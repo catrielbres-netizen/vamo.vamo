@@ -43,13 +43,13 @@ export default function DriverPage() {
   // 2. Query for available rides (searching for a driver)
   const availableRidesQuery = useMemoFirebase(
     () =>
-      firestore
+      firestore && user // Also ensure user exists, good practice for rules
         ? query(
             collection(firestore, 'rides'),
             where('status', '==', 'searching_driver')
           )
         : null,
-    [firestore]
+    [firestore, user]
   );
   const { data: availableRides, isLoading: isLoadingAvailable } = useCollection(availableRidesQuery);
 
