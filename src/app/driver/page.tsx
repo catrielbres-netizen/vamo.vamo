@@ -15,6 +15,7 @@ export default function DriverPage() {
   const { user } = useUser();
   const { toast } = useToast();
   const wasPreviouslyActive = useRef(false);
+  const previousAvailableRides = useRef<any[]>([]);
 
   // 1. Query for rides assigned to the current driver
   const activeRideQuery = useMemoFirebase(
@@ -52,9 +53,9 @@ export default function DriverPage() {
 
   const currentActiveRide = activeRides && activeRides.length > 0 ? activeRides[0] : null;
 
+  // Effect for cancellation notifications
   useEffect(() => {
     const isActive = !!currentActiveRide;
-    // If it was active before but now it's not
     if (wasPreviouslyActive.current && !isActive) {
       toast({
         title: "Viaje cancelado",
@@ -64,6 +65,24 @@ export default function DriverPage() {
     }
     wasPreviouslyActive.current = isActive;
   }, [currentActiveRide, toast]);
+  
+  // Effect for new available ride notifications
+  useEffect(() => {
+    if (availableRides && availableRides.length > (previousAvailableRides.current?.length ?? 0)) {
+        // This finds the new ride(s) by comparing current with previous.
+        const newRides = availableRides.filter(
+            (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
+        );
+
+        if(newRides.length > 0 && !currentActiveRide) { // Only notify if not in an active ride
+             toast({
+                title: "¡Nuevo viaje disponible!",
+                description: `Un pasajero solicita un viaje a ${newRides[0].destination.address}.`,
+            });
+        }
+    }
+    previousAvailableRides.current = availableRides || [];
+  }, [availableRides, toast, currentActiveRide]);
 
 
   const handleAcceptRide = (rideId: string) => {
