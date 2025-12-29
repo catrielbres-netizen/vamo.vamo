@@ -118,7 +118,22 @@
         },
         "pauseHistory": {
           "type": "array",
-          "items": {},
+          "items": {
+            "type": "object",
+            "properties": {
+              "started": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "ended": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "duration": {
+                "type": "number"
+              }
+            }
+          },
           "description": "A history of pause events during the ride."
         }
       },

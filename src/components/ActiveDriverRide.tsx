@@ -39,10 +39,27 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
         updatedAt: serverTimestamp(),
     }
 
+    if(newStatus === 'paused') {
+        payload.pauseStartedAt = serverTimestamp();
+    }
+    
+    if(newStatus === 'in_progress' && ride.status === 'paused') {
+        const now = new Date();
+        const pausedAt = ride.pauseStartedAt.toDate(); // Convert Firestore Timestamp to JS Date
+        const diffSeconds = Math.round((now.getTime() - pausedAt.getTime()) / 1000);
+        
+        payload.pauseStartedAt = null;
+        payload.pauseHistory = [
+            ...ride.pauseHistory,
+            { started: pausedAt, ended: now, duration: diffSeconds }
+        ];
+    }
+
     if(newStatus === 'finished') {
+        const totalWaitTimeSeconds = ride.pauseHistory.reduce((acc: number, p: any) => acc + p.duration, 0);
         const finalPrice = calculateFare({
             distanceMeters: ride.pricing.estimatedDistanceMeters ?? 4200, // Usar distancia real en el futuro
-            waitingMinutes: 0, // Añadir lógica de tiempo de espera
+            waitingMinutes: Math.ceil(totalWaitTimeSeconds / 60),
             service: ride.serviceType,
             isNight: false, // Añadir lógica de tarifa nocturna
         });
