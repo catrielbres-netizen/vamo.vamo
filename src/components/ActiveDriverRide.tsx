@@ -107,7 +107,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
   };
 
   const openNavigationToDestination = () => {
-    if (ride?.destination?.lat && ride?.destination?.lng) {
+    if (ride?.destination?.address) {
         // Usamos la dirección para una mejor experiencia en Google Maps
         const destinationQuery = encodeURIComponent(ride.destination.address);
         const url = `https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`;
