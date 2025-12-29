@@ -1,7 +1,7 @@
 // /app/driver/page.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import { collection, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
@@ -22,7 +22,7 @@ export default function DriverPage() {
   // 1. Query for rides assigned to the current driver
   const activeRideQuery = useMemoFirebase(
     () =>
-      firestore && user
+      firestore && user?.uid // Ensure both exist before creating the query
         ? query(
             collection(firestore, 'rides'),
             where('driverId', '==', user.uid),
@@ -43,7 +43,7 @@ export default function DriverPage() {
   // 2. Query for available rides (searching for a driver)
   const availableRidesQuery = useMemoFirebase(
     () =>
-      firestore && user // Also ensure user exists, good practice for rules
+      firestore && user // Ensure firestore and user are available
         ? query(
             collection(firestore, 'rides'),
             where('status', '==', 'searching_driver')
@@ -75,12 +75,12 @@ export default function DriverPage() {
   
   // Effect for new available ride notifications
   useEffect(() => {
-    if (availableRides && availableRides.length > (previousAvailableRides.current?.length ?? 0)) {
+    if (!currentActiveRide && availableRides && availableRides.length > (previousAvailableRides.current?.length ?? 0)) {
         const newRides = availableRides.filter(
             (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
         );
 
-        if(newRides.length > 0 && !currentActiveRide) { 
+        if(newRides.length > 0) { 
              const newRide = newRides[0];
              toast({
                 title: "¡Nuevo viaje disponible!",
@@ -92,7 +92,7 @@ export default function DriverPage() {
         }
     }
     previousAvailableRides.current = availableRides || [];
-  }, [availableRides, toast, currentActiveRide]);
+  }, [availableRides, currentActiveRide, toast]);
 
 
   const handleAcceptRide = (rideId: string) => {

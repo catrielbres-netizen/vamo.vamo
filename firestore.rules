@@ -3,34 +3,37 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /rides/{rideId} {
       
+      // Un pasajero o conductor autenticado puede leer un viaje si está involucrado.
+      // Cualquier conductor puede leer un viaje si está buscando conductor.
+      allow read: if request.auth != null && 
+                   (
+                    resource.data.passengerId == request.auth.uid || 
+                    resource.data.driverId == request.auth.uid ||
+                    resource.data.status == 'searching_driver'
+                   );
+                   
+      // Un usuario autenticado puede listar viajes si la consulta está debidamente filtrada.
+      // 1. Para conductores: buscando viajes con estado 'searching_driver'.
+      // 2. Para pasajeros: buscando su propio historial por 'passengerId'.
+      allow list: if request.auth != null &&
+                   (
+                    (request.query.where[0][0] == 'status' && request.query.where[0][2] == 'searching_driver') ||
+                    (request.query.where[0][0] == 'passengerId' && request.query.where[0][2] == request.auth.uid)
+                   );
+
       // Un pasajero autenticado puede crear un viaje si el passengerId es el suyo.
       allow create: if request.auth != null && request.resource.data.passengerId == request.auth.uid;
       
-      // Se permite listar viajes si:
-      // 1. El usuario está autenticado y está consultando viajes disponibles ('searching_driver').
-      // 2. El usuario es un pasajero consultando su propio historial de viajes.
-      allow list: if request.auth != null && 
-                    (
-                      (request.query.where[0][0] == 'status' && request.query.where[0][2] == 'searching_driver') ||
-                      (request.query.where[0][0] == 'passengerId' && request.query.where[0][2] == request.auth.uid && request.query.where[1][0] == 'status')
-                    );
-
-
-      // El pasajero del viaje o el conductor asignado pueden leer el documento.
-      // También se permite leer si el estado es 'searching_driver' para que los conductores vean detalles.
-      allow read: if request.auth != null && 
-                   (resource.data.passengerId == request.auth.uid || 
-                    resource.data.driverId == request.auth.uid ||
-                    resource.data.status == 'searching_driver');
-
       // Se puede actualizar un viaje si:
       // 1. El que actualiza es el pasajero y está cancelando el viaje.
       // 2. El que actualiza es un conductor asignándose a un viaje que estaba buscando conductor.
       // 3. El que actualiza ya es el conductor asignado a este viaje.
       allow update: if request.auth != null && 
-                     ((resource.data.passengerId == request.auth.uid && request.resource.data.status == 'cancelled') ||
+                     (
+                      (resource.data.passengerId == request.auth.uid && request.resource.data.status == 'cancelled') ||
                       (resource.data.status == 'searching_driver' && request.resource.data.driverId == request.auth.uid) ||
-                      (resource.data.driverId == request.auth.uid));
+                      (resource.data.driverId == request.auth.uid)
+                     );
 
       // Nadie puede eliminar viajes, solo se cancelan o finalizan.
       allow delete: if false;
