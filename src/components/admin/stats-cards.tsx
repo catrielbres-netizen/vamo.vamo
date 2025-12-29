@@ -31,24 +31,24 @@ export function StatsCards() {
 
   const totalRides = rides.length;
   const totalIncome = rides
-    .filter((r) => r.status === 'finished' && r.fare)
+    .filter((r) => r.status === 'finalizado' && r.fare)
     .reduce((sum, r) => sum + (r.fare || 0), 0);
   const activeDrivers = users.filter((u) => u.role === 'driver').length;
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       <StatCard
-        title="Total Rides"
+        title="Viajes Totales"
         value={totalRides}
         icon={<Car className="h-4 w-4 text-muted-foreground" />}
       />
       <StatCard
-        title="Total Income"
+        title="Ingresos Totales"
         value={`$${totalIncome.toFixed(2)}`}
         icon={<CircleDollarSign className="h-4 w-4 text-muted-foreground" />}
       />
       <StatCard
-        title="Active Drivers"
+        title="Conductores Activos"
         value={activeDrivers}
         icon={<Users className="h-4 w-4 text-muted-foreground" />}
       />

@@ -4,24 +4,24 @@ import { useStore } from '@/lib/store';
 import { RideStatus } from '@/lib/types';
 
 const SIMULATION_DELAYS: Record<RideStatus, number> = {
-  confirmed: 3000,
-  searching: 5000,
-  driver_found: 3000,
-  en_route: 5000,
-  arrived: 3000,
-  active: 10000, // Ride duration
-  paused: 5000, // Pause duration
-  requested: 0,
-  finished: 0,
-  cancelled: 0,
+  confirmado: 3000,
+  buscando: 5000,
+  conductor_encontrado: 3000,
+  en_camino: 5000,
+  llegado: 3000,
+  activo: 10000, // Ride duration
+  pausado: 5000, // Pause duration
+  solicitado: 0,
+  finalizado: 0,
+  cancelado: 0,
 };
 
 const NEXT_STATUS: Partial<Record<RideStatus, RideStatus>> = {
-  confirmed: 'searching',
-  searching: 'driver_found',
-  driver_found: 'en_route',
-  en_route: 'arrived',
-  arrived: 'active',
+  confirmado: 'buscando',
+  buscando: 'conductor_encontrado',
+  conductor_encontrado: 'en_camino',
+  en_camino: 'llegado',
+  llegado: 'activo',
 };
 
 export const useRideSimulation = (rideId: string) => {

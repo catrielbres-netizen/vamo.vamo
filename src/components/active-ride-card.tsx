@@ -46,53 +46,53 @@ const statusInfo: Record<
   RideStatus,
   { text: string; progress: number; icon: React.ReactNode }
 > = {
-  requested: {
-    text: 'Ride Requested',
+  solicitado: {
+    text: 'Viaje Solicitado',
     progress: 10,
     icon: <Activity className="h-4 w-4" />,
   },
-  confirmed: {
-    text: 'Ride Confirmed',
+  confirmado: {
+    text: 'Viaje Confirmado',
     progress: 20,
     icon: <Check className="h-4 w-4" />,
   },
-  searching: {
-    text: 'Searching for Driver',
+  buscando: {
+    text: 'Buscando Conductor',
     progress: 30,
     icon: <Activity className="h-4 w-4" />,
   },
-  driver_found: {
-    text: 'Driver Found',
+  conductor_encontrado: {
+    text: 'Conductor Encontrado',
     progress: 40,
     icon: <Car className="h-4 w-4" />,
   },
-  en_route: {
-    text: 'Driver is on the way',
+  en_camino: {
+    text: 'El Conductor está en camino',
     progress: 50,
     icon: <Car className="h-4 w-4" />,
   },
-  arrived: {
-    text: 'Driver has Arrived',
+  llegado: {
+    text: 'El Conductor ha Llegado',
     progress: 60,
     icon: <Car className="h-4 w-4" />,
   },
-  active: {
-    text: 'Ride in Progress',
+  activo: {
+    text: 'Viaje en Progreso',
     progress: 80,
     icon: <Activity className="h-4 w-4" />,
   },
-  paused: {
-    text: 'Ride Paused',
+  pausado: {
+    text: 'Viaje Pausado',
     progress: 75,
     icon: <Pause className="h-4 w-4" />,
   },
-  finished: {
-    text: 'Ride Finished',
+  finalizado: {
+    text: 'Viaje Finalizado',
     progress: 100,
     icon: <Flag className="h-4 w-4" />,
   },
-  cancelled: {
-    text: 'Ride Cancelled',
+  cancelado: {
+    text: 'Viaje Cancelado',
     progress: 0,
     icon: <Activity className="h-4 w-4" />,
   },
@@ -106,7 +106,7 @@ const UserInfo = ({ user, role }: { user: {name: string, avatarUrl: string}, rol
     </Avatar>
     <div>
       <p className="font-semibold">{user.name}</p>
-      <p className="text-sm capitalize text-muted-foreground">{role}</p>
+      <p className="text-sm capitalize text-muted-foreground">{role === 'driver' ? 'Conductor' : 'Pasajero'}</p>
     </div>
   </div>
 );
@@ -134,7 +134,7 @@ export function ActiveRideCard({ rideId }: { rideId: string }) {
     <Card className="overflow-hidden">
       <CardHeader className="flex-row items-start justify-between gap-4">
         <CardTitle className="leading-tight">
-          Trip to <span className="text-primary">{ride.destination}</span>
+          Viaje a <span className="text-primary">{ride.destination}</span>
         </CardTitle>
         <Badge variant="secondary" className="flex items-center gap-2 whitespace-nowrap">
           {statusInfo[ride.status].icon}
@@ -161,29 +161,29 @@ export function ActiveRideCard({ rideId }: { rideId: string }) {
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div className="space-y-4 rounded-lg border bg-secondary/50 p-4">
-                <h3 className="font-semibold">Trip Details</h3>
+                <h3 className="font-semibold">Detalles del Viaje</h3>
                 <div className="flex items-center gap-3 text-sm">
                     <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span>From: {ride.origin}</span>
+                    <span>Desde: {ride.origin}</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                     <Flag className="h-4 w-4 text-muted-foreground" />
-                    <span>To: {ride.destination}</span>
+                    <span>Hasta: {ride.destination}</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                     <CircleDollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span>Fare: ${ride.fare?.toFixed(2)} ({ride.serviceType})</span>
+                    <span>Tarifa: ${ride.fare?.toFixed(2)} ({ride.serviceType})</span>
                 </div>
             </div>
             
             <div className="space-y-4 rounded-lg border bg-secondary/50 p-4">
                 <h3 className="font-semibold">
-                    {currentUser?.role === 'passenger' ? 'Your Driver' : 'Your Passenger'}
+                    {currentUser?.role === 'passenger' ? 'Tu Conductor' : 'Tu Pasajero'}
                 </h3>
                 {otherUser ? (
                     <UserInfo user={otherUser} role={otherUserRole} />
                 ) : (
-                    <p className="text-sm text-muted-foreground">Waiting for driver assignment...</p>
+                    <p className="text-sm text-muted-foreground">Esperando asignación de conductor...</p>
                 )}
             </div>
         </div>
@@ -192,21 +192,21 @@ export function ActiveRideCard({ rideId }: { rideId: string }) {
       <CardFooter className="flex-col items-stretch gap-2 bg-secondary/30 p-4 sm:flex-row sm:justify-between">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Clock className="h-4 w-4" />
-          <span>Ride ID: {ride.id}</span>
+          <span>ID del Viaje: {ride.id}</span>
         </div>
         {currentUser?.role === 'driver' && (
           <div className="flex items-center gap-2">
-            {ride.status === 'arrived' && (
-                <Button onClick={() => handleStatusChange('active')} className="bg-green-600 hover:bg-green-700">Start Ride</Button>
+            {ride.status === 'llegado' && (
+                <Button onClick={() => handleStatusChange('activo')} className="bg-green-600 hover:bg-green-700">Iniciar Viaje</Button>
             )}
-            {ride.status === 'active' && (
-                <Button variant="outline" onClick={() => handleStatusChange('paused')}><Pause className="mr-2"/>Pause</Button>
+            {ride.status === 'activo' && (
+                <Button variant="outline" onClick={() => handleStatusChange('pausado')}><Pause className="mr-2"/>Pausar</Button>
             )}
-            {ride.status === 'paused' && (
-                <Button variant="outline" onClick={() => handleStatusChange('active')}><Play className="mr-2"/>Resume</Button>
+            {ride.status === 'pausado' && (
+                <Button variant="outline" onClick={() => handleStatusChange('activo')}><Play className="mr-2"/>Reanudar</Button>
             )}
-            {['active', 'paused'].includes(ride.status) && (
-                <Button onClick={() => handleStatusChange('finished')}>End Ride</Button>
+            {['activo', 'pausado'].includes(ride.status) && (
+                <Button onClick={() => handleStatusChange('finalizado')}>Finalizar Viaje</Button>
             )}
           </div>
         )}

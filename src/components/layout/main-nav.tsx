@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils';
 import { useCurrentUser } from '@/hooks/use-current-user';
 
 const routes = [
-  { href: '/', label: 'Passenger', role: 'passenger' },
-  { href: '/driver', label: 'Driver', role: 'driver' },
+  { href: '/', label: 'Pasajero', role: 'passenger' },
+  { href: '/driver', label: 'Conductor', role: 'driver' },
   { href: '/admin', label: 'Admin', role: 'admin' },
 ];
 

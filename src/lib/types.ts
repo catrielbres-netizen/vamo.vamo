@@ -12,16 +12,16 @@ export type User = {
 export type RideService = 'Premium' | 'Privado' | 'Express';
 
 export type RideStatus =
-  | 'requested'
-  | 'confirmed'
-  | 'searching'
-  | 'driver_found'
-  | 'en_route'
-  | 'arrived'
-  | 'active'
-  | 'paused'
-  | 'finished'
-  | 'cancelled';
+  | 'solicitado'
+  | 'confirmado'
+  | 'buscando'
+  | 'conductor_encontrado'
+  | 'en_camino'
+  | 'llegado'
+  | 'activo'
+  | 'pausado'
+  | 'finalizado'
+  | 'cancelado';
 
 export type Ride = {
   id: string;

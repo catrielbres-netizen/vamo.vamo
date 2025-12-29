@@ -11,6 +11,13 @@ import { useUsers } from '@/hooks/use-users';
 import { useStore } from '@/lib/store';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCurrentUser } from '@/hooks/use-current-user';
+import { UserRole } from '@/lib/types';
+
+const roleNames: Record<UserRole, string> = {
+    passenger: 'Pasajero',
+    driver: 'Conductor',
+    admin: 'Admin'
+}
 
 export function UserSwitcher() {
   const { users } = useUsers();
@@ -27,7 +34,7 @@ export function UserSwitcher() {
       </Avatar>
       <Select value={currentUser.id} onValueChange={setCurrentUserId}>
         <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="Select user" />
+          <SelectValue placeholder="Seleccionar usuario" />
         </SelectTrigger>
         <SelectContent>
           {users.map((user) => (
@@ -38,7 +45,7 @@ export function UserSwitcher() {
                   <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <span>
-                  {user.name} ({user.role})
+                  {user.name} ({roleNames[user.role]})
                 </span>
               </div>
             </SelectItem>

@@ -46,8 +46,8 @@ import {
 } from '@/components/ui/dialog';
 
 const formSchema = z.object({
-  origin: z.string().min(1, 'Origin is required'),
-  destination: z.string().min(1, 'Destination is required'),
+  origin: z.string().min(1, 'El origen es requerido'),
+  destination: z.string().min(1, 'El destino es requerido'),
   serviceType: z.enum(['Premium', 'Privado', 'Express']),
   isNightTime: z.boolean(),
 });
@@ -70,7 +70,7 @@ export function RideRequestForm({ passengerId }: { passengerId: string }) {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      origin: 'Current Location',
+      origin: 'Ubicación Actual',
       destination: '',
       serviceType: 'Premium',
       isNightTime: false,
@@ -86,7 +86,7 @@ export function RideRequestForm({ passengerId }: { passengerId: string }) {
       setFormValues(values);
       setIsConfirming(true);
     } catch (error) {
-      console.error('Fare calculation failed:', error);
+      console.error('El cálculo de la tarifa falló:', error);
     } finally {
       setIsLoading(false);
     }
@@ -111,9 +111,9 @@ export function RideRequestForm({ passengerId }: { passengerId: string }) {
     <>
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>Where to?</CardTitle>
+          <CardTitle>¿A dónde vamos?</CardTitle>
           <CardDescription>
-            Enter your destination to see fare options.
+            Ingresá tu destino para ver las opciones de tarifa.
           </CardDescription>
         </CardHeader>
         <Form {...form}>
@@ -124,7 +124,7 @@ export function RideRequestForm({ passengerId }: { passengerId: string }) {
                 name="origin"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>From</FormLabel>
+                    <FormLabel>Desde</FormLabel>
                     <FormControl>
                       <Input {...field} disabled />
                     </FormControl>
@@ -137,9 +137,9 @@ export function RideRequestForm({ passengerId }: { passengerId: string }) {
                 name="destination"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Destination</FormLabel>
+                    <FormLabel>Destino</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Downtown Plaza" {...field} />
+                      <Input placeholder="Ej: Plaza Principal" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -150,14 +150,14 @@ export function RideRequestForm({ passengerId }: { passengerId: string }) {
                 name="serviceType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Service Type</FormLabel>
+                    <FormLabel>Tipo de Servicio</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       defaultValue={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a service" />
+                          <SelectValue placeholder="Seleccioná un servicio" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -176,9 +176,9 @@ export function RideRequestForm({ passengerId }: { passengerId: string }) {
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                     <div className="space-y-0.5">
-                      <FormLabel>Night Fare</FormLabel>
+                      <FormLabel>Tarifa Nocturna</FormLabel>
                       <FormDescription>
-                        Applies a 5% surcharge for rides at night.
+                        Aplica un recargo del 5% para viajes de noche.
                       </FormDescription>
                     </div>
                     <FormControl>
@@ -200,7 +200,7 @@ export function RideRequestForm({ passengerId }: { passengerId: string }) {
                 {isLoading && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                {isLoading ? 'Calculating...' : 'Calculate Fare'}
+                {isLoading ? 'Calculando...' : 'Calcular Tarifa'}
               </Button>
             </CardFooter>
           </form>
@@ -210,24 +210,24 @@ export function RideRequestForm({ passengerId }: { passengerId: string }) {
       <Dialog open={isConfirming} onOpenChange={setIsConfirming}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Your Ride</DialogTitle>
+            <DialogTitle>Confirmá tu Viaje</DialogTitle>
             <DialogDescription>
-              Please review the details of your trip before confirming.
+              Por favor, revisá los detalles de tu viaje antes de confirmar.
             </DialogDescription>
           </DialogHeader>
           {formValues && fareResult && (
             <div className="space-y-4 py-4">
               <p>
-                <strong>From:</strong> {formValues.origin}
+                <strong>Desde:</strong> {formValues.origin}
               </p>
               <p>
-                <strong>To:</strong> {formValues.destination}
+                <strong>Hasta:</strong> {formValues.destination}
               </p>
               <p>
-                <strong>Service:</strong> {formValues.serviceType}
+                <strong>Servicio:</strong> {formValues.serviceType}
               </p>
               <div className="rounded-lg bg-secondary p-4 text-center">
-                <p className="text-sm text-muted-foreground">Estimated Fare</p>
+                <p className="text-sm text-muted-foreground">Tarifa Estimada</p>
                 <p className="text-3xl font-bold text-primary">
                   ${fareResult.fare.toFixed(2)}
                 </p>
@@ -239,9 +239,9 @@ export function RideRequestForm({ passengerId }: { passengerId: string }) {
               variant="outline"
               onClick={() => setIsConfirming(false)}
             >
-              Cancel
+              Cancelar
             </Button>
-            <Button onClick={handleConfirmRide}>Confirm Ride</Button>
+            <Button onClick={handleConfirmRide}>Confirmar Viaje</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

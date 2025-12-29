@@ -91,17 +91,17 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
 
       const updates: Partial<Ride> = { status };
 
-      if (status === 'paused' && ride.status === 'active') {
+      if (status === 'pausado' && ride.status === 'activo') {
         updates.lastPauseTime = Date.now();
       }
 
-      if (status === 'active' && ride.status === 'paused' && ride.lastPauseTime) {
+      if (status === 'activo' && ride.status === 'pausado' && ride.lastPauseTime) {
         const pauseDuration = (Date.now() - ride.lastPauseTime) / 1000;
         updates.pauseDuration = (ride.pauseDuration || 0) + pauseDuration;
         updates.lastPauseTime = undefined;
       }
       
-      if (status === 'finished') {
+      if (status === 'finalizado') {
         updates.endTime = Date.now();
         updates.fare = calculateFinalFare(ride);
       }
@@ -130,7 +130,7 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
         origin: data.origin,
         destination: data.destination,
         serviceType: data.serviceType,
-        status: 'confirmed',
+        status: 'confirmado',
         fare: data.fare,
         distanceMeters: data.distanceMeters,
         estimatedTimeMinutes: data.estimatedTimeMinutes,
@@ -144,7 +144,7 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
 
   const acceptRide = useCallback(
     (rideId: string, driver: User) => {
-      updateRide(rideId, { driver, status: 'driver_found' });
+      updateRide(rideId, { driver, status: 'conductor_encontrado' });
     },
     [updateRide]
   );

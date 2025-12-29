@@ -45,42 +45,42 @@ export function RideOfferCard({ rideId }: { rideId: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>New Ride Offer</CardTitle>
+        <CardTitle>Nueva Oferta de Viaje</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-3">
           <MapPin className="h-5 w-5 text-muted-foreground" />
           <div className="text-sm">
-            <p className="text-muted-foreground">From</p>
+            <p className="text-muted-foreground">Desde</p>
             <p className="font-medium">{ride.origin}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <Flag className="h-5 w-5 text-muted-foreground" />
           <div className="text-sm">
-            <p className="text-muted-foreground">To</p>
+            <p className="text-muted-foreground">Hasta</p>
             <p className="font-medium">{ride.destination}</p>
           </div>
         </div>
         <div className="flex items-center justify-between rounded-lg bg-secondary/50 p-3">
           <div className="flex items-center gap-2">
             <CircleDollarSign className="h-5 w-5 text-primary" />
-            <span className="font-semibold text-primary">Offered Fare</span>
+            <span className="font-semibold text-primary">Tarifa Ofrecida</span>
           </div>
           <span className="text-lg font-bold">${ride.fare?.toFixed(2)}</span>
         </div>
         <p className="text-xs text-muted-foreground">
-          Service Type: {ride.serviceType}
+          Tipo de Servicio: {ride.serviceType}
         </p>
       </CardContent>
       <CardFooter className="flex flex-col items-stretch gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Timer className="h-4 w-4" />
-          <span>Offer expires in {timeLeft}s</span>
+          <span>La oferta vence en {timeLeft}s</span>
         </div>
         <Progress value={progress} className="h-1" />
         <Button onClick={handleAccept} disabled={timeLeft <= 0} size="lg">
-          {timeLeft > 0 ? 'Accept Ride' : 'Offer Expired'}
+          {timeLeft > 0 ? 'Aceptar Viaje' : 'Oferta Vencida'}
         </Button>
       </CardFooter>
     </Card>

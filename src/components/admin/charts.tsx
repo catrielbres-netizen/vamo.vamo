@@ -15,7 +15,7 @@ export function Charts() {
 
   const ridesByDay = rides.reduce((acc, ride) => {
     if (ride.startTime) {
-      const day = new Date(ride.startTime).toLocaleDateString('en-US', {
+      const day = new Date(ride.startTime).toLocaleDateString('es-AR', {
         weekday: 'short',
       });
       acc[day] = (acc[day] || 0) + 1;
@@ -29,8 +29,8 @@ export function Charts() {
   }));
 
   const incomeByDay = rides.reduce((acc, ride) => {
-    if (ride.status === 'finished' && ride.fare && ride.endTime) {
-      const day = new Date(ride.endTime).toLocaleDateString('en-US', {
+    if (ride.status === 'finalizado' && ride.fare && ride.endTime) {
+      const day = new Date(ride.endTime).toLocaleDateString('es-AR', {
         weekday: 'short',
       });
       acc[day] = (acc[day] || 0) + ride.fare;
@@ -45,11 +45,11 @@ export function Charts() {
 
   const chartConfig = {
     rides: {
-      label: 'Rides',
+      label: 'Viajes',
       color: 'hsl(var(--primary))',
     },
     income: {
-      label: 'Income',
+      label: 'Ingresos',
       color: 'hsl(var(--accent))',
     },
   };
@@ -58,7 +58,7 @@ export function Charts() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>Rides per Day</CardTitle>
+          <CardTitle>Viajes por Día</CardTitle>
         </CardHeader>
         <CardContent>
           <ChartContainer config={chartConfig} className="h-[250px] w-full">
@@ -79,7 +79,7 @@ export function Charts() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Daily Income</CardTitle>
+          <CardTitle>Ingresos Diarios</CardTitle>
         </CardHeader>
         <CardContent>
           <ChartContainer config={chartConfig} className="h-[250px] w-full">
@@ -93,14 +93,14 @@ export function Charts() {
               />
               <YAxis
                 tickFormatter={(value) =>
-                  `$${new Intl.NumberFormat('en-US').format(value)}`
+                  `$${new Intl.NumberFormat('es-AR').format(value)}`
                 }
               />
               <ChartTooltip
                 content={
                   <ChartTooltipContent
                     formatter={(value) =>
-                      `$${new Intl.NumberFormat('en-US').format(value as number)}`
+                      `$${new Intl.NumberFormat('es-AR').format(value as number)}`
                     }
                   />
                 }

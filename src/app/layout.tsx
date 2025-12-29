@@ -6,8 +6,8 @@ import { cn } from '@/lib/utils';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'VamO - Your Ride, Your Way',
-  description: 'A ride-sharing app built with Next.js and Firebase.',
+  title: 'VamO - Tu Viaje, a Tu Manera',
+  description: 'Una app de viajes compartidos hecha con Next.js y Firebase.',
 };
 
 export default function RootLayout({
@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link

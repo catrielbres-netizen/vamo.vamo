@@ -6,7 +6,7 @@ import { useCurrentUser } from '@/hooks/use-current-user';
 import { useRides } from '@/hooks/use-rides';
 import { RideStatus } from '@/lib/types';
 
-const availableStatuses: RideStatus[] = ['confirmed', 'searching'];
+const availableStatuses: RideStatus[] = ['confirmado', 'buscando'];
 
 export default function DriverPage() {
   const { currentUser } = useCurrentUser();
@@ -15,13 +15,13 @@ export default function DriverPage() {
   if (!currentUser || currentUser.role !== 'driver') {
     return (
       <div className="container py-10 text-center">
-        <p>Please switch to a driver profile to view this page.</p>
+        <p>Por favor, cambiá a un perfil de conductor para ver esta página.</p>
       </div>
     );
   }
 
   const myActiveRide = rides.find(
-    (ride) => ride.driver?.id === currentUser.id && ride.status !== 'finished'
+    (ride) => ride.driver?.id === currentUser.id && ride.status !== 'finalizado'
   );
 
   const availableRides = rides.filter(
@@ -38,7 +38,7 @@ export default function DriverPage() {
       ) : (
         <div>
           <h1 className="mb-6 text-3xl font-bold text-primary">
-            Available Rides
+            Viajes Disponibles
           </h1>
           {availableRides.length > 0 ? (
             <div className="grid gap-6 md:grid-cols-2">
@@ -49,7 +49,7 @@ export default function DriverPage() {
           ) : (
             <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed bg-card">
               <p className="text-muted-foreground">
-                No available rides right now. Check back soon!
+                No hay viajes disponibles por ahora. ¡Volvé a fijarte pronto!
               </p>
             </div>
           )}

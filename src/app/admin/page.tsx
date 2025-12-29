@@ -11,7 +11,7 @@ export default function AdminPage() {
   if (!currentUser || currentUser.role !== 'admin') {
     return (
       <div className="container py-10 text-center">
-        <p>You must be an admin to view this page.</p>
+        <p>Tenés que ser admin para ver esta página.</p>
       </div>
     );
   }
@@ -19,7 +19,7 @@ export default function AdminPage() {
   return (
     <div className="container mx-auto py-8">
       <div className="flex flex-col gap-8">
-        <h1 className="text-3xl font-bold text-primary">Admin Dashboard</h1>
+        <h1 className="text-3xl font-bold text-primary">Panel de Administración</h1>
         <StatsCards />
         <Charts />
         <AiAnalysis />

@@ -12,14 +12,14 @@ export default function PassengerPage() {
   if (!currentUser || currentUser.role !== 'passenger') {
     return (
       <div className="container py-10 text-center">
-        <p>Please switch to a passenger profile to view this page.</p>
+        <p>Por favor, cambiá a un perfil de pasajero para ver esta página.</p>
       </div>
     );
   }
 
   const myRide = rides.find(
     (ride) =>
-      ride.passenger.id === currentUser.id && ride.status !== 'finished'
+      ride.passenger.id === currentUser.id && ride.status !== 'finalizado'
   );
 
   return (

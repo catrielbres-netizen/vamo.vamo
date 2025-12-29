@@ -29,7 +29,7 @@ export function AiAnalysis() {
         rideData: JSON.stringify(rides),
         incomeData: JSON.stringify(
           rides
-            .filter((r) => r.status === 'finished' && r.fare)
+            .filter((r) => r.status === 'finalizado' && r.fare)
             .map((r) => ({ fare: r.fare, date: r.endTime }))
         ),
         driverPerformanceData: JSON.stringify(
@@ -38,8 +38,8 @@ export function AiAnalysis() {
       });
       setAnalysis(insights);
     } catch (error) {
-      console.error('Analysis failed:', error);
-      setAnalysis('An error occurred during analysis.');
+      console.error('El análisis falló:', error);
+      setAnalysis('Ocurrió un error durante el análisis.');
     } finally {
       setIsLoading(false);
     }
@@ -50,16 +50,15 @@ export function AiAnalysis() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Lightbulb className="text-primary" />
-          AI-Powered Data Analysis
+          Análisis de Datos con IA
         </CardTitle>
         <CardDescription>
-          Get instant insights from your data. Click the button to analyze ride
-          statistics, income trends, and driver performance.
+          Obtené insights de tus datos al instante. Hacé clic en el botón para analizar estadísticas de viajes, tendencias de ingresos y rendimiento de los conductores.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Button onClick={handleAnalyze} disabled={isLoading}>
-          {isLoading ? 'Analyzing...' : 'Analyze Data with AI'}
+          {isLoading ? 'Analizando...' : 'Analizar Datos con IA'}
         </Button>
         {isLoading && (
           <div className="space-y-2">
