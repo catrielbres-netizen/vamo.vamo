@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { cn } from '@/lib/utils';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import { FirebaseClientProvider } from '@/firebase';
 
 export const metadata: Metadata = {
   title: 'VamO - Tu Viaje, a Tu Manera',
@@ -33,10 +34,12 @@ export default function RootLayout({
           'dark'
         )}
       >
-        <div className="relative flex min-h-screen flex-col">
+        <FirebaseClientProvider>
+          <div className="relative flex min-h-screen flex-col">
             <main className="flex-1">{children}</main>
-        </div>
-        <Toaster />
+          </div>
+          <Toaster />
+        </FirebaseClientProvider>
       </body>
     </html>
   );

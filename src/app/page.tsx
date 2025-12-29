@@ -1,51 +1,55 @@
 // /app/page.tsx
-"use client";
+'use client';
 
-import { useState } from "react";
-import PassengerRideForm from "@/components/PassengerRideForm";
-import RideStatus from "@/components/RideStatus";
+import { useState, useEffect } from 'react';
+import PassengerRideForm from '@/components/PassengerRideForm';
+import RideStatus from '@/components/RideStatus';
+import { useUser, useAuth, initiateAnonymousSignIn } from '@/firebase';
 
 export default function Home() {
-  const [rideStatus, setRideStatus] = useState<string | null>(null);
-  const [currentRideData, setCurrentRideData] = useState(null);
+  const [rideId, setRideId] = useState<string | null>(null);
+  const auth = useAuth();
+  const { user, isUserLoading } = useUser();
 
-  function handleConfirmRide(data: any) {
-    setCurrentRideData(data);
-    setRideStatus("Buscando conductor...");
+  useEffect(() => {
+    if (!user && !isUserLoading) {
+      initiateAnonymousSignIn(auth);
+    }
+  }, [user, isUserLoading, auth]);
 
-    setTimeout(() => setRideStatus("Conductor encontrado"), 2000);
-    setTimeout(() => setRideStatus("El conductor está en camino"), 4000);
-    setTimeout(() => setRideStatus("El conductor ha llegado"), 6000);
-    setTimeout(() => setRideStatus("Viaje en curso"), 8000);
-    setTimeout(() => setRideStatus("Viaje finalizado"), 12000);
-    setTimeout(() => {
-      setRideStatus(null);
-      setCurrentRideData(null);
-    }, 14000);
+  if (isUserLoading) {
+    return (
+      <main className="container mx-auto max-w-md p-4">
+        <div className="flex justify-center items-center mb-6">
+          <h1 className="text-3xl font-bold text-center">VamO</h1>
+        </div>
+        <p className="text-center">Cargando...</p>
+      </main>
+    );
   }
 
   return (
     <main className="container mx-auto max-w-md p-4">
-       <div className="flex justify-center items-center mb-6">
+      <div className="flex justify-center items-center mb-6">
         <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-8 w-8 text-primary mr-2"
-          >
-            <path d="M4 6L8 18L12 6L16 18L20 6" />
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-8 w-8 text-primary mr-2"
+        >
+          <path d="M4 6L8 18L12 6L16 18L20 6" />
         </svg>
         <h1 className="text-3xl font-bold text-center">VamO</h1>
       </div>
 
-      {!rideStatus ? (
-        <PassengerRideForm onConfirm={handleConfirmRide} />
+      {!rideId ? (
+        <PassengerRideForm onConfirm={setRideId} />
       ) : (
-        <RideStatus status={rideStatus} rideData={currentRideData} />
+        <RideStatus rideId={rideId} />
       )}
     </main>
   );
