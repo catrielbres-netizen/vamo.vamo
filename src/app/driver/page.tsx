@@ -82,12 +82,11 @@ export default function DriverPage() {
 
         if(newRides.length > 0) { 
              const newRide = newRides[0];
+             const destinationText = newRide.destination.address;
              toast({
                 title: "¡Nuevo viaje disponible!",
-                description: `Un pasajero solicita un viaje a ${newRide.destination.address}.`,
+                description: `Un pasajero solicita un viaje a ${destinationText}.`,
             });
-            
-            const destinationText = newRide.destination.address;
             speak(`Nuevo viaje disponible hacia ${destinationText}.`);
         }
     }
