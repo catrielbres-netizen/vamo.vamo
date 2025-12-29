@@ -6,12 +6,12 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.passengerId == request.auth.uid;
       
       // Se permite listar viajes si:
-      // 1. Es un conductor buscando viajes disponibles ('searching_driver').
-      // 2. Es un pasajero consultando su propio historial de viajes (status 'finished' o 'cancelled').
+      // 1. El usuario está autenticado y está consultando viajes disponibles ('searching_driver').
+      // 2. El usuario es un pasajero consultando su propio historial de viajes (status 'finished' o 'cancelled').
       allow list: if request.auth != null && 
-                    (request.query.get("status") == "searching_driver" || 
-                     (request.query.get("passengerId") == request.auth.uid && 
-                      (request.query.get("status") == "finished" || request.query.get("status") == "cancelled")));
+                    (request.query.where.size() == 1 && request.query.where[0].field == 'status' && request.query.where[0].value == 'searching_driver') ||
+                    (request.query.where.size() > 0 && request.query.where[0].field == 'passengerId' && request.query.where[0].value == request.auth.uid);
+
 
       // El pasajero del viaje o el conductor asignado pueden leer el documento.
       // También se permite leer si el estado es 'searching_driver' para que los conductores vean detalles.
