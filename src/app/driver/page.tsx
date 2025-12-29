@@ -35,7 +35,7 @@ export default function DriverPage() {
             ])
           )
         : null,
-    [firestore, user]
+    [firestore, user?.uid] // Depend on user.uid specifically
   );
   const { data: activeRides, isLoading: isLoadingActive } = useCollection(activeRideQuery);
 
