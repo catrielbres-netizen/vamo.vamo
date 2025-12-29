@@ -18,6 +18,7 @@ import {
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { RideStatusInfo } from '@/lib/ride-status';
+import { Skeleton } from './ui/skeleton';
 
 export default function RideStatus({ rideId }: { rideId: string }) {
   const firestore = useFirestore();
@@ -31,10 +32,12 @@ export default function RideStatus({ rideId }: { rideId: string }) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Cargando estado del viaje...</CardTitle>
+          <CardTitle>Buscando tu viaje...</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p>Aguardá un momento...</p>
+        <CardContent className="space-y-4">
+          <Skeleton className="h-8 w-3/4" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-10 w-1/2" />
         </CardContent>
       </Card>
     );
@@ -56,8 +59,8 @@ export default function RideStatus({ rideId }: { rideId: string }) {
   if (ride.status === 'finished') {
     return (
         <Card>
-        <CardHeader className='items-center'>
-            <PartyPopper className="w-12 h-12 text-primary" />
+        <CardHeader className='items-center text-center'>
+            <PartyPopper className="w-12 h-12 text-primary mb-2" />
             <CardTitle>¡Viaje Finalizado!</CardTitle>
             <CardDescription>Gracias por viajar con VamO.</CardDescription>
         </CardHeader>
@@ -90,7 +93,7 @@ export default function RideStatus({ rideId }: { rideId: string }) {
           </div>
           <Progress value={config.progress} className="w-full" />
         </div>
-        <div className="text-sm space-y-2">
+        <div className="text-sm space-y-3">
             {ride.driverName && (
                <p className="flex items-center">
                 <UserCheck className="w-4 h-4 mr-2 text-muted-foreground" />{' '}
@@ -107,15 +110,15 @@ export default function RideStatus({ rideId }: { rideId: string }) {
               <span className="capitalize ml-1">{ride.serviceType}</span>
             </p>
             {ride.pricing.estimatedTotal && (
-              <p className="font-bold text-base">
-                Tarifa:{' '}
-                <span className="text-primary">
+              <div className="!mt-4 bg-background/50 border p-3 rounded-lg text-center">
+                <p className="text-sm text-muted-foreground">Tarifa Estimada</p>
+                <p className="font-bold text-xl text-primary">
                   $
                   {new Intl.NumberFormat('es-AR').format(
                     ride.pricing.estimatedTotal
                   )}
-                </span>
-              </p>
+                </p>
+              </div>
             )}
           </div>
       </CardContent>

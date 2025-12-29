@@ -50,11 +50,11 @@ export default function DriverPage() {
 
 
   const handleAcceptRide = (rideId: string) => {
-    setActiveRideId(rideId);
+    // No need to set activeRideId here as the activeRideQuery will pick it up
   };
   
   const handleFinishRide = () => {
-    setActiveRideId(null);
+    // The ride is finished, so it will disappear from the active query
   };
 
   const currentActiveRide = activeRides && activeRides.length > 0 ? activeRides[0] : null;
