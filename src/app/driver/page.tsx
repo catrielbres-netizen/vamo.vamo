@@ -1,18 +1,20 @@
 // /app/driver/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import { collection, query, where, doc } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
 import ActiveDriverRide from '@/components/ActiveDriverRide';
 import { VamoIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { useToast } from "@/hooks/use-toast";
 
 export default function DriverPage() {
   const firestore = useFirestore();
   const { user } = useUser();
-  const [activeRideId, setActiveRideId] = useState<string | null>(null);
+  const { toast } = useToast();
+  const wasPreviouslyActive = useRef(false);
 
   // 1. Query for rides assigned to the current driver
   const activeRideQuery = useMemoFirebase(
@@ -48,16 +50,33 @@ export default function DriverPage() {
   );
   const { data: availableRides, isLoading: isLoadingAvailable } = useCollection(availableRidesQuery);
 
+  const currentActiveRide = activeRides && activeRides.length > 0 ? activeRides[0] : null;
+
+  useEffect(() => {
+    const isActive = !!currentActiveRide;
+    // If it was active before but now it's not
+    if (wasPreviouslyActive.current && !isActive) {
+      toast({
+        title: "Viaje cancelado",
+        description: "El pasajero ha cancelado el viaje. Vuelves a estar disponible.",
+        variant: "destructive",
+      });
+    }
+    wasPreviouslyActive.current = isActive;
+  }, [currentActiveRide, toast]);
+
 
   const handleAcceptRide = (rideId: string) => {
     // No need to set activeRideId here as the activeRideQuery will pick it up
   };
   
   const handleFinishRide = () => {
+    toast({
+        title: "¡Viaje finalizado!",
+        description: "El viaje ha sido completado y cobrado.",
+    });
     // The ride is finished, so it will disappear from the active query
   };
-
-  const currentActiveRide = activeRides && activeRides.length > 0 ? activeRides[0] : null;
 
   return (
     <main className="container mx-auto max-w-md p-4">
