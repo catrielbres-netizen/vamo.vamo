@@ -1,4 +1,4 @@
-// @/lib/store.ts
+// @/lib/store.tsx
 'use client';
 import {
   createContext,
