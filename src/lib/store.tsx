@@ -32,35 +32,38 @@ interface Store {
 const StoreContext = createContext<Store | null>(null);
 
 const useLocalStorage = <T,>(key: string, initialValue: T) => {
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    if (typeof window === 'undefined') {
-      return initialValue;
-    }
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.log(error);
-      return initialValue;
-    }
-  });
+  const [storedValue, setStoredValue] = useState<T>(initialValue);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    try {
+      const item = window.localStorage.getItem(key);
+      if (item) {
+        setStoredValue(JSON.parse(item));
+      }
+    } catch (error) {
+      console.log(error);
+    }
+    setHydrated(true);
+  }, [key]);
+
+  useEffect(() => {
+    if (hydrated) {
       window.localStorage.setItem(key, JSON.stringify(storedValue));
     }
-  }, [key, storedValue]);
+  }, [key, storedValue, hydrated]);
 
-  return [storedValue, setStoredValue] as const;
+  return [storedValue, setStoredValue, hydrated] as const;
 };
 
 export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
-  const [rides, setRides] = useLocalStorage<Ride[]>('rides', initialRides);
-  const [users] = useState<User[]>(initialUsers);
-  const [currentUserId, setCurrentUserId] = useLocalStorage<string>(
-    'currentUserId',
-    users[0].id
+  const [rides, setRides, ridesHydrated] = useLocalStorage<Ride[]>(
+    'rides',
+    initialRides
   );
+  const [users] = useState<User[]>(initialUsers);
+  const [currentUserId, setCurrentUserId, userHydrated] =
+    useLocalStorage<string>('currentUserId', users[0].id);
 
   const updateRide = useCallback(
     (rideId: string, updates: Partial<Ride>) => {
@@ -95,15 +98,19 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
         updates.lastPauseTime = Date.now();
       }
 
-      if (status === 'activo' && ride.status === 'pausado' && ride.lastPauseTime) {
+      if (
+        status === 'activo' &&
+        ride.status === 'pausado' &&
+        ride.lastPauseTime
+      ) {
         const pauseDuration = (Date.now() - ride.lastPauseTime) / 1000;
         updates.pauseDuration = (ride.pauseDuration || 0) + pauseDuration;
         updates.lastPauseTime = undefined;
       }
-      
+
       if (status === 'finalizado') {
         updates.endTime = Date.now();
-        updates.fare = calculateFinalFare(ride);
+        updates.fare = calculateFinalFare({ ...ride, ...updates });
       }
 
       updateRide(rideId, updates);
@@ -170,6 +177,10 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
     ]
   );
 
+  if (!ridesHydrated || !userHydrated) {
+    return null; // O un spinner de carga
+  }
+
   return (
     <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
   );
@@ -178,7 +189,7 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
 export const useStore = () => {
   const context = useContext(StoreContext);
   if (!context) {
-    throw new Error('useStore must be used within a StoreProvider');
+    throw new Error('useStore debe ser usado dentro de un StoreProvider');
   }
   return context;
 };
