@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RideStatusInfo } from '@/lib/ride-status';
-import { calculateFare } from '@/lib/pricing';
-import { Flag, User, Hourglass, Play } from 'lucide-react';
+import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
+import { Flag, User, Hourglass, Play, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 const statusActions: { [key: string]: { action: string, label: string } } = {
   driver_assigned: { action: 'driver_arriving', label: '¡Voy en camino!' },
@@ -26,10 +27,35 @@ const statusActions: { [key: string]: { action: string, label: string } } = {
   paused: { action: 'in_progress', label: 'Reanudar Viaje' },
 };
 
+const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
 
 export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, onFinishRide: () => void }) {
   const firestore = useFirestore();
-  
+  const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
+
+  const totalAccumulatedWaitSeconds = (ride.pauseHistory || []).reduce((acc: number, p: any) => acc + p.duration, 0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout | undefined;
+    if (ride.status === 'paused' && ride.pauseStartedAt) {
+      const updateTimer = () => {
+          const now = Timestamp.now();
+          const start = ride.pauseStartedAt;
+          setCurrentPauseSeconds(now.seconds - start.seconds);
+      }
+      updateTimer();
+      timer = setInterval(updateTimer, 1000);
+    } else {
+        setCurrentPauseSeconds(0);
+    }
+    
+    return () => clearInterval(timer);
+  }, [ride.status, ride.pauseStartedAt]);
+
   const updateStatus = (newStatus: string) => {
     if (!firestore) return;
     const rideRef = doc(firestore, 'rides', ride.id);
@@ -43,7 +69,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
         payload.pauseStartedAt = serverTimestamp();
     }
     
-    if(newStatus === 'in_progress' && ride.status === 'paused') {
+    if(newStatus === 'in_progress' && ride.status === 'paused' && ride.pauseStartedAt) {
         const now = Timestamp.now();
         const pausedAt = ride.pauseStartedAt; // Is already a Timestamp
         const diffSeconds = now.seconds - pausedAt.seconds;
@@ -56,7 +82,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
     }
 
     if(newStatus === 'finished') {
-        const totalWaitTimeSeconds = (ride.pauseHistory || []).reduce((acc: number, p: any) => acc + p.duration, 0);
+        const totalWaitTimeSeconds = totalAccumulatedWaitSeconds;
         const finalPrice = calculateFare({
             distanceMeters: ride.pricing.estimatedDistanceMeters ?? 4200, // Usar distancia real en el futuro
             waitingMinutes: Math.ceil(totalWaitTimeSeconds / 60),
@@ -77,13 +103,16 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
   const nextAction = statusActions[ride.status as keyof typeof statusActions];
   const statusInfo = RideStatusInfo[ride.status as keyof typeof RideStatusInfo] || { text: 'Estado desconocido', icon: <></> };
 
+  const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
+  const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
+
   return (
     <Card>
        <CardHeader className="flex-row items-center justify-between">
         <CardTitle>
             Viaje en curso
         </CardTitle>
-        <Badge variant="secondary" className="flex items-center gap-2 whitespace-nowrap">
+        <Badge variant={ride.status === 'paused' ? 'destructive' : 'secondary'} className="flex items-center gap-2 whitespace-nowrap">
             {statusInfo.icon}
             {statusInfo.text}
         </Badge>
@@ -97,6 +126,18 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
           <Flag className="w-4 h-4 mr-2 text-muted-foreground" />
           <strong>Destino:</strong> {ride.destination.address}
         </p>
+        {(totalWaitWithCurrent > 0) && (
+            <div className="!mt-4 bg-secondary/50 p-3 rounded-lg">
+                <p className="flex items-center justify-center font-mono text-center">
+                    <Clock className="w-4 h-4 mr-2 text-primary" />
+                    <span className="font-semibold">Tiempo de espera:</span>
+                    <span className="ml-2 tabular-nums">{formatDuration(totalWaitWithCurrent)}</span>
+                </p>
+                <p className="mt-1 text-center font-semibold">
+                    Costo de espera: ${new Intl.NumberFormat('es-AR').format(waitingCost)}
+                </p>
+            </div>
+        )}
       </CardContent>
       <CardFooter className="flex-col gap-2">
         {nextAction && (

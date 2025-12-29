@@ -4,7 +4,7 @@ export type ServiceType = "premium" | "privado" | "express";
 
 const BASE_FARE = 1400;
 const PRICE_PER_100M = 120;
-const WAITING_PER_MIN = 100;
+export const WAITING_PER_MIN = 100;
 
 export function calculateFare({
   distanceMeters,

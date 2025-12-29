@@ -7,26 +7,58 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter
 } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import {
   Car,
   Flag,
   UserCheck,
-  PartyPopper
+  PartyPopper,
+  Clock
 } from 'lucide-react';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, Timestamp } from 'firebase/firestore';
 import { RideStatusInfo } from '@/lib/ride-status';
 import { Skeleton } from './ui/skeleton';
+import { useState, useEffect } from 'react';
+import { WAITING_PER_MIN } from '@/lib/pricing';
+import { Badge } from '@/components/ui/badge';
+
+const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
 
 export default function RideStatus({ rideId }: { rideId: string }) {
   const firestore = useFirestore();
+  const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
+
   const rideRef = useMemoFirebase(
     () => (firestore && rideId ? doc(firestore, 'rides', rideId) : null),
     [firestore, rideId]
   );
   const { data: ride, isLoading } = useDoc(rideRef);
+
+  const totalAccumulatedWaitSeconds = (ride?.pauseHistory || []).reduce((acc: number, p: any) => acc + p.duration, 0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout | undefined;
+    if (ride?.status === 'paused' && ride.pauseStartedAt) {
+      const updateTimer = () => {
+          const now = Timestamp.now();
+          const start = ride.pauseStartedAt;
+          setCurrentPauseSeconds(now.seconds - start.seconds);
+      }
+      updateTimer();
+      timer = setInterval(updateTimer, 1000);
+    } else {
+        setCurrentPauseSeconds(0);
+    }
+    
+    return () => clearInterval(timer);
+  }, [ride?.status, ride?.pauseStartedAt]);
 
   if (isLoading) {
     return (
@@ -57,6 +89,10 @@ export default function RideStatus({ rideId }: { rideId: string }) {
   }
   
   if (ride.status === 'finished') {
+    const waitingMinutes = Math.ceil(totalAccumulatedWaitSeconds / 60);
+    const waitingCost = waitingMinutes * WAITING_PER_MIN;
+    const fareWithoutWaiting = (ride.pricing.finalTotal || 0) - waitingCost;
+
     return (
         <Card>
         <CardHeader className='items-center text-center'>
@@ -66,9 +102,13 @@ export default function RideStatus({ rideId }: { rideId: string }) {
         </CardHeader>
         <CardContent className="text-center">
             <p className="text-muted-foreground">Monto final</p>
-            <p className="text-4xl font-bold">
+            <p className="text-4xl font-bold mb-4">
             ${new Intl.NumberFormat('es-AR').format(ride.pricing.finalTotal || ride.pricing.estimatedTotal)}
             </p>
+             <div className="text-left text-sm space-y-1 bg-secondary/50 p-3 rounded-lg">
+                <div className="flex justify-between"><span>Tarifa base del viaje:</span> <span>${new Intl.NumberFormat('es-AR').format(fareWithoutWaiting)}</span></div>
+                {waitingCost > 0 && <div className="flex justify-between"><span>Tiempo de espera ({formatDuration(totalAccumulatedWaitSeconds)}):</span> <span>${new Intl.NumberFormat('es-AR').format(waitingCost)}</span></div>}
+            </div>
         </CardContent>
         </Card>
     )
@@ -80,10 +120,12 @@ export default function RideStatus({ rideId }: { rideId: string }) {
   let cardTitle = '¡Tu viaje está en marcha!';
   if (ride.status === 'searching_driver') {
       cardTitle = 'Buscando tu viaje...';
-  } else if (ride.status === 'driver_arriving') {
+  } else if (ride.status === 'driver_assigned' || ride.status === 'driver_arriving') {
       cardTitle = `El conductor ${ride.driverName || ''} está yendo a buscarte`;
   }
 
+  const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
+  const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
 
   return (
     <Card>
@@ -117,19 +159,29 @@ export default function RideStatus({ rideId }: { rideId: string }) {
               <strong>Servicio:</strong>{' '}
               <span className="capitalize ml-1">{ride.serviceType}</span>
             </p>
-            {ride.pricing.estimatedTotal && (
-              <div className="!mt-4 bg-background/50 border p-3 rounded-lg text-center">
-                <p className="text-sm text-muted-foreground">Tarifa Estimada</p>
-                <p className="font-bold text-xl text-primary">
-                  $
-                  {new Intl.NumberFormat('es-AR').format(
-                    ride.pricing.estimatedTotal
-                  )}
-                </p>
-              </div>
+
+            {(totalWaitWithCurrent > 0 || ride.status === 'paused') && (
+                <div className="!mt-4 border bg-background/80 p-3 rounded-lg">
+                    <p className="flex items-center justify-center font-mono text-center">
+                        <Clock className="w-4 h-4 mr-2 text-primary" />
+                        <span className="font-semibold">Tiempo de espera:</span>
+                        <span className="ml-2 tabular-nums">{formatDuration(totalWaitWithCurrent)}</span>
+                    </p>
+                    <p className="mt-1 text-center text-sm">
+                        Costo de espera: ${new Intl.NumberFormat('es-AR').format(waitingCost)}
+                    </p>
+                </div>
             )}
-          </div>
+        </div>
       </CardContent>
+       <CardFooter className="!mt-4 bg-background/50 border p-3 rounded-lg text-center">
+            <div>
+              <p className="text-sm text-muted-foreground">Tarifa Actual Estimada</p>
+              <p className="font-bold text-xl text-primary">
+                ${new Intl.NumberFormat('es-AR').format(ride.pricing.estimatedTotal + waitingCost)}
+              </p>
+            </div>
+      </CardFooter>
     </Card>
   );
 }
