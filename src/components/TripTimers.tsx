@@ -1,18 +1,26 @@
 'use client';
 
-import { Clock } from 'lucide-react';
+import { Clock, Hourglass } from 'lucide-react';
 
-export function TripTimers({ waitMinutes, waitCost }: { waitMinutes: number, waitCost: number }) {
-  if (!waitMinutes) return null;
+export function TripTimers({ waitMinutes, waitCost, currentTotal }: { waitMinutes: string, waitCost: string, currentTotal: string }) {
+  const hasWaitTime = waitMinutes !== '00:00';
 
   return (
-    <div className="m-4 p-3 text-sm rounded-lg bg-secondary/50 flex items-center justify-center gap-4">
-        <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-primary" />
-            <span>Espera: <strong>{waitMinutes} min</strong></span>
-        </div>
-        <div>
-            <span>Costo espera: <strong>${new Intl.NumberFormat('es-AR').format(waitCost)}</strong></span>
+    <div className="m-4 p-3 text-sm rounded-lg bg-card border shadow-sm flex flex-col gap-3">
+        {hasWaitTime && (
+            <div className="flex items-center justify-center gap-4 text-center">
+                <div className="flex items-center gap-2">
+                    <Hourglass className="w-4 h-4 text-primary" />
+                    <span>Espera: <strong>{waitMinutes}</strong></span>
+                </div>
+                <div>
+                    <span>Costo: <strong>{waitCost}</strong></span>
+                </div>
+            </div>
+        )}
+        <div className="bg-secondary/50 p-3 rounded-md text-center">
+            <p className="text-xs text-muted-foreground">Tarifa actual estimada</p>
+            <p className="font-bold text-lg text-primary">{currentTotal}</p>
         </div>
     </div>
   );

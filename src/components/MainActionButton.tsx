@@ -2,29 +2,31 @@
 
 import { Button } from './ui/button';
 
-export function MainActionButton({ status, onClick }: { status: string, onClick: () => void }) {
-  const LABELS: { [key: string]: string } = {
-    idle: 'Pedir viaje',
-    searching: 'Cancelar búsqueda',
-    driver_found: 'Cancelar viaje',
-    on_the_way: 'Cancelar viaje',
-    arrived: 'Cancelar viaje',
-    finished: 'Pedir otro viaje',
-  };
+type ButtonVariant = "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
 
-  const isDestructive = ['searching', 'driver_found'].includes(status);
-
-  if (!LABELS[status]) return null;
-
+export function MainActionButton({
+  status,
+  onClick,
+  label,
+  variant,
+  disabled
+}: {
+  status: string;
+  onClick: () => void;
+  label: string;
+  variant: ButtonVariant;
+  disabled?: boolean;
+}) {
   return (
     <div className="m-4">
       <Button
         onClick={onClick}
         className="w-full"
         size="lg"
-        variant={isDestructive ? "destructive" : "default"}
+        variant={variant}
+        disabled={disabled}
       >
-        {LABELS[status]}
+        {label}
       </Button>
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { PassengerHeader } from '@/components/PassengerHeader';
 import { TripCard } from '@/components/TripCard';
 import { ServiceSelector } from '@/components/ServiceSelector';
@@ -8,36 +8,154 @@ import { PriceDisplay } from '@/components/PriceDisplay';
 import { DriverInfo } from '@/components/DriverInfo';
 import { TripTimers } from '@/components/TripTimers';
 import { MainActionButton } from '@/components/MainActionButton';
-import { useUser, useAuth } from '@/firebase';
+import {
+  useUser,
+  useAuth,
+  useFirestore,
+  useDoc,
+  useMemoFirebase,
+  addDocumentNonBlocking,
+  updateDocumentNonBlocking
+} from '@/firebase';
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/icons';
 import RideHistory from '@/components/RideHistory';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-
-// Mock data - to be replaced with Firestore data
-const mockDriver = {
-    name: 'Juan Pérez',
-    car: 'Toyota Corolla',
-    plate: 'AB 123 CD',
-    rating: '4.9',
-};
-
+import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
+import { collection, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
+import RideStatus from '@/components/RideStatus';
 
 export default function Home() {
-  const [rideId, setRideId] = useState<string | null>(null);
   const auth = useAuth();
+  const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
-  
-  // 🔥 después estos datos vienen de Firestore
-  const status = 'idle';
+  const { toast } = useToast();
 
+  // State for the new ride request form
+  const [destination, setDestination] = useState('');
+  const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
+  const [estimatedFare, setEstimatedFare] = useState(0);
+
+  // State to track the active ride ID
+  const [activeRideId, setActiveRideId] = useState<string | null>(null);
+
+  // Subscribe to the active ride document
+  const activeRideRef = useMemoFirebase(
+    () => (firestore && activeRideId ? doc(firestore, 'rides', activeRideId) : null),
+    [firestore, activeRideId]
+  );
+  const { data: ride, isLoading: isRideLoading } = useDoc(activeRideRef);
+
+  // Derived state from the ride document
+  const status = ride?.status || 'idle';
+
+  // Effect for anonymous sign-in
   useEffect(() => {
     if (!auth) return;
     if (!user && !isUserLoading) {
       initiateAnonymousSignIn(auth);
     }
   }, [user, isUserLoading, auth]);
+  
+    // Effect to calculate estimated fare
+  useEffect(() => {
+    if (destination.length > 3) { // Simple check to start estimating
+      // Mock distance for estimation. In a real app, this would come from a Maps API
+      const mockDistance = 4200;
+      const fare = calculateFare({ distanceMeters: mockDistance, service: serviceType });
+      setEstimatedFare(fare);
+    } else {
+      setEstimatedFare(0);
+    }
+  }, [destination, serviceType]);
+
+
+  const handleRequestRide = () => {
+    if (!firestore || !user || !destination) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Por favor, completá el destino para pedir un viaje.',
+      });
+      return;
+    }
+
+    const ridesCollection = collection(firestore, 'rides');
+    const newRide = {
+      passengerId: user.uid,
+      passengerName: user.displayName || 'Pasajero Anónimo',
+      origin: { lat: -43.3005, lng: -65.1023 }, // Mock: Rawson, Chubut
+      destination: {
+        address: destination,
+        lat: -43.25, // Mock coordinates
+        lng: -65.05,
+      },
+      serviceType: serviceType,
+      pricing: {
+        estimatedTotal: estimatedFare,
+        estimatedDistanceMeters: 4200, // Corresponds to mock distance
+        finalTotal: null,
+      },
+      status: 'searching_driver',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      finishedAt: null,
+      driverId: null,
+      pauseStartedAt: null,
+      pauseHistory: [],
+    };
+
+    addDocumentNonBlocking(ridesCollection, newRide)
+      .then((docRef) => {
+        if(docRef) {
+          setActiveRideId(docRef.id); // Start tracking the new ride
+          toast({
+            title: '¡Buscando conductor!',
+            description: 'Tu pedido fue enviado. Esperá la confirmación.',
+          });
+        }
+      })
+  };
+  
+  const handleCancelRide = () => {
+    if (!activeRideRef) return;
+
+    updateDocumentNonBlocking(activeRideRef, {
+      status: 'cancelled',
+      updatedAt: serverTimestamp(),
+    });
+    toast({
+        variant: "destructive",
+        title: "Viaje Cancelado",
+        description: "Tu viaje ha sido cancelado.",
+    });
+    // The useDoc hook will update the ride status, and the UI will react
+  }
+  
+  const handleReset = () => {
+      setActiveRideId(null);
+      setDestination('');
+  }
+
+  const getAction = () => {
+    switch (status) {
+        case 'idle':
+            return { handler: handleRequestRide, label: 'Pedir Viaje', variant: 'default' as const };
+        case 'searching_driver':
+        case 'driver_assigned':
+        case 'arrived':
+        case 'driver_arriving':
+             return { handler: handleCancelRide, label: 'Cancelar Viaje', variant: 'destructive' as const };
+        case 'finished':
+        case 'cancelled':
+             return { handler: handleReset, label: 'Pedir Otro Viaje', variant: 'default' as const };
+        default:
+             return { handler: () => {}, label: '...', variant: 'secondary' as const };
+    }
+  }
+
+  const currentAction = getAction();
 
 
   if (isUserLoading || !user) {
@@ -50,14 +168,45 @@ export default function Home() {
   }
 
   return (
-     <div className="max-w-md mx-auto">
-      <PassengerHeader userName="Catriel" location="Ubicación actual" />
-      <TripCard status={status} origin="Actual" destination="Destino" />
-      <ServiceSelector value="premium" onChange={() => {}} />
-      <PriceDisplay price={5400} isNight={false} />
-      <DriverInfo driver={null} />
-      <TripTimers waitMinutes={0} waitCost={0} />
-      <MainActionButton status={status} onClick={() => {}} />
-    </div>
+    <main className="max-w-md mx-auto pb-4">
+        <PassengerHeader userName={user.isAnonymous ? "Invitado" : user.displayName || "Usuario"} location="Rawson, Chubut" />
+
+        <Tabs defaultValue="trip" className="w-full px-4">
+            <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="trip">Viaje</TabsTrigger>
+                <TabsTrigger value="history">Historial</TabsTrigger>
+            </TabsList>
+            <TabsContent value="trip">
+                {status !== 'idle' && ride ? (
+                    <RideStatus ride={ride} />
+                ) : (
+                    <>
+                        <TripCard 
+                            status={status} 
+                            origin="Ubicación actual (simulada)" 
+                            destination={destination}
+                            onDestinationChange={setDestination}
+                            isInteractive={true}
+                        />
+                        <ServiceSelector 
+                            value={serviceType} 
+                            onChange={(val) => setServiceType(val as any)} 
+                        />
+                        <PriceDisplay price={estimatedFare} isNight={false} />
+                    </>
+                )}
+                 <MainActionButton 
+                    status={status} 
+                    onClick={currentAction.handler}
+                    label={currentAction.label}
+                    variant={currentAction.variant}
+                    disabled={isRideLoading || (status==='idle' && !destination)}
+                 />
+            </TabsContent>
+            <TabsContent value="history">
+                <RideHistory passengerId={user.uid} />
+            </TabsContent>
+        </Tabs>
+    </main>
   );
 }
