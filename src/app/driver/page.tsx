@@ -9,7 +9,6 @@ import ActiveDriverRide from '@/components/ActiveDriverRide';
 import { VamoIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { notificationSoundUri } from '@/lib/sounds';
 import { speak } from '@/lib/speak';
 
 export default function DriverPage() {
@@ -87,12 +86,7 @@ export default function DriverPage() {
                 title: "¡Nuevo viaje disponible!",
                 description: `Un pasajero solicita un viaje a ${newRide.destination.address}.`,
             });
-            const audio = new Audio(notificationSoundUri);
-            audio.play().catch(e => {
-                console.error("Error al reproducir sonido de notificación:", e);
-            });
             
-            const originText = 'la ubicación del pasajero';
             const destinationText = newRide.destination.address;
             speak(`Nuevo viaje disponible hacia ${destinationText}.`);
         }
