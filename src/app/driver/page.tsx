@@ -17,12 +17,6 @@ export default function DriverPage() {
   const { toast } = useToast();
   const wasPreviouslyActive = useRef(false);
   const previousAvailableRides = useRef<any[]>([]);
-  const notificationAudio = useRef<HTMLAudioElement | null>(null);
-
-  // Pre-load audio
-    useEffect(() => {
-        notificationAudio.current = new Audio(notificationSoundUri);
-    }, []);
 
   // 1. Query for rides assigned to the current driver
   const activeRideQuery = useMemoFirebase(
@@ -86,7 +80,9 @@ export default function DriverPage() {
                 title: "¡Nuevo viaje disponible!",
                 description: `Un pasajero solicita un viaje a ${newRides[0].destination.address}.`,
             });
-            notificationAudio.current?.play().catch(e => console.error("Error playing sound:", e));
+            // Instantiate and play the sound on demand.
+            const audio = new Audio(notificationSoundUri);
+            audio.play().catch(e => console.error("Error playing sound:", e));
         }
     }
     previousAvailableRides.current = availableRides || [];
