@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
 import ActiveDriverRide from '@/components/ActiveDriverRide';
 import { VamoIcon } from '@/components/icons';
@@ -108,11 +108,48 @@ export default function DriverPage() {
     // The ride is finished, so it will disappear from the active query
   };
 
+  const handleFinalizeAllRides = async () => {
+    if (!firestore) return;
+    toast({ title: "Limpiando viajes...", description: "Por favor, esperá." });
+
+    const activeStatuses = ['searching_driver', 'driver_assigned', 'driver_arriving', 'arrived', 'in_progress', 'paused'];
+    const q = query(collection(firestore, 'rides'), where('status', 'in', activeStatuses));
+
+    try {
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            toast({ title: "Todo limpio", description: "No se encontraron viajes activos para finalizar." });
+            return;
+        }
+
+        const batch = writeBatch(firestore);
+        querySnapshot.forEach(rideDoc => {
+            const rideRef = doc(firestore, 'rides', rideDoc.id);
+            batch.update(rideRef, { status: 'finished' });
+        });
+
+        await batch.commit();
+
+        toast({ title: "¡Limpieza completada!", description: `${querySnapshot.size} viajes fueron marcados como finalizados.` });
+    } catch (error) {
+        console.error("Error finalizando todos los viajes:", error);
+        toast({ title: "Error", description: "No se pudieron finalizar los viajes.", variant: "destructive" });
+    }
+  };
+
+
   return (
     <main className="container mx-auto max-w-md p-4">
        <div className="flex justify-center items-center mb-6">
         <VamoIcon className="h-8 w-8 text-primary mr-2" />
         <h1 className="text-3xl font-bold text-center">Panel Conductor</h1>
+      </div>
+      
+      <div className="my-4 p-4 border border-destructive/50 bg-destructive/10 rounded-lg">
+          <p className="text-sm text-center mb-2">Botón de limpieza temporal:</p>
+          <Button variant="destructive" onClick={handleFinalizeAllRides} className="w-full">
+            Finalizar Todos los Viajes Activos
+          </Button>
       </div>
 
       {isLoadingActive || isLoadingAvailable ? (
