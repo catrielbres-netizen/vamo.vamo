@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { useFirestore, useUser } from '@/firebase';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { collection, serverTimestamp } from 'firebase/firestore';
+import { collection, serverTimestamp, Firestore } from 'firebase/firestore';
 
 async function createRide({
   firestore,
@@ -33,7 +33,7 @@ async function createRide({
   pricing,
   passenger,
 }: {
-  firestore: any;
+  firestore: Firestore;
   origin: { lat: number; lng: number };
   destination: { address: string; lat: number; lng: number };
   serviceType: 'premium' | 'privado' | 'express';
@@ -58,9 +58,9 @@ async function createRide({
     collection(firestore, 'rides'),
     rideData
   );
-  
+
   if (!rideRef) {
-    throw new Error("Failed to create ride.");
+    throw new Error('No se pudo crear el viaje.');
   }
 
   return rideRef.id;
@@ -112,7 +112,7 @@ export default function PassengerRideForm({
   }, [destination, service, origin]);
 
   const handleConfirm = async () => {
-    if (!fare || !user) return;
+    if (!fare || !user || !firestore) return;
     setIsConfirming(true);
 
     try {

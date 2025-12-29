@@ -107,6 +107,12 @@ export default function RideStatus({ rideId }: { rideId: string }) {
         </div>
         {rideData && rideData.destination && (
           <div className="text-sm space-y-2">
+            {ride.driverName && (
+               <p className="flex items-center">
+                <UserCheck className="w-4 h-4 mr-2 text-muted-foreground" />{' '}
+                <strong>Conductor:</strong> {ride.driverName}
+              </p>
+            )}
             <p className="flex items-center">
               <Flag className="w-4 h-4 mr-2 text-muted-foreground" />{' '}
               <strong>Destino:</strong> {rideData.destination.address}
@@ -118,7 +124,7 @@ export default function RideStatus({ rideId }: { rideId: string }) {
             </p>
             {rideData.pricing.estimatedTotal && (
               <p className="font-bold text-base">
-                Tarifa Final:{' '}
+                Tarifa:{' '}
                 <span className="text-primary">
                   $
                   {new Intl.NumberFormat('es-AR').format(
