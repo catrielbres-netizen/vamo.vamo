@@ -38,7 +38,7 @@ const formatDuration = (seconds: number) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export default function RideStatus({ rideId, onCancel }: { rideId: string, onCancel: () => void }) {
+export default function RideStatus({ rideId, onCancel, onFinish }: { rideId: string, onCancel: () => void, onFinish: () => void }) {
   const firestore = useFirestore();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
 
@@ -47,6 +47,15 @@ export default function RideStatus({ rideId, onCancel }: { rideId: string, onCan
     [firestore, rideId]
   );
   const { data: ride, isLoading } = useDoc(rideRef);
+
+  useEffect(() => {
+    if(ride?.status === 'finished' || ride?.status === 'cancelled') {
+        // La primera vez que el estado cambia a finalizado/cancelado, llamamos al callback
+        if (ride.status === 'finished') onFinish();
+        if (ride.status === 'cancelled') onCancel();
+    }
+  }, [ride?.status, onFinish, onCancel]);
+
 
   const totalAccumulatedWaitSeconds = (ride?.pauseHistory || []).reduce((acc: number, p: any) => acc + p.duration, 0);
 
@@ -74,7 +83,7 @@ export default function RideStatus({ rideId, onCancel }: { rideId: string, onCan
       status: 'cancelled',
       updatedAt: serverTimestamp(),
     });
-    onCancel();
+    // onCancel will be called by the useEffect
   };
 
   const handleShareViaWhatsapp = () => {
@@ -100,7 +109,8 @@ Aquí está el resumen de tu viaje:
     window.open(whatsappUrl, '_blank');
   }
 
-  const canCancel = ride && ['searching_driver', 'driver_assigned', 'driver_arriving'].includes(ride.status);
+  const canCancel = ride && ['searching_driver', 'driver_assigned'].includes(ride.status);
+
 
   if (isLoading) {
     return (
