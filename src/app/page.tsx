@@ -5,8 +5,6 @@ import { PassengerHeader } from '@/components/PassengerHeader';
 import { TripCard } from '@/components/TripCard';
 import { ServiceSelector } from '@/components/ServiceSelector';
 import { PriceDisplay } from '@/components/PriceDisplay';
-import { DriverInfo } from '@/components/DriverInfo';
-import { TripTimers } from '@/components/TripTimers';
 import { MainActionButton } from '@/components/MainActionButton';
 import {
   useUser,
@@ -20,9 +18,8 @@ import {
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/icons';
 import RideHistory from '@/components/RideHistory';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
-import { collection, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { calculateFare } from '@/lib/pricing';
+import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
 
@@ -168,45 +165,35 @@ export default function Home() {
   }
 
   return (
-    <main className="max-w-md mx-auto pb-4">
-        <PassengerHeader userName={user.isAnonymous ? "Invitado" : user.displayName || "Usuario"} location="Rawson, Chubut" />
+    <main className="max-w-md mx-auto pb-4 px-4">
+      <PassengerHeader userName={user.isAnonymous ? "Invitado" : user.displayName || "Usuario"} location="Rawson, Chubut" />
 
-        <Tabs defaultValue="trip" className="w-full px-4">
-            <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="trip">Viaje</TabsTrigger>
-                <TabsTrigger value="history">Historial</TabsTrigger>
-            </TabsList>
-            <TabsContent value="trip">
-                {status !== 'idle' && ride ? (
-                    <RideStatus ride={ride} />
-                ) : (
-                    <>
-                        <TripCard 
-                            status={status} 
-                            origin="Ubicación actual (simulada)" 
-                            destination={destination}
-                            onDestinationChange={setDestination}
-                            isInteractive={true}
-                        />
-                        <ServiceSelector 
-                            value={serviceType} 
-                            onChange={(val) => setServiceType(val as any)} 
-                        />
-                        <PriceDisplay price={estimatedFare} isNight={false} />
-                    </>
-                )}
-                 <MainActionButton 
-                    status={status} 
-                    onClick={currentAction.handler}
-                    label={currentAction.label}
-                    variant={currentAction.variant}
-                    disabled={isRideLoading || (status==='idle' && !destination)}
-                 />
-            </TabsContent>
-            <TabsContent value="history">
-                <RideHistory passengerId={user.uid} />
-            </TabsContent>
-        </Tabs>
+      {status !== 'idle' && ride ? (
+        <RideStatus ride={ride} />
+      ) : (
+        <>
+          <TripCard 
+            status={status} 
+            origin="Ubicación actual (simulada)" 
+            destination={destination}
+            onDestinationChange={setDestination}
+            isInteractive={true}
+          />
+          <ServiceSelector 
+            value={serviceType} 
+            onChange={(val) => setServiceType(val as any)} 
+          />
+          <PriceDisplay price={estimatedFare} isNight={false} />
+        </>
+      )}
+      <MainActionButton 
+        status={status} 
+        onClick={currentAction.handler}
+        label={currentAction.label}
+        variant={currentAction.variant}
+        disabled={isRideLoading || (status==='idle' && !destination)}
+      />
+      <RideHistory passengerId={user.uid} />
     </main>
   );
 }
