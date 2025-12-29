@@ -15,15 +15,18 @@ import {
   Flag,
   UserCheck,
   PartyPopper,
-  Clock
+  Clock,
+  XCircle
 } from 'lucide-react';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
-import { doc, Timestamp } from 'firebase/firestore';
+import { doc, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { RideStatusInfo } from '@/lib/ride-status';
 import { Skeleton } from './ui/skeleton';
 import { useState, useEffect } from 'react';
 import { WAITING_PER_MIN } from '@/lib/pricing';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+
 
 const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -31,7 +34,7 @@ const formatDuration = (seconds: number) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export default function RideStatus({ rideId }: { rideId: string }) {
+export default function RideStatus({ rideId, onCancel }: { rideId: string, onCancel: () => void }) {
   const firestore = useFirestore();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
 
@@ -59,6 +62,18 @@ export default function RideStatus({ rideId }: { rideId: string }) {
     
     return () => clearInterval(timer);
   }, [ride?.status, ride?.pauseStartedAt]);
+
+  const handleCancelRide = () => {
+    if (!firestore || !rideId) return;
+    const rideDocRef = doc(firestore, "rides", rideId);
+    updateDocumentNonBlocking(rideDocRef, {
+      status: 'cancelled',
+      updatedAt: serverTimestamp(),
+    });
+    onCancel();
+  };
+
+  const canCancel = ride && ['searching_driver', 'driver_assigned', 'driver_arriving'].includes(ride.status);
 
   if (isLoading) {
     return (
@@ -88,6 +103,20 @@ export default function RideStatus({ rideId }: { rideId: string }) {
     );
   }
   
+  if (ride.status === 'cancelled') {
+    return (
+      <Card>
+        <CardHeader className='items-center text-center'>
+            <XCircle className="w-12 h-12 text-destructive mb-2" />
+            <CardTitle>Viaje Cancelado</CardTitle>
+        </CardHeader>
+        <CardContent className="text-center">
+            <Button onClick={onCancel} variant="outline">Pedir un nuevo viaje</Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (ride.status === 'finished') {
     const waitingMinutes = Math.ceil(totalAccumulatedWaitSeconds / 60);
     const waitingCost = waitingMinutes * WAITING_PER_MIN;
@@ -174,13 +203,19 @@ export default function RideStatus({ rideId }: { rideId: string }) {
             )}
         </div>
       </CardContent>
-       <CardFooter className="!mt-4 bg-background/50 border p-3 rounded-lg text-center">
+       <CardFooter className="!mt-4 bg-background/50 border p-3 rounded-lg text-center flex-col gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Tarifa Actual Estimada</p>
               <p className="font-bold text-xl text-primary">
                 ${new Intl.NumberFormat('es-AR').format(ride.pricing.estimatedTotal + waitingCost)}
               </p>
             </div>
+            {canCancel && (
+                <Button onClick={handleCancelRide} variant="destructive" className="w-full">
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Cancelar Viaje
+                </Button>
+            )}
       </CardFooter>
     </Card>
   );

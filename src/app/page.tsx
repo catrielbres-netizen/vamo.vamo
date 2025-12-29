@@ -20,6 +20,10 @@ export default function Home() {
     }
   }, [user, isUserLoading, auth]);
 
+  const handleNewRide = () => {
+    setRideId(null);
+  }
+
   if (isUserLoading) {
     return (
       <main className="container mx-auto max-w-md p-4">
@@ -41,7 +45,7 @@ export default function Home() {
       {!rideId ? (
         <PassengerRideForm onConfirm={setRideId} />
       ) : (
-        <RideStatus rideId={rideId} />
+        <RideStatus rideId={rideId} onCancel={handleNewRide}/>
       )}
     </main>
   );
