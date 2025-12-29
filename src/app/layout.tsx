@@ -1,13 +1,11 @@
 import type { Metadata } from 'next';
-import { AppProvider } from '@/components/layout/app-provider';
-import { Header } from '@/components/layout/header';
-import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 import './globals.css';
+import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
   title: 'VamO - Tu Viaje, a Tu Manera',
-  description: 'Una app de viajes compartidos hecha con Next.js y Firebase.',
+  description: 'Una app de viajes compartidos hecha con Next.js.',
 };
 
 export default function RootLayout({
@@ -28,24 +26,17 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500&display=swap"
-          rel="stylesheet"
-        />
       </head>
       <body
         className={cn(
-          'min-h-screen bg-background font-body antialiased',
+          'min-h-screen bg-background font-sans antialiased',
           'dark'
         )}
       >
-        <AppProvider>
-          <div className="relative flex min-h-screen flex-col">
-            <Header />
+        <div className="relative flex min-h-screen flex-col">
             <main className="flex-1">{children}</main>
-          </div>
-          <Toaster />
-        </AppProvider>
+        </div>
+        <Toaster />
       </body>
     </html>
   );
