@@ -17,14 +17,14 @@ export function calculateFare({
   service: ServiceType;
   isNight?: boolean;
 }) {
-  let fare =
-    BASE_FARE +
-    (distanceMeters / 100) * PRICE_PER_100M +
-    waitingMinutes * WAITING_PER_MIN;
+  let distanceCost = Math.ceil(distanceMeters / 100) * PRICE_PER_100M;
+  let waitCost = waitingMinutes * WAITING_PER_MIN;
 
-  if (service === "privado") fare *= 0.9;
-  if (service === "express") fare *= 0.75;
-  if (isNight) fare *= 1.05;
+  let total = BASE_FARE + distanceCost + waitCost;
 
-  return Math.round(fare);
+  if (service === "privado") total *= 0.9;
+  if (service === "express") total *= 0.75;
+  if (isNight) total *= 1.05;
+
+  return Math.round(total);
 }

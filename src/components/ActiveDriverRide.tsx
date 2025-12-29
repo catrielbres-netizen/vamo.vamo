@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RideStatusInfo } from '@/lib/ride-status';
+import { calculateFare } from '@/lib/pricing';
 import { Flag, User } from 'lucide-react';
 
 const statusActions = {
@@ -39,6 +40,13 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
     }
 
     if(newStatus === 'finished') {
+        const finalPrice = calculateFare({
+            distanceMeters: ride.pricing.estimatedDistanceMeters ?? 4200, // Usar distancia real en el futuro
+            waitingMinutes: 0, // Añadir lógica de tiempo de espera
+            service: ride.serviceType,
+            isNight: false, // Añadir lógica de tarifa nocturna
+        });
+        payload.pricing.finalTotal = finalPrice;
         payload.finishedAt = serverTimestamp();
     }
 
@@ -79,6 +87,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
             onClick={() => updateStatus(nextAction.action)}
             className="w-full"
             size="lg"
+            variant={nextAction.action === 'finished' ? 'destructive' : 'default'}
           >
             {nextAction.label}
           </Button>

@@ -50,7 +50,7 @@
           "required": [
             "address",
             "lat",
-lng"
+            "lng"
           ],
           "description": "The destination details of the ride."
         },
@@ -67,6 +67,9 @@ lng"
           "properties": {
             "estimatedTotal": {
               "type": "number"
+            },
+            "finalTotal": {
+              "type": ["number", "null"]
             },
             "estimatedDistanceMeters": {
               "type": "number"
@@ -100,6 +103,11 @@ lng"
           "type": "string",
           "format": "date-time",
           "description": "Timestamp of when the ride was last updated."
+        },
+        "finishedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Timestamp of when the ride was finished."
         },
         "driverId": {
           "type": [
