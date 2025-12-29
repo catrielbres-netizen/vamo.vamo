@@ -81,7 +81,7 @@ export default function RideStatus({ rideId }: { rideId: string }) {
   if (ride.status === 'searching_driver') {
       cardTitle = 'Buscando tu viaje...';
   } else if (ride.status === 'driver_arriving') {
-      cardTitle = 'Tu conductor viene a buscarte';
+      cardTitle = `El conductor ${ride.driverName || ''} está yendo a buscarte`;
   }
 
 
