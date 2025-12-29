@@ -1,27 +1,36 @@
-// /app/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import PassengerRideForm from '@/components/PassengerRideForm';
-import RideStatus from '@/components/RideStatus';
-import RideHistory from '@/components/RideHistory';
+import { PassengerHeader } from '@/components/PassengerHeader';
+import { TripCard } from '@/components/TripCard';
+import { ServiceSelector } from '@/components/ServiceSelector';
+import { PriceDisplay } from '@/components/PriceDisplay';
+import { DriverInfo } from '@/components/DriverInfo';
+import { TripTimers } from '@/components/TripTimers';
+import { MainActionButton } from '@/components/MainActionButton';
 import { useUser, useAuth } from '@/firebase';
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/icons';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import RideHistory from '@/components/RideHistory';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+
+// Mock data - to be replaced with Firestore data
+const mockDriver = {
+    name: 'Juan Pérez',
+    car: 'Toyota Corolla',
+    plate: 'AB 123 CD',
+    rating: '4.9',
+};
+
 
 export default function Home() {
   const [rideId, setRideId] = useState<string | null>(null);
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
-
-  useEffect(() => {
-    // Check local storage for an ongoing ride
-    const savedRideId = localStorage.getItem('activeRideId');
-    if (savedRideId) {
-      setRideId(savedRideId);
-    }
-  }, []);
+  
+  // 🔥 después estos datos vienen de Firestore
+  const status = 'idle';
 
   useEffect(() => {
     if (!auth) return;
@@ -30,15 +39,6 @@ export default function Home() {
     }
   }, [user, isUserLoading, auth]);
 
-  const handleNewRideRequest = (newRideId: string) => {
-    localStorage.setItem('activeRideId', newRideId);
-    setRideId(newRideId);
-  }
-
-  const handleRideFinishOrCancel = () => {
-    localStorage.removeItem('activeRideId');
-    setRideId(null);
-  }
 
   if (isUserLoading || !user) {
     return (
@@ -50,28 +50,14 @@ export default function Home() {
   }
 
   return (
-    <main className="container mx-auto max-w-md p-4">
-      <div className="flex justify-center items-center mb-6">
-        <VamoIcon className="h-8 w-8 text-primary mr-2" />
-        <h1 className="text-3xl font-bold text-center">VamO</h1>
-      </div>
-
-      <Tabs defaultValue="ride" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="ride">Viaje</TabsTrigger>
-          <TabsTrigger value="history">Historial</TabsTrigger>
-        </TabsList>
-        <TabsContent value="ride" className="mt-4">
-          {!rideId ? (
-            <PassengerRideForm onConfirm={handleNewRideRequest} />
-          ) : (
-            <RideStatus rideId={rideId} onCancel={handleRideFinishOrCancel} onFinish={handleRideFinishOrCancel}/>
-          )}
-        </TabsContent>
-        <TabsContent value="history" className="mt-4">
-          <RideHistory passengerId={user.uid} />
-        </TabsContent>
-      </Tabs>
-    </main>
+     <div className="max-w-md mx-auto">
+      <PassengerHeader userName="Catriel" location="Ubicación actual" />
+      <TripCard status={status} origin="Actual" destination="Destino" />
+      <ServiceSelector value="premium" onChange={() => {}} />
+      <PriceDisplay price={5400} isNight={false} />
+      <DriverInfo driver={null} />
+      <TripTimers waitMinutes={0} waitCost={0} />
+      <MainActionButton status={status} onClick={() => {}} />
+    </div>
   );
 }
