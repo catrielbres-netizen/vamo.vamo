@@ -1,57 +1,84 @@
 // /app/driver/page.tsx
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { useEffect, useRef, useState } from 'react';
+import { useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { collection, query, where, getDocs, writeBatch, doc, onSnapshot } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
 import ActiveDriverRide from '@/components/ActiveDriverRide';
 import { VamoIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { speak } from '@/lib/speak';
+import { WithId } from '@/firebase/firestore/use-collection';
+import { Ride } from '@/lib/types';
+
 
 export default function DriverPage() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  
+  const [activeRides, setActiveRides] = useState<WithId<Ride>[] | null>(null);
+  const [availableRides, setAvailableRides] = useState<WithId<Ride>[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
   const wasPreviouslyActive = useRef(false);
   const previousAvailableRides = useRef<any[]>([]);
   const finishedByDriver = useRef(false);
 
-  // 1. Query for rides assigned to the current driver
-  const activeRideQuery = useMemoFirebase(
-    () =>
-      firestore && user?.uid // Ensure both exist before creating the query
-        ? query(
-            collection(firestore, 'rides'),
-            where('driverId', '==', user.uid),
-            where('status', 'in', [
-              'driver_assigned',
-              'driver_arriving',
-              'arrived',
-              'in_progress',
-              'paused',
-            ])
-          )
-        : null,
-    [firestore, user?.uid] // Depend on user.uid specifically
-  );
-  const { data: activeRides, isLoading: isLoadingActive } = useCollection(activeRideQuery);
+  useEffect(() => {
+    if (!firestore || !user?.uid) {
+        setIsLoading(false);
+        return;
+    }
 
+    setIsLoading(true);
 
-  // 2. Query for available rides (searching for a driver)
-  const availableRidesQuery = useMemoFirebase(
-    () =>
-      firestore && user // Ensure firestore and user are available
-        ? query(
-            collection(firestore, 'rides'),
-            where('status', '==', 'searching_driver')
-          )
-        : null,
-    [firestore, user]
-  );
-  const { data: availableRides, isLoading: isLoadingAvailable } = useCollection(availableRidesQuery);
+    // 1. Query for rides assigned to the current driver
+    const activeRideQuery = query(
+        collection(firestore, 'rides'),
+        where('driverId', '==', user.uid),
+        where('status', 'in', [
+            'driver_assigned',
+            'driver_arriving',
+            'arrived',
+            'in_progress',
+            'paused',
+        ])
+    );
+
+    // 2. Query for available rides
+    const availableRidesQuery = query(
+        collection(firestore, 'rides'),
+        where('status', '==', 'searching_driver')
+    );
+
+    const unsubActive = onSnapshot(activeRideQuery, (snapshot) => {
+        const rides = snapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
+        setActiveRides(rides);
+        setIsLoading(false);
+    }, (error) => {
+        console.error("Error fetching active rides:", error);
+        setIsLoading(false);
+    });
+
+    const unsubAvailable = onSnapshot(availableRidesQuery, (snapshot) => {
+        const rides = snapshot.docs.map(doc => ({ ...doc-data(), id: doc.id }));
+        setAvailableRides(rides);
+         setIsLoading(false);
+    }, (error) => {
+        console.error("Error fetching available rides:", error);
+        setIsLoading(false);
+    });
+
+    return () => {
+        unsubActive();
+        unsubAvailable();
+    };
+
+  }, [firestore, user?.uid]);
+
 
   const currentActiveRide = activeRides && activeRides.length > 0 ? activeRides[0] : null;
 
@@ -151,7 +178,7 @@ export default function DriverPage() {
           </Button>
       </div>
 
-      {isLoadingActive || isLoadingAvailable ? (
+      {isLoading ? (
         <p className="text-center">Buscando viajes...</p>
       ) : currentActiveRide ? (
          <ActiveDriverRide ride={currentActiveRide} onFinishRide={handleFinishRide}/>
