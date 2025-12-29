@@ -2,16 +2,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /rides/{rideId} {
-      // Un pasajero autenticado puede crear un viaje.
-      // El nuevo recurso debe tener el ID del pasajero correcto.
+      // Un pasajero autenticado puede crear un viaje si el passengerId es el suyo.
       allow create: if request.auth != null && request.resource.data.passengerId == request.auth.uid;
       
-      // Un usuario puede listar viajes si:
+      // Se permite listar viajes si:
       // 1. Es un conductor buscando viajes disponibles ('searching_driver').
-      // 2. Es un pasajero consultando su propio historial de viajes.
+      // 2. Es un pasajero consultando su propio historial de viajes (status 'finished' o 'cancelled').
       allow list: if request.auth != null && 
-                    ((request.query.get("status") == "searching_driver") || 
-                     (request.query.get("passengerId") == request.auth.uid));
+                    (request.query.get("status") == "searching_driver" || 
+                     (request.query.get("passengerId") == request.auth.uid && 
+                      (request.query.get("status") == "finished" || request.query.get("status") == "cancelled")));
 
       // El pasajero del viaje o el conductor asignado pueden leer el documento.
       // También se permite leer si el estado es 'searching_driver' para que los conductores vean detalles.
@@ -20,10 +20,13 @@ service cloud.firestore {
                     resource.data.driverId == request.auth.uid ||
                     resource.data.status == 'searching_driver');
 
-      // El pasajero puede cancelar su propio viaje si aún no ha comenzado.
-      // El conductor asignado puede actualizar el estado del viaje.
+      // Se puede actualizar un viaje si:
+      // 1. El que actualiza es el pasajero y está cancelando el viaje.
+      // 2. El que actualiza es un conductor asignándose a un viaje que estaba buscando conductor.
+      // 3. El que actualiza ya es el conductor asignado a este viaje.
       allow update: if request.auth != null && 
-                     ((resource.data.passengerId == request.auth.uid && request.resource.data.status == 'cancelled') || 
+                     ((resource.data.passengerId == request.auth.uid && request.resource.data.status == 'cancelled') ||
+                      (resource.data.status == 'searching_driver' && request.resource.data.driverId == request.auth.uid) ||
                       (resource.data.driverId == request.auth.uid));
 
       // Nadie puede eliminar viajes, solo se cancelan o finalizan.
