@@ -1,0 +1,84 @@
+/**
+ * Core Philosophy: This ruleset enforces a strict, participant-based security model for a ride-hailing application.
+ * Access is granted based on a user's role in a specific ride, either as the passenger who created it or the driver
+ * assigned to it. The default security posture is to deny all access unless explicitly granted.
+ *
+ * Data Structure: All ride data is stored in a single top-level collection named `/rides`. Each document within
+ * this collection, identified by a unique `{rideId}`, contains all information related to that specific ride.
+ *
+ * Key Security Decisions:
+ * - No Public Listing: Listing all rides in the system is strictly forbidden (`allow list: if false;`). This prevents
+ *   data leakage and protects user privacy. Client applications MUST query for rides they are involved in (e.g.,
+ *   `where('passengerId', '==', uid)` or `where('driverId', '==', uid)`). The `get` rule will then authorize the
+ *   reading of individual documents returned by these queries.
+ * - Strict Ownership on Creation: A user can only create a ride for themselves. The rules enforce that the
+ *   `passengerId` in a new ride document must match the creator's authenticated UID.
+ * - Shared Access for Participants: Once a ride is created, both the passenger (`passengerId`) and the assigned
+ *   driver (`driverId`) can read and update the ride document.
+ * - Passenger-Only Deletion: Only the original passenger is permitted to delete (i.e., cancel) the ride.
+ *
+ * Denormalization for Authorization: To ensure fast and secure authorization, each `/rides/{rideId}` document
+ * contains denormalized `passengerId` and `driverId` fields. This allows the rules to make immediate access
+ * decisions without needing slow and costly `get()` calls to other collections.
+ *
+ * Structural Segregation: This principle is not applicable as the data model does not require separating
+ * public and private data into different collections.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for readable and maintainable rules.
+
+    /**
+     * Checks if a user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the requesting user is the passenger for a given ride.
+     * @param rideData The resource.data map of the ride document.
+     */
+    function isPassenger(rideData) {
+      return request.auth.uid == rideData.passengerId;
+    }
+
+    /**
+     * Checks if the requesting user is the driver for a given ride.
+     * Ensures driverId is not null before comparing.
+     * @param rideData The resource.data map of the ride document.
+     */
+    function isDriver(rideData) {
+      return rideData.driverId != null && request.auth.uid == rideData.driverId;
+    }
+
+    /**
+     * Checks if the requesting user is a participant (either passenger or driver) of a ride.
+     * @param rideData The resource.data map of the ride document.
+     */
+    function isParticipant(rideData) {
+      return isPassenger(rideData) || isDriver(rideData);
+    }
+
+
+    /**
+     * @description Rules for the `rides` collection, which contains individual ride documents.
+     * @path /rides/{rideId}
+     * @allow (create) An authenticated user creating a ride for themselves.
+     * @allow (get) The passenger or the assigned driver reading their own ride document.
+     * @deny (list) Any user attempting to list all rides in the system. This is a critical security rule.
+     * @deny (update) An unauthenticated user or a user not involved in the ride trying to modify it.
+     * @principle Enforces a shared access model where only the passenger and assigned driver can access a ride document.
+     */
+    match /rides/{rideId} {
+      allow get: if isSignedIn() && isParticipant(resource.data);
+      allow list: if false;
+
+      allow create: if isSignedIn() && request.resource.data.passengerId == request.auth.uid;
+      allow update: if isSignedIn() && resource != null && isParticipant(resource.data) && request.resource.data.passengerId == resource.data.passengerId;
+      allow delete: if isSignedIn() && resource != null && isPassenger(resource.data);
+    }
+  }
+}

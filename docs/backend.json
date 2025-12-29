@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "Ride": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Ride",
+      "type": "object",
+      "description": "Represents a ride request and its lifecycle within the VamO app.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ride entity."
+        },
+        "passengerId": {
+          "type": "string",
+          "description": "Reference to the Passenger. (Relationship: Passenger 1:N Ride)"
+        },
+        "passengerName": {
+          "type": "string",
+          "description": "The name of the passenger requesting the ride. Can be null if the user doesn't have a display name."
+        },
+        "origin": {
+          "type": "array",
+          "description": "The origin coordinates of the ride.",
+          "items": {
+            "type": "number"
+          }
+        },
+        "destination": {
+          "type": "array",
+          "description": "The destination details of the ride including address and coordinates.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "serviceType": {
+          "type": "string",
+          "description": "The type of service requested for the ride (premium, private, express)."
+        },
+        "pricing": {
+          "type": "number",
+          "description": "The pricing details for the ride, including base fare, per distance rate, per minute rate, and night multiplier."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the ride (searching_driver, driver_assigned, driver_arriving, arrived, in_progress, paused, finished, cancelled)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The timestamp when the ride request was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "The timestamp when the ride was last updated.",
+          "format": "date-time"
+        },
+        "driverId": {
+          "type": "string",
+          "description": "Reference to Driver assigned to ride (Relationship: Driver 1:N Ride). Null until a driver is assigned."
+        },
+        "pauseHistory": {
+          "type": "array",
+          "description": "History of pauses during the ride, currently an empty array.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "passengerId",
+        "origin",
+        "destination",
+        "serviceType",
+        "pricing",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Passenger": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Passenger",
+      "type": "object",
+      "description": "Represents a passenger using the VamO app.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the passenger entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the passenger."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Driver": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Driver",
+      "type": "object",
+      "description": "Represents a driver using the VamO app.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the driver entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the driver."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/rides/{rideId}",
+        "definition": {
+          "entityName": "Ride",
+          "schema": {
+            "$ref": "#/backend/entities/Ride"
+          },
+          "description": "Represents a ride request and its lifecycle. Includes denormalized 'passengerId' and 'driverId' for authorization independence.",
+          "params": [
+            {
+              "name": "rideId",
+              "description": "The unique identifier for the ride document."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to optimize for a simple ride-hailing application. The primary collection is `rides`, with each document representing a single ride. This design prioritizes ease of querying and real-time updates for ride status. All essential ride details are stored within the ride document itself, including passenger and driver IDs, origin and destination coordinates, service type, pricing, and status. This denormalization ensures that all necessary data for a given ride is readily available, eliminating the need for additional lookups and maintaining authorization independence. \n\n**Authorization Independence:** The `rides` collection includes the `passengerId` which allows for secure read/write access based on the `request.auth.uid` without needing to `get()` other documents. Even when a driver is assigned, the `driverId` is stored directly in the `ride` document avoiding any hierarchical authorization dependencies.\n\n**QAPs (Rules are not Filters):** The structure supports the required QAPs as follows:\n\n*   **Secure List Operations:** The security rules can efficiently control list access based on the `passengerId` field. A passenger can only list rides where `passengerId == request.auth.uid`.\n\n*   **Ownership:** Path-based ownership is enforced via the `/rides/{rideId}` path, ensuring each document represents a specific ride, and access control is managed through the `passengerId` attribute.\n\n**Explicit State Modeling:** The `status` field explicitly models the state of the ride, making it easy to query and manage the lifecycle of a ride. This design decision avoids inferring state from multiple boolean or timestamp fields."
+  }
+}
