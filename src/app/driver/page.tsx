@@ -70,19 +70,19 @@ export default function DriverPage() {
   // Effect for new available ride notifications
   useEffect(() => {
     if (availableRides && availableRides.length > (previousAvailableRides.current?.length ?? 0)) {
-        // This finds the new ride(s) by comparing current with previous.
         const newRides = availableRides.filter(
             (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
         );
 
-        if(newRides.length > 0 && !currentActiveRide) { // Only notify if not in an active ride
+        if(newRides.length > 0 && !currentActiveRide) { 
              toast({
                 title: "¡Nuevo viaje disponible!",
                 description: `Un pasajero solicita un viaje a ${newRides[0].destination.address}.`,
             });
-            // Instantiate and play the sound on demand.
             const audio = new Audio(notificationSoundUri);
-            audio.play().catch(e => console.error("Error playing sound:", e));
+            audio.play().catch(e => {
+                console.error("Error al reproducir sonido:", e);
+            });
         }
     }
     previousAvailableRides.current = availableRides || [];
