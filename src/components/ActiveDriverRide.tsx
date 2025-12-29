@@ -16,7 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { RideStatusInfo } from '@/lib/ride-status';
 import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
-import { Flag, User, Hourglass, Play, Clock, Map } from 'lucide-react';
+import { Flag, User, Hourglass, Play, Clock, Map, MapPin } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 const statusActions: { [key: string]: { action: string, label: string } } = {
@@ -100,10 +100,19 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
     }
   };
 
-  const openNavigation = () => {
+  const openNavigationToOrigin = () => {
     if (ride?.origin?.lat && ride?.origin?.lng) {
       const url = `https://www.google.com/maps/dir/?api=1&destination=${ride.origin.lat},${ride.origin.lng}`;
       window.open(url, '_blank');
+    }
+  };
+
+  const openNavigationToDestination = () => {
+    if (ride?.destination?.lat && ride?.destination?.lng) {
+        // Usamos la dirección para una mejor experiencia en Google Maps
+        const destinationQuery = encodeURIComponent(ride.destination.address);
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`;
+        window.open(url, '_blank');
     }
   };
 
@@ -134,14 +143,22 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
           <Flag className="w-4 h-4 mr-2 text-muted-foreground" />
           <strong>Destino:</strong> {ride.destination.address}
         </p>
-        {ride.status === 'driver_arriving' && (
-          <div className="!mt-4">
-             <Button onClick={openNavigation} className="w-full" variant="outline">
-                <Map className="mr-2 h-4 w-4"/>
-                Ir al Origen
-            </Button>
-          </div>
-        )}
+
+        <div className="!mt-4 grid grid-cols-1 gap-2">
+            {['driver_arriving', 'arrived'].includes(ride.status) && (
+                 <Button onClick={openNavigationToOrigin} className="w-full" variant="outline">
+                    <MapPin className="mr-2 h-4 w-4"/>
+                    Ir al Origen
+                </Button>
+            )}
+             {ride.status === 'in_progress' && (
+                <Button onClick={openNavigationToDestination} className="w-full" variant="outline">
+                    <Map className="mr-2 h-4 w-4"/>
+                    Ir al Destino
+                </Button>
+            )}
+        </div>
+       
         {(totalWaitWithCurrent > 0) && (
             <div className="!mt-4 bg-secondary/50 p-3 rounded-lg">
                 <p className="flex items-center justify-center font-mono text-center">
