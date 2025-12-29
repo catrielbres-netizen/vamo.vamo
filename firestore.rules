@@ -11,8 +11,14 @@ service cloud.firestore {
       // El pasajero y el conductor asignado pueden leer el viaje.
       allow read: if request.auth != null && (request.auth.uid == resource.data.passengerId || request.auth.uid == resource.data.driverId);
 
-      // El pasajero o el conductor pueden actualizar el viaje.
-      allow update: if request.auth != null && (request.auth.uid == resource.data.passengerId || request.auth.uid == resource.data.driverId);
+      // El pasajero puede actualizar su propio viaje.
+      // Un conductor puede aceptar un viaje que está buscando conductor.
+      // Un conductor asignado puede actualizar el viaje.
+      allow update: if request.auth != null && (
+        (resource.data.status == 'searching_driver') || // Driver accepting ride
+        (request.auth.uid == resource.data.passengerId) || // Passenger updating
+        (request.auth.uid == resource.data.driverId) // Assigned driver updating
+      );
 
       // Solo el pasajero puede cancelar (eliminar) su propio viaje.
       allow delete: if request.auth != null && request.auth.uid == resource.data.passengerId;
