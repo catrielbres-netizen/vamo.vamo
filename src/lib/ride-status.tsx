@@ -20,7 +20,7 @@ export const RideStatusInfo: {
       progress: 15,
     },
     driver_assigned: {
-      text: '¡Conductor asignado!',
+      text: 'Conductor en camino',
       icon: <UserCheck />,
       progress: 30,
     },
