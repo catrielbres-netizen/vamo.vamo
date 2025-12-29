@@ -30,7 +30,7 @@ import { Button } from '@/components/ui/button';
 
 const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const secs = Math.round(seconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
@@ -139,6 +139,9 @@ export default function RideStatus({ rideId, onCancel }: { rideId: string, onCan
                 {waitingCost > 0 && <div className="flex justify-between"><span>Tiempo de espera ({formatDuration(totalAccumulatedWaitSeconds)}):</span> <span>${new Intl.NumberFormat('es-AR').format(waitingCost)}</span></div>}
             </div>
         </CardContent>
+        <CardFooter className="flex justify-center">
+            <Button onClick={onCancel} variant="outline">Pedir un nuevo viaje</Button>
+        </CardFooter>
         </Card>
     )
   }
@@ -150,7 +153,7 @@ export default function RideStatus({ rideId, onCancel }: { rideId: string, onCan
   if (ride.status === 'searching_driver') {
       cardTitle = 'Buscando tu viaje...';
   } else if (ride.status === 'driver_assigned' || ride.status === 'driver_arriving') {
-      cardTitle = `El conductor ${ride.driverName || ''} está yendo a buscarte`;
+      cardTitle = `${ride.driverName || 'Tu conductor'} está yendo a buscarte`;
   }
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
