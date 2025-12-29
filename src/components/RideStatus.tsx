@@ -16,7 +16,11 @@ import {
   UserCheck,
   PartyPopper,
   Clock,
-  XCircle
+  XCircle,
+  CalendarDays,
+  Ticket,
+  User,
+  Share2
 } from 'lucide-react';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { doc, Timestamp, serverTimestamp } from 'firebase/firestore';
@@ -73,6 +77,29 @@ export default function RideStatus({ rideId, onCancel }: { rideId: string, onCan
     onCancel();
   };
 
+  const handleShareViaWhatsapp = () => {
+    if (!ride) return;
+
+    const finalTotal = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(ride.pricing.finalTotal || ride.pricing.estimatedTotal);
+    const date = ride.finishedAt instanceof Timestamp ? ride.finishedAt.toDate().toLocaleString('es-AR') : 'N/A';
+    
+    const message = `
+*¡Gracias por viajar con VamO!* 🚖
+
+Aquí está el resumen de tu viaje:
+
+- *Destino:* ${ride.destination.address}
+- *Conductor:* ${ride.driverName || 'No disponible'}
+- *Fecha:* ${date}
+- *Monto Final:* ${finalTotal}
+
+¡Esperamos verte pronto!
+`.trim();
+
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  }
+
   const canCancel = ride && ['searching_driver', 'driver_assigned', 'driver_arriving'].includes(ride.status);
 
   if (isLoading) {
@@ -121,27 +148,49 @@ export default function RideStatus({ rideId, onCancel }: { rideId: string, onCan
     const waitingMinutes = Math.ceil(totalAccumulatedWaitSeconds / 60);
     const waitingCost = waitingMinutes * WAITING_PER_MIN;
     const fareWithoutWaiting = (ride.pricing.finalTotal || 0) - waitingCost;
+    const finalDate = ride.finishedAt instanceof Timestamp ? ride.finishedAt.toDate() : new Date();
 
     return (
         <Card>
-        <CardHeader className='items-center text-center'>
-            <PartyPopper className="w-12 h-12 text-primary mb-2" />
-            <CardTitle>¡Viaje Finalizado!</CardTitle>
-            <CardDescription>Gracias por viajar con VamO.</CardDescription>
-        </CardHeader>
-        <CardContent className="text-center">
-            <p className="text-muted-foreground">Monto final</p>
-            <p className="text-4xl font-bold mb-4">
-            ${new Intl.NumberFormat('es-AR').format(ride.pricing.finalTotal || ride.pricing.estimatedTotal)}
-            </p>
-             <div className="text-left text-sm space-y-1 bg-secondary/50 p-3 rounded-lg">
-                <div className="flex justify-between"><span>Tarifa base del viaje:</span> <span>${new Intl.NumberFormat('es-AR').format(fareWithoutWaiting)}</span></div>
-                {waitingCost > 0 && <div className="flex justify-between"><span>Tiempo de espera ({formatDuration(totalAccumulatedWaitSeconds)}):</span> <span>${new Intl.NumberFormat('es-AR').format(waitingCost)}</span></div>}
-            </div>
-        </CardContent>
-        <CardFooter className="flex justify-center">
-            <Button onClick={onCancel} variant="outline">Pedir un nuevo viaje</Button>
-        </CardFooter>
+            <CardHeader className='items-center text-center'>
+                <Ticket className="w-12 h-12 text-primary mb-2" />
+                <CardTitle>Resumen de tu Viaje</CardTitle>
+                <CardDescription>¡Gracias por viajar con VamO!</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="text-center">
+                    <p className="text-muted-foreground">Monto final</p>
+                    <p className="text-4xl font-bold mb-4">
+                        ${new Intl.NumberFormat('es-AR').format(ride.pricing.finalTotal || ride.pricing.estimatedTotal)}
+                    </p>
+                </div>
+
+                <div className="text-sm space-y-3 bg-secondary/50 p-4 rounded-lg border">
+                    <p className="flex justify-between">
+                        <span className="flex items-center text-muted-foreground"><Flag className="w-4 h-4 mr-2" />Destino</span>
+                        <span>{ride.destination.address}</span>
+                    </p>
+                     <p className="flex justify-between">
+                        <span className="flex items-center text-muted-foreground"><User className="w-4 h-4 mr-2" />Conductor</span>
+                        <span>{ride.driverName || 'No disponible'}</span>
+                    </p>
+                    <p className="flex justify-between">
+                        <span className="flex items-center text-muted-foreground"><CalendarDays className="w-4 h-4 mr-2" />Fecha y Hora</span>
+                        <span>{finalDate.toLocaleString('es-AR')}</span>
+                    </p>
+                </div>
+
+                 <div className="text-left text-sm space-y-1 bg-secondary/50 p-3 rounded-lg">
+                    <div className="flex justify-between"><span>Tarifa base del viaje:</span> <span>${new Intl.NumberFormat('es-AR').format(fareWithoutWaiting)}</span></div>
+                    {waitingCost > 0 && <div className="flex justify-between"><span>Tiempo de espera ({formatDuration(totalAccumulatedWaitSeconds)}):</span> <span>${new Intl.NumberFormat('es-AR').format(waitingCost)}</span></div>}
+                </div>
+            </CardContent>
+            <CardFooter className="flex-col gap-3">
+                 <Button onClick={handleShareViaWhatsapp} className="w-full">
+                    <Share2 className="mr-2 h-4 w-4" /> Enviar por WhatsApp
+                </Button>
+                <Button onClick={onCancel} variant="outline" className="w-full">Pedir un nuevo viaje</Button>
+            </CardFooter>
         </Card>
     )
   }
