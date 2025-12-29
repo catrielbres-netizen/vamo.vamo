@@ -16,7 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { RideStatusInfo } from '@/lib/ride-status';
 import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
-import { Flag, User, Hourglass, Play, Clock } from 'lucide-react';
+import { Flag, User, Hourglass, Play, Clock, Wallet } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 const statusActions: { [key: string]: { action: string, label: string } } = {
@@ -105,6 +105,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
   const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
+  const currentTotal = ride.pricing.estimatedTotal + waitingCost;
 
   return (
     <Card>
@@ -133,34 +134,45 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
                     <span className="font-semibold">Tiempo de espera:</span>
                     <span className="ml-2 tabular-nums">{formatDuration(totalWaitWithCurrent)}</span>
                 </p>
-                <p className="mt-1 text-center font-semibold">
+                <p className="mt-1 text-center font-semibold text-sm">
                     Costo de espera: ${new Intl.NumberFormat('es-AR').format(waitingCost)}
                 </p>
             </div>
         )}
       </CardContent>
-      <CardFooter className="flex-col gap-2">
-        {nextAction && (
-          <Button
-            onClick={() => updateStatus(nextAction.action)}
-            className="w-full"
-            size="lg"
-            variant={nextAction.action === 'finished' ? 'destructive' : 'default'}
-          >
-            {nextAction.action === 'in_progress' && ride.status === 'paused' && <Play className="mr-2 h-4 w-4" />}
-            {nextAction.label}
-          </Button>
-        )}
-        {ride.status === 'in_progress' && (
-             <Button
-                onClick={() => updateStatus('paused')}
+      <CardFooter className="flex-col gap-4">
+        <div className="w-full !mt-0 bg-background/50 border p-3 rounded-lg text-center flex-col gap-4">
+            <div>
+                <p className="text-sm text-muted-foreground">Tarifa Actual a Cobrar</p>
+                <p className="font-bold text-2xl text-primary">
+                    ${new Intl.NumberFormat('es-AR').format(currentTotal)}
+                </p>
+            </div>
+        </div>
+
+        <div className="w-full flex flex-col gap-2">
+            {nextAction && (
+            <Button
+                onClick={() => updateStatus(nextAction.action)}
                 className="w-full"
-                variant="outline"
+                size="lg"
+                variant={nextAction.action === 'finished' ? 'destructive' : 'default'}
             >
-                <Hourglass className="mr-2 h-4 w-4" />
-                Pausar Viaje
+                {nextAction.action === 'in_progress' && ride.status === 'paused' && <Play className="mr-2 h-4 w-4" />}
+                {nextAction.label}
             </Button>
-        )}
+            )}
+            {ride.status === 'in_progress' && (
+                <Button
+                    onClick={() => updateStatus('paused')}
+                    className="w-full"
+                    variant="outline"
+                >
+                    <Hourglass className="mr-2 h-4 w-4" />
+                    Pausar Viaje
+                </Button>
+            )}
+        </div>
       </CardFooter>
     </Card>
   );
