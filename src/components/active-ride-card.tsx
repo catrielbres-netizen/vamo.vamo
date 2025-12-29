@@ -16,7 +16,7 @@ import Image from 'next/image';
 import { useCurrentUser } from '@/hooks/use-current-user';
 import { useRideById } from '@/hooks/use-rides';
 import { useRideSimulation } from '@/hooks/use-ride-simulation';
-import { useStore } from '@/lib/store';
+import { useStore } from '@/lib/store.tsx';
 import placeholderImages from '@/lib/placeholder-images.json';
 import {
   Avatar,
@@ -120,6 +120,8 @@ export function ActiveRideCard({ rideId }: { rideId: string }) {
   if (!ride) {
     return null;
   }
+  
+  const currentStatusInfo = statusInfo[ride.status];
 
   const handleStatusChange = (status: RideStatus) => {
     updateRideStatus(rideId, status);
@@ -136,15 +138,19 @@ export function ActiveRideCard({ rideId }: { rideId: string }) {
         <CardTitle className="leading-tight">
           Viaje a <span className="text-primary">{ride.destination}</span>
         </CardTitle>
-        <Badge variant="secondary" className="flex items-center gap-2 whitespace-nowrap">
-          {statusInfo[ride.status].icon}
-          {statusInfo[ride.status].text}
-        </Badge>
+        {currentStatusInfo && (
+          <Badge variant="secondary" className="flex items-center gap-2 whitespace-nowrap">
+            {currentStatusInfo.icon}
+            {currentStatusInfo.text}
+          </Badge>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-2">
-            <Progress value={statusInfo[ride.status].progress} className="h-2" />
-        </div>
+        {currentStatusInfo && (
+          <div className="space-y-2">
+            <Progress value={currentStatusInfo.progress} className="h-2" />
+          </div>
+        )}
         
         {mapImage && (
             <div className="overflow-hidden rounded-lg border">
