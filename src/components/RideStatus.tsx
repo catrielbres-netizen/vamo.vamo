@@ -126,6 +126,9 @@ Aquí está el resumen de tu viaje:
         <CardContent>
           <p>No pudimos encontrar los detalles de tu viaje. ¿Querés pedir otro?</p>
         </CardContent>
+        <CardFooter>
+            <Button onClick={onCancel} variant="outline" className="w-full">Pedir un nuevo viaje</Button>
+        </CardFooter>
       </Card>
     );
   }
@@ -147,7 +150,7 @@ Aquí está el resumen de tu viaje:
   if (ride.status === 'finished') {
     const waitingMinutes = Math.ceil(totalAccumulatedWaitSeconds / 60);
     const waitingCost = waitingMinutes * WAITING_PER_MIN;
-    const fareWithoutWaiting = (ride.pricing.finalTotal || 0) - waitingCost;
+    const fareWithoutWaiting = (ride.pricing.finalTotal || ride.pricing.estimatedTotal) - waitingCost;
     const finalDate = ride.finishedAt instanceof Timestamp ? ride.finishedAt.toDate() : new Date();
 
     return (
@@ -201,7 +204,7 @@ Aquí está el resumen de tu viaje:
   let cardTitle = '¡Tu viaje está en marcha!';
   if (ride.status === 'searching_driver') {
       cardTitle = 'Buscando tu viaje...';
-  } else if (ride.status === 'driver_assigned' || ride.status === 'driver_arriving') {
+  } else if (ride.status === 'driver_assigned' || ride.status === 'driver_arriving' || ride.status === 'arrived') {
       cardTitle = `${ride.driverName || 'Tu conductor'} está yendo a buscarte`;
   }
 
@@ -255,12 +258,14 @@ Aquí está el resumen de tu viaje:
             )}
         </div>
       </CardContent>
-       <CardFooter className="!mt-4 bg-background/50 border p-3 rounded-lg text-center flex-col gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Tarifa Actual Estimada</p>
-              <p className="font-bold text-xl text-primary">
-                ${new Intl.NumberFormat('es-AR').format(ride.pricing.estimatedTotal + waitingCost)}
-              </p>
+       <CardFooter className="flex-col gap-4">
+            <div className="w-full !mt-0 bg-background/50 border p-3 rounded-lg text-center flex-col gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Tarifa Actual a Cobrar</p>
+                <p className="font-bold text-2xl text-primary">
+                  ${new Intl.NumberFormat('es-AR').format(ride.pricing.estimatedTotal + waitingCost)}
+                </p>
+              </div>
             </div>
             {canCancel && (
                 <Button onClick={handleCancelRide} variant="destructive" className="w-full">
