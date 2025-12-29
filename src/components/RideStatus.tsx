@@ -76,7 +76,14 @@ export default function RideStatus({ rideId }: { rideId: string }) {
 
 
   const config = RideStatusInfo[ride.status] || RideStatusInfo['searching_driver'];
-  const cardTitle = ride.status === 'searching_driver' ? 'Buscando tu viaje...' : '¡Tu viaje está en marcha!';
+  
+  let cardTitle = '¡Tu viaje está en marcha!';
+  if (ride.status === 'searching_driver') {
+      cardTitle = 'Buscando tu viaje...';
+  } else if (ride.status === 'driver_arriving') {
+      cardTitle = 'Tu conductor viene a buscarte';
+  }
+
 
   return (
     <Card>
