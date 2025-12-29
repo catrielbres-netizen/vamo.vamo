@@ -135,5 +135,3 @@ export default function DriverPage() {
     </main>
   );
 }
-
-    
