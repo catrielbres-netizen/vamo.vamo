@@ -6,19 +6,16 @@ service cloud.firestore {
       allow create: if request.auth != null;
       
       // Los conductores pueden listar viajes que buscan conductor.
-      allow list: if request.auth != null && resource.data.status == 'searching_driver';
+      // TEMPORAL: Permitir a cualquier usuario autenticado listar viajes para la limpieza.
+      allow list: if request.auth != null;
 
       // El pasajero y el conductor asignado pueden leer el viaje.
-      allow read: if request.auth != null && (request.auth.uid == resource.data.passengerId || request.auth.uid == resource.data.driverId);
+      // TEMPORAL: Permitir a cualquier usuario autenticado leer para la limpieza.
+      allow read: if request.auth != null;
 
-      // El pasajero puede actualizar su propio viaje (ej: para cancelar).
-      // Un conductor puede aceptar un viaje que está buscando conductor.
-      // Un conductor asignado puede actualizar el viaje.
-      allow update: if request.auth != null && (
-        (resource.data.status == 'searching_driver' && request.resource.data.status == 'driver_assigned') || // Driver accepting ride
-        (request.auth.uid == resource.data.passengerId) || // Passenger updating (e.g., cancelling)
-        (request.auth.uid == resource.data.driverId) // Assigned driver updating
-      );
+      // TEMPORAL: Permitir a cualquier usuario autenticado actualizar cualquier viaje.
+      // Esto es para permitir que el botón "Finalizar Todos" funcione.
+      allow update: if request.auth != null;
 
       // Nadie puede eliminar viajes, solo se cancelan.
       allow delete: if false;
