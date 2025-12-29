@@ -46,7 +46,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
             service: ride.serviceType,
             isNight: false, // Añadir lógica de tarifa nocturna
         });
-        payload.pricing.finalTotal = finalPrice;
+        payload.pricing = { ...ride.pricing, finalTotal: finalPrice };
         payload.finishedAt = serverTimestamp();
     }
 
