@@ -76,11 +76,12 @@ export default function RideStatus({ rideId }: { rideId: string }) {
 
 
   const config = RideStatusInfo[ride.status] || RideStatusInfo['searching_driver'];
+  const cardTitle = ride.status === 'searching_driver' ? 'Buscando tu viaje...' : '¡Tu viaje está en marcha!';
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>¡Tu viaje está en marcha!</CardTitle>
+        <CardTitle>{cardTitle}</CardTitle>
         <CardDescription>
           Seguí el estado de tu viaje en tiempo real.
         </CardDescription>
