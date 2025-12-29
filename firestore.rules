@@ -2,9 +2,19 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /rides/{rideId} {
+      // Los pasajeros pueden crear viajes.
       allow create: if request.auth != null;
+      
+      // Los conductores pueden listar viajes que buscan conductor.
+      allow list: if request.auth != null && resource.data.status == 'searching_driver';
+
+      // El pasajero y el conductor asignado pueden leer el viaje.
       allow read: if request.auth != null && (request.auth.uid == resource.data.passengerId || request.auth.uid == resource.data.driverId);
+
+      // El pasajero o el conductor pueden actualizar el viaje.
       allow update: if request.auth != null && (request.auth.uid == resource.data.passengerId || request.auth.uid == resource.data.driverId);
+
+      // Solo el pasajero puede cancelar (eliminar) su propio viaje.
       allow delete: if request.auth != null && request.auth.uid == resource.data.passengerId;
     }
   }
