@@ -8,11 +8,11 @@ service cloud.firestore {
       
       // Se permite listar viajes si:
       // 1. El usuario está autenticado y está consultando viajes disponibles ('searching_driver').
-      // 2. El usuario es un pasajero consultando su propio historial de viajes (status 'finished' o 'cancelled').
+      // 2. El usuario es un pasajero consultando su propio historial de viajes.
       allow list: if request.auth != null && 
                     (
                       (request.query.where[0][0] == 'status' && request.query.where[0][2] == 'searching_driver') ||
-                      (request.query.where[0][0] == 'passengerId' && request.query.where[0][2] == request.auth.uid)
+                      (request.query.where[0][0] == 'passengerId' && request.query.where[0][2] == request.auth.uid && request.query.where[1][0] == 'status')
                     );
 
 
