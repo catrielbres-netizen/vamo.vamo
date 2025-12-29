@@ -17,6 +17,7 @@ export default function DriverPage() {
   const { toast } = useToast();
   const wasPreviouslyActive = useRef(false);
   const previousAvailableRides = useRef<any[]>([]);
+  const finishedByDriver = useRef(false);
 
   // 1. Query for rides assigned to the current driver
   const activeRideQuery = useMemoFirebase(
@@ -57,7 +58,8 @@ export default function DriverPage() {
   // Effect for cancellation notifications
   useEffect(() => {
     const isActive = !!currentActiveRide;
-    if (wasPreviouslyActive.current && !isActive) {
+    // Si antes había un viaje activo y ahora no lo hay, Y no fue finalizado por el conductor...
+    if (wasPreviouslyActive.current && !isActive && !finishedByDriver.current) {
       toast({
         title: "Viaje cancelado",
         description: "El pasajero ha cancelado el viaje. Vuelves a estar disponible.",
@@ -65,6 +67,10 @@ export default function DriverPage() {
       });
     }
     wasPreviouslyActive.current = isActive;
+    // Reseteamos el flag si ya no hay viaje activo
+    if (!isActive) {
+        finishedByDriver.current = false;
+    }
   }, [currentActiveRide, toast]);
   
   // Effect for new available ride notifications
@@ -94,6 +100,7 @@ export default function DriverPage() {
   };
   
   const handleFinishRide = () => {
+    finishedByDriver.current = true; // Marcamos que el conductor finalizó el viaje
     toast({
         title: "¡Viaje finalizado!",
         description: "El viaje ha sido completado y cobrado.",
