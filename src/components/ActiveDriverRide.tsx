@@ -20,8 +20,7 @@ import { Flag, User, Hourglass, Play, Clock, Map, MapPin } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 const statusActions: { [key: string]: { action: string, label: string } } = {
-  driver_assigned: { action: 'driver_arriving', label: '¡Voy en camino!' },
-  driver_arriving: { action: 'arrived', label: 'Llegué al origen' },
+  driver_assigned: { action: 'arrived', label: 'Llegué al origen' },
   arrived: { action: 'in_progress', label: 'Iniciar Viaje' },
   in_progress: { action: 'finished', label: 'Finalizar Viaje' },
   paused: { action: 'in_progress', label: 'Reanudar Viaje' },
@@ -145,7 +144,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
         </p>
 
         <div className="!mt-4 grid grid-cols-1 gap-2">
-            {['driver_arriving', 'arrived'].includes(ride.status) && (
+            {['driver_assigned', 'arrived'].includes(ride.status) && (
                  <Button onClick={openNavigationToOrigin} className="w-full" variant="outline">
                     <MapPin className="mr-2 h-4 w-4"/>
                     Ir al Origen
