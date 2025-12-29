@@ -11,46 +11,12 @@ import {
 import { Progress } from '@/components/ui/progress';
 import {
   Car,
-  CircleDashed,
   Flag,
-  MapPin,
-  PartyPopper,
   UserCheck,
 } from 'lucide-react';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
-
-const statusConfig: {
-  [key: string]: { text: string; icon: React.ReactNode; progress: number };
-} = {
-  searching_driver: {
-    text: 'Buscando conductor...',
-    icon: <CircleDashed className="animate-spin" />,
-    progress: 20,
-  },
-  driver_assigned: {
-    text: 'Conductor encontrado',
-    icon: <UserCheck />,
-    progress: 40,
-  },
-  driver_arriving: {
-    text: 'El conductor está en camino',
-    icon: <Car />,
-    progress: 60,
-  },
-  arrived: {
-    text: 'El conductor ha llegado',
-    icon: <MapPin />,
-    progress: 80,
-  },
-  in_progress: {
-    text: 'Viaje en curso',
-    icon: <Car className="animate-pulse" />,
-    progress: 90,
-  },
-  finished: { text: 'Viaje finalizado', icon: <PartyPopper />, progress: 100 },
-  cancelled: { text: 'Viaje cancelado', icon: <Flag />, progress: 0 },
-};
+import { RideStatusInfo } from '@/lib/ride-status';
 
 export default function RideStatus({ rideId }: { rideId: string }) {
   const firestore = useFirestore();
@@ -77,16 +43,16 @@ export default function RideStatus({ rideId }: { rideId: string }) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Error</CardTitle>
+          <CardTitle>Viaje finalizado o no encontrado</CardTitle>
         </CardHeader>
         <CardContent>
-          <p>No se pudo encontrar la información del viaje.</p>
+          <p>Gracias por viajar con VamO. ¿Querés pedir otro viaje?</p>
         </CardContent>
       </Card>
     );
   }
 
-  const config = statusConfig[ride.status] || statusConfig['searching_driver'];
+  const config = RideStatusInfo[ride.status] || RideStatusInfo['searching_driver'];
   const rideData = ride;
 
   return (
