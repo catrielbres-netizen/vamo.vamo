@@ -239,7 +239,7 @@ export default function Home() {
   const currentAction = getAction();
 
 
-  if (isUserLoading || isProfileLoading || !user) {
+  if (isUserLoading || isProfileLoading || !user || userProfile?.isDriver) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
         <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
@@ -247,16 +247,6 @@ export default function Home() {
       </main>
     );
   }
-  
-  if (userProfile?.isDriver) {
-    return (
-      <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
-        <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
-        <p className="text-center mt-4">Redirigiendo al panel de conductor...</p>
-      </main>
-    );
-  }
-
 
   const fareToDisplay = userProfile?.activeBonus ? estimatedFare * 0.9 : estimatedFare;
   const userName = userProfile?.name || (user.isAnonymous ? "Invitado" : user.displayName || "Usuario");
