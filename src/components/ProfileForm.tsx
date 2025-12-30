@@ -49,7 +49,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   const [seguroUploaded, setSeguroUploaded] = useState(false);
   const [dniUploaded, setDniUploaded] = useState(false);
 
-  const { control, register, handleSubmit, watch, formState: { errors, isDirty } } = useForm<ProfileFormData>({
+  const { control, register, handleSubmit, watch, formState: { errors } } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       name: userProfile?.name || '',
@@ -194,7 +194,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
         </CardContent>
         <CardFooter className="flex justify-end gap-2">
             {isDialog && <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>}
-            <Button type="submit" disabled={!canSave && !isDirty}>Guardar Perfil</Button>
+            <Button type="submit" disabled={!canSave}>Guardar Perfil</Button>
         </CardFooter>
       </form>
   );
