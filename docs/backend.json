@@ -177,7 +177,7 @@
         "$schema": "http://json-schema.org/draft-07/schema#",
         "title": "User Profile",
         "type": "object",
-        "description": "Stores public profile information for a user.",
+        "description": "Stores public profile information for a user (passenger or driver).",
         "properties": {
           "name": {
             "type": "string",
@@ -195,15 +195,15 @@
           },
           "vamoPoints": {
             "type": "number",
-            "description": "Total accumulated Vamo points."
+            "description": "Total accumulated Vamo points (for passengers)."
           },
           "averageRating": {
             "type": ["number", "null"],
-            "description": "The user's average rating as a passenger."
+            "description": "The user's average rating as a passenger or driver."
           },
           "ridesCompleted": {
             "type": "number",
-            "description": "Total number of completed rides."
+            "description": "Total number of completed rides (as passenger or driver)."
           },
           "activeBonus": {
             "type": "boolean",
@@ -211,6 +211,41 @@
           }
         },
         "required": ["name", "createdAt", "vamoPoints", "ridesCompleted", "activeBonus"]
+      },
+      "DriverSummary": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Driver Summary",
+        "type": "object",
+        "description": "Stores weekly financial summary for a driver.",
+        "properties": {
+            "driverId": {
+                "type": "string",
+                "description": "The unique identifier of the driver."
+            },
+            "weekId": {
+                "type": "string",
+                "description": "Identifier for the week, e.g., '2024-W28'."
+            },
+            "totalEarnings": {
+                "type": "number",
+                "description": "Total gross earnings for the week."
+            },
+            "commissionOwed": {
+                "type": "number",
+                "description": "The 8% commission owed to the app."
+            },
+            "status": {
+                "type": "string",
+                "enum": ["pending", "paid"],
+                "description": "The payment status of the commission."
+            },
+            "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Timestamp of when the summary was last updated."
+            }
+        },
+        "required": ["driverId", "weekId", "totalEarnings", "commissionOwed", "status", "updatedAt"]
       }
   },
   "auth": {
@@ -238,6 +273,16 @@
             "$ref": "#/backend/entities/UserProfile"
           },
           "description": "Stores public profile information for a user."
+        }
+      },
+      {
+        "path": "/driver_summaries/{summaryId}",
+        "definition": {
+            "entityName": "DriverSummary",
+            "schema": {
+                "$ref": "#/backend/entities/DriverSummary"
+            },
+            "description": "Stores a driver's weekly financial summary."
         }
       }
     ]

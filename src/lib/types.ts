@@ -61,3 +61,12 @@ export interface UserProfile {
   ridesCompleted: number;
   activeBonus: boolean;
 }
+
+export interface DriverSummary {
+    driverId: string;
+    weekId: string; // e.g., "2024-W28"
+    totalEarnings: number;
+    commissionOwed: number;
+    status: 'pending' | 'paid';
+    updatedAt: Timestamp;
+}
