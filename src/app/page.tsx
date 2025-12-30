@@ -3,6 +3,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { PassengerHeader } from '@/components/PassengerHeader';
 import { TripCard } from '@/components/TripCard';
 import { ServiceSelector } from '@/components/ServiceSelector';
@@ -28,7 +29,7 @@ import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile } from '@/lib/types';
 import { speak } from '@/lib/speak';
-import ProfileForm from '@/components/ProfileForm'; // Changed import
+import ProfileForm from '@/components/ProfileForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 export default function Home() {
@@ -36,6 +37,7 @@ export default function Home() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [destination, setDestination] = useState('');
   const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
@@ -67,13 +69,14 @@ export default function Home() {
   }, [user, isUserLoading, auth]);
 
   useEffect(() => {
-    // Open profile modal if user exists but profile is new or incomplete
     if (user && !isProfileLoading) {
-      if (!userProfile || !userProfile.name) {
+      if (userProfile?.isDriver) {
+        router.replace('/driver');
+      } else if (!userProfile || !userProfile.name) {
         setProfileModalOpen(true);
       }
     }
-  }, [user, userProfile, isProfileLoading]);
+  }, [user, userProfile, isProfileLoading, router]);
 
   useEffect(() => {
     if (destination.length > 3) {
@@ -235,7 +238,7 @@ export default function Home() {
   const currentAction = getAction();
 
 
-  if (isUserLoading || isProfileLoading || !user) {
+  if (isUserLoading || isProfileLoading || !user || userProfile?.isDriver) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
         <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
