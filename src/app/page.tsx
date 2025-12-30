@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { PassengerHeader } from '@/components/PassengerHeader';
 import { TripCard } from '@/components/TripCard';
 import { ServiceSelector } from '@/components/ServiceSelector';
@@ -22,6 +22,9 @@ import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
 import { Separator } from '@/components/ui/separator';
+import { WithId } from '@/firebase/firestore/use-collection';
+import { Ride } from '@/lib/types';
+import { speak } from '@/lib/speak';
 
 export default function Home() {
   const auth = useAuth();
@@ -42,7 +45,10 @@ export default function Home() {
     () => (firestore && activeRideId ? doc(firestore, 'rides', activeRideId) : null),
     [firestore, activeRideId]
   );
-  const { data: ride, isLoading: isRideLoading } = useDoc(activeRideRef);
+  const { data: ride, isLoading: isRideLoading } = useDoc<Ride>(activeRideRef);
+  
+  const prevRideRef = useRef<WithId<Ride> | null | undefined>(null);
+
 
   // Derived state from the ride document
   const status = ride?.status || 'idle';
@@ -66,6 +72,25 @@ export default function Home() {
       setEstimatedFare(0);
     }
   }, [destination, serviceType]);
+  
+  // Effect to handle spoken notifications for status changes
+  useEffect(() => {
+    const prevStatus = prevRideRef.current?.status;
+    const currentStatus = ride?.status;
+
+    if (prevStatus !== currentStatus) {
+        if (currentStatus === 'driver_assigned' && ride.driverName) {
+            const message = `¡Buenas noticias! Tu conductor, ${ride.driverName}, ha aceptado el viaje y ya está en camino.`;
+            toast({
+                title: '¡Conductor asignado!',
+                description: `${ride.driverName} está en camino.`,
+            });
+            speak(message);
+        }
+    }
+
+    prevRideRef.current = ride;
+  }, [ride]);
 
 
   const handleRequestRide = () => {
