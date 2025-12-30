@@ -28,17 +28,20 @@ export default function DriverProfilePage() {
         updatedAt: serverTimestamp(),
     };
     
-    if (!userProfile) { // If profile doesn't exist, create it
+    // Logic for creating or updating the profile
+    if (!userProfile) { // If profile doesn't exist, create it.
         dataToSave.createdAt = serverTimestamp();
         dataToSave.vamoPoints = 0;
         dataToSave.ridesCompleted = 0;
         dataToSave.averageRating = null;
         dataToSave.activeBonus = false;
         dataToSave.isDriver = profileData.isDriver || false;
+        // If registering as a driver from the start, set to pending.
         dataToSave.vehicleVerificationStatus = profileData.isDriver ? 'pending_review' : 'unverified';
-    } else { // If profile exists, update it
-        // If they are marking themselves as a driver and were previously unverified, set to pending.
-        if(profileData.isDriver && userProfile.vehicleVerificationStatus === 'unverified') {
+    } else { // If profile exists, update it.
+        // **CRITICAL FIX**: If an existing user marks themselves as a driver
+        // and their status is currently unverified, move them to pending review.
+        if (profileData.isDriver && userProfile.vehicleVerificationStatus === 'unverified') {
            dataToSave.vehicleVerificationStatus = 'pending_review';
         }
     }
