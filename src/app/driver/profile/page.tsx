@@ -1,5 +1,6 @@
 // src/app/driver/profile/page.tsx
 'use client';
+import { useEffect } from 'react';
 import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
 import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { doc, serverTimestamp } from 'firebase/firestore';
@@ -21,6 +22,18 @@ export default function DriverProfilePage() {
     [firestore, user]
   );
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
+
+  useEffect(() => {
+    // This effect will trigger the redirection AFTER the local data has been updated by the onSnapshot listener.
+    // This solves the race condition where we were redirecting before the client was aware of the state change.
+    if (userProfile?.vehicleVerificationStatus === 'pending_review' && userProfile.isDriver) {
+        // We use a small timeout to ensure the user sees the toast message before redirecting.
+        const timer = setTimeout(() => {
+            router.push('/driver/rides');
+        }, 1000); 
+        return () => clearTimeout(timer); // Clean up the timer
+    }
+  }, [userProfile?.vehicleVerificationStatus, userProfile?.isDriver, router]);
 
   const handleProfileSave = (profileData: Partial<UserProfile>) => {
     if (!userProfileRef) return;
@@ -52,12 +65,8 @@ export default function DriverProfilePage() {
     
     toast({
         title: '¡Perfil guardado!',
-        description: 'Tus datos han sido actualizados.',
+        description: 'Tus datos han sido actualizados. Serás redirigido.',
     });
-
-    if (profileData.isDriver) {
-        router.push('/driver/rides');
-    }
   };
 
   if (isUserLoading || isProfileLoading) {
