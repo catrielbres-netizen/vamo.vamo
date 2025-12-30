@@ -197,7 +197,7 @@ export default function DriverRidesPage() {
                     <Clock className="h-4 w-4 text-yellow-500" />
                     <AlertTitle>Verificación Pendiente</AlertTitle>
                     <AlertDescription>
-                       Tus datos de conductor están siendo revisados. Te notificaremos cuando tu cuenta sea aprobada.
+                       Tu cuenta está siendo verificada. Si todo está en orden, podrás empezar a recibir viajes. Esto puede tardar menos de una hora.
                     </AlertDescription>
                 </Alert>
             );
