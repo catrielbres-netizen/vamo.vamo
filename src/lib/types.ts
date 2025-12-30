@@ -1,3 +1,4 @@
+
 // src/lib/types.ts
 
 import { type Timestamp } from "firebase/firestore";
@@ -56,12 +57,13 @@ export interface UserProfile {
   name: string;
   photoURL?: string | null;
   createdAt: Timestamp;
+  updatedAt: Timestamp;
   vamoPoints: number;
   averageRating: number | null;
   ridesCompleted: number;
   activeBonus: boolean;
   isDriver?: boolean;
-  carModelYear?: number;
+  carModelYear?: number | null;
 }
 
 export interface DriverSummary {

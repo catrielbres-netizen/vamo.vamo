@@ -1,7 +1,6 @@
 
 'use client';
 
-import Link from 'next/link';
 import { UserCircle2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useUser, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
@@ -9,7 +8,7 @@ import { UserProfile } from '@/lib/types';
 import { doc } from 'firebase/firestore';
 
 
-export function PassengerHeader({ userName, location }: { userName: string, location: string }) {
+export function PassengerHeader({ userName, location, onProfileClick }: { userName: string, location: string, onProfileClick: () => void }) {
   const firestore = useFirestore();
   const { user } = useUser();
   
@@ -20,7 +19,7 @@ export function PassengerHeader({ userName, location }: { userName: string, loca
   const { data: userProfile } = useDoc<UserProfile>(userProfileRef);
 
   const getInitials = (name: string | null | undefined) => {
-    if (!name) return '?';
+    if (!name || name === "Invitado") return '?';
     const names = name.split(' ');
     if (names.length > 1) {
       return `${names[0][0]}${names[names.length - 1][0]}`;
@@ -34,12 +33,12 @@ export function PassengerHeader({ userName, location }: { userName: string, loca
         <p className="text-sm text-gray-500">Hola, {userName} 👋</p>
         <p className="font-medium">📍 {location || 'Ubicación no disponible'}</p>
       </div>
-      <Link href="/profile" passHref>
+      <button onClick={onProfileClick} className="focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-full">
         <Avatar className="cursor-pointer">
             <AvatarImage src={userProfile?.photoURL || user?.photoURL || undefined} alt={userName} />
             <AvatarFallback>{getInitials(userName)}</AvatarFallback>
         </Avatar>
-      </Link>
+      </button>
     </div>
   );
 }

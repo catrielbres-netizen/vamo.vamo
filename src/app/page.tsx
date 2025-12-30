@@ -1,4 +1,5 @@
 
+// src/app/page.tsx
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -14,7 +15,8 @@ import {
   useDoc,
   useMemoFirebase,
   addDocumentNonBlocking,
-  updateDocumentNonBlocking
+  updateDocumentNonBlocking,
+  setDocumentNonBlocking
 } from '@/firebase';
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/icons';
@@ -26,6 +28,8 @@ import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile } from '@/lib/types';
 import { speak } from '@/lib/speak';
+import ProfileForm from '@/components/ProfileForm'; // Changed import
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 export default function Home() {
   const auth = useAuth();
@@ -33,15 +37,12 @@ export default function Home() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
 
-  // State for the new ride request form
   const [destination, setDestination] = useState('');
   const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
   const [estimatedFare, setEstimatedFare] = useState(0);
-
-  // State to track the active ride ID
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
+  const [isProfileModalOpen, setProfileModalOpen] = useState(false);
 
-  // Subscribe to the active ride document
   const activeRideRef = useMemoFirebase(
     () => (firestore && activeRideId ? doc(firestore, 'rides', activeRideId) : null),
     [firestore, activeRideId]
@@ -56,22 +57,26 @@ export default function Home() {
   
   const prevRideRef = useRef<WithId<Ride> | null | undefined>(null);
 
-
-  // Derived state from the ride document
   const status = ride?.status || 'idle';
 
-  // Effect for anonymous sign-in
   useEffect(() => {
     if (!auth) return;
     if (!user && !isUserLoading) {
       initiateAnonymousSignIn(auth);
     }
   }, [user, isUserLoading, auth]);
-  
-    // Effect to calculate estimated fare
+
   useEffect(() => {
-    if (destination.length > 3) { // Simple check to start estimating
-      // Mock distance for estimation. In a real app, this would come from a Maps API
+    // Open profile modal if user exists but profile is new or incomplete
+    if (user && !isProfileLoading) {
+      if (!userProfile || !userProfile.name) {
+        setProfileModalOpen(true);
+      }
+    }
+  }, [user, userProfile, isProfileLoading]);
+
+  useEffect(() => {
+    if (destination.length > 3) {
       const mockDistance = 4200;
       const fare = calculateFare({ distanceMeters: mockDistance, service: serviceType });
       setEstimatedFare(fare);
@@ -80,7 +85,6 @@ export default function Home() {
     }
   }, [destination, serviceType]);
   
-  // Effect to handle spoken notifications for status changes
   useEffect(() => {
     const prevStatus = prevRideRef.current?.status;
     const currentStatus = ride?.status;
@@ -95,9 +99,8 @@ export default function Home() {
             speak(message);
         }
     }
-
     prevRideRef.current = ride;
-  }, [ride]);
+  }, [ride, toast]);
 
 
   const handleRequestRide = async () => {
@@ -110,30 +113,32 @@ export default function Home() {
       return;
     }
 
+    if (!userProfile?.name) {
+      setProfileModalOpen(true);
+      return;
+    }
+
     let rideFare = estimatedFare;
     let discountAmount = 0;
 
-    // Check for bonus and apply it
     if(userProfile?.activeBonus) {
         discountAmount = rideFare * 0.10;
-        // The passenger pays the discounted price.
-        // The driver will get the full fare, with the app covering the discount.
     }
 
     const ridesCollection = collection(firestore, 'rides');
     const newRideData = {
       passengerId: user.uid,
-      passengerName: user.displayName || 'Pasajero Anónimo',
-      origin: { lat: -43.3005, lng: -65.1023 }, // Mock: Rawson, Chubut
+      passengerName: userProfile?.name || 'Pasajero Anónimo',
+      origin: { lat: -43.3005, lng: -65.1023 },
       destination: {
         address: destination,
-        lat: -43.25, // Mock coordinates
+        lat: -43.25,
         lng: -65.05,
       },
       serviceType: serviceType,
       pricing: {
         estimatedTotal: rideFare,
-        estimatedDistanceMeters: 4200, // Corresponds to mock distance
+        estimatedDistanceMeters: 4200,
         finalTotal: null,
         discountAmount: discountAmount,
       },
@@ -154,11 +159,10 @@ export default function Home() {
                 title: '¡Buscando conductor!',
                 description: 'Tu pedido fue enviado. Esperá la confirmación.',
             });
-            // If a bonus was used, deactivate it in the user's profile
             if (userProfile?.activeBonus) {
                 await updateDocumentNonBlocking(userProfileRef, { 
                     activeBonus: false,
-                    vamoPoints: userProfile.vamoPoints - 30 // Consume points
+                    vamoPoints: userProfile.vamoPoints - 30
                 });
             }
         }
@@ -179,13 +183,37 @@ export default function Home() {
         title: "Viaje Cancelado",
         description: "Tu viaje ha sido cancelado.",
     });
-    // The useDoc hook will update the ride status, and the UI will react
   }
   
   const handleReset = () => {
       setActiveRideId(null);
       setDestination('');
   }
+
+  const handleProfileSave = (profileData: Partial<UserProfile>) => {
+    if (!userProfileRef) return;
+    
+    const dataToSave: Partial<UserProfile> = {
+        ...profileData,
+        updatedAt: serverTimestamp(),
+    };
+    
+    if (!userProfile) { // If profile doesn't exist, create it
+        dataToSave.createdAt = serverTimestamp();
+        dataToSave.vamoPoints = 0;
+        dataToSave.ridesCompleted = 0;
+        dataToSave.averageRating = null;
+        dataToSave.activeBonus = false;
+    }
+    
+    setDocumentNonBlocking(userProfileRef, dataToSave, { merge: true });
+    
+    toast({
+        title: '¡Perfil guardado!',
+        description: 'Tus datos han sido actualizados.',
+    });
+    setProfileModalOpen(false);
+};
 
   const getAction = () => {
     switch (status) {
@@ -217,10 +245,25 @@ export default function Home() {
   }
 
   const fareToDisplay = userProfile?.activeBonus ? estimatedFare * 0.9 : estimatedFare;
+  const userName = userProfile?.name || (user.isAnonymous ? "Invitado" : user.displayName || "Usuario");
 
   return (
     <main className="max-w-md mx-auto pb-4 px-4">
-      <PassengerHeader userName={user.isAnonymous ? "Invitado" : user.displayName || "Usuario"} location="Rawson, Chubut" />
+      <Dialog open={isProfileModalOpen} onOpenChange={setProfileModalOpen}>
+        <DialogContent>
+           <ProfileForm 
+             userProfile={userProfile}
+             onSave={handleProfileSave}
+             onCancel={() => setProfileModalOpen(false)}
+           />
+        </DialogContent>
+      </Dialog>
+      
+      <PassengerHeader 
+        userName={userName}
+        location="Rawson, Chubut" 
+        onProfileClick={() => setProfileModalOpen(true)}
+      />
 
       {status !== 'idle' && ride ? (
         <RideStatus ride={ride} />
