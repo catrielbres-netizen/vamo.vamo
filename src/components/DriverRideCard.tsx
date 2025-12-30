@@ -12,15 +12,23 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Flag, MapPin, User, Car } from 'lucide-react';
+import { Flag, MapPin, User } from 'lucide-react';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { Ride } from '@/lib/types';
+import ServiceBadge from './ServiceBadge';
+import { cn } from '@/lib/utils';
 
+const serviceCardStyles: Record<Ride['serviceType'], string> = {
+    premium: "border-yellow-400/50",
+    privado: "border-green-400/50",
+    express: "border-gray-400/50",
+};
 
 export default function DriverRideCard({
   ride,
   onAccept,
 }: {
-  ride: any;
+  ride: Ride & { id: string };
   onAccept: () => void;
 }) {
   const firestore = useFirestore();
@@ -30,6 +38,7 @@ export default function DriverRideCard({
     if (!firestore || !user) return;
     const rideRef = doc(firestore, 'rides', ride.id);
     
+    // For now, we simulate driver's car data. In a real app, this would come from the driver's profile.
     updateDocumentNonBlocking(rideRef, {
         status: 'driver_assigned',
         driverId: user.uid,
@@ -39,11 +48,16 @@ export default function DriverRideCard({
 
     onAccept();
   };
+  
+  const cardStyle = serviceCardStyles[ride.serviceType] || serviceCardStyles.express;
 
   return (
-    <Card>
+    <Card className={cn(cardStyle)}>
       <CardHeader>
-        <CardTitle>Nuevo Viaje Disponible</CardTitle>
+        <div className="flex justify-between items-center">
+            <CardTitle>Nuevo Viaje Disponible</CardTitle>
+            <ServiceBadge serviceType={ride.serviceType} />
+        </div>
         <CardDescription>
           Un pasajero necesita que lo lleven.
         </CardDescription>
@@ -60,10 +74,6 @@ export default function DriverRideCard({
         <p className="flex items-center">
           <Flag className="w-4 h-4 mr-2 text-muted-foreground" />
           <strong>Hasta:</strong> {ride.destination.address}
-        </p>
-        <p className="flex items-center">
-            <Car className="w-4 h-4 mr-2 text-muted-foreground" />
-            <strong>Servicio:</strong> <span className="capitalize ml-1">{ride.serviceType}</span>
         </p>
         <div className="!mt-4 bg-secondary/50 p-3 rounded-lg">
             <p className="font-bold text-base text-center">

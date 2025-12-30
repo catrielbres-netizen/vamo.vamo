@@ -212,6 +212,14 @@
           "activeBonus": {
             "type": "boolean",
             "description": "Whether the user has an active 10% discount bonus."
+          },
+          "isDriver": {
+            "type": "boolean",
+            "description": "Indicates if the user is a driver."
+          },
+          "carModelYear": {
+            "type": ["number", "null"],
+            "description": "The model year of the driver's car."
           }
         },
         "required": ["name", "createdAt", "vamoPoints", "ridesCompleted", "activeBonus"]

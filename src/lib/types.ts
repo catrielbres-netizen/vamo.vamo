@@ -60,6 +60,8 @@ export interface UserProfile {
   averageRating: number | null;
   ridesCompleted: number;
   activeBonus: boolean;
+  isDriver?: boolean;
+  carModelYear?: number;
 }
 
 export interface DriverSummary {

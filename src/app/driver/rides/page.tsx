@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, query, where, onSnapshot, Unsubscribe, doc } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
 import ActiveDriverRide from '@/components/ActiveDriverRide';
@@ -10,7 +10,16 @@ import FinishedRideSummary from '@/components/FinishedRideSummary';
 import { useToast } from "@/hooks/use-toast";
 import { speak } from '@/lib/speak';
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride } from '@/lib/types';
+import { Ride, UserProfile, ServiceType } from '@/lib/types';
+
+
+// Helper function to determine which services a driver can see
+const getAllowedServices = (carModelYear?: number): ServiceType[] => {
+    if (!carModelYear) return ['express']; // Default to lowest tier if no data
+    if (carModelYear >= 2020) return ['premium', 'privado', 'express'];
+    if (carModelYear >= 2016) return ['privado', 'express'];
+    return ['express'];
+}
 
 
 export default function DriverRidesPage() {
@@ -22,6 +31,14 @@ export default function DriverRidesPage() {
   const [availableRides, setAvailableRides] = useState<WithId<Ride>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
+  
+  // Get the driver's profile to know their car model year
+  const driverProfileRef = useMemoFirebase(
+    () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
+    [firestore, user]
+  );
+  const { data: driverProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(driverProfileRef);
+
 
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
   const activeRideUnsubscribe = useRef<Unsubscribe | null>(null);
@@ -37,7 +54,6 @@ export default function DriverRidesPage() {
 
     // Unsubscribe from previous listeners if they exist
     activeRideUnsubscribe.current?.();
-    availableRidesUnsubscribe.current?.();
 
     // 1. Query for rides assigned to the current driver
     const activeRideQuery = query(
@@ -71,26 +87,35 @@ export default function DriverRidesPage() {
     return () => {
       activeRideUnsubscribe.current?.();
     };
-  }, [firestore, user?.uid, toast]);
+  }, [firestore, user?.uid, toast, activeRide]); // Added activeRide to dependencies
 
 
   useEffect(() => {
     // This effect manages the available rides subscription
-    // It should only be active if there is no active ride
-    if (firestore && !activeRide) {
-        availableRidesUnsubscribe.current?.(); // Clean up previous listener just in case
+    // It should only be active if there is no active ride and the driver profile has loaded
+    if (firestore && user?.uid && !activeRide && !isProfileLoading) {
+        availableRidesUnsubscribe.current?.(); // Clean up previous listener
+
+        // Determine allowed services based on car model year
+        const allowedServices = getAllowedServices(driverProfile?.carModelYear);
+        
+        // If there are no allowed services, don't subscribe.
+        if (allowedServices.length === 0) {
+            setAvailableRides([]);
+            setIsLoading(false);
+            return;
+        }
 
         const availableRidesQuery = query(
             collection(firestore, 'rides'),
-            where('status', '==', 'searching_driver')
+            where('status', '==', 'searching_driver'),
+            where('serviceType', 'in', allowedServices)
         );
 
         availableRidesUnsubscribe.current = onSnapshot(availableRidesQuery, (snapshot) => {
             const rides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
             
-            // This logic is tricky. Let's make sure it's robust.
-            // Check for brand new rides since the last snapshot.
-            if (!isLoading) { // Only notify after initial load
+            if (!isLoading) { 
                 const newRides = rides.filter(
                     (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
                 );
@@ -99,24 +124,24 @@ export default function DriverRidesPage() {
                      newRides.forEach(newRide => {
                         const destinationText = newRide.destination.address;
                         toast({
-                            title: "¡Nuevo viaje disponible!",
+                            title: `¡Nuevo viaje ${newRide.serviceType}!`,
                             description: `Un pasajero solicita un viaje a ${destinationText}.`,
                         });
-                        speak(`Nuevo viaje disponible hacia ${destinationText}.`);
+                        speak(`Nuevo viaje ${newRide.serviceType} disponible hacia ${destinationText}.`);
                      });
                 }
             }
             
             setAvailableRides(rides);
             previousAvailableRides.current = rides;
-            if(isLoading) setIsLoading(false); // Also stop loading here
+            if(isLoading) setIsLoading(false);
         }, (error) => {
             console.error("Error fetching available rides:", error);
             toast({ variant: 'destructive', title: 'Error al buscar viajes disponibles.' });
         });
     } else {
-        // If there is an active ride, we don't need to listen for available ones.
-        setAvailableRides([]); // Clear available rides
+        // If there is an active ride, or profile is loading, we don't listen for available ones.
+        setAvailableRides([]);
         previousAvailableRides.current = [];
         availableRidesUnsubscribe.current?.();
     }
@@ -124,7 +149,7 @@ export default function DriverRidesPage() {
     return () => {
         availableRidesUnsubscribe.current?.();
     }
-  }, [firestore, activeRide, isLoading, toast]); // Dependency on activeRide is key
+  }, [firestore, user?.uid, activeRide, isProfileLoading, driverProfile, isLoading, toast]);
 
 
   const handleAcceptRide = () => {
@@ -146,10 +171,12 @@ export default function DriverRidesPage() {
   const handleCloseSummary = () => {
     setLastFinishedRide(null);
   }
+  
+  const isLoadingSomething = isLoading || isProfileLoading;
 
   return (
     <>
-      {isLoading ? (
+      {isLoadingSomething ? (
         <p className="text-center">Buscando viajes...</p>
       ) : activeRide ? (
          <ActiveDriverRide ride={activeRide} onFinishRide={handleFinishRide}/>
@@ -167,7 +194,7 @@ export default function DriverRidesPage() {
               />
             ))
           ) : (
-            <p className="text-center text-muted-foreground">No hay viajes buscando conductor en este momento.</p>
+            <p className="text-center text-muted-foreground pt-8">No hay viajes buscando conductor en este momento para tu categoría de vehículo.</p>
           )}
         </div>
       )}
