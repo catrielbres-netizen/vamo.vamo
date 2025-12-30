@@ -44,7 +44,7 @@ export default function Home() {
   const [estimatedFare, setEstimatedFare] = useState(0);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
   const [isProfileModalOpen, setProfileModalOpen] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(true);
+  const [isRedirecting, setIsRedirecting] = useState(true); // Start with true to show loading
 
   const activeRideRef = useMemoFirebase(
     () => (firestore && activeRideId ? doc(firestore, 'rides', activeRideId) : null),
@@ -71,21 +71,33 @@ export default function Home() {
 
   useEffect(() => {
     // This effect handles role-based redirection.
-    if (user && !isProfileLoading) {
-      if (userProfile?.isDriver) {
-        router.replace('/driver');
-        // No need to set isRedirecting to false, we're leaving the page.
-      } else if (!userProfile || !userProfile.name) {
-        setProfileModalOpen(true);
-        setIsRedirecting(false); // Show passenger UI
-      } else {
-        setIsRedirecting(false); // Show passenger UI
-      }
-    } else if (!user && !isUserLoading) {
-        // If there's no user and we are not loading, show the UI.
-        setIsRedirecting(false);
+    // It waits until the user and profile loading states are settled.
+    if (isUserLoading || isProfileLoading) {
+      return; // Wait until we have all the data.
     }
-  }, [user, userProfile, isProfileLoading, router]);
+
+    if (user && userProfile) {
+      if (userProfile.isDriver) {
+        // This is a driver, redirect them. isRedirecting remains true.
+        router.replace('/driver');
+      } else {
+        // This is a passenger, stop the loading state and show the UI.
+        setIsRedirecting(false);
+        if (!userProfile.name) {
+          // If passenger profile is incomplete, open the modal.
+          setProfileModalOpen(true);
+        }
+      }
+    } else {
+      // No user or no profile, treat as a new passenger.
+      // This can happen for brand new anonymous users.
+      setIsRedirecting(false);
+      // If the user exists but has no profile yet, prompt them.
+      if (user && !userProfile) {
+          setProfileModalOpen(true);
+      }
+    }
+  }, [user, userProfile, isUserLoading, isProfileLoading, router]);
 
   useEffect(() => {
     if (destination.length > 3) {
@@ -314,5 +326,3 @@ export default function Home() {
     </main>
   );
 }
-
-    
