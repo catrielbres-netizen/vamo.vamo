@@ -2,8 +2,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, writeBatch, doc, onSnapshot } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { collection, query, where, getDocs, writeBatch, doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
 import ActiveDriverRide from '@/components/ActiveDriverRide';
 import { VamoIcon } from '@/components/icons';
@@ -34,47 +34,55 @@ export default function DriverPage() {
     }
 
     setIsLoading(true);
+    let unsubActive: Unsubscribe | undefined;
+    let unsubAvailable: Unsubscribe | undefined;
 
-    // 1. Query for rides assigned to the current driver
-    const activeRideQuery = query(
-        collection(firestore, 'rides'),
-        where('driverId', '==', user.uid),
-        where('status', 'in', [
-            'driver_assigned',
-            'driver_arriving',
-            'arrived',
-            'in_progress',
-            'paused',
-        ])
-    );
+    try {
+        // 1. Query for rides assigned to the current driver
+        const activeRideQuery = query(
+            collection(firestore, 'rides'),
+            where('driverId', '==', user.uid),
+            where('status', 'in', [
+                'driver_assigned',
+                'driver_arriving',
+                'arrived',
+                'in_progress',
+                'paused',
+            ])
+        );
 
-    // 2. Query for available rides
-    const availableRidesQuery = query(
-        collection(firestore, 'rides'),
-        where('status', '==', 'searching_driver')
-    );
+        // 2. Query for available rides
+        const availableRidesQuery = query(
+            collection(firestore, 'rides'),
+            where('status', '==', 'searching_driver')
+        );
 
-    const unsubActive = onSnapshot(activeRideQuery, (snapshot) => {
-        const rides = snapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
-        setActiveRides(rides);
+        unsubActive = onSnapshot(activeRideQuery, (snapshot) => {
+            const rides = snapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
+            setActiveRides(rides);
+            if (isLoading) setIsLoading(false);
+        }, (error) => {
+            console.error("Error fetching active rides:", error);
+            if (isLoading) setIsLoading(false);
+        });
+
+        unsubAvailable = onSnapshot(availableRidesQuery, (snapshot) => {
+            const rides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
+            setAvailableRides(rides);
+             if (isLoading) setIsLoading(false);
+        }, (error) => {
+            console.error("Error fetching available rides:", error);
+            if (isLoading) setIsLoading(false);
+        });
+
+    } catch (error) {
+        console.error("Error setting up snapshots:", error);
         setIsLoading(false);
-    }, (error) => {
-        console.error("Error fetching active rides:", error);
-        setIsLoading(false);
-    });
-
-    const unsubAvailable = onSnapshot(availableRidesQuery, (snapshot) => {
-        const rides = snapshot.docs.map(doc => ({ ...doc-data(), id: doc.id }));
-        setAvailableRides(rides);
-         setIsLoading(false);
-    }, (error) => {
-        console.error("Error fetching available rides:", error);
-        setIsLoading(false);
-    });
+    }
 
     return () => {
-        unsubActive();
-        unsubAvailable();
+        if (unsubActive) unsubActive();
+        if (unsubAvailable) unsubAvailable();
     };
 
   }, [firestore, user?.uid]);
