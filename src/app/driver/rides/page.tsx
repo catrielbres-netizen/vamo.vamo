@@ -46,11 +46,6 @@ export default function DriverRidesPage() {
   const activeRideStateRef = useRef<WithId<Ride> | null>(null);
 
   useEffect(() => {
-    if (!firestore || !user?.uid) {
-      setIsLoading(false);
-      return;
-    }
-
     // This ref helps the snapshot callback to know the previous state
     // without including the state variable `activeRide` in the dependency array.
     activeRideStateRef.current = activeRide;
@@ -123,6 +118,7 @@ export default function DriverRidesPage() {
         availableRidesUnsubscribe.current = onSnapshot(availableRidesQuery, (snapshot) => {
             const rides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
             
+            // Only play sound/toast if initial load is done.
             if (!isLoading) { 
                 const newRides = rides.filter(
                     (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
@@ -179,7 +175,20 @@ export default function DriverRidesPage() {
   const isLoadingSomething = isLoading || isProfileLoading;
 
   const renderVerificationStatus = () => {
-    if (!driverProfile) return null;
+    if (isLoadingSomething) {
+      return <p className="text-center">Cargando estado...</p>;
+    }
+    if (!driverProfile) {
+        return (
+            <Alert>
+                <ShieldX className="h-4 w-4" />
+                <AlertTitle>Perfil no encontrado</AlertTitle>
+                <AlertDescription>
+                    No pudimos cargar tu perfil. Por favor, intentá recargar la página.
+                </AlertDescription>
+            </Alert>
+        );
+    }
     switch(driverProfile.vehicleVerificationStatus) {
         case 'pending_review':
             return (
@@ -236,15 +245,13 @@ export default function DriverRidesPage() {
                 </div>
             );
         default:
-            return null;
+            return <p className="text-center text-muted-foreground">Estado de cuenta desconocido.</p>;
     }
   }
 
   return (
     <>
-      {isLoadingSomething ? (
-        <p className="text-center">Buscando viajes...</p>
-      ) : activeRide ? (
+      {activeRide ? (
          <ActiveDriverRide ride={activeRide} onFinishRide={handleFinishRide}/>
       ) : lastFinishedRide ? (
          <FinishedRideSummary ride={lastFinishedRide} onClose={handleCloseSummary} />
