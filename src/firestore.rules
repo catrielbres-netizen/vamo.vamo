@@ -14,11 +14,11 @@ service cloud.firestore {
                    
       // LIST: Permite a los usuarios autenticados realizar consultas específicas.
       // 1. Conductores: listando viajes que buscan conductor.
-      // 2. Pasajeros: listando su propio historial de viajes finalizados/cancelados.
+      // 2. Pasajeros: listando su propio historial de viajes.
       allow list: if request.auth != null &&
                    (
                     (request.query.where[0][0] == 'status' && request.query.where[0][2] == 'searching_driver') ||
-                    (request.query.where[0][0] == 'passengerId' && request.query.where[0][2] == request.auth.uid && request.query.where[1][0] == 'status')
+                    (request.query.where[0][0] == 'passengerId' && request.query.where[0][2] == request.auth.uid)
                    );
 
       // CREATE: Un pasajero autenticado puede crear un viaje si el passengerId es el suyo.
