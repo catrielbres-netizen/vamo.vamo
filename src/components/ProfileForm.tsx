@@ -14,6 +14,7 @@ import { UserProfile } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Edit2, UploadCloud, CheckCircle } from 'lucide-react';
 import { useUser } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
 import { Separator } from './ui/separator';
 
 const profileSchema = z.object({
@@ -23,25 +24,6 @@ const profileSchema = z.object({
   cedulaUploaded: z.boolean().default(false),
   seguroUploaded: z.boolean().default(false),
   dniUploaded: z.boolean().default(false),
-}).superRefine((data, ctx) => {
-    if (data.isDriver) {
-        if (!data.carModelYear) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: 'El año del modelo es requerido.',
-                path: ['carModelYear'],
-            });
-        }
-        if (!data.cedulaUploaded) {
-             ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['cedulaUploaded'], message: "Debe subir la cédula del vehículo." });
-        }
-        if (!data.seguroUploaded) {
-             ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['seguroUploaded'], message: "Debe subir el comprobante de seguro." });
-        }
-         if (!data.dniUploaded) {
-             ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['dniUploaded'], message: "Debe subir el DNI." });
-        }
-    }
 });
 
 
@@ -56,6 +38,7 @@ interface ProfileFormProps {
 
 export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = false }: ProfileFormProps) {
   const { user } = useUser();
+  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(userProfile?.photoURL || null);
   
@@ -75,10 +58,27 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   const isDriver = watch('isDriver');
   
   useEffect(() => {
+    // When the driver switch changes, re-validate the form
     trigger();
   }, [isDriver, trigger]);
 
   const onSubmit = (data: ProfileFormData) => {
+     if (data.isDriver) {
+      const missingDocs = [];
+      if (!data.carModelYear) missingDocs.push("año del modelo");
+      if (!data.cedulaUploaded) missingDocs.push("cédula");
+      if (!data.seguroUploaded) missingDocs.push("seguro");
+      if (!data.dniUploaded) missingDocs.push("DNI");
+      
+      if (missingDocs.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Faltan datos para ser conductor",
+          description: `Por favor, completá lo siguiente: ${missingDocs.join(', ')}.`,
+        });
+        return;
+      }
+    }
     onSave({ ...data, photoURL: photoUrl });
   };
   
@@ -160,6 +160,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
                         id="isDriver"
                         checked={field.value}
                         onCheckedChange={field.onChange}
+                        disabled={userProfile?.vehicleVerificationStatus === 'approved' || userProfile?.vehicleVerificationStatus === 'pending_review'}
                     />
                  )}
             />
@@ -196,19 +197,16 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
                     {watch('cedulaUploaded') ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
                     Cédula del vehículo
                   </Button>
-                  {errors.cedulaUploaded && <p className="text-sm text-destructive">{errors.cedulaUploaded.message}</p>}
 
                    <Button type="button" variant="outline" className="w-full justify-start text-left font-normal gap-2" onClick={() => handleDocUpload('seguroUploaded')}>
                     {watch('seguroUploaded') ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
                     Comprobante de seguro al día
                   </Button>
-                  {errors.seguroUploaded && <p className="text-sm text-destructive">{errors.seguroUploaded.message}</p>}
 
                    <Button type="button" variant="outline" className="w-full justify-start text-left font-normal gap-2" onClick={() => handleDocUpload('dniUploaded')}>
                     {watch('dniUploaded') ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
                     DNI (frente y dorso)
                   </Button>
-                  {errors.dniUploaded && <p className="text-sm text-destructive">{errors.dniUploaded.message}</p>}
                 </div>
 
                <div className="text-xs text-muted-foreground p-3 bg-secondary rounded-md">
@@ -219,7 +217,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
         </CardContent>
         <CardFooter className="flex justify-end gap-2">
             {isDialog && <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>}
-            <Button type="submit" disabled={!isValid}>Guardar Perfil</Button>
+            <Button type="submit">Guardar Perfil</Button>
         </CardFooter>
       </form>
   );

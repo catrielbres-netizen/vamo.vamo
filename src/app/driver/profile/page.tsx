@@ -65,9 +65,9 @@ export default function DriverProfilePage() {
 
     if (shouldRedirect) {
        router.push('/driver/rides');
-    } else {
-        setIsSaving(false);
     }
+    
+    setIsSaving(false);
   };
 
 
