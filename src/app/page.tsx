@@ -44,6 +44,7 @@ export default function Home() {
   const [estimatedFare, setEstimatedFare] = useState(0);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
   const [isProfileModalOpen, setProfileModalOpen] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(true);
 
   const activeRideRef = useMemoFirebase(
     () => (firestore && activeRideId ? doc(firestore, 'rides', activeRideId) : null),
@@ -69,12 +70,20 @@ export default function Home() {
   }, [user, isUserLoading, auth]);
 
   useEffect(() => {
+    // This effect handles role-based redirection.
     if (user && !isProfileLoading) {
       if (userProfile?.isDriver) {
         router.replace('/driver');
+        // No need to set isRedirecting to false, we're leaving the page.
       } else if (!userProfile || !userProfile.name) {
         setProfileModalOpen(true);
+        setIsRedirecting(false); // Show passenger UI
+      } else {
+        setIsRedirecting(false); // Show passenger UI
       }
+    } else if (!user && !isUserLoading) {
+        // If there's no user and we are not loading, show the UI.
+        setIsRedirecting(false);
     }
   }, [user, userProfile, isProfileLoading, router]);
 
@@ -239,7 +248,7 @@ export default function Home() {
   const currentAction = getAction();
 
 
-  if (isUserLoading || isProfileLoading || !user) {
+  if (isUserLoading || isProfileLoading || isRedirecting) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
         <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
@@ -248,19 +257,8 @@ export default function Home() {
     );
   }
 
-  // A user could be a driver but the redirect hasn't happened yet.
-  // In that case, we render nothing to avoid a flicker of the passenger UI.
-  if (userProfile?.isDriver) {
-    return (
-        <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
-            <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
-            <p className="text-center mt-4">Redirigiendo a panel de conductor...</p>
-      </main>
-    );
-  }
-
   const fareToDisplay = userProfile?.activeBonus ? estimatedFare * 0.9 : estimatedFare;
-  const userName = userProfile?.name || (user.isAnonymous ? "Invitado" : user.displayName || "Usuario");
+  const userName = userProfile?.name || (user?.isAnonymous ? "Invitado" : user?.displayName || "Usuario");
 
   return (
     <main className="max-w-md mx-auto pb-4 px-4">
@@ -316,7 +314,5 @@ export default function Home() {
     </main>
   );
 }
-
-    
 
     
