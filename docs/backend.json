@@ -236,7 +236,11 @@
             },
             "commissionOwed": {
                 "type": "number",
-                "description": "The 8% commission owed to the app."
+                "description": "The commission owed to the app, calculated based on the variable rate."
+            },
+            "commissionRate": {
+                "type": "number",
+                "description": "The commission rate applied for this week (e.g., 0.08 for 8%)."
             },
             "bonusesApplied": {
                 "type": "number",
@@ -253,7 +257,7 @@
                 "description": "Timestamp of when the summary was last updated."
             }
         },
-        "required": ["driverId", "weekId", "totalEarnings", "commissionOwed", "status", "updatedAt", "bonusesApplied"]
+        "required": ["driverId", "weekId", "totalEarnings", "commissionOwed", "commissionRate", "status", "updatedAt", "bonusesApplied"]
       }
   },
   "auth": {

@@ -67,6 +67,7 @@ export interface DriverSummary {
     weekId: string; // e.g., "2024-W28"
     totalEarnings: number;
     commissionOwed: number;
+    commissionRate: number;
     bonusesApplied: number;
     status: 'pending' | 'paid';
     updatedAt: Timestamp;

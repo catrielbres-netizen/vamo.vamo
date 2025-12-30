@@ -10,8 +10,10 @@ import { Button } from '@/components/ui/button';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Info, CheckCircle, Percent } from 'lucide-react';
+import { Info, CheckCircle, Percent, TrendingUp, Target } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Progress } from '@/components/ui/progress';
+
 
 function formatCurrency(value: number) {
     return new Intl.NumberFormat('es-AR', {
@@ -20,7 +22,16 @@ function formatCurrency(value: number) {
     }).format(value);
 }
 
-const COMMISSION_RATE = 0.08; // 8%
+const getCommissionInfo = (rideCount: number): { rate: number, nextTier: number | null, ridesToNext: number | null } => {
+    if (rideCount < 30) {
+        return { rate: 0.08, nextTier: 30, ridesToNext: 30 - rideCount }; // 8%
+    }
+    if (rideCount < 50) {
+        return { rate: 0.06, nextTier: 50, ridesToNext: 50 - rideCount }; // 6%
+    }
+    return { rate: 0.04, nextTier: null, ridesToNext: null }; // 4%
+}
+
 
 export default function EarningsPage() {
     const firestore = useFirestore();
@@ -66,9 +77,10 @@ export default function EarningsPage() {
                 const rides = ridesSnapshot.docs.map(doc => doc.data() as Ride);
                 setWeeklyRides(rides);
                 
+                const commissionInfo = getCommissionInfo(rides.length);
                 const totalEarnings = rides.reduce((acc, ride) => acc + (ride.pricing.finalTotal || ride.pricing.estimatedTotal || 0), 0);
                 const bonusesCovered = rides.reduce((acc, ride) => acc + (ride.pricing.discountAmount || 0), 0);
-                const commissionOwed = totalEarnings * COMMISSION_RATE;
+                const commissionOwed = totalEarnings * commissionInfo.rate;
                 
                 if (summarySnapshot.empty) {
                     const newSummary: DriverSummary = {
@@ -76,27 +88,28 @@ export default function EarningsPage() {
                         weekId: weekId,
                         totalEarnings: totalEarnings,
                         commissionOwed: commissionOwed,
+                        commissionRate: commissionInfo.rate,
                         bonusesApplied: bonusesCovered,
                         status: 'pending',
                         updatedAt: Timestamp.now(),
                     };
                     const summaryRef = doc(firestore, 'driver_summaries', `${user.uid}_${weekId}`);
-                    // create the document non-blockingly, don't show toast
                     setDoc(summaryRef, newSummary, { merge: true });
                     setSummary(newSummary);
                 } else {
                     const existingSummary = { ...summarySnapshot.docs[0].data(), id: summarySnapshot.docs[0].id } as DriverSummary & { id: string };
                     const summaryRef = doc(firestore, 'driver_summaries', existingSummary.id as string);
                     
-                    if(existingSummary.totalEarnings !== totalEarnings || existingSummary.commissionOwed !== commissionOwed || existingSummary.bonusesApplied !== bonusesCovered) {
-                        // We recalculate earnings based on rides, in case a new one was added
+                    if(existingSummary.totalEarnings !== totalEarnings || existingSummary.commissionOwed !== commissionOwed || existingSummary.bonusesApplied !== bonusesCovered || existingSummary.commissionRate !== commissionInfo.rate) {
                         existingSummary.totalEarnings = totalEarnings;
                         existingSummary.commissionOwed = commissionOwed;
                         existingSummary.bonusesApplied = bonusesCovered;
+                        existingSummary.commissionRate = commissionInfo.rate;
                         updateDocumentNonBlocking(summaryRef, { 
                             totalEarnings: totalEarnings,
                             commissionOwed: commissionOwed,
                             bonusesApplied: bonusesCovered,
+                            commissionRate: commissionInfo.rate,
                             updatedAt: Timestamp.now()
                         });
                     }
@@ -154,9 +167,41 @@ export default function EarningsPage() {
     }
 
     const netToReceive = summary.totalEarnings - summary.commissionOwed + summary.bonusesApplied;
+    const commissionInfo = getCommissionInfo(weeklyRides.length);
+
+    const progressToNextTier = commissionInfo.nextTier ? (weeklyRides.length / commissionInfo.nextTier) * 100 : 100;
 
     return (
         <div className="space-y-6">
+            <Card className="border-primary">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><TrendingUp/> Metas Semanales</CardTitle>
+                    <CardDescription>Completá más viajes para reducir tu comisión.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <div className="flex justify-between items-baseline">
+                        <p className="text-sm font-medium">Comisión actual</p>
+                        <p className="text-2xl font-bold text-primary">{(commissionInfo.rate * 100)}%</p>
+                    </div>
+                     <div className="space-y-2">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Viajes completados: {weeklyRides.length}</span>
+                            {commissionInfo.nextTier && <span>Meta: {commissionInfo.nextTier}</span>}
+                        </div>
+                        <Progress value={progressToNextTier} />
+                        {commissionInfo.ridesToNext !== null ? (
+                             <p className="text-center text-sm text-muted-foreground">
+                                ¡Te faltan <strong>{commissionInfo.ridesToNext} {commissionInfo.ridesToNext === 1 ? 'viaje' : 'viajes'}</strong> para bajar tu comisión al <strong>{(getCommissionInfo(weeklyRides.length + commissionInfo.ridesToNext).rate * 100)}%</strong>!
+                             </p>
+                        ) : (
+                            <p className="text-center text-sm font-semibold text-green-500 flex items-center justify-center gap-2">
+                                <Target/> ¡Alcanzaste la comisión más baja!
+                            </p>
+                        )}
+                     </div>
+                </CardContent>
+            </Card>
+
             <Card>
                 <CardHeader>
                     <CardTitle>Resumen Semanal</CardTitle>
@@ -181,7 +226,7 @@ export default function EarningsPage() {
                      </div>
                      <div className="border-t pt-4 space-y-2 text-base">
                         <div className="flex justify-between items-center text-red-500">
-                            <span className="font-medium">Comisión VamO (8%)</span>
+                            <span className="font-medium">Comisión VamO ({(summary.commissionRate * 100).toFixed(0)}%)</span>
                             <span className="font-bold">{formatCurrency(summary.commissionOwed)}</span>
                         </div>
                         <div className="flex justify-between items-center text-green-500">
