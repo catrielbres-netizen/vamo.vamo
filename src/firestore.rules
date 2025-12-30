@@ -1,9 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /rides/{rideId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+
+    // usuarios logueados pueden leer/escribir
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
+
   }
 }
