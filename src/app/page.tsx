@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -80,7 +81,7 @@ export default function Home() {
 
     if (prevStatus !== currentStatus) {
         if (currentStatus === 'driver_assigned' && ride.driverName) {
-            const message = `¡Buenas noticias! Tu conductor, ${ride.driverName}, ha aceptado el viaje y ya está en camino.`;
+            const message = "Tu viaje ya fue aceptado";
             toast({
                 title: '¡Conductor asignado!',
                 description: `${ride.driverName} está en camino.`,
