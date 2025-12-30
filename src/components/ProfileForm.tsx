@@ -38,9 +38,10 @@ interface ProfileFormProps {
   userProfile: UserProfile | null;
   onSave: (data: Partial<UserProfile>) => void;
   onCancel: () => void;
+  isDialog?: boolean;
 }
 
-export default function ProfileForm({ userProfile, onSave, onCancel }: ProfileFormProps) {
+export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = true }: ProfileFormProps) {
   const { user } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const vehicleProofInputRef = useRef<HTMLInputElement>(null);
@@ -199,8 +200,8 @@ export default function ProfileForm({ userProfile, onSave, onCancel }: ProfileFo
           )}
         </CardContent>
         <CardFooter className="flex justify-end gap-2">
-           <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>
-           <Button type="submit">Guardar Perfil</Button>
+            {isDialog && <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>}
+            <Button type="submit">Guardar Perfil</Button>
         </CardFooter>
       </form>
   );

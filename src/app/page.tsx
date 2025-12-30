@@ -288,6 +288,7 @@ export default function Home() {
              userProfile={userProfile}
              onSave={handleProfileSave}
              onCancel={() => setProfileModalOpen(false)}
+             isDialog={true}
            />
         </DialogContent>
       </Dialog>

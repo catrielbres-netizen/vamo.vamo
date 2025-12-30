@@ -55,7 +55,7 @@ export default function DiscountsPage() {
     }, [firestore, user?.uid]);
 
     if (isLoading) {
-        return <p className="text-center">Cargando descuentos de la semana...</p>;
+        return <p className="text-center">Cargando bonos de la semana...</p>;
     }
 
     const totalDiscountAmount = discountedRides.reduce((acc, ride) => acc + (ride.pricing.discountAmount || 0), 0);
@@ -88,7 +88,7 @@ export default function DiscountsPage() {
                             ))}
                         </ul>
                     ) : (
-                         <p className="text-center text-muted-foreground py-8">No se aplicaron descuentos en tus viajes de esta semana.</p>
+                         <p className="text-center text-muted-foreground py-8">No se aplicaron bonos en tus viajes de esta semana.</p>
                     )}
                 </CardContent>
             </Card>

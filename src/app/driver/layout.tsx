@@ -3,7 +3,7 @@
 import { VamoIcon } from '@/components/icons';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
-import { Car, Wallet, Percent } from 'lucide-react';
+import { Car, Wallet, Percent, User } from 'lucide-react';
 
 export default function DriverLayout({
   children,
@@ -15,7 +15,9 @@ export default function DriverLayout({
 
   // Determine the active tab from the URL
   const activeTabValue = pathname.split('/driver/')[1] || 'rides';
-  const activeTab = activeTabValue.includes('earnings') ? 'earnings' : activeTabValue.includes('discounts') ? 'discounts' : 'rides';
+  
+  // This logic correctly identifies the active tab based on the path segment
+  const activeTab = activeTabValue.split('/')[0];
 
 
   const handleTabChange = (value: string) => {
@@ -30,7 +32,7 @@ export default function DriverLayout({
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full mb-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="rides" className="gap-2">
             <Car className="w-4 h-4" /> Viajes
           </TabsTrigger>
@@ -38,7 +40,10 @@ export default function DriverLayout({
             <Wallet className="w-4 h-4" /> Ganancias
           </TabsTrigger>
           <TabsTrigger value="discounts" className="gap-2">
-            <Percent className="w-4 h-4" /> Descuentos
+            <Percent className="w-4 h-4" /> Bonos
+          </TabsTrigger>
+           <TabsTrigger value="profile" className="gap-2">
+            <User className="w-4 h-4" /> Perfil
           </TabsTrigger>
         </TabsList>
       </Tabs>
