@@ -207,6 +207,7 @@ export default function Home() {
         dataToSave.ridesCompleted = 0;
         dataToSave.averageRating = null;
         dataToSave.activeBonus = false;
+        dataToSave.isDriver = profileData.isDriver || false;
     }
     
     setDocumentNonBlocking(userProfileRef, dataToSave, { merge: true });
@@ -238,7 +239,7 @@ export default function Home() {
   const currentAction = getAction();
 
 
-  if (isUserLoading || isProfileLoading || !user || userProfile?.isDriver) {
+  if (isUserLoading || isProfileLoading || !user) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
         <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
@@ -246,6 +247,16 @@ export default function Home() {
       </main>
     );
   }
+  
+  if (userProfile?.isDriver) {
+    return (
+      <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
+        <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
+        <p className="text-center mt-4">Redirigiendo al panel de conductor...</p>
+      </main>
+    );
+  }
+
 
   const fareToDisplay = userProfile?.activeBonus ? estimatedFare * 0.9 : estimatedFare;
   const userName = userProfile?.name || (user.isAnonymous ? "Invitado" : user.displayName || "Usuario");
@@ -304,3 +315,5 @@ export default function Home() {
     </main>
   );
 }
+
+    

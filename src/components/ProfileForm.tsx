@@ -89,7 +89,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel }: ProfileFo
                     <button type="button" onClick={handleAvatarClick} className="focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-full">
                         <Avatar className="w-24 h-24 text-lg">
                             <AvatarImage src={photoUrl || user?.photoURL || undefined} />
-                            <AvatarFallback>{getInitials(userProfile?.name)}</AvatarFallback>
+                            <AvatarFallback>{getInitials(userProfile?.name || user?.displayName)}</AvatarFallback>
                         </Avatar>
                         <div className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-2 cursor-pointer hover:bg-primary/80">
                             <Edit2 className="w-4 h-4" />
@@ -167,3 +167,5 @@ export default function ProfileForm({ userProfile, onSave, onCancel }: ProfileFo
       </form>
   );
 }
+
+    
