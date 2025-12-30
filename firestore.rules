@@ -1,6 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
     match /rides/{rideId} {
       
       // GET: Un pasajero o conductor autenticado puede leer un viaje si está involucrado.
@@ -14,7 +15,7 @@ service cloud.firestore {
                    
       // LIST: Permite a los usuarios autenticados realizar consultas específicas.
       // 1. Conductores: listando viajes que buscan conductor.
-      // 2. Pasajeros: listando su propio historial de viajes finalizados/cancelados.
+      // 2. Pasajeros: listando su propio historial de viajes.
       allow list: if request.auth != null &&
                    (
                     (request.query.where[0][0] == 'status' && request.query.where[0][2] == 'searching_driver') ||
