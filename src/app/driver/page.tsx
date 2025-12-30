@@ -19,123 +19,118 @@ export default function DriverPage() {
   const { user } = useUser();
   const { toast } = useToast();
   
-  const [activeRides, setActiveRides] = useState<WithId<Ride>[]>([]);
+  const [activeRide, setActiveRide] = useState<WithId<Ride> | null>(null);
   const [availableRides, setAvailableRides] = useState<WithId<Ride>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
 
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
+  const activeRideUnsubscribe = useRef<Unsubscribe | null>(null);
+  const availableRidesUnsubscribe = useRef<Unsubscribe | null>(null);
 
   useEffect(() => {
     if (!firestore || !user?.uid) {
-        setIsLoading(false);
-        return;
+      setIsLoading(false);
+      return;
     }
 
     setIsLoading(true);
-    const unsubscribes: Unsubscribe[] = [];
 
-    let activeLoaded = false;
-    let availableLoaded = false;
-
-    const checkLoading = () => {
-      if (activeLoaded && availableLoaded) {
-        setIsLoading(false);
-      }
-    };
+    // Unsubscribe from previous listeners if they exist
+    activeRideUnsubscribe.current?.();
+    availableRidesUnsubscribe.current?.();
 
     // 1. Query for rides assigned to the current driver
     const activeRideQuery = query(
-        collection(firestore, 'rides'),
-        where('driverId', '==', user.uid),
-        where('status', 'in', [
-            'driver_assigned',
-            'driver_arriving',
-            'arrived',
-            'in_progress',
-            'paused',
-        ])
+      collection(firestore, 'rides'),
+      where('driverId', '==', user.uid),
+      where('status', 'in', ['driver_assigned', 'driver_arriving', 'arrived', 'in_progress', 'paused'])
     );
 
-    // 2. Query for available rides
-    const availableRidesQuery = query(
-        collection(firestore, 'rides'),
-        where('status', '==', 'searching_driver')
-    );
+    activeRideUnsubscribe.current = onSnapshot(activeRideQuery, (snapshot) => {
+      const rides = snapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
+      const currentActiveRide = rides.length > 0 ? rides[0] : null;
 
-    const unsubActive = onSnapshot(activeRideQuery, (snapshot) => {
-        const rides = snapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
-        
-        // Passenger cancellation detection
-        if (activeRides.length > 0 && rides.length === 0) {
-          toast({
+      const wasActive = !!activeRide;
+      setActiveRide(currentActiveRide);
+      
+      if(wasActive && !currentActiveRide) {
+         toast({
             title: "Viaje cancelado",
             description: "El pasajero ha cancelado el viaje. Vuelves a estar disponible.",
             variant: "destructive",
           });
-        }
-        
-        setActiveRides(rides);
-        activeLoaded = true;
-        checkLoading();
+      }
+      
+      setIsLoading(false);
     }, (error) => {
-        console.error("Error fetching active rides:", error);
-        toast({ variant: 'destructive', title: 'Error al cargar tus viajes activos.'});
-        activeLoaded = true;
-        checkLoading();
+      console.error("Error fetching active ride:", error);
+      toast({ variant: 'destructive', title: 'Error al cargar tu viaje activo.' });
+      setIsLoading(false);
     });
 
-    const unsubAvailable = onSnapshot(availableRidesQuery, (snapshot) => {
-        const rides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
-        setAvailableRides(rides);
-        availableLoaded = true;
-        checkLoading();
-    }, (error) => {
-        console.error("Error fetching available rides:", error);
-        toast({ variant: 'destructive', title: 'Error al buscar viajes disponibles.'});
-        availableLoaded = true;
-        checkLoading();
-    });
-
-    unsubscribes.push(unsubActive, unsubAvailable);
-
-    // Cleanup function
     return () => {
-        unsubscribes.forEach(unsub => unsub());
+      activeRideUnsubscribe.current?.();
     };
+  }, [firestore, user?.uid]);
 
-  }, [firestore, user?.uid, toast, activeRides.length]);
 
-  
-  // Effect for new available ride notifications
   useEffect(() => {
-    if (isLoading) return; // Don't run on initial load
-    
-    if (activeRides.length === 0 && availableRides.length > previousAvailableRides.current.length) {
-        const newRide = availableRides.find(
-            (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
+    // This effect manages the available rides subscription
+    // It should only be active if there is no active ride
+    if (firestore && !activeRide) {
+        availableRidesUnsubscribe.current?.(); // Clean up previous listener just in case
+
+        const availableRidesQuery = query(
+            collection(firestore, 'rides'),
+            where('status', '==', 'searching_driver')
         );
 
-        if(newRide) { 
-             const destinationText = newRide.destination.address;
-             toast({
-                title: "¡Nuevo viaje disponible!",
-                description: `Un pasajero solicita un viaje a ${destinationText}.`,
-            });
-            speak(`Nuevo viaje disponible hacia ${destinationText}.`);
-        }
+        availableRidesUnsubscribe.current = onSnapshot(availableRidesQuery, (snapshot) => {
+            const rides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
+            
+            if (!isLoading && rides.length > availableRides.length) {
+                 const newRide = rides.find(
+                    (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
+                );
+                if (newRide) {
+                    const destinationText = newRide.destination.address;
+                    toast({
+                        title: "¡Nuevo viaje disponible!",
+                        description: `Un pasajero solicita un viaje a ${destinationText}.`,
+                    });
+                    speak(`Nuevo viaje disponible hacia ${destinationText}.`);
+                }
+            }
+            
+            setAvailableRides(rides);
+            previousAvailableRides.current = rides;
+        }, (error) => {
+            console.error("Error fetching available rides:", error);
+            toast({ variant: 'destructive', title: 'Error al buscar viajes disponibles.' });
+        });
+    } else {
+        // If there is an active ride, we don't need to listen for available ones.
+        setAvailableRides([]); // Clear available rides
+        previousAvailableRides.current = [];
+        availableRidesUnsubscribe.current?.();
     }
-    previousAvailableRides.current = availableRides;
-  }, [availableRides, activeRides.length, toast, isLoading]);
+
+    return () => {
+        availableRidesUnsubscribe.current?.();
+    }
+  }, [firestore, activeRide, isLoading]); // Dependency on activeRide is key
 
 
   const handleAcceptRide = () => {
-    // When a ride is accepted, it will be picked up by the activeRides query.
-    // Clear any finished ride summary that might be showing.
+    // When a ride is accepted, it will be picked up by the activeRide query.
+    // The UI will switch automatically. We clear the finished ride summary.
     setLastFinishedRide(null);
   };
   
   const handleFinishRide = (finishedRide: WithId<Ride>) => {
+    // The activeRide listener will set activeRide to null.
+    // We want to show the summary.
     setLastFinishedRide(finishedRide);
     toast({
         title: "¡Viaje finalizado!",
@@ -147,8 +142,6 @@ export default function DriverPage() {
     setLastFinishedRide(null);
   }
 
-  const currentActiveRide = activeRides.length > 0 ? activeRides[0] : null;
-
   return (
     <main className="container mx-auto max-w-md p-4">
        <div className="flex justify-center items-center mb-6">
@@ -158,8 +151,8 @@ export default function DriverPage() {
       
       {isLoading ? (
         <p className="text-center">Buscando viajes...</p>
-      ) : currentActiveRide ? (
-         <ActiveDriverRide ride={currentActiveRide} onFinishRide={handleFinishRide}/>
+      ) : activeRide ? (
+         <ActiveDriverRide ride={activeRide} onFinishRide={handleFinishRide}/>
       ) : lastFinishedRide ? (
          <FinishedRideSummary ride={lastFinishedRide} onClose={handleCloseSummary} />
       ) : (
