@@ -29,7 +29,10 @@ export default function DriverProfilePage() {
     setIsSaving(true);
 
     const dataToSave: Partial<UserProfile> = {
-        ...profileData,
+        name: profileData.name,
+        carModelYear: profileData.carModelYear,
+        isDriver: profileData.isDriver,
+        photoURL: profileData.photoURL,
         updatedAt: serverTimestamp(),
     };
 
@@ -42,7 +45,6 @@ export default function DriverProfilePage() {
         dataToSave.ridesCompleted = 0;
         dataToSave.averageRating = null;
         dataToSave.activeBonus = false;
-        dataToSave.isDriver = profileData.isDriver || false;
         if (profileData.isDriver) {
           dataToSave.vehicleVerificationStatus = 'pending_review';
           shouldRedirect = true;

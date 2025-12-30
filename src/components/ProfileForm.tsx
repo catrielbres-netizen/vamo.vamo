@@ -40,9 +40,9 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   const { user } = useUser();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(userProfile?.photoURL || null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(userProfile?.photoURL || user?.photoURL || null);
   
-  const { control, register, handleSubmit, watch, formState: { errors, isValid }, setValue, trigger } = useForm<ProfileFormData>({
+  const { control, register, handleSubmit, watch, formState: { errors }, setValue } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     mode: 'onChange',
     defaultValues: {
@@ -56,14 +56,9 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   });
 
   const isDriver = watch('isDriver');
-  
-  useEffect(() => {
-    // When the driver switch changes, re-validate the form
-    trigger();
-  }, [isDriver, trigger]);
 
   const onSubmit = (data: ProfileFormData) => {
-     if (data.isDriver) {
+    if (data.isDriver) {
       const missingDocs = [];
       if (!data.carModelYear) missingDocs.push("año del modelo");
       if (!data.cedulaUploaded) missingDocs.push("cédula");
@@ -112,6 +107,10 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   
   const handleDocUpload = (field: 'cedulaUploaded' | 'seguroUploaded' | 'dniUploaded') => {
       setValue(field, true, { shouldValidate: true });
+       toast({
+          title: '¡Documento simulado!',
+          description: `Se simuló la subida de ${field.replace('Uploaded', '')}.`,
+        });
   }
 
 
@@ -188,7 +187,6 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
                        </Select>
                     )}
                 />
-                {errors.carModelYear && <p className="text-sm text-destructive">{errors.carModelYear.message}</p>}
                </div>
                
                 <div className="space-y-2">
