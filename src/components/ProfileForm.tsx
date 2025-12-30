@@ -66,7 +66,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
       name: userProfile?.name || '',
       isDriver: userProfile?.isDriver || false,
       carModelYear: userProfile?.carModelYear || null,
-      cedulaUploaded: false, // These are for simulation, don't persist them from profile
+      cedulaUploaded: false,
       seguroUploaded: false,
       dniUploaded: false,
     },
@@ -74,7 +74,6 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
 
   const isDriver = watch('isDriver');
   
-  // Re-trigger validation when isDriver changes
   useEffect(() => {
     trigger();
   }, [isDriver, trigger]);

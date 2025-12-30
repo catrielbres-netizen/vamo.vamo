@@ -240,7 +240,7 @@ export default function Home() {
 
     if (dataToSave.isDriver) {
         setIsRedirecting(true);
-        router.replace('/driver');
+        router.replace('/driver/rides');
     }
 };
 

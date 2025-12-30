@@ -24,15 +24,15 @@ export default function DriverProfilePage() {
   );
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
 
-  const handleProfileSave = (profileData: Partial<UserProfile>) => {
+  const handleProfileSave = (profileData: Partial<UserProfile & { cedulaUploaded?: boolean, seguroUploaded?: boolean, dniUploaded?: boolean }>) => {
     if (!userProfileRef || isSaving) return;
     setIsSaving(true);
-    
+
     const dataToSave: Partial<UserProfile> = {
         ...profileData,
         updatedAt: serverTimestamp(),
     };
-    
+
     let shouldRedirect = false;
 
     // Logic for creating or updating the profile
@@ -55,22 +55,21 @@ export default function DriverProfilePage() {
            shouldRedirect = true;
         }
     }
-    
+
     setDocumentNonBlocking(userProfileRef, dataToSave, { merge: true });
-    
+
     toast({
         title: '¡Perfil guardado!',
         description: 'Tus datos han sido actualizados.',
     });
 
     if (shouldRedirect) {
-       setTimeout(() => {
-            router.push('/driver/rides');
-        }, 1000);
+       router.push('/driver/rides');
     } else {
         setIsSaving(false);
     }
   };
+
 
   if (isUserLoading || isProfileLoading) {
     return (
