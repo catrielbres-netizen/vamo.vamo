@@ -88,7 +88,7 @@ export default function DriverPage() {
         unsubscribes.forEach(unsub => unsub());
     };
 
-  }, [firestore, user?.uid, isLoading, toast]);
+  }, [firestore, user?.uid, toast]);
 
 
   const currentActiveRide = activeRides && activeRides.length > 0 ? activeRides[0] : null;
