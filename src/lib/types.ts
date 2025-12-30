@@ -54,6 +54,7 @@ export interface Ride {
 
 export interface UserProfile {
   name: string;
+  photoURL?: string | null;
   createdAt: Timestamp;
   vamoPoints: number;
   averageRating: number | null;

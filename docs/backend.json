@@ -183,6 +183,11 @@
             "type": "string",
             "description": "The user's display name."
           },
+          "photoURL": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "URL of the user's profile picture."
+           },
           "createdAt": {
             "type": "string",
             "format": "date-time",

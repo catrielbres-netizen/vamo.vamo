@@ -2,17 +2,25 @@
 // src/app/profile/page.tsx
 'use client';
 
-import { useAuth, useDoc, useFirestore, useMemoFirebase, useUser } from '@/firebase';
-import { doc, getDocs, collection, query, where, orderBy, limit } from 'firebase/firestore';
+import { useAuth, useDoc, useFirestore, useMemoFirebase, useUser, updateDocumentNonBlocking } from '@/firebase';
+import { doc, getDocs, collection, query, where, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { UserProfile, Ride } from '@/lib/types';
-import { LogOut, Star, Award, CheckCircle, Percent } from 'lucide-react';
+import { LogOut, Star, Award, Percent, Info, Edit2 } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { WithId } from '@/firebase/firestore/use-collection';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { useToast } from '@/hooks/use-toast';
 
 const StatCard = ({ icon, label, value, bonus }: { icon: React.ReactNode, label: string, value: string | number, bonus?: boolean }) => (
     <div className={`p-4 rounded-lg flex items-center gap-4 ${bonus ? 'bg-green-100 dark:bg-green-900/50' : 'bg-secondary'}`}>
@@ -32,6 +40,9 @@ export default function ProfilePage() {
     const firestore = useFirestore();
     const { user, isUserLoading } = useUser();
     const router = useRouter();
+    const { toast } = useToast();
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
 
     const userProfileRef = useMemoFirebase(
         () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -61,13 +72,33 @@ export default function ProfilePage() {
 
     }, [firestore, user?.uid]);
 
-
     const handleSignOut = async () => {
         if (auth) {
             await auth.signOut();
             router.push('/');
         }
     };
+
+    const handleAvatarClick = () => {
+        fileInputRef.current?.click();
+    }
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file && userProfileRef) {
+            // In a real app, you would upload the file to Firebase Storage
+            // and get a download URL. Here, we'll simulate it.
+            const placeholderUrl = `https://picsum.photos/seed/${user?.uid}/200`;
+            
+            updateDocumentNonBlocking(userProfileRef, { photoURL: placeholderUrl });
+
+            toast({
+                title: 'Foto de perfil actualizada',
+                description: 'Tu nueva foto de perfil ha sido guardada.',
+            });
+        }
+    };
+
 
     if (isUserLoading || isProfileLoading) {
         return <div className="container mx-auto p-4 text-center">Cargando perfil...</div>;
@@ -87,8 +118,24 @@ export default function ProfilePage() {
     return (
         <main className="container mx-auto max-w-md p-4">
             <Card>
-                <CardHeader className="text-center">
-                    <CardTitle className="text-2xl">
+                <CardHeader className="text-center items-center">
+                    <div className="relative">
+                        <Avatar className="w-24 h-24 text-lg" onClick={handleAvatarClick} >
+                            <AvatarImage src={userProfile?.photoURL || user.photoURL || undefined} alt={userProfile?.name} />
+                            <AvatarFallback>{userProfile?.name?.charAt(0) || 'P'}</AvatarFallback>
+                        </Avatar>
+                        <div className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-1 cursor-pointer hover:bg-primary/80">
+                            <Edit2 className="w-4 h-4" />
+                        </div>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileChange}
+                            className="hidden"
+                            accept="image/*"
+                        />
+                    </div>
+                    <CardTitle className="text-2xl pt-4">
                         {userProfile?.name || user.displayName || 'Pasajero Anónimo'}
                     </CardTitle>
                     <CardDescription>
@@ -113,6 +160,28 @@ export default function ProfilePage() {
                         </div>
                     )}
                     
+                    <Separator />
+
+                    <Accordion type="single" collapsible className="w-full">
+                        <AccordionItem value="item-1">
+                            <AccordionTrigger>
+                                <div className='flex items-center gap-2'><Award className='w-4 h-4' />¿Qué son los Vamo Puntos?</div>
+                            </AccordionTrigger>
+                            <AccordionContent className='text-muted-foreground text-sm'>
+                            Ganá 3 Vamo Puntos por cada viaje que completes. Al juntar 30 puntos, ¡recibís un 10% de descuento en tu próximo viaje! Es nuestra forma de agradecerte por elegirnos.
+                            </AccordionContent>
+                        </AccordionItem>
+                        <AccordionItem value="item-2">
+                            <AccordionTrigger>
+                                <div className='flex items-center gap-2'><Info className='w-4 h-4' />Acerca de VamO</div>
+                            </AccordionTrigger>
+                            <AccordionContent className='text-muted-foreground text-sm'>
+                            VamO es una aplicación de viajes compartidos desarrollada para conectar pasajeros y conductores de manera eficiente y segura. Nuestra misión es ofrecer una alternativa de transporte confiable, económica y amigable en tu ciudad.
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
+
+
                     <Separator />
 
                     <div>
