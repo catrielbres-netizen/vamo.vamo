@@ -21,7 +21,7 @@ export default function DriverRideCard({
   onAccept,
 }: {
   ride: any;
-  onAccept: (rideId: string) => void;
+  onAccept: () => void;
 }) {
   const firestore = useFirestore();
   const { user } = useUser();
@@ -37,7 +37,7 @@ export default function DriverRideCard({
         updatedAt: serverTimestamp(),
     });
 
-    onAccept(ride.id);
+    onAccept();
   };
 
   return (

@@ -14,8 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Button } from './ui/button';
-import { WhatsAppLogo } from './icons'; // Asegúrate de tener este ícono
 import { format } from 'date-fns';
 import es from 'date-fns/locale/es';
 
@@ -61,30 +59,8 @@ export default function RideStatus({ ride }: { ride: any }) {
   
   const finalPrice = ride.pricing.finalTotal || ride.pricing.estimatedTotal;
 
-  const handleSendWhatsApp = () => {
-    const rideDate = ride.finishedAt instanceof Timestamp 
-        ? format(ride.finishedAt.toDate(), "d 'de' MMMM 'de' yyyy 'a las' HH:mm", { locale: es })
-        : 'Fecha no disponible';
-
-    const message = `
-*Resumen de tu viaje con VamO* 🚕
-
-*Destino:* ${ride.destination.address}
-*Fecha:* ${rideDate}
-*Conductor:* ${ride.driverName || 'No disponible'}
------------------------------------
-*Tarifa Base:* ${formatCurrency(ride.pricing.estimatedTotal)}
-*Costo de Espera:* ${formatCurrency(waitingCost)}
-*TOTAL A PAGAR:* *${formatCurrency(finalPrice)}*
-
-¡Gracias por viajar con VamO!
-    `.trim().replace(/\n/g, '%0A').replace(/ /g, '%20');
-
-    const url = `https://wa.me/?text=${message}`;
-    window.open(url, '_blank');
-  }
-
   if (ride.status === 'finished') {
+    const waitingCostFinal = Math.ceil(totalAccumulatedWaitSeconds / 60) * WAITING_PER_MIN;
     return (
         <Card className="m-4">
             <CardHeader>
@@ -97,11 +73,11 @@ export default function RideStatus({ ride }: { ride: any }) {
                 <div className="border-t border-b py-4 space-y-2">
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Tarifa base</span>
-                        <span>{formatCurrency(ride.pricing.estimatedTotal)}</span>
+                        <span>{formatCurrency(ride.pricing.estimatedTotal - waitingCostFinal)}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Costo por espera</span>
-                        <span>{formatCurrency(waitingCost)}</span>
+                        <span>{formatCurrency(waitingCostFinal)}</span>
                     </div>
                 </div>
                  <div className="flex justify-between items-center font-bold text-lg">
@@ -113,12 +89,6 @@ export default function RideStatus({ ride }: { ride: any }) {
                     Conductor: {ride.driverName || 'No disponible'}
                 </p>
             </CardContent>
-            <CardFooter>
-                 <Button onClick={handleSendWhatsApp} className="w-full" variant="outline">
-                    <WhatsAppLogo className="mr-2 h-5 w-5" />
-                    Enviar Resumen por WhatsApp
-                </Button>
-            </CardFooter>
         </Card>
     )
   }

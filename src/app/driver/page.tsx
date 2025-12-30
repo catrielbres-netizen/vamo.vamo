@@ -6,6 +6,7 @@ import { useFirestore, useUser } from '@/firebase';
 import { collection, query, where, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
 import ActiveDriverRide from '@/components/ActiveDriverRide';
+import FinishedRideSummary from '@/components/FinishedRideSummary';
 import { VamoIcon } from '@/components/icons';
 import { useToast } from "@/hooks/use-toast";
 import { speak } from '@/lib/speak';
@@ -21,10 +22,9 @@ export default function DriverPage() {
   const [activeRides, setActiveRides] = useState<WithId<Ride>[]>([]);
   const [availableRides, setAvailableRides] = useState<WithId<Ride>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
 
-  const wasPreviouslyActive = useRef(false);
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
-  const finishedByDriver = useRef(false);
 
   useEffect(() => {
     if (!firestore || !user?.uid) {
@@ -65,6 +65,16 @@ export default function DriverPage() {
 
     const unsubActive = onSnapshot(activeRideQuery, (snapshot) => {
         const rides = snapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
+        
+        // Passenger cancellation detection
+        if (activeRides.length > 0 && rides.length === 0) {
+          toast({
+            title: "Viaje cancelado",
+            description: "El pasajero ha cancelado el viaje. Vuelves a estar disponible.",
+            variant: "destructive",
+          });
+        }
+        
         setActiveRides(rides);
         activeLoaded = true;
         checkLoading();
@@ -94,34 +104,14 @@ export default function DriverPage() {
         unsubscribes.forEach(unsub => unsub());
     };
 
-  }, [firestore, user?.uid, toast]);
+  }, [firestore, user?.uid, toast, activeRides.length]);
 
-
-  const currentActiveRide = activeRides && activeRides.length > 0 ? activeRides[0] : null;
-
-  // Effect for cancellation notifications
-  useEffect(() => {
-    const isActive = !!currentActiveRide;
-    // Si antes había un viaje activo y ahora no lo hay, Y no fue finalizado por el conductor...
-    if (wasPreviouslyActive.current && !isActive && !finishedByDriver.current) {
-      toast({
-        title: "Viaje cancelado",
-        description: "El pasajero ha cancelado el viaje. Vuelves a estar disponible.",
-        variant: "destructive",
-      });
-    }
-    wasPreviouslyActive.current = isActive;
-    // Reseteamos el flag si ya no hay viaje activo
-    if (!isActive) {
-        finishedByDriver.current = false;
-    }
-  }, [currentActiveRide, toast]);
   
   // Effect for new available ride notifications
   useEffect(() => {
     if (isLoading) return; // Don't run on initial load
     
-    if (!currentActiveRide && availableRides.length > previousAvailableRides.current.length) {
+    if (activeRides.length === 0 && availableRides.length > previousAvailableRides.current.length) {
         const newRide = availableRides.find(
             (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
         );
@@ -136,21 +126,28 @@ export default function DriverPage() {
         }
     }
     previousAvailableRides.current = availableRides;
-  }, [availableRides, currentActiveRide, toast, isLoading]);
+  }, [availableRides, activeRides.length, toast, isLoading]);
 
 
-  const handleAcceptRide = (rideId: string) => {
-    // No need to set activeRideId here as the activeRideQuery will pick it up
+  const handleAcceptRide = () => {
+    // When a ride is accepted, it will be picked up by the activeRides query.
+    // Clear any finished ride summary that might be showing.
+    setLastFinishedRide(null);
   };
   
-  const handleFinishRide = () => {
-    finishedByDriver.current = true; // Marcamos que el conductor finalizó el viaje
+  const handleFinishRide = (finishedRide: WithId<Ride>) => {
+    setLastFinishedRide(finishedRide);
     toast({
         title: "¡Viaje finalizado!",
         description: "El viaje ha sido completado y cobrado.",
     });
-    // The ride is finished, so it will disappear from the active query
   };
+
+  const handleCloseSummary = () => {
+    setLastFinishedRide(null);
+  }
+
+  const currentActiveRide = activeRides.length > 0 ? activeRides[0] : null;
 
   return (
     <main className="container mx-auto max-w-md p-4">
@@ -163,10 +160,12 @@ export default function DriverPage() {
         <p className="text-center">Buscando viajes...</p>
       ) : currentActiveRide ? (
          <ActiveDriverRide ride={currentActiveRide} onFinishRide={handleFinishRide}/>
+      ) : lastFinishedRide ? (
+         <FinishedRideSummary ride={lastFinishedRide} onClose={handleCloseSummary} />
       ) : (
         <div className="space-y-4">
            <h2 className="text-xl font-semibold text-center">Viajes Disponibles</h2>
-          {availableRides && availableRides.length > 0 ? (
+          {availableRides.length > 0 ? (
             availableRides.map((ride) => (
               <DriverRideCard
                 key={ride.id}

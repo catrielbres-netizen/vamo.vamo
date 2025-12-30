@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -18,6 +17,9 @@ import { RideStatusInfo } from '@/lib/ride-status';
 import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
 import { Flag, User, Hourglass, Play, Clock, Map, MapPin } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { WithId } from '@/firebase/firestore/use-collection';
+import { Ride } from '@/lib/types';
+
 
 const statusActions: { [key: string]: { action: string, label: string } } = {
   driver_assigned: { action: 'arrived', label: 'Llegué al origen' },
@@ -32,7 +34,7 @@ const formatDuration = (seconds: number) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, onFinishRide: () => void }) {
+export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<Ride>, onFinishRide: (ride: WithId<Ride>) => void }) {
   const firestore = useFirestore();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
 
@@ -43,7 +45,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
     if (ride.status === 'paused' && ride.pauseStartedAt) {
       const updateTimer = () => {
           const now = Timestamp.now();
-          const start = ride.pauseStartedAt;
+          const start = ride.pauseStartedAt as Timestamp;
           setCurrentPauseSeconds(now.seconds - start.seconds);
       }
       updateTimer();
@@ -63,6 +65,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
         status: newStatus,
         updatedAt: serverTimestamp(),
     }
+    let finalRideData = { ...ride };
 
     if(newStatus === 'paused') {
         payload.pauseStartedAt = serverTimestamp();
@@ -70,7 +73,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
     
     if(newStatus === 'in_progress' && ride.status === 'paused' && ride.pauseStartedAt) {
         const now = Timestamp.now();
-        const pausedAt = ride.pauseStartedAt; // Is already a Timestamp
+        const pausedAt = ride.pauseStartedAt as Timestamp; // Is already a Timestamp
         const diffSeconds = now.seconds - pausedAt.seconds;
         
         payload.pauseStartedAt = null; // Clear the start time
@@ -83,19 +86,28 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
     if(newStatus === 'finished') {
         const totalWaitTimeSeconds = totalAccumulatedWaitSeconds;
         const finalPrice = calculateFare({
-            distanceMeters: ride.pricing.estimatedDistanceMeters ?? 4200, // Usar distancia real en el futuro
+            distanceMeters: ride.pricing.estimatedDistanceMeters ?? 4200,
             waitingMinutes: Math.ceil(totalWaitTimeSeconds / 60),
             service: ride.serviceType,
-            isNight: false, // Añadir lógica de tarifa nocturna
+            isNight: false,
         });
-        payload.pricing = { ...ride.pricing, finalTotal: finalPrice };
+        const finalPricing = { ...ride.pricing, finalTotal: finalPrice };
+        payload.pricing = finalPricing;
         payload.finishedAt = serverTimestamp();
+
+        // Prepare the data for the callback
+        finalRideData = {
+          ...ride,
+          status: 'finished',
+          pricing: finalPricing,
+          finishedAt: payload.finishedAt
+        };
     }
 
     updateDocumentNonBlocking(rideRef, payload);
 
     if (newStatus === 'finished') {
-        onFinishRide();
+        onFinishRide(finalRideData);
     }
   };
 
@@ -108,7 +120,6 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: any, on
 
   const openNavigationToDestination = () => {
     if (ride?.destination?.address) {
-        // Usamos la dirección para una mejor experiencia en Google Maps
         const destinationQuery = encodeURIComponent(ride.destination.address);
         const url = `https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`;
         window.open(url, '_blank');
