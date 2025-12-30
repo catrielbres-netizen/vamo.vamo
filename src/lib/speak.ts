@@ -9,37 +9,39 @@ export function speak(text: string) {
 
   const synth = window.speechSynthesis;
 
-  // Si ya está hablando, no interrumpir para cosas menos importantes
-  // pero para un nuevo viaje, sí queremos interrumpir.
+  // Si ya está hablando, lo cancelamos para dar prioridad al nuevo mensaje.
   if (synth.speaking) {
     synth.cancel();
   }
 
   const utterance = new SpeechSynthesisUtterance(text);
   
-  // Intentar usar una voz en español si está disponible
-  const voices = synth.getVoices();
-  const spanishVoice = voices.find(voice => voice.lang.startsWith('es'));
-  if (spanishVoice) {
-    utterance.voice = spanishVoice;
-  }
-  
-  utterance.lang = 'es-AR';
-  utterance.rate = 1;
-  utterance.pitch = 1;
-  utterance.volume = 1;
+  // Función para seleccionar la voz y hablar
+  const doSpeak = () => {
+    const voices = synth.getVoices();
+    // Prioridad a la voz de español de Argentina, luego cualquier español.
+    const spanishVoice = voices.find(voice => voice.lang === 'es-AR') || voices.find(voice => voice.lang.startsWith('es'));
+    
+    if (spanishVoice) {
+      utterance.voice = spanishVoice;
+    }
+    
+    utterance.lang = spanishVoice ? spanishVoice.lang : 'es';
+    utterance.rate = 1;
+    utterance.pitch = 1.1;
+    utterance.volume = 1;
 
-  // Asegurarse de que las voces se carguen antes de hablar
-  if (voices.length === 0) {
+    synth.speak(utterance);
+  };
+
+  // Si las voces no se han cargado todavía, esperamos al evento onvoiceschanged.
+  // Esto es crucial en muchos navegadores.
+  if (synth.getVoices().length === 0) {
     synth.onvoiceschanged = () => {
-        const updatedVoices = synth.getVoices();
-        const updatedSpanishVoice = updatedVoices.find(voice => voice.lang.startsWith('es'));
-        if (updatedSpanishVoice) {
-            utterance.voice = updatedSpanishVoice;
-        }
-        synth.speak(utterance);
+      doSpeak();
     };
   } else {
-    synth.speak(utterance);
+    // Si ya están cargadas, hablamos directamente.
+    doSpeak();
   }
 }
