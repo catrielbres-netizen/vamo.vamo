@@ -1,3 +1,4 @@
+
 // /app/driver/rides/page.tsx
 'use client';
 
@@ -245,7 +246,17 @@ export default function DriverRidesPage() {
                 </div>
             );
         default:
-            return <p className="text-center text-muted-foreground">Estado de cuenta desconocido.</p>;
+             // This case should ideally not be reached if vehicleVerificationStatus is always initialized.
+             // But as a fallback, we treat it as unverified.
+            return (
+                <Alert>
+                    <ShieldX className="h-4 w-4" />
+                    <AlertTitle>Registro Incompleto</AlertTitle>
+                    <AlertDescription>
+                        Para comenzar a recibir viajes, completá tu registro como conductor desde tu perfil.
+                    </AlertDescription>
+                </Alert>
+            );
     }
   }
 
