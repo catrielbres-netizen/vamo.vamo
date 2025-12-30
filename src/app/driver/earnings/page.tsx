@@ -1,8 +1,9 @@
 // src/app/driver/earnings/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
-import { useFirestore, useUser, updateDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, setDoc } from 'firebase/firestore';
+import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Ride, DriverSummary } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -77,12 +78,24 @@ export default function EarningsPage() {
                         status: 'pending',
                         updatedAt: Timestamp.now(),
                     };
+                    const summaryRef = doc(firestore, 'driver_summaries', `${user.uid}_${weekId}`);
+                    // create the document non-blockingly, don't show toast
+                    setDoc(summaryRef, newSummary, { merge: true });
                     setSummary(newSummary);
                 } else {
                     const existingSummary = { ...summarySnapshot.docs[0].data(), id: summarySnapshot.docs[0].id } as DriverSummary;
-                    // We recalculate earnings based on rides, in case a new one was added
-                    existingSummary.totalEarnings = totalEarnings;
-                    existingSummary.commissionOwed = commissionOwed;
+                    const summaryRef = doc(firestore, 'driver_summaries', existingSummary.id as string);
+                    
+                    if(existingSummary.totalEarnings !== totalEarnings || existingSummary.commissionOwed !== commissionOwed) {
+                        // We recalculate earnings based on rides, in case a new one was added
+                        existingSummary.totalEarnings = totalEarnings;
+                        existingSummary.commissionOwed = commissionOwed;
+                        updateDocumentNonBlocking(summaryRef, { 
+                            totalEarnings: totalEarnings,
+                            commissionOwed: commissionOwed,
+                            updatedAt: Timestamp.now()
+                        });
+                    }
                     setSummary(existingSummary);
                 }
 

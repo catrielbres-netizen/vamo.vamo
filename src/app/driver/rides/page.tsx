@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useFirestore, useUser } from '@/firebase';
-import { collection, query, where, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, Unsubscribe, doc } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
 import ActiveDriverRide from '@/components/ActiveDriverRide';
 import FinishedRideSummary from '@/components/FinishedRideSummary';
@@ -55,8 +55,8 @@ export default function DriverRidesPage() {
       
       if(wasActive && !currentActiveRide) {
          toast({
-            title: "Viaje cancelado",
-            description: "El pasajero ha cancelado el viaje. Vuelves a estar disponible.",
+            title: "Viaje cancelado o finalizado",
+            description: "El viaje ha sido completado o cancelado por el pasajero. Vuelves a estar disponible.",
             variant: "destructive",
           });
       }
@@ -71,7 +71,7 @@ export default function DriverRidesPage() {
     return () => {
       activeRideUnsubscribe.current?.();
     };
-  }, [firestore, user?.uid]);
+  }, [firestore, user?.uid, toast]);
 
 
   useEffect(() => {
@@ -88,22 +88,28 @@ export default function DriverRidesPage() {
         availableRidesUnsubscribe.current = onSnapshot(availableRidesQuery, (snapshot) => {
             const rides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
             
-            if (!isLoading && rides.length > previousAvailableRides.current.length) {
-                 const newRide = rides.find(
+            // This logic is tricky. Let's make sure it's robust.
+            // Check for brand new rides since the last snapshot.
+            if (!isLoading) { // Only notify after initial load
+                const newRides = rides.filter(
                     (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
                 );
-                if (newRide) {
-                    const destinationText = newRide.destination.address;
-                    toast({
-                        title: "¡Nuevo viaje disponible!",
-                        description: `Un pasajero solicita un viaje a ${destinationText}.`,
-                    });
-                    speak(`Nuevo viaje disponible hacia ${destinationText}.`);
+
+                if (newRides.length > 0) {
+                     newRides.forEach(newRide => {
+                        const destinationText = newRide.destination.address;
+                        toast({
+                            title: "¡Nuevo viaje disponible!",
+                            description: `Un pasajero solicita un viaje a ${destinationText}.`,
+                        });
+                        speak(`Nuevo viaje disponible hacia ${destinationText}.`);
+                     });
                 }
             }
             
             setAvailableRides(rides);
             previousAvailableRides.current = rides;
+            if(isLoading) setIsLoading(false); // Also stop loading here
         }, (error) => {
             console.error("Error fetching available rides:", error);
             toast({ variant: 'destructive', title: 'Error al buscar viajes disponibles.' });
@@ -118,7 +124,7 @@ export default function DriverRidesPage() {
     return () => {
         availableRidesUnsubscribe.current?.();
     }
-  }, [firestore, activeRide, isLoading]); // Dependency on activeRide is key
+  }, [firestore, activeRide, isLoading, toast]); // Dependency on activeRide is key
 
 
   const handleAcceptRide = () => {
