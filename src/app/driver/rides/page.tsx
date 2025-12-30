@@ -87,7 +87,7 @@ export default function DriverRidesPage() {
     return () => {
       activeRideUnsubscribe.current?.();
     };
-  }, [firestore, user?.uid, toast, activeRide]); // Added activeRide to dependencies
+  }, [firestore, user?.uid, toast]); // Removed activeRide from dependencies
 
 
   useEffect(() => {
