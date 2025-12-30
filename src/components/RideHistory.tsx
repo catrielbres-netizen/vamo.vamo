@@ -16,7 +16,6 @@ export default function RideHistory({ passengerId }: { passengerId: string }) {
         ? query(
             collection(firestore, 'rides'),
             where('passengerId', '==', passengerId),
-            where('status', 'in', ['finished', 'cancelled']),
             orderBy('createdAt', 'desc'),
             limit(20)
           )
@@ -25,6 +24,8 @@ export default function RideHistory({ passengerId }: { passengerId: string }) {
   );
 
   const { data: rides, isLoading } = useCollection(historyQuery);
+
+  const filteredRides = rides?.filter(ride => ['finished', 'cancelled'].includes(ride.status));
 
   return (
     <div className="mt-8">
@@ -36,11 +37,11 @@ export default function RideHistory({ passengerId }: { passengerId: string }) {
                 <Skeleton className="h-16 w-full" />
             </div>
         )}
-        {!isLoading && (!rides || rides.length === 0) && (
+        {!isLoading && (!filteredRides || filteredRides.length === 0) && (
              <p className="text-center text-muted-foreground text-sm">No tenés viajes anteriores.</p>
         )}
         <div className="space-y-4">
-            {rides?.map((ride) => (
+            {filteredRides?.map((ride) => (
                 <Card key={ride.id} className="bg-card/50">
                     <CardHeader className="p-4">
                         <CardTitle className="text-base">{ride.destination.address}</CardTitle>
