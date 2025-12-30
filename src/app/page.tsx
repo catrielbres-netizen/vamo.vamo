@@ -29,7 +29,7 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import ProfileForm from '@/components/ProfileForm'; // Changed import
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 export default function Home() {
   const auth = useAuth();
@@ -251,6 +251,10 @@ export default function Home() {
     <main className="max-w-md mx-auto pb-4 px-4">
       <Dialog open={isProfileModalOpen} onOpenChange={setProfileModalOpen}>
         <DialogContent>
+           <DialogHeader className="text-center">
+              <DialogTitle>Completá tu Perfil</DialogTitle>
+              <DialogDescription>Necesitamos algunos datos para empezar.</DialogDescription>
+            </DialogHeader>
            <ProfileForm 
              userProfile={userProfile}
              onSave={handleProfileSave}

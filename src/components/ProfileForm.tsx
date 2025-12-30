@@ -15,6 +15,7 @@ import { UserProfile } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Edit2 } from 'lucide-react';
 import { useUser } from '@/firebase';
+import { Separator } from './ui/separator';
 
 const profileSchema = z.object({
   name: z.string().min(3, { message: 'El nombre debe tener al menos 3 caracteres.' }),
@@ -81,13 +82,8 @@ export default function ProfileForm({ userProfile, onSave, onCancel }: ProfileFo
   };
 
   return (
-    <Card className="w-full max-w-md border-0 shadow-none">
-      <CardHeader className="text-center">
-        <CardTitle>Completá tu Perfil</CardTitle>
-        <CardDescription>Necesitamos algunos datos para empezar.</CardDescription>
-      </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 pt-6">
             <div className="flex justify-center">
                  <div className="relative">
                     <button type="button" onClick={handleAvatarClick} className="focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-full">
@@ -169,6 +165,5 @@ export default function ProfileForm({ userProfile, onSave, onCancel }: ProfileFo
            <Button type="submit">Guardar Perfil</Button>
         </CardFooter>
       </form>
-    </Card>
   );
 }
