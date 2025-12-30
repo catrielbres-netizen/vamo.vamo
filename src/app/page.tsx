@@ -17,11 +17,11 @@ import {
 } from '@/firebase';
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/icons';
-import RideHistory from '@/components/RideHistory';
 import { calculateFare } from '@/lib/pricing';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
+import { Separator } from '@/components/ui/separator';
 
 export default function Home() {
   const auth = useAuth();
@@ -193,7 +193,10 @@ export default function Home() {
         variant={currentAction.variant}
         disabled={isRideLoading || (status==='idle' && !destination)}
       />
-      <RideHistory passengerId={user.uid} />
+       <div className="mt-8">
+        <Separator />
+        <p className="text-center text-muted-foreground text-sm mt-4">No hay viajes anteriores.</p>
+       </div>
     </main>
   );
 }
