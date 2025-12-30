@@ -35,52 +35,59 @@ export default function DriverPage() {
     setIsLoading(true);
     const unsubscribes: Unsubscribe[] = [];
 
-    try {
-        // 1. Query for rides assigned to the current driver
-        const activeRideQuery = query(
-            collection(firestore, 'rides'),
-            where('driverId', '==', user.uid),
-            where('status', 'in', [
-                'driver_assigned',
-                'driver_arriving',
-                'arrived',
-                'in_progress',
-                'paused',
-            ])
-        );
+    let activeLoaded = false;
+    let availableLoaded = false;
 
-        // 2. Query for available rides
-        const availableRidesQuery = query(
-            collection(firestore, 'rides'),
-            where('status', '==', 'searching_driver')
-        );
-
-        const unsubActive = onSnapshot(activeRideQuery, (snapshot) => {
-            const rides = snapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
-            setActiveRides(rides);
-            if (isLoading) setIsLoading(false);
-        }, (error) => {
-            console.error("Error fetching active rides:", error);
-            toast({ variant: 'destructive', title: 'Error al cargar tus viajes activos.'});
-            if (isLoading) setIsLoading(false);
-        });
-
-        const unsubAvailable = onSnapshot(availableRidesQuery, (snapshot) => {
-            const rides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
-            setAvailableRides(rides);
-             if (isLoading) setIsLoading(false);
-        }, (error) => {
-            console.error("Error fetching available rides:", error);
-            toast({ variant: 'destructive', title: 'Error al buscar viajes disponibles.'});
-            if (isLoading) setIsLoading(false);
-        });
-
-        unsubscribes.push(unsubActive, unsubAvailable);
-
-    } catch (error) {
-        console.error("Error setting up snapshots:", error);
+    const checkLoading = () => {
+      if (activeLoaded && availableLoaded) {
         setIsLoading(false);
-    }
+      }
+    };
+
+    // 1. Query for rides assigned to the current driver
+    const activeRideQuery = query(
+        collection(firestore, 'rides'),
+        where('driverId', '==', user.uid),
+        where('status', 'in', [
+            'driver_assigned',
+            'driver_arriving',
+            'arrived',
+            'in_progress',
+            'paused',
+        ])
+    );
+
+    // 2. Query for available rides
+    const availableRidesQuery = query(
+        collection(firestore, 'rides'),
+        where('status', '==', 'searching_driver')
+    );
+
+    const unsubActive = onSnapshot(activeRideQuery, (snapshot) => {
+        const rides = snapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
+        setActiveRides(rides);
+        activeLoaded = true;
+        checkLoading();
+    }, (error) => {
+        console.error("Error fetching active rides:", error);
+        toast({ variant: 'destructive', title: 'Error al cargar tus viajes activos.'});
+        activeLoaded = true;
+        checkLoading();
+    });
+
+    const unsubAvailable = onSnapshot(availableRidesQuery, (snapshot) => {
+        const rides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
+        setAvailableRides(rides);
+        availableLoaded = true;
+        checkLoading();
+    }, (error) => {
+        console.error("Error fetching available rides:", error);
+        toast({ variant: 'destructive', title: 'Error al buscar viajes disponibles.'});
+        availableLoaded = true;
+        checkLoading();
+    });
+
+    unsubscribes.push(unsubActive, unsubAvailable);
 
     // Cleanup function
     return () => {
@@ -112,6 +119,8 @@ export default function DriverPage() {
   
   // Effect for new available ride notifications
   useEffect(() => {
+    if (isLoading) return; // Don't run on initial load
+    
     if (!currentActiveRide && availableRides.length > previousAvailableRides.current.length) {
         const newRide = availableRides.find(
             (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
@@ -127,7 +136,7 @@ export default function DriverPage() {
         }
     }
     previousAvailableRides.current = availableRides;
-  }, [availableRides, currentActiveRide, toast]);
+  }, [availableRides, currentActiveRide, toast, isLoading]);
 
 
   const handleAcceptRide = (rideId: string) => {
