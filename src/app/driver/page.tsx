@@ -3,11 +3,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useFirestore, useUser } from '@/firebase';
-import { collection, query, where, getDocs, writeBatch, doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
 import ActiveDriverRide from '@/components/ActiveDriverRide';
 import { VamoIcon } from '@/components/icons';
-import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { speak } from '@/lib/speak';
 import { WithId } from '@/firebase/firestore/use-collection';
@@ -19,12 +18,12 @@ export default function DriverPage() {
   const { user } = useUser();
   const { toast } = useToast();
   
-  const [activeRides, setActiveRides] = useState<WithId<Ride>[] | null>(null);
-  const [availableRides, setAvailableRides] = useState<WithId<Ride>[] | null>(null);
+  const [activeRides, setActiveRides] = useState<WithId<Ride>[]>([]);
+  const [availableRides, setAvailableRides] = useState<WithId<Ride>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const wasPreviouslyActive = useRef(false);
-  const previousAvailableRides = useRef<any[]>([]);
+  const previousAvailableRides = useRef<WithId<Ride>[]>([]);
   const finishedByDriver = useRef(false);
 
   useEffect(() => {
@@ -113,13 +112,12 @@ export default function DriverPage() {
   
   // Effect for new available ride notifications
   useEffect(() => {
-    if (!currentActiveRide && availableRides && availableRides.length > (previousAvailableRides.current?.length ?? 0)) {
-        const newRides = availableRides.filter(
+    if (!currentActiveRide && availableRides.length > previousAvailableRides.current.length) {
+        const newRide = availableRides.find(
             (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
         );
 
-        if(newRides.length > 0) { 
-             const newRide = newRides[0];
+        if(newRide) { 
              const destinationText = newRide.destination.address;
              toast({
                 title: "¡Nuevo viaje disponible!",
@@ -128,7 +126,7 @@ export default function DriverPage() {
             speak(`Nuevo viaje disponible hacia ${destinationText}.`);
         }
     }
-    previousAvailableRides.current = availableRides || [];
+    previousAvailableRides.current = availableRides;
   }, [availableRides, currentActiveRide, toast]);
 
 
