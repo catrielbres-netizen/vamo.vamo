@@ -1,11 +1,12 @@
+
 // src/components/RideStatus.tsx
 'use client';
 import { TripCard } from './TripCard';
 import { DriverInfo } from './DriverInfo';
 import { TripTimers } from './TripTimers';
 import { WAITING_PER_MIN } from '@/lib/pricing';
-import { useEffect, useState } from 'react';
-import { Timestamp, doc } from 'firebase/firestore';
+import { useEffect, useState, useRef } from 'react';
+import { Timestamp, doc, runTransaction } from 'firebase/firestore';
 import {
   Card,
   CardContent,
@@ -16,7 +17,7 @@ import {
 import RatingForm from './RatingForm';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride } from '@/lib/types';
+import { Ride, UserProfile } from '@/lib/types';
 
 
 function formatCurrency(value: number) {
@@ -35,6 +36,7 @@ const formatDuration = (seconds: number) => {
 export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
   const firestore = useFirestore();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
+  const pointsAwardedRef = useRef(false);
 
   const totalAccumulatedWaitSeconds = (ride.pauseHistory || []).reduce((acc: number, p: any) => acc + p.duration, 0);
 
@@ -54,6 +56,62 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
     
     return () => clearInterval(timer);
   }, [ride.status, ride.pauseStartedAt]);
+  
+   useEffect(() => {
+    if (ride.status === 'finished' && !ride.vamoPointsAwarded && !pointsAwardedRef.current) {
+        if (!firestore || !ride.passengerId) return;
+        
+        pointsAwardedRef.current = true; // Prevents re-running
+
+        const awardPoints = async () => {
+            const VAMO_POINTS_PER_RIDE = 3;
+            const rideRef = doc(firestore, 'rides', ride.id);
+            const userProfileRef = doc(firestore, 'users', ride.passengerId);
+
+            try {
+                await runTransaction(firestore, async (transaction) => {
+                    const userProfileDoc = await transaction.get(userProfileRef);
+                    
+                    let currentPoints = 0;
+                    if (userProfileDoc.exists()) {
+                        currentPoints = (userProfileDoc.data() as UserProfile).vamoPoints || 0;
+                    } else {
+                        // Create profile if it doesn't exist
+                        const newProfile: UserProfile = {
+                            name: ride.passengerName || 'Pasajero Anónimo',
+                            createdAt: Timestamp.now(),
+                            vamoPoints: 0,
+                            averageRating: null,
+                            ridesCompleted: 0,
+                            activeBonus: false
+                        };
+                        transaction.set(userProfileRef, newProfile);
+                    }
+                    
+                    const newTotalPoints = currentPoints + VAMO_POINTS_PER_RIDE;
+                    const hasBonus = newTotalPoints >= 30;
+
+                    transaction.update(userProfileRef, { 
+                        vamoPoints: newTotalPoints,
+                        ridesCompleted: (userProfileDoc.data()?.ridesCompleted || 0) + 1,
+                        activeBonus: hasBonus,
+                    });
+                    
+                    transaction.update(rideRef, { 
+                        vamoPointsAwarded: VAMO_POINTS_PER_RIDE 
+                    });
+                });
+                 console.log(`Awarded ${VAMO_POINTS_PER_RIDE} points to ${ride.passengerId}`);
+            } catch (error) {
+                console.error("Failed to award points in transaction:", error);
+                pointsAwardedRef.current = false; // Allow retry if transaction fails
+            }
+        };
+
+        awardPoints();
+    }
+  }, [ride.status, ride.id, ride.passengerId, firestore, ride.vamoPointsAwarded]);
+
 
   const handleRatingSubmit = (rating: number, comments: string) => {
     if (!firestore) return;
@@ -109,6 +167,19 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
             />
         </Card>
     )
+  }
+
+  if (ride.status === 'cancelled') {
+    return (
+        <Card className="m-4">
+            <CardHeader>
+                <CardTitle className="text-xl text-destructive">Viaje Cancelado</CardTitle>
+                <CardDescription>
+                   El viaje a {ride.destination.address} fue cancelado.
+                </CardDescription>
+            </CardHeader>
+        </Card>
+    );
   }
 
   return (

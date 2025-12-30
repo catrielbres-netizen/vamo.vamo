@@ -156,6 +156,10 @@
         "driverComments": {
             "type": ["string", "null"],
             "description": "Comments from the passenger about the driver."
+        },
+        "vamoPointsAwarded": {
+            "type": ["number", "null"],
+            "description": "Vamo points awarded to the passenger for this ride."
         }
       },
       "required": [
@@ -168,7 +172,41 @@
         "createdAt",
         "updatedAt"
       ]
-    }
+    },
+    "UserProfile": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "User Profile",
+        "type": "object",
+        "description": "Stores public profile information for a user.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The user's display name."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of when the profile was created."
+          },
+          "vamoPoints": {
+            "type": "number",
+            "description": "Total accumulated Vamo points."
+          },
+          "averageRating": {
+            "type": ["number", "null"],
+            "description": "The user's average rating as a passenger."
+          },
+          "ridesCompleted": {
+            "type": "number",
+            "description": "Total number of completed rides."
+          },
+          "activeBonus": {
+            "type": "boolean",
+            "description": "Whether the user has an active 10% discount bonus."
+          }
+        },
+        "required": ["name", "createdAt", "vamoPoints", "ridesCompleted", "activeBonus"]
+      }
   },
   "auth": {
     "providers": [
@@ -185,6 +223,16 @@
             "$ref": "#/backend/entities/Ride"
           },
           "description": "Represents a ride request and its lifecycle."
+        }
+      },
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Stores public profile information for a user."
         }
       }
     ]
