@@ -1,4 +1,3 @@
-
 // src/components/ProfileForm.tsx
 'use client';
 import { useState, useEffect, useRef } from 'react';
@@ -21,15 +20,14 @@ const profileSchema = z.object({
   name: z.string().min(3, { message: 'El nombre debe tener al menos 3 caracteres.' }),
   isDriver: z.boolean().default(false),
   carModelYear: z.number({ invalid_type_error: 'Por favor, seleccioná un año.' }).nullable().optional(),
-}).refine(data => {
-    // If the user is a driver, they must specify the car model year.
-    if (data.isDriver && !data.carModelYear) {
-        return false;
+}).superRefine((data, ctx) => {
+    if (data.isDriver && (data.carModelYear === null || data.carModelYear === undefined)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'El año del modelo es requerido para los conductores.',
+            path: ['carModelYear'],
+        });
     }
-    return true;
-}, {
-    message: 'El año del modelo es requerido para los conductores.',
-    path: ['carModelYear'], // path of error
 });
 
 
