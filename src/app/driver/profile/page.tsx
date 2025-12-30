@@ -23,18 +23,6 @@ export default function DriverProfilePage() {
   );
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
 
-  useEffect(() => {
-    // This effect will trigger the redirection AFTER the local data has been updated by the onSnapshot listener from useDoc.
-    // This solves the race condition where we were redirecting before the client was aware of the state change.
-    if (userProfile?.vehicleVerificationStatus === 'pending_review' && userProfile.isDriver) {
-        // We use a small timeout to ensure the user sees the toast message and the state propagation is complete.
-        const timer = setTimeout(() => {
-            router.push('/driver/rides');
-        }, 1000); 
-        return () => clearTimeout(timer); // Clean up the timer if the component unmounts
-    }
-  }, [userProfile?.vehicleVerificationStatus, userProfile?.isDriver, router]);
-
   const handleProfileSave = (profileData: Partial<UserProfile>) => {
     if (!userProfileRef) return;
     
@@ -65,8 +53,12 @@ export default function DriverProfilePage() {
     
     toast({
         title: '¡Perfil guardado!',
-        description: 'Tus datos han sido actualizados. Serás redirigido.',
+        description: 'Tus datos han sido actualizados.',
     });
+
+    if (dataToSave.vehicleVerificationStatus === 'pending_review') {
+        router.push('/driver/rides');
+    }
   };
 
   if (isUserLoading || isProfileLoading) {
