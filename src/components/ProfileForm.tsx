@@ -1,6 +1,6 @@
 // src/components/ProfileForm.tsx
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -12,14 +12,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CardContent, CardFooter } from '@/components/ui/card';
 import { UserProfile } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Edit2 } from 'lucide-react';
+import { Edit2, UploadCloud } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { Separator } from './ui/separator';
 
 const profileSchema = z.object({
   name: z.string().min(3, { message: 'El nombre debe tener al menos 3 caracteres.' }),
   isDriver: z.boolean().default(false),
-  carModelYear: z.number({ invalid_type_error: 'Por favor, seleccioná un año.' }).nullable().optional(),
+  carModelYear: z.number().nullable().optional(),
+  vehicleProof: z.any().optional(), // For file upload
 }).superRefine((data, ctx) => {
     if (data.isDriver && (data.carModelYear === null || data.carModelYear === undefined)) {
         ctx.addIssue({
@@ -42,7 +43,9 @@ interface ProfileFormProps {
 export default function ProfileForm({ userProfile, onSave, onCancel }: ProfileFormProps) {
   const { user } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const vehicleProofInputRef = useRef<HTMLInputElement>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(userProfile?.photoURL || null);
+  const [vehicleProofFileName, setVehicleProofFileName] = useState<string | null>(null);
 
   const { control, register, handleSubmit, watch, formState: { errors } } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -63,13 +66,22 @@ export default function ProfileForm({ userProfile, onSave, onCancel }: ProfileFo
     fileInputRef.current?.click();
   }
 
+  const handleVehicleProofClick = () => {
+    vehicleProofInputRef.current?.click();
+  }
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // In a real app, upload to Firebase Storage and get URL.
-      // Here, we'll simulate with a local blob URL for immediate preview.
       const blobUrl = URL.createObjectURL(file);
       setPhotoUrl(blobUrl);
+    }
+  };
+
+  const handleVehicleProofFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+        setVehicleProofFileName(file.name);
     }
   };
   
@@ -163,8 +175,25 @@ export default function ProfileForm({ userProfile, onSave, onCancel }: ProfileFo
                 />
                 {errors.carModelYear && <p className="text-sm text-destructive">{errors.carModelYear.message}</p>}
                </div>
+               
+                <div className="space-y-2">
+                  <Label>Comprobante del vehículo</Label>
+                  <Button type="button" variant="outline" className="w-full justify-start text-left font-normal" onClick={handleVehicleProofClick}>
+                    <UploadCloud className="mr-2 h-4 w-4" />
+                    {vehicleProofFileName ? <span className="text-primary truncate">{vehicleProofFileName}</span> : 'Subir título o cédula...'}
+                  </Button>
+                  <input
+                        type="file"
+                        ref={vehicleProofInputRef}
+                        {...register('vehicleProof')}
+                        onChange={handleVehicleProofFileChange}
+                        className="hidden"
+                        accept="image/*,application/pdf"
+                    />
+                </div>
+
                <div className="text-xs text-muted-foreground p-3 bg-secondary rounded-md">
-                 <p>Tu tipo de servicio (Premium, Privado, Express) será asignado automáticamente según el año de tu vehículo.</p>
+                 <p>Un administrador verificará tus datos. Tu tipo de servicio (Premium, Privado, Express) será asignado una vez aprobado.</p>
                </div>
             </div>
           )}

@@ -44,7 +44,7 @@ export default function Home() {
   const [estimatedFare, setEstimatedFare] = useState(0);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
   const [isProfileModalOpen, setProfileModalOpen] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(true); // Start with true to show loading
+  const [isRedirecting, setIsRedirecting] = useState(true);
 
   const activeRideRef = useMemoFirebase(
     () => (firestore && activeRideId ? doc(firestore, 'rides', activeRideId) : null),
@@ -70,32 +70,26 @@ export default function Home() {
   }, [user, isUserLoading, auth]);
 
   useEffect(() => {
-    // This effect handles role-based redirection.
-    // It waits until the user and profile loading states are settled.
     if (isUserLoading || isProfileLoading) {
-      return; // Wait until we have all the data.
+      return; 
     }
 
     if (user && userProfile) {
       if (userProfile.isDriver) {
-        // This is a driver, redirect them. isRedirecting remains true.
         router.replace('/driver');
       } else {
-        // This is a passenger, stop the loading state and show the UI.
         setIsRedirecting(false);
         if (!userProfile.name) {
-          // If passenger profile is incomplete, open the modal.
           setProfileModalOpen(true);
         }
       }
-    } else {
-      // No user or no profile, treat as a new passenger.
-      // This can happen for brand new anonymous users.
-      setIsRedirecting(false);
-      // If the user exists but has no profile yet, prompt them.
-      if (user && !userProfile) {
+    } else if (user) {
+        setIsRedirecting(false);
+        if (!userProfile) {
           setProfileModalOpen(true);
       }
+    } else {
+      setIsRedirecting(false);
     }
   }, [user, userProfile, isUserLoading, isProfileLoading, router]);
 
@@ -229,6 +223,11 @@ export default function Home() {
         dataToSave.averageRating = null;
         dataToSave.activeBonus = false;
         dataToSave.isDriver = profileData.isDriver || false;
+        dataToSave.vehicleVerificationStatus = profileData.isDriver ? 'pending_review' : 'unverified';
+    } else { // If profile exists, update it
+        if(profileData.isDriver && userProfile.vehicleVerificationStatus === 'unverified') {
+           dataToSave.vehicleVerificationStatus = 'pending_review';
+        }
     }
     
     setDocumentNonBlocking(userProfileRef, dataToSave, { merge: true });
@@ -238,6 +237,11 @@ export default function Home() {
         description: 'Tus datos han sido actualizados.',
     });
     setProfileModalOpen(false);
+
+    if (dataToSave.isDriver) {
+        setIsRedirecting(true);
+        router.replace('/driver');
+    }
 };
 
   const getAction = () => {

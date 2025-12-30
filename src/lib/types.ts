@@ -15,6 +15,8 @@ export type RideStatus =
   | "finished"
   | "cancelled";
 
+export type VerificationStatus = "unverified" | "pending_review" | "approved" | "rejected";
+
 export interface Ride {
   passengerId: string;
   passengerName?: string | null;
@@ -64,6 +66,7 @@ export interface UserProfile {
   activeBonus: boolean;
   isDriver?: boolean;
   carModelYear?: number | null;
+  vehicleVerificationStatus?: VerificationStatus;
 }
 
 export interface DriverSummary {

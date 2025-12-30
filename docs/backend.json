@@ -220,7 +220,12 @@
           "carModelYear": {
             "type": ["number", "null"],
             "description": "The model year of the driver's car."
-          }
+          },
+           "vehicleVerificationStatus": {
+              "type": "string",
+              "enum": ["unverified", "pending_review", "approved", "rejected"],
+              "description": "The verification status of the driver's vehicle."
+            }
         },
         "required": ["name", "createdAt", "vamoPoints", "ridesCompleted", "activeBonus"]
       },

@@ -11,11 +11,13 @@ import { useToast } from "@/hooks/use-toast";
 import { speak } from '@/lib/speak';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, ServiceType } from '@/lib/types';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Clock, ShieldCheck, ShieldX } from 'lucide-react';
 
 
 // Helper function to determine which services a driver can see
 const getAllowedServices = (carModelYear?: number): ServiceType[] => {
-    if (!carModelYear) return ['express']; // Default to lowest tier if no data
+    if (!carModelYear) return []; // If no car year, no services
     if (carModelYear >= 2020) return ['premium', 'privado', 'express'];
     if (carModelYear >= 2016) return ['privado', 'express'];
     return ['express'];
@@ -32,13 +34,11 @@ export default function DriverRidesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
   
-  // Get the driver's profile to know their car model year
   const driverProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
     [firestore, user]
   );
   const { data: driverProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(driverProfileRef);
-
 
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
   const activeRideUnsubscribe = useRef<Unsubscribe | null>(null);
@@ -51,11 +51,8 @@ export default function DriverRidesPage() {
     }
 
     setIsLoading(true);
-
-    // Unsubscribe from previous listeners if they exist
     activeRideUnsubscribe.current?.();
 
-    // 1. Query for rides assigned to the current driver
     const activeRideQuery = query(
       collection(firestore, 'rides'),
       where('driverId', '==', user.uid),
@@ -65,8 +62,8 @@ export default function DriverRidesPage() {
     activeRideUnsubscribe.current = onSnapshot(activeRideQuery, (snapshot) => {
       const rides = snapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
       const currentActiveRide = rides.length > 0 ? rides[0] : null;
-
       const wasActive = !!activeRide;
+
       setActiveRide(currentActiveRide);
       
       if(wasActive && !currentActiveRide) {
@@ -87,19 +84,17 @@ export default function DriverRidesPage() {
     return () => {
       activeRideUnsubscribe.current?.();
     };
-  }, [firestore, user?.uid, toast]); // Removed activeRide from dependencies
+  }, [firestore, user?.uid, toast]);
 
 
   useEffect(() => {
-    // This effect manages the available rides subscription
-    // It should only be active if there is no active ride and the driver profile has loaded
-    if (firestore && user?.uid && !activeRide && !isProfileLoading) {
-        availableRidesUnsubscribe.current?.(); // Clean up previous listener
+    const isApproved = driverProfile?.vehicleVerificationStatus === 'approved';
+    
+    if (firestore && user?.uid && !activeRide && !isProfileLoading && isApproved) {
+        availableRidesUnsubscribe.current?.();
 
-        // Determine allowed services based on car model year
         const allowedServices = getAllowedServices(driverProfile?.carModelYear);
         
-        // If there are no allowed services, don't subscribe.
         if (allowedServices.length === 0) {
             setAvailableRides([]);
             setIsLoading(false);
@@ -140,10 +135,10 @@ export default function DriverRidesPage() {
             toast({ variant: 'destructive', title: 'Error al buscar viajes disponibles.' });
         });
     } else {
-        // If there is an active ride, or profile is loading, we don't listen for available ones.
         setAvailableRides([]);
         previousAvailableRides.current = [];
         availableRidesUnsubscribe.current?.();
+        if(!isProfileLoading) setIsLoading(false);
     }
 
     return () => {
@@ -153,14 +148,10 @@ export default function DriverRidesPage() {
 
 
   const handleAcceptRide = () => {
-    // When a ride is accepted, it will be picked up by the activeRide query.
-    // The UI will switch automatically. We clear the finished ride summary.
     setLastFinishedRide(null);
   };
   
   const handleFinishRide = (finishedRide: WithId<Ride>) => {
-    // The activeRide listener will set activeRide to null.
-    // We want to show the summary.
     setLastFinishedRide(finishedRide);
     toast({
         title: "¡Viaje finalizado!",
@@ -174,6 +165,68 @@ export default function DriverRidesPage() {
   
   const isLoadingSomething = isLoading || isProfileLoading;
 
+  const renderVerificationStatus = () => {
+    if (!driverProfile) return null;
+    switch(driverProfile.vehicleVerificationStatus) {
+        case 'pending_review':
+            return (
+                <Alert className="border-yellow-500 text-yellow-600">
+                    <Clock className="h-4 w-4 text-yellow-500" />
+                    <AlertTitle>Verificación Pendiente</AlertTitle>
+                    <AlertDescription>
+                       Tus datos de conductor están siendo revisados. Te notificaremos cuando tu cuenta sea aprobada.
+                    </AlertDescription>
+                </Alert>
+            );
+        case 'rejected':
+            return (
+                <Alert variant="destructive">
+                    <ShieldX className="h-4 w-4" />
+                    <AlertTitle>Verificación Rechazada</AlertTitle>
+                    <AlertDescription>
+                        Hubo un problema con los datos que enviaste. Por favor, revisa tu perfil y volvé a enviarlos.
+                    </AlertDescription>
+                </Alert>
+            );
+        case 'unverified':
+             return (
+                <Alert>
+                    <ShieldX className="h-4 w-4" />
+                    <AlertTitle>Registro Incompleto</AlertTitle>
+                    <AlertDescription>
+                        Para comenzar a recibir viajes, completá tu registro como conductor desde tu perfil.
+                    </AlertDescription>
+                </Alert>
+            );
+        case 'approved':
+             return (
+                <div className="space-y-4">
+                    <Alert variant="default" className="bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400">
+                         <ShieldCheck className="h-4 w-4 text-green-500" />
+                        <AlertTitle>¡Cuenta Verificada!</AlertTitle>
+                        <AlertDescription className="text-green-600 dark:text-green-500">
+                            Ya podés recibir viajes. ¡Buenas rutas!
+                        </AlertDescription>
+                    </Alert>
+                    <h2 className="text-xl font-semibold text-center">Viajes Disponibles</h2>
+                    {availableRides.length > 0 ? (
+                        availableRides.map((ride) => (
+                        <DriverRideCard
+                            key={ride.id}
+                            ride={ride}
+                            onAccept={handleAcceptRide}
+                        />
+                        ))
+                    ) : (
+                        <p className="text-center text-muted-foreground pt-8">No hay viajes buscando conductor en este momento para tu categoría de vehículo.</p>
+                    )}
+                </div>
+            );
+        default:
+            return null;
+    }
+  }
+
   return (
     <>
       {isLoadingSomething ? (
@@ -183,20 +236,7 @@ export default function DriverRidesPage() {
       ) : lastFinishedRide ? (
          <FinishedRideSummary ride={lastFinishedRide} onClose={handleCloseSummary} />
       ) : (
-        <div className="space-y-4">
-           <h2 className="text-xl font-semibold text-center">Viajes Disponibles</h2>
-          {availableRides.length > 0 ? (
-            availableRides.map((ride) => (
-              <DriverRideCard
-                key={ride.id}
-                ride={ride}
-                onAccept={handleAcceptRide}
-              />
-            ))
-          ) : (
-            <p className="text-center text-muted-foreground pt-8">No hay viajes buscando conductor en este momento para tu categoría de vehículo.</p>
-          )}
-        </div>
+        renderVerificationStatus()
       )}
     </>
   );
