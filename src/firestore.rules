@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /rides/{rideId} {
+      
+      // GET: Un pasajero o conductor autenticado puede leer un viaje si está involucrado.
+      // Cualquier usuario autenticado puede leer un viaje si está buscando conductor.
+      allow get: if request.auth != null && 
+                   (
+                    resource.data.passengerId == request.auth.uid || 
+                    resource.data.driverId == request.auth.uid ||
+                    resource.data.status == 'searching_driver'
+                   );
+                   
+      // LIST: Permite a los usuarios autenticados realizar consultas específicas.
+      // 1. Conductores: listando viajes que buscan conductor.
+      // 2. Pasajeros: listando su propio historial de viajes finalizados/cancelados.
+      allow list: if request.auth != null &&
+                   (
+                    (request.query.where[0][0] == 'status' && request.query.where[0][2] == 'searching_driver') ||
+                    (request.query.where[0][0] == 'passengerId' && request.query.where[0][2] == request.auth.uid && request.query.where[1][0] == 'status')
+                   );
+
+      // CREATE: Un pasajero autenticado puede crear un viaje si el passengerId es el suyo.
+      allow create: if request.auth != null && request.resource.data.passengerId == request.auth.uid;
+      
+      // UPDATE: Se puede actualizar un viaje si:
+      // 1. El que actualiza es el pasajero Y está cancelando el viaje.
+      // 2. El que actualiza es un conductor Y se está asignando a un viaje que buscaba conductor.
+      // 3. El que actualiza ya es el conductor asignado a este viaje.
+      allow update: if request.auth != null && 
+                     (
+                      (resource.data.passengerId == request.auth.uid && request.resource.data.status == 'cancelled') ||
+                      (resource.data.status == 'searching_driver' && request.resource.data.driverId == request.auth.uid) ||
+                      (resource.data.driverId == request.auth.uid)
+                     );
+
+      // DELETE: Nadie puede eliminar viajes, solo se cancelan o finalizan.
+      allow delete: if false;
+    }
+  }
+}
