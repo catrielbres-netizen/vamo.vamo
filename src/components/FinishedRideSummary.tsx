@@ -13,10 +13,12 @@ import { Button } from './ui/button';
 import { WhatsAppLogo } from './icons';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, doc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import es from 'date-fns/locale/es';
 import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
+import RatingForm from './RatingForm';
+import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('es-AR', {
@@ -32,6 +34,7 @@ const formatDuration = (seconds: number) => {
 };
 
 export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ride>, onClose: () => void }) {
+  const firestore = useFirestore();
   const finalPrice = ride.pricing.finalTotal || ride.pricing.estimatedTotal;
 
   const totalWaitSeconds = (ride.pauseHistory || []).reduce((acc, p) => acc + p.duration, 0);
@@ -48,9 +51,19 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
     condicion: "Monotributista"
   };
 
+  const handleRatingSubmit = (rating: number, comments: string) => {
+    if (!firestore) return;
+    const rideRef = doc(firestore, 'rides', ride.id);
+    updateDocumentNonBlocking(rideRef, {
+      passengerRating: rating,
+      passengerComments: comments,
+      updatedAt: Timestamp.now(),
+    });
+  };
+
   const handleSendWhatsApp = () => {
     const rideDate = ride.finishedAt instanceof Timestamp 
-        ? format(ride.finishedAt.toDate(), "d 'de' MMMM 'de' yyyy 'a las' HH:mm", { locale: es })
+        ? format((ride.finishedAt as Timestamp).toDate(), "d 'de' MMMM 'de' yyyy 'a las' HH:mm", { locale: es })
         : 'Fecha no disponible';
     
     let stopsDetail = (ride.pauseHistory || []).map((p, index) => 
@@ -116,7 +129,13 @@ ${stopsDetail}
                 <span className="text-primary">{formatCurrency(finalPrice)}</span>
             </div>
         </CardContent>
-        <CardFooter className="flex-col gap-2">
+        <RatingForm
+          participantName={ride.passengerName || 'Pasajero'}
+          participantRole="pasajero"
+          onSubmit={handleRatingSubmit}
+          isSubmitted={!!ride.passengerRating}
+        />
+        <CardFooter className="flex-col gap-2 pt-6">
              <Button onClick={handleSendWhatsApp} className="w-full" variant="outline">
                 <WhatsAppLogo className="mr-2 h-5 w-5" />
                 Enviar Resumen por WhatsApp

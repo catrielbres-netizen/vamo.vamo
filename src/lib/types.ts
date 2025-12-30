@@ -44,4 +44,8 @@ export interface Ride {
     ended: Timestamp;
     duration: number; // in seconds
   }[];
+  passengerRating?: number | null;
+  driverRating?: number | null;
+  passengerComments?: string | null;
+  driverComments?: string | null;
 }

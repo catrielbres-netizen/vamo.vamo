@@ -140,6 +140,22 @@
             }
           },
           "description": "A history of pause events during the ride."
+        },
+        "passengerRating": {
+          "type": ["number", "null"],
+          "description": "Rating given by the driver to the passenger (e.g., 1-5)."
+        },
+        "driverRating": {
+          "type": ["number", "null"],
+          "description": "Rating given by the passenger to the driver (e.g., 1-5)."
+        },
+        "passengerComments": {
+            "type": ["string", "null"],
+            "description": "Comments from the driver about the passenger."
+        },
+        "driverComments": {
+            "type": ["string", "null"],
+            "description": "Comments from the passenger about the driver."
         }
       },
       "required": [
