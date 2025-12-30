@@ -1,4 +1,3 @@
-
 // src/lib/types.ts
 
 import { type Timestamp } from "firebase/firestore";
@@ -32,6 +31,7 @@ export interface Ride {
     estimatedTotal: number;
     finalTotal?: number | null;
     estimatedDistanceMeters: number;
+    discountAmount?: number | null;
   };
   status: RideStatus;
   createdAt: Timestamp;
@@ -67,6 +67,7 @@ export interface DriverSummary {
     weekId: string; // e.g., "2024-W28"
     totalEarnings: number;
     commissionOwed: number;
+    bonusesApplied: number;
     status: 'pending' | 'paid';
     updatedAt: Timestamp;
 }

@@ -19,12 +19,12 @@ import {
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/icons';
 import { calculateFare } from '@/lib/pricing';
-import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
 import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride } from '@/lib/types';
+import { Ride, UserProfile } from '@/lib/types';
 import { speak } from '@/lib/speak';
 
 export default function Home() {
@@ -47,6 +47,12 @@ export default function Home() {
     [firestore, activeRideId]
   );
   const { data: ride, isLoading: isRideLoading } = useDoc<Ride>(activeRideRef);
+
+  const userProfileRef = useMemoFirebase(
+      () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
+      [firestore, user]
+  );
+  const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
   
   const prevRideRef = useRef<WithId<Ride> | null | undefined>(null);
 
@@ -94,8 +100,8 @@ export default function Home() {
   }, [ride]);
 
 
-  const handleRequestRide = () => {
-    if (!firestore || !user || !destination) {
+  const handleRequestRide = async () => {
+    if (!firestore || !user || !destination || !userProfileRef) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -104,8 +110,18 @@ export default function Home() {
       return;
     }
 
+    let rideFare = estimatedFare;
+    let discountAmount = 0;
+
+    // Check for bonus and apply it
+    if(userProfile?.activeBonus) {
+        discountAmount = rideFare * 0.10;
+        // The passenger pays the discounted price.
+        // The driver will get the full fare, with the app covering the discount.
+    }
+
     const ridesCollection = collection(firestore, 'rides');
-    const newRide = {
+    const newRideData = {
       passengerId: user.uid,
       passengerName: user.displayName || 'Pasajero Anónimo',
       origin: { lat: -43.3005, lng: -65.1023 }, // Mock: Rawson, Chubut
@@ -116,11 +132,12 @@ export default function Home() {
       },
       serviceType: serviceType,
       pricing: {
-        estimatedTotal: estimatedFare,
+        estimatedTotal: rideFare,
         estimatedDistanceMeters: 4200, // Corresponds to mock distance
         finalTotal: null,
+        discountAmount: discountAmount,
       },
-      status: 'searching_driver',
+      status: 'searching_driver' as const,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       finishedAt: null,
@@ -129,16 +146,25 @@ export default function Home() {
       pauseHistory: [],
     };
 
-    addDocumentNonBlocking(ridesCollection, newRide)
-      .then((docRef) => {
-        if(docRef) {
-          setActiveRideId(docRef.id); // Start tracking the new ride
-          toast({
-            title: '¡Buscando conductor!',
-            description: 'Tu pedido fue enviado. Esperá la confirmación.',
-          });
+    try {
+        const docRef = await addDocumentNonBlocking(ridesCollection, newRideData);
+        if (docRef) {
+            setActiveRideId(docRef.id);
+            toast({
+                title: '¡Buscando conductor!',
+                description: 'Tu pedido fue enviado. Esperá la confirmación.',
+            });
+            // If a bonus was used, deactivate it in the user's profile
+            if (userProfile?.activeBonus) {
+                await updateDocumentNonBlocking(userProfileRef, { 
+                    activeBonus: false,
+                    vamoPoints: userProfile.vamoPoints - 30 // Consume points
+                });
+            }
         }
-      })
+    } catch(e) {
+        // Error is handled by non-blocking-updates
+    }
   };
   
   const handleCancelRide = () => {
@@ -181,7 +207,7 @@ export default function Home() {
   const currentAction = getAction();
 
 
-  if (isUserLoading || !user) {
+  if (isUserLoading || isProfileLoading || !user) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
         <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
@@ -189,6 +215,8 @@ export default function Home() {
       </main>
     );
   }
+
+  const fareToDisplay = userProfile?.activeBonus ? estimatedFare * 0.9 : estimatedFare;
 
   return (
     <main className="max-w-md mx-auto pb-4 px-4">
@@ -209,7 +237,7 @@ export default function Home() {
             value={serviceType} 
             onChange={(val) => setServiceType(val as any)} 
           />
-          <PriceDisplay price={estimatedFare} isNight={false} />
+          <PriceDisplay price={fareToDisplay} isNight={false} originalPrice={userProfile?.activeBonus ? estimatedFare : undefined} />
         </>
       )}
       <MainActionButton 

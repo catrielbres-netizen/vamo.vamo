@@ -73,6 +73,10 @@
             },
             "estimatedDistanceMeters": {
               "type": "number"
+            },
+            "discountAmount": {
+              "type": ["number", "null"],
+              "description": "The amount discounted from the ride, covered by the app."
             }
           },
           "required": [
@@ -234,6 +238,10 @@
                 "type": "number",
                 "description": "The 8% commission owed to the app."
             },
+            "bonusesApplied": {
+                "type": "number",
+                "description": "Total amount of passenger discounts covered by the app."
+            },
             "status": {
                 "type": "string",
                 "enum": ["pending", "paid"],
@@ -245,7 +253,7 @@
                 "description": "Timestamp of when the summary was last updated."
             }
         },
-        "required": ["driverId", "weekId", "totalEarnings", "commissionOwed", "status", "updatedAt"]
+        "required": ["driverId", "weekId", "totalEarnings", "commissionOwed", "status", "updatedAt", "bonusesApplied"]
       }
   },
   "auth": {

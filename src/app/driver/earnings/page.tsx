@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Info, CheckCircle } from 'lucide-react';
+import { Info, CheckCircle, Percent } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 function formatCurrency(value: number) {
@@ -65,8 +65,9 @@ export default function EarningsPage() {
 
                 const rides = ridesSnapshot.docs.map(doc => doc.data() as Ride);
                 setWeeklyRides(rides);
-
-                const totalEarnings = rides.reduce((acc, ride) => acc + (ride.pricing.finalTotal || 0), 0);
+                
+                const totalEarnings = rides.reduce((acc, ride) => acc + (ride.pricing.finalTotal || ride.pricing.estimatedTotal || 0), 0);
+                const bonusesCovered = rides.reduce((acc, ride) => acc + (ride.pricing.discountAmount || 0), 0);
                 const commissionOwed = totalEarnings * COMMISSION_RATE;
                 
                 if (summarySnapshot.empty) {
@@ -75,6 +76,7 @@ export default function EarningsPage() {
                         weekId: weekId,
                         totalEarnings: totalEarnings,
                         commissionOwed: commissionOwed,
+                        bonusesApplied: bonusesCovered,
                         status: 'pending',
                         updatedAt: Timestamp.now(),
                     };
@@ -83,16 +85,18 @@ export default function EarningsPage() {
                     setDoc(summaryRef, newSummary, { merge: true });
                     setSummary(newSummary);
                 } else {
-                    const existingSummary = { ...summarySnapshot.docs[0].data(), id: summarySnapshot.docs[0].id } as DriverSummary;
+                    const existingSummary = { ...summarySnapshot.docs[0].data(), id: summarySnapshot.docs[0].id } as DriverSummary & { id: string };
                     const summaryRef = doc(firestore, 'driver_summaries', existingSummary.id as string);
                     
-                    if(existingSummary.totalEarnings !== totalEarnings || existingSummary.commissionOwed !== commissionOwed) {
+                    if(existingSummary.totalEarnings !== totalEarnings || existingSummary.commissionOwed !== commissionOwed || existingSummary.bonusesApplied !== bonusesCovered) {
                         // We recalculate earnings based on rides, in case a new one was added
                         existingSummary.totalEarnings = totalEarnings;
                         existingSummary.commissionOwed = commissionOwed;
+                        existingSummary.bonusesApplied = bonusesCovered;
                         updateDocumentNonBlocking(summaryRef, { 
                             totalEarnings: totalEarnings,
                             commissionOwed: commissionOwed,
+                            bonusesApplied: bonusesCovered,
                             updatedAt: Timestamp.now()
                         });
                     }
@@ -149,7 +153,7 @@ export default function EarningsPage() {
         return <p className="text-center text-muted-foreground">No hay datos de ganancias para esta semana.</p>;
     }
 
-    const netEarnings = summary.totalEarnings - summary.commissionOwed;
+    const netToReceive = summary.totalEarnings - summary.commissionOwed + summary.bonusesApplied;
 
     return (
         <div className="space-y-6">
@@ -168,6 +172,12 @@ export default function EarningsPage() {
                             <span className="text-muted-foreground">Total bruto facturado</span>
                             <span className="font-medium">{formatCurrency(summary.totalEarnings)}</span>
                         </div>
+                        {summary.bonusesApplied > 0 && (
+                            <div className="flex justify-between text-blue-500">
+                                <span className="flex items-center gap-1"><Percent className="w-3 h-3" /> Reembolso por bonos</span>
+                                <span className="font-medium">{formatCurrency(summary.bonusesApplied)}</span>
+                            </div>
+                        )}
                      </div>
                      <div className="border-t pt-4 space-y-2 text-base">
                         <div className="flex justify-between items-center text-red-500">
@@ -175,10 +185,13 @@ export default function EarningsPage() {
                             <span className="font-bold">{formatCurrency(summary.commissionOwed)}</span>
                         </div>
                         <div className="flex justify-between items-center text-green-500">
-                            <span className="font-medium">Ganancia neta</span>
-                            <span className="font-bold">{formatCurrency(netEarnings)}</span>
+                            <span className="font-medium">Total a recibir</span>
+                            <span className="font-bold">{formatCurrency(netToReceive)}</span>
                         </div>
                      </div>
+                      <p className="text-xs text-muted-foreground text-center pt-2">
+                        El total a recibir es el bruto facturado, menos la comisión, más los bonos de pasajero que VamO te cubre.
+                     </p>
                 </CardContent>
                 {summary.status === 'pending' && summary.commissionOwed > 0 && (
                     <CardFooter>
