@@ -1,29 +1,48 @@
 // src/components/RideHistory.tsx
 'use client';
 
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, where, orderBy, limit } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { collection, query, where, orderBy, limit, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { Skeleton } from './ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Separator } from './ui/separator';
+import { useEffect, useState } from 'react';
+import { Ride } from '@/lib/types';
+import { WithId } from '@/firebase/firestore/use-collection';
 
 export default function RideHistory({ passengerId }: { passengerId: string }) {
   const firestore = useFirestore();
+  const [rides, setRides] = useState<WithId<Ride>[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const historyQuery = useMemoFirebase(
-    () =>
-      firestore && passengerId
-        ? query(
-            collection(firestore, 'rides'),
-            where('passengerId', '==', passengerId),
-            orderBy('createdAt', 'desc'),
-            limit(20)
-          )
-        : null,
-    [firestore, passengerId]
-  );
 
-  const { data: rides, isLoading } = useCollection(historyQuery);
+  useEffect(() => {
+    if (!firestore || !passengerId) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+
+    const historyQuery = query(
+      collection(firestore, 'rides'),
+      where('passengerId', '==', passengerId),
+      orderBy('createdAt', 'desc'),
+      limit(20)
+    );
+
+    const unsubscribe: Unsubscribe = onSnapshot(historyQuery, (snapshot) => {
+      const results = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
+      setRides(results);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching ride history:", error);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [firestore, passengerId]);
+  
 
   const filteredRides = rides?.filter(ride => ['finished', 'cancelled'].includes(ride.status));
 

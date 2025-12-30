@@ -34,8 +34,7 @@ export default function DriverPage() {
     }
 
     setIsLoading(true);
-    let unsubActive: Unsubscribe | undefined;
-    let unsubAvailable: Unsubscribe | undefined;
+    const unsubscribes: Unsubscribe[] = [];
 
     try {
         // 1. Query for rides assigned to the current driver
@@ -57,35 +56,39 @@ export default function DriverPage() {
             where('status', '==', 'searching_driver')
         );
 
-        unsubActive = onSnapshot(activeRideQuery, (snapshot) => {
+        const unsubActive = onSnapshot(activeRideQuery, (snapshot) => {
             const rides = snapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
             setActiveRides(rides);
             if (isLoading) setIsLoading(false);
         }, (error) => {
             console.error("Error fetching active rides:", error);
+            toast({ variant: 'destructive', title: 'Error al cargar tus viajes activos.'});
             if (isLoading) setIsLoading(false);
         });
 
-        unsubAvailable = onSnapshot(availableRidesQuery, (snapshot) => {
+        const unsubAvailable = onSnapshot(availableRidesQuery, (snapshot) => {
             const rides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
             setAvailableRides(rides);
              if (isLoading) setIsLoading(false);
         }, (error) => {
             console.error("Error fetching available rides:", error);
+            toast({ variant: 'destructive', title: 'Error al buscar viajes disponibles.'});
             if (isLoading) setIsLoading(false);
         });
+
+        unsubscribes.push(unsubActive, unsubAvailable);
 
     } catch (error) {
         console.error("Error setting up snapshots:", error);
         setIsLoading(false);
     }
 
+    // Cleanup function
     return () => {
-        if (unsubActive) unsubActive();
-        if (unsubAvailable) unsubAvailable();
+        unsubscribes.forEach(unsub => unsub());
     };
 
-  }, [firestore, user?.uid]);
+  }, [firestore, user?.uid, isLoading, toast]);
 
 
   const currentActiveRide = activeRides && activeRides.length > 0 ? activeRides[0] : null;
