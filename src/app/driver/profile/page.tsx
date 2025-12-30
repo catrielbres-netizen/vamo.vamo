@@ -1,6 +1,6 @@
 // src/app/driver/profile/page.tsx
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
 import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { doc, serverTimestamp } from 'firebase/firestore';
@@ -16,6 +16,7 @@ export default function DriverProfilePage() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
+  const [isSaving, setIsSaving] = useState(false);
 
   const userProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -24,13 +25,16 @@ export default function DriverProfilePage() {
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
 
   const handleProfileSave = (profileData: Partial<UserProfile>) => {
-    if (!userProfileRef) return;
+    if (!userProfileRef || isSaving) return;
+    setIsSaving(true);
     
     const dataToSave: Partial<UserProfile> = {
         ...profileData,
         updatedAt: serverTimestamp(),
     };
     
+    let shouldRedirect = false;
+
     // Logic for creating or updating the profile
     if (!userProfile) { // If profile doesn't exist, create it.
         dataToSave.createdAt = serverTimestamp();
@@ -39,13 +43,16 @@ export default function DriverProfilePage() {
         dataToSave.averageRating = null;
         dataToSave.activeBonus = false;
         dataToSave.isDriver = profileData.isDriver || false;
-        // If registering as a driver from the start, set to pending.
-        dataToSave.vehicleVerificationStatus = profileData.isDriver ? 'pending_review' : 'unverified';
+        if (profileData.isDriver) {
+          dataToSave.vehicleVerificationStatus = 'pending_review';
+          shouldRedirect = true;
+        } else {
+          dataToSave.vehicleVerificationStatus = 'unverified';
+        }
     } else { // If profile exists, update it.
-        // **CRITICAL FIX**: If an existing user marks themselves as a driver
-        // and their status is currently unverified, move them to pending review.
         if (profileData.isDriver && userProfile.vehicleVerificationStatus === 'unverified') {
            dataToSave.vehicleVerificationStatus = 'pending_review';
+           shouldRedirect = true;
         }
     }
     
@@ -56,8 +63,12 @@ export default function DriverProfilePage() {
         description: 'Tus datos han sido actualizados.',
     });
 
-    if (dataToSave.vehicleVerificationStatus === 'pending_review') {
-        router.push('/driver/rides');
+    if (shouldRedirect) {
+       setTimeout(() => {
+            router.push('/driver/rides');
+        }, 1000);
+    } else {
+        setIsSaving(false);
     }
   };
 

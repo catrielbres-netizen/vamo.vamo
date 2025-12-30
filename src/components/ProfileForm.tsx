@@ -49,7 +49,7 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 
 interface ProfileFormProps {
   userProfile: UserProfile | null;
-  onSave: (data: Partial<UserProfile>) => void;
+  onSave: (data: Partial<UserProfile & ProfileFormData>) => void;
   onCancel: () => void;
   isDialog?: boolean;
 }
@@ -80,9 +80,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   }, [isDriver, trigger]);
 
   const onSubmit = (data: ProfileFormData) => {
-    // Exclude simulation fields from the saved data
-    const { cedulaUploaded, seguroUploaded, dniUploaded, ...saveData } = data;
-    onSave({ ...saveData, photoURL: photoUrl });
+    onSave({ ...data, photoURL: photoUrl });
   };
   
   const handleAvatarClick = () => {
@@ -113,7 +111,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
     return years;
   };
   
-  const handleDocUpload = (field: keyof ProfileFormData) => {
+  const handleDocUpload = (field: 'cedulaUploaded' | 'seguroUploaded' | 'dniUploaded') => {
       setValue(field, true, { shouldValidate: true });
   }
 
