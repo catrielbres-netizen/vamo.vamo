@@ -191,7 +191,7 @@ export default function ProfilePage() {
                                 <div key={ride.id} className="p-3 bg-secondary rounded-lg text-sm">
                                     <p>Hacia: <strong>{ride.destination.address}</strong></p>
                                     <p className="text-xs text-muted-foreground">
-                                        Finalizado el {ride.finishedAt instanceof Timestamp ? ride.finishedAt.toDate().toLocaleDateString('es-AR') : ''}
+                                        Finalizado el {ride.finishedAt && 'seconds' in ride.finishedAt ? new Date((ride.finishedAt as any).seconds * 1000).toLocaleDateString('es-AR') : 'Fecha no disponible'}
                                     </p>
                                 </div>
                             )) : (

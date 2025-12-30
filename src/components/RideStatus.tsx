@@ -6,7 +6,7 @@ import { DriverInfo } from './DriverInfo';
 import { TripTimers } from './TripTimers';
 import { WAITING_PER_MIN } from '@/lib/pricing';
 import { useEffect, useState, useRef } from 'react';
-import { Timestamp, doc, runTransaction } from 'firebase/firestore';
+import { Timestamp, doc, runTransaction, collection, getDocs, where, query } from 'firebase/firestore';
 import {
   Card,
   CardContent,
@@ -73,8 +73,12 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
                     const userProfileDoc = await transaction.get(userProfileRef);
                     
                     let currentPoints = 0;
+                    let ridesCompleted = 0;
+
                     if (userProfileDoc.exists()) {
-                        currentPoints = (userProfileDoc.data() as UserProfile).vamoPoints || 0;
+                        const profileData = userProfileDoc.data() as UserProfile;
+                        currentPoints = profileData.vamoPoints || 0;
+                        ridesCompleted = profileData.ridesCompleted || 0;
                     } else {
                         // Create profile if it doesn't exist
                         const newProfile: UserProfile = {
@@ -89,11 +93,12 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
                     }
                     
                     const newTotalPoints = currentPoints + VAMO_POINTS_PER_RIDE;
+                    const newRidesCompleted = ridesCompleted + 1;
                     const hasBonus = newTotalPoints >= 30;
 
                     transaction.update(userProfileRef, { 
                         vamoPoints: newTotalPoints,
-                        ridesCompleted: (userProfileDoc.data()?.ridesCompleted || 0) + 1,
+                        ridesCompleted: newRidesCompleted,
                         activeBonus: hasBonus,
                     });
                     
@@ -113,14 +118,52 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
   }, [ride.status, ride.id, ride.passengerId, firestore, ride.vamoPointsAwarded]);
 
 
-  const handleRatingSubmit = (rating: number, comments: string) => {
-    if (!firestore) return;
+  const handleRatingSubmit = async (rating: number, comments: string) => {
+    if (!firestore || !ride.driverId) return;
     const rideRef = doc(firestore, 'rides', ride.id);
-    updateDocumentNonBlocking(rideRef, {
+    const driverProfileRef = doc(firestore, 'users', ride.driverId);
+
+    // 1. Update the ride document with the new rating
+    await updateDocumentNonBlocking(rideRef, {
       driverRating: rating,
       driverComments: comments,
       updatedAt: Timestamp.now(),
     });
+
+    // 2. Recalculate driver's average rating
+    try {
+        await runTransaction(firestore, async (transaction) => {
+            // Get all finished rides for this driver
+            const ridesQuery = query(
+                collection(firestore, 'rides'),
+                where('driverId', '==', ride.driverId),
+                where('status', '==', 'finished')
+            );
+            const driverRidesSnapshot = await getDocs(ridesQuery);
+
+            let totalRating = 0;
+            let ratingCount = 0;
+            driverRidesSnapshot.forEach(doc => {
+                const rideData = doc.data() as Ride;
+                if (rideData.driverRating && rideData.driverRating > 0) {
+                    totalRating += rideData.driverRating;
+                    ratingCount++;
+                }
+            });
+
+            // If the current ride's rating isn't in the snapshot yet, add it
+            if (!driverRidesSnapshot.docs.some(d => d.id === ride.id)) {
+                 totalRating += rating;
+                 ratingCount++;
+            }
+            
+            const newAverage = ratingCount > 0 ? totalRating / ratingCount : null;
+
+            transaction.update(driverProfileRef, { averageRating: newAverage });
+        });
+    } catch(e) {
+        console.error("Could not update driver average rating", e);
+    }
   };
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
