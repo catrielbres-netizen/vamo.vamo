@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { CardContent, CardFooter } from '@/components/ui/card';
 import { UserProfile } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Edit2 } from 'lucide-react';
@@ -20,8 +20,18 @@ import { Separator } from './ui/separator';
 const profileSchema = z.object({
   name: z.string().min(3, { message: 'El nombre debe tener al menos 3 caracteres.' }),
   isDriver: z.boolean().default(false),
-  carModelYear: z.number().nullable().optional(),
+  carModelYear: z.number({ invalid_type_error: 'Por favor, seleccioná un año.' }).nullable().optional(),
+}).refine(data => {
+    // If the user is a driver, they must specify the car model year.
+    if (data.isDriver && !data.carModelYear) {
+        return false;
+    }
+    return true;
+}, {
+    message: 'El año del modelo es requerido para los conductores.',
+    path: ['carModelYear'], // path of error
 });
+
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 
@@ -153,6 +163,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel }: ProfileFo
                        </Select>
                     )}
                 />
+                {errors.carModelYear && <p className="text-sm text-destructive">{errors.carModelYear.message}</p>}
                </div>
                <div className="text-xs text-muted-foreground p-3 bg-secondary rounded-md">
                  <p>Tu tipo de servicio (Premium, Privado, Express) será asignado automáticamente según el año de tu vehículo.</p>
@@ -167,5 +178,3 @@ export default function ProfileForm({ userProfile, onSave, onCancel }: ProfileFo
       </form>
   );
 }
-
-    
