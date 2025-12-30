@@ -239,11 +239,22 @@ export default function Home() {
   const currentAction = getAction();
 
 
-  if (isUserLoading || isProfileLoading || !user || userProfile?.isDriver) {
+  if (isUserLoading || isProfileLoading || !user) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
         <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
         <p className="text-center mt-4">Cargando...</p>
+      </main>
+    );
+  }
+
+  // A user could be a driver but the redirect hasn't happened yet.
+  // In that case, we render nothing to avoid a flicker of the passenger UI.
+  if (userProfile?.isDriver) {
+    return (
+        <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
+            <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
+            <p className="text-center mt-4">Redirigiendo a panel de conductor...</p>
       </main>
     );
   }
@@ -305,5 +316,7 @@ export default function Home() {
     </main>
   );
 }
+
+    
 
     
