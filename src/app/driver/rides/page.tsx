@@ -43,6 +43,18 @@ export default function DriverRidesPage() {
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
   const activeRideUnsubscribe = useRef<Unsubscribe | null>(null);
   const availableRidesUnsubscribe = useRef<Unsubscribe | null>(null);
+  const activeRideStateRef = useRef<WithId<Ride> | null>(null);
+
+  useEffect(() => {
+    if (!firestore || !user?.uid) {
+      setIsLoading(false);
+      return;
+    }
+
+    // This ref helps the snapshot callback to know the previous state
+    // without including the state variable `activeRide` in the dependency array.
+    activeRideStateRef.current = activeRide;
+  }, [activeRide]);
 
   useEffect(() => {
     if (!firestore || !user?.uid) {
@@ -62,7 +74,8 @@ export default function DriverRidesPage() {
     activeRideUnsubscribe.current = onSnapshot(activeRideQuery, (snapshot) => {
       const rides = snapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
       const currentActiveRide = rides.length > 0 ? rides[0] : null;
-      const wasActive = !!activeRide;
+      
+      const wasActive = !!activeRideStateRef.current;
 
       setActiveRide(currentActiveRide);
       
