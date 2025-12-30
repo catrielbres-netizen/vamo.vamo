@@ -8,11 +8,13 @@ import { UserProfile } from '@/lib/types';
 import ProfileForm from '@/components/ProfileForm';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { VamoIcon } from '@/components/icons';
+import { useRouter } from 'next/navigation';
 
 export default function DriverProfilePage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
+  const router = useRouter();
 
   const userProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -52,6 +54,10 @@ export default function DriverProfilePage() {
         title: '¡Perfil guardado!',
         description: 'Tus datos han sido actualizados.',
     });
+
+    if (profileData.isDriver) {
+        router.push('/driver/rides');
+    }
   };
 
   if (isUserLoading || isProfileLoading) {
