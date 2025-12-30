@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CardContent, CardFooter } from '@/components/ui/card';
 import { UserProfile } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Edit2, UploadCloud } from 'lucide-react';
+import { Edit2, UploadCloud, CheckCircle } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { Separator } from './ui/separator';
 
@@ -20,7 +20,6 @@ const profileSchema = z.object({
   name: z.string().min(3, { message: 'El nombre debe tener al menos 3 caracteres.' }),
   isDriver: z.boolean().default(false),
   carModelYear: z.number().nullable().optional(),
-  vehicleProof: z.any().optional(), // For file upload
 }).superRefine((data, ctx) => {
     if (data.isDriver && (data.carModelYear === null || data.carModelYear === undefined)) {
         ctx.addIssue({
@@ -41,14 +40,16 @@ interface ProfileFormProps {
   isDialog?: boolean;
 }
 
-export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = true }: ProfileFormProps) {
+export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = false }: ProfileFormProps) {
   const { user } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const vehicleProofInputRef = useRef<HTMLInputElement>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(userProfile?.photoURL || null);
-  const [vehicleProofFileName, setVehicleProofFileName] = useState<string | null>(null);
+  
+  const [cedulaUploaded, setCedulaUploaded] = useState(false);
+  const [seguroUploaded, setSeguroUploaded] = useState(false);
+  const [dniUploaded, setDniUploaded] = useState(false);
 
-  const { control, register, handleSubmit, watch, formState: { errors } } = useForm<ProfileFormData>({
+  const { control, register, handleSubmit, watch, formState: { errors, isDirty } } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       name: userProfile?.name || '',
@@ -67,22 +68,11 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
     fileInputRef.current?.click();
   }
 
-  const handleVehicleProofClick = () => {
-    vehicleProofInputRef.current?.click();
-  }
-
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const blobUrl = URL.createObjectURL(file);
       setPhotoUrl(blobUrl);
-    }
-  };
-
-  const handleVehicleProofFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-        setVehicleProofFileName(file.name);
     }
   };
   
@@ -101,6 +91,9 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
     }
     return years;
   };
+  
+  const canSave = isDriver ? cedulaUploaded && seguroUploaded && dniUploaded && !!watch('carModelYear') && !!watch('name') : !!watch('name');
+
 
   return (
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -155,7 +148,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
           {isDriver && (
             <div className="space-y-4 pt-2">
                <Separator />
-               <h4 className="font-medium text-center">Datos del Vehículo</h4>
+               <h4 className="font-medium text-center">Datos del Vehículo y Conductor</h4>
                <div className="space-y-2">
                  <Label htmlFor="carModelYear">Año del modelo</Label>
                  <Controller
@@ -177,20 +170,20 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
                 {errors.carModelYear && <p className="text-sm text-destructive">{errors.carModelYear.message}</p>}
                </div>
                
-                <div className="space-y-2">
-                  <Label>Comprobante del vehículo</Label>
-                  <Button type="button" variant="outline" className="w-full justify-start text-left font-normal" onClick={handleVehicleProofClick}>
-                    <UploadCloud className="mr-2 h-4 w-4" />
-                    {vehicleProofFileName ? <span className="text-primary truncate">{vehicleProofFileName}</span> : 'Subir título o cédula...'}
+                <div className="space-y-3">
+                  <Label>Documentación requerida</Label>
+                  <Button type="button" variant="outline" className="w-full justify-start text-left font-normal gap-2" onClick={() => setCedulaUploaded(true)} disabled={cedulaUploaded}>
+                    {cedulaUploaded ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
+                    Cédula del vehículo
                   </Button>
-                  <input
-                        type="file"
-                        ref={vehicleProofInputRef}
-                        {...register('vehicleProof')}
-                        onChange={handleVehicleProofFileChange}
-                        className="hidden"
-                        accept="image/*,application/pdf"
-                    />
+                   <Button type="button" variant="outline" className="w-full justify-start text-left font-normal gap-2" onClick={() => setSeguroUploaded(true)} disabled={seguroUploaded}>
+                    {seguroUploaded ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
+                    Comprobante de seguro al día
+                  </Button>
+                   <Button type="button" variant="outline" className="w-full justify-start text-left font-normal gap-2" onClick={() => setDniUploaded(true)} disabled={dniUploaded}>
+                    {dniUploaded ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
+                    DNI (frente y dorso)
+                  </Button>
                 </div>
 
                <div className="text-xs text-muted-foreground p-3 bg-secondary rounded-md">
@@ -201,7 +194,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
         </CardContent>
         <CardFooter className="flex justify-end gap-2">
             {isDialog && <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>}
-            <Button type="submit">Guardar Perfil</Button>
+            <Button type="submit" disabled={!canSave && !isDirty}>Guardar Perfil</Button>
         </CardFooter>
       </form>
   );
