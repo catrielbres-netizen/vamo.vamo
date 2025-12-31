@@ -2,8 +2,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
-import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { doc, serverTimestamp } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { UserProfile } from '@/lib/types';
 import ProfileForm from '@/components/ProfileForm';
@@ -29,26 +28,8 @@ export default function DriverProfilePage() {
   );
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
 
-  const handleProfileSave = (profileData: Partial<UserProfile>) => {
+  const handleProfileSave = async (profileData: Partial<UserProfile>) => {
     if (!userProfileRef || isSaving) return;
-    
-    // Manual validation before saving
-    if (profileData.isDriver) {
-        const missingDocs = [];
-        if (!cedulaUploaded) missingDocs.push("cédula");
-        if (!seguroUploaded) missingDocs.push("seguro");
-        if (!dniUploaded) missingDocs.push("DNI");
-        if (!profileData.carModelYear) missingDocs.push("año del modelo");
-
-        if (missingDocs.length > 0) {
-            toast({
-                variant: "destructive",
-                title: "Faltan datos para ser conductor",
-                description: `Por favor, completá lo siguiente: ${missingDocs.join(', ')}.`,
-            });
-            return;
-        }
-    }
     
     setIsSaving(true);
     
@@ -77,18 +58,27 @@ export default function DriverProfilePage() {
         }
     }
     
-    setDocumentNonBlocking(userProfileRef, dataToSave, { merge: true });
+    try {
+        await setDoc(userProfileRef, dataToSave, { merge: true });
 
-    toast({
-        title: '¡Perfil guardado!',
-        description: 'Tus datos han sido actualizados.',
-    });
+        toast({
+            title: '¡Perfil guardado!',
+            description: 'Tus datos han sido actualizados.',
+        });
 
-    if (shouldRedirect) {
-       router.push('/driver/rides');
+        if (shouldRedirect) {
+           router.push('/driver/rides');
+        }
+    } catch (error) {
+        console.error("Error saving profile: ", error);
+        toast({
+            variant: 'destructive',
+            title: 'Error al guardar',
+            description: 'No se pudo guardar tu perfil. Intentá de nuevo.',
+        });
+    } finally {
+        setIsSaving(false);
     }
-    
-    setIsSaving(false);
   };
 
 

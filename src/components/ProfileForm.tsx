@@ -69,6 +69,24 @@ export default function ProfileForm({
   const isDriver = watch('isDriver');
 
   const onSubmit = (data: ProfileFormData) => {
+    // Manual validation before saving
+    if (data.isDriver) {
+        const missingDocs = [];
+        if (!cedulaUploaded) missingDocs.push("cédula");
+        if (!seguroUploaded) missingDocs.push("seguro");
+        if (!dniUploaded) missingDocs.push("DNI");
+        if (!data.carModelYear) missingDocs.push("año del modelo");
+
+        if (missingDocs.length > 0) {
+            toast({
+                variant: "destructive",
+                title: "Faltan datos para ser conductor",
+                description: `Por favor, completá lo siguiente: ${missingDocs.join(', ')}.`,
+            });
+            return;
+        }
+    }
+    
     onSave({ ...data, photoURL: photoUrl });
   };
   
@@ -79,6 +97,8 @@ export default function ProfileForm({
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // In a real app, you'd upload this file and get a URL.
+      // For simulation, we just use a blob URL.
       const blobUrl = URL.createObjectURL(file);
       setPhotoUrl(blobUrl);
     }
