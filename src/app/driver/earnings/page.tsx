@@ -152,10 +152,14 @@ export default function EarningsPage() {
     };
     
     const isPaymentWindow = () => {
-        const now = new Date();
-        const day = now.getDay(); // 0 = Sunday
-        const hour = now.getHours();
-        return day === 0 && hour >= 18 && hour < 20;
+        // SIMULACION: Se simula que es domingo a las 18hs para habilitar el botón.
+        return true;
+        
+        // Lógica original:
+        // const now = new Date();
+        // const day = now.getDay(); // 0 = Sunday
+        // const hour = now.getHours();
+        // return day === 0 && hour >= 18 && hour < 20;
     }
 
     if (isLoading) {
