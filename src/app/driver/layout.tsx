@@ -17,17 +17,20 @@ export default function DriverLayout({
   const pathname = usePathname();
 
   useEffect(() => {
-    if (loading) return; // Esperar a que la autenticación y el perfil carguen.
+    if (loading) return; // Wait for everything to load
 
-    // Si no hay usuario, redirigir a login.
+    // Not logged in
     if (!user) {
-        router.replace('/login');
-        return;
+      router.replace('/login');
+      return;
     }
-    
-    // Si el perfil ya cargó, pero no es de conductor, redirigir.
-    if (profile && profile.role !== 'driver') {
-        router.replace('/'); // A la página de pasajero/default
+
+    // Profile not yet loaded, DO NOT redirect
+    if (!profile) return;
+
+    // Not a driver
+    if (profile.role !== 'driver') {
+      router.replace('/dashboard'); // Redirect to passenger page
     }
   }, [user, profile, loading, router]);
 
@@ -43,7 +46,7 @@ export default function DriverLayout({
     router.push(`/driver/${value}`);
   };
 
-  // Mostrar un loader mientras se verifica todo.
+  // Show a loader while we verify everything.
   if (loading || !profile) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
@@ -53,9 +56,9 @@ export default function DriverLayout({
     );
   }
 
-  // Si después de cargar no es conductor, no renderizar nada.
+  // Render nothing while redirecting
   if (profile.role !== 'driver') {
-    return null; // Render nothing while redirecting
+    return null;
   }
 
 
