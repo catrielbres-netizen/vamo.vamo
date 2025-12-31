@@ -85,7 +85,6 @@ export interface UserProfile {
   ridesCompleted?: number;
   activeBonus?: boolean;
   // Driver fields
-  isDriver?: boolean;
   approved?: boolean;
   driverStatus?: DriverStatus;
   carModelYear?: number | null;
