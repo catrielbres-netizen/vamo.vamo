@@ -4,8 +4,8 @@ import { useUser } from '@/firebase'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { VamoIcon } from '@/components/icons'
-import AdminSidebar from '@/components/AdminSidebar'
 import { requireAdmin } from '@/lib/auth/requireAdmin'
+import { AdminNavbar } from './components/AdminNavbar'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useUser()
@@ -15,7 +15,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (status === 'unauthorized') {
-      // Redirigir a una página principal si no está autorizado
       router.replace('/dashboard')
     }
   }, [status, router])
@@ -29,20 +28,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     )
   }
 
-  // No renderizar nada mientras se redirige para evitar parpadeos
   if (status !== 'authorized') {
     return null
   }
 
-  // Si está autorizado, muestra el layout y el contenido.
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
-      <AdminSidebar />
-      <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-14">
-        <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
-          {children}
-        </main>
-      </div>
+       <AdminNavbar />
+       <main className="flex-1 p-6">{children}</main>
     </div>
   )
 }

@@ -1,13 +1,14 @@
 'use client'
 
-import { useUser } from '@/firebase'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
-export default function AdminPage() {
-  const { user, profile, loading } = useUser()
+export default function AdminIndex() {
+  const router = useRouter()
 
-  return (
-    <pre style={{ padding: 20, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-      {JSON.stringify({ loading, uid: user?.uid, profile }, null, 2)}
-    </pre>
-  )
+  useEffect(() => {
+    router.replace('/admin/dashboard')
+  }, [router])
+
+  return null
 }

@@ -47,9 +47,9 @@ export default function CreateAdminPage() {
                 toast({
                     variant: 'destructive',
                     title: 'Acceso Denegado',
-                    description: 'Solo un administrador puede crear otro. Si es el primero, cierra sesión.',
+                    description: 'Solo un administrador puede crear otro.',
                 });
-                router.replace('/login');
+                router.replace('/admin/dashboard');
             }
             setIsLoading(false);
         };
@@ -89,8 +89,7 @@ export default function CreateAdminPage() {
                 description: `${name} ha sido registrado como administrador.`,
             });
             
-            // Redirect to admin panel after a short delay
-            setTimeout(() => router.push('/admin'), 2000);
+            setTimeout(() => router.push('/admin/users'), 2000);
 
         } catch (error: any) {
             console.error("Error creating admin:", error);
@@ -106,8 +105,7 @@ export default function CreateAdminPage() {
     
     if (isLoading) {
         return (
-             <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
-                <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
+             <main className="container mx-auto p-4 flex flex-col justify-center items-center">
                 <p className="text-center mt-4">Verificando permisos...</p>
             </main>
         )
@@ -115,22 +113,18 @@ export default function CreateAdminPage() {
 
     if (!canCreate && !isLoading) {
         return (
-             <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
-                <VamoIcon className="h-12 w-12 text-destructive" />
-                <p className="text-center mt-4">No tenés permiso para acceder a esta página.</p>
-            </main>
+             <main className="container mx-auto p-4 flex flex-col justify-center items-center">
+                <p className="text-center mt-4 text-destructive">No tenés permiso para acceder a esta página.</p>
+             </main>
         )
     }
 
 
     return (
-        <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
+        <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center">
             <Card className="w-full">
                 <CardHeader className="text-center">
-                    <div className="flex justify-center items-center mb-4">
-                        <VamoIcon className="h-8 w-8 text-primary mr-2" />
-                        <CardTitle>Crear Administrador</CardTitle>
-                    </div>
+                     <CardTitle>Crear Nuevo Administrador</CardTitle>
                     <CardDescription>Registra un nuevo usuario con permisos de administrador.</CardDescription>
                 </CardHeader>
                 <CardContent>
