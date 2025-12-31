@@ -64,13 +64,18 @@ export default function Home() {
   const status = ride?.status || 'idle';
 
   useEffect(() => {
-    // This is the ONLY redirect that should be on this page.
-    // If the user is not logged in after loading, send them to the login page.
-    // Role-based redirects are handled in their respective layouts.
-    if (!loading && !user) {
-      router.replace('/login');
+    // This is the core redirection logic based on roles.
+    if (!loading && user) {
+        if (profile?.role === 'admin') {
+            router.replace('/admin');
+        } else if (profile?.role === 'driver') {
+            router.replace('/driver');
+        }
+        // Passengers just stay on this page, no redirect needed.
+    } else if (!loading && !user) {
+        router.replace('/login');
     }
-  }, [user, loading, router]);
+  }, [user, profile, loading, router]);
 
 
   useEffect(() => {
@@ -225,23 +230,23 @@ export default function Home() {
   const currentAction = getAction();
 
 
-  if (loading) {
+  if (loading || (user && !profile)) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
         <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
-        <p className="text-center mt-4">Cargando...</p>
+        <p className="text-center mt-4">Cargando tu sesión...</p>
       </main>
     );
   }
-
-  // Redirect non-passengers away if they land here
+  
+  // If user has a role, the useEffect will redirect them.
+  // This content is for passengers or anonymous users.
   if (profile && profile.role !== 'passenger') {
-      // Show loading while redirecting to avoid flashing content
-       return (
-        <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
-          <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
-          <p className="text-center mt-4">Redirigiendo a tu panel...</p>
-        </main>
+      return (
+          <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
+              <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
+              <p className="text-center mt-4">Redirigiendo a tu panel...</p>
+          </main>
       );
   }
 
@@ -288,5 +293,3 @@ export default function Home() {
     </main>
   );
 }
-
-    
