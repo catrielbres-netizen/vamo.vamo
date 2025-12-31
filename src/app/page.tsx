@@ -28,7 +28,7 @@ import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
-import { useMapsLibrary } from '@vis.gl/react-google-maps';
+// import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 export default function Home() {
   const auth = useAuth();
@@ -36,8 +36,7 @@ export default function Home() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
-  // Remove 'routes' to avoid loading the Directions API on init
-  const places = useMapsLibrary('places');
+  // const places = useMapsLibrary('places');
 
   const [origin, setOrigin] = useState<Place | null>({
       address: 'Rawson, Chubut, Argentina',

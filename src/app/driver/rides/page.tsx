@@ -1,4 +1,5 @@
 
+
 // /app/driver/rides/page.tsx
 'use client';
 
@@ -14,7 +15,7 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, ServiceType } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { ShieldCheck, MapIcon, List } from 'lucide-react';
-import { Map, AdvancedMarker, APIProvider, Pin } from '@vis.gl/react-google-maps';
+// import { Map, AdvancedMarker, APIProvider, Pin } from '@vis.gl/react-google-maps';
 import { Button } from '@/components/ui/button';
 
 
@@ -33,7 +34,7 @@ export default function DriverRidesPage() {
   const [availableRides, setAvailableRides] = useState<WithId<Ride>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
-  const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
+  const [viewMode, setViewMode] = useState<'map' | 'list'>('list'); // Default to list view
 
   const driverPosition = useMemo(() => ({ lat: -43.3005, lng: -65.1023 }), []);
   
@@ -179,51 +180,26 @@ export default function DriverRidesPage() {
                     Ya podés recibir viajes. ¡Buenas rutas!
                 </AlertDescription>
             </Alert>
-            <div className="flex justify-center my-4">
+            
+            {/* The map functionality is temporarily removed to avoid API errors */}
+            {/* <div className="flex justify-center my-4">
                 <Button variant="outline" onClick={() => setViewMode(viewMode === 'map' ? 'list' : 'map')}>
                     {viewMode === 'map' ? <List className="mr-2 h-4 w-4" /> : <MapIcon className="mr-2 h-4 w-4" />}
                     Ver en {viewMode === 'map' ? 'Lista' : 'Mapa'}
                 </Button>
-            </div>
+            </div> */}
 
-            {viewMode === 'map' ? (
-                <div className="h-[400px] w-full rounded-lg overflow-hidden border">
-                    <Map
-                        mapId="vamo-driver-map"
-                        defaultCenter={driverPosition}
-                        defaultZoom={12}
-                        gestureHandling={'greedy'}
-                        disableDefaultUI={true}
-                    >
-                        <AdvancedMarker position={driverPosition} title={"Tu ubicación"}>
-                           <Pin background={'#FBBC04'} glyphColor={'#000'} borderColor={'#000'} />
-                        </AdvancedMarker>
-                        {availableRides.map(ride => (
-                            <AdvancedMarker key={ride.id} position={ride.origin} title={`Viaje a ${ride.destination.address}`}>
-                                <Pin />
-                            </AdvancedMarker>
-                        ))}
-                    </Map>
-                </div>
+            <h2 className="text-xl font-semibold text-center pt-4">Viajes Disponibles</h2>
+            {availableRides.length > 0 ? (
+                availableRides.map((ride) => (
+                <DriverRideCard
+                    key={ride.id}
+                    ride={ride}
+                    onAccept={handleAcceptRide}
+                />
+                ))
             ) : (
-                <>
-                    <h2 className="text-xl font-semibold text-center">Viajes Disponibles</h2>
-                    {availableRides.length > 0 ? (
-                        availableRides.map((ride) => (
-                        <DriverRideCard
-                            key={ride.id}
-                            ride={ride}
-                            onAccept={handleAcceptRide}
-                        />
-                        ))
-                    ) : (
-                        <p className="text-center text-muted-foreground pt-8">No hay viajes buscando conductor en este momento.</p>
-                    )}
-                </>
-            )}
-            
-            {availableRides.length === 0 && viewMode === 'map' && (
-                 <p className="text-center text-muted-foreground pt-4">No hay viajes buscando conductor en este momento.</p>
+                <p className="text-center text-muted-foreground pt-8">No hay viajes buscando conductor en este momento.</p>
             )}
         </div>
     );
