@@ -13,12 +13,14 @@ import { Button } from './ui/button';
 import { WhatsAppLogo } from './icons';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
-import { Timestamp, doc } from 'firebase/firestore';
+import { Timestamp, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import es from 'date-fns/locale/es';
 import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
 import RatingForm from './RatingForm';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
+
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('es-AR', {
@@ -35,6 +37,7 @@ const formatDuration = (seconds: number) => {
 
 export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ride>, onClose: () => void }) {
   const firestore = useFirestore();
+  const { toast } = useToast();
   const finalPrice = ride.pricing.finalTotal || ride.pricing.estimatedTotal;
 
   const totalWaitSeconds = (ride.pauseHistory || []).reduce((acc, p) => acc + p.duration, 0);
@@ -51,14 +54,27 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
     condicion: "Monotributista"
   };
 
-  const handleRatingSubmit = (rating: number, comments: string) => {
+  const handleRatingSubmit = async (rating: number, comments: string) => {
     if (!firestore) return;
     const rideRef = doc(firestore, 'rides', ride.id);
-    updateDocumentNonBlocking(rideRef, {
-      passengerRating: rating,
-      passengerComments: comments,
-      updatedAt: Timestamp.now(),
-    });
+    try {
+        await updateDoc(rideRef, {
+            passengerRating: rating,
+            passengerComments: comments,
+            updatedAt: serverTimestamp(),
+        });
+        toast({
+            title: '¡Calificación enviada!',
+            description: 'Gracias por calificar a tu pasajero.',
+        });
+    } catch(error) {
+        console.error("Error submitting passenger rating:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Error al enviar calificación',
+            description: 'No se pudo guardar la calificación. Por favor, intentá de nuevo.',
+        });
+    }
   };
 
   const handleSendWhatsApp = () => {
