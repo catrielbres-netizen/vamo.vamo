@@ -16,15 +16,19 @@ export default function Home() {
     if (!user) {
       router.replace('/login');
     } else {
-      // Redirección basada en rol
-      if (profile?.role === 'admin') {
-        router.replace('/admin');
-      } else if (profile?.role === 'driver') {
-        router.replace('/driver');
-      } else {
-        // Por defecto, para pasajeros o roles no definidos
-        router.replace('/dashboard');
+      // Una vez que el perfil está disponible, redirige basado en el rol.
+      // Esta es la ÚNICA fuente de verdad para la redirección inicial.
+      if (profile) {
+        if (profile.role === 'admin') {
+          router.replace('/admin');
+        } else if (profile.role === 'driver') {
+          router.replace('/driver');
+        } else {
+          // Por defecto, para pasajeros o roles no definidos
+          router.replace('/dashboard');
+        }
       }
+      // Si hay usuario pero el perfil aún no carga, el loader de abajo se muestra.
     }
   }, [user, profile, loading, router]);
 

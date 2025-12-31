@@ -62,16 +62,8 @@ export default function DashboardPage() {
 
   const status = ride?.status || 'idle';
 
-  useEffect(() => {
-    // Ya no es necesario redirigir desde acá, page.tsx y los layouts se encargan.
-    // Esta página ahora asume que es solo para pasajeros.
-    if (!loading && profile && profile.role !== 'passenger') {
-      // Si un admin o driver llega acá, la lógica central de page.tsx lo debería haber redirigido.
-      // Como salvaguarda, podemos enviarlos al dashboard, aunque no debería ocurrir.
-      router.replace('/'); 
-    }
-  }, [user, profile, loading, router]);
-
+  // **REMOVED** el useEffect que causaba la redirección conflictiva.
+  // La lógica ahora está centralizada en `src/app/page.tsx`.
 
   useEffect(() => {
     if (!destination) {
@@ -234,13 +226,12 @@ export default function DashboardPage() {
     );
   }
   
-  // Si el usuario no es pasajero, el useEffect lo redirigirá.
-  // Se muestra un loader mientras ocurre la redirección para evitar parpadeos.
+  // Si un usuario que no es pasajero llega acá, `page.tsx` ya lo debería haber redirigido.
+  // Este es un fallback de UI para evitar mostrar contenido incorrecto durante una transición.
   if (profile && profile.role !== 'passenger') {
       return (
           <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
               <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
-              <p className="text-center mt-4">Redirigiendo...</p>
           </main>
       );
   }
