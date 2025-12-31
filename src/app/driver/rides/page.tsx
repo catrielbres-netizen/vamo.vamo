@@ -127,8 +127,8 @@ export default function DriverRidesPage() {
             previousAvailableRides.current = rides;
             if(isLoading) setIsLoading(false);
         }, (error) => {
-            console.error("Error fetching available rides:", error);
-            toast({ variant: 'destructive', title: 'Error al buscar viajes disponibles.' });
+            // Error is handled globally by FirebaseErrorListener for permission errors
+            toast({ variant: 'destructive', title: 'Error al buscar viajes', description: 'No se pudo cargar la lista de viajes disponibles.' });
         });
     } else {
         setAvailableRides([]);
