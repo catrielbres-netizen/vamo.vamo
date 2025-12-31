@@ -36,7 +36,8 @@ export default function Home() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
-  const maps = useMapsLibrary('routes');
+  // Remove 'routes' to avoid loading the Directions API on init
+  const places = useMapsLibrary('places');
 
   const [origin, setOrigin] = useState<Place | null>({
       address: 'Rawson, Chubut, Argentina',
@@ -83,31 +84,20 @@ export default function Home() {
   }, [user, userProfile, isUserLoading, isProfileLoading, router]);
 
   useEffect(() => {
-    if (!maps || !origin || !destination) {
+    // We remove the DirectionsService logic and simulate distance
+    if (!destination) {
         setEstimatedFare(0);
+        setDistanceMeters(0);
         return;
     }
-    const directionsService = new maps.DirectionsService();
-    directionsService.route({
-        origin: new google.maps.LatLng(origin.lat, origin.lng),
-        destination: new google.maps.LatLng(destination.lat, destination.lng),
-        travelMode: google.maps.TravelMode.DRIVING,
-    }, (response, status) => {
-        if (status === 'OK' && response && response.routes.length > 0) {
-            const route = response.routes[0];
-            const leg = route.legs[0];
-            if (leg && leg.distance) {
-                const distance = leg.distance.value;
-                setDistanceMeters(distance);
-                const fare = calculateFare({ distanceMeters: distance, service: serviceType });
-                setEstimatedFare(fare);
-            }
-        } else {
-            console.error(`Directions request failed due to ${status}`);
-        }
-    });
+    
+    // Simulate a distance when a destination is set
+    const simulatedDistance = 5000; // 5km
+    setDistanceMeters(simulatedDistance);
+    const fare = calculateFare({ distanceMeters: simulatedDistance, service: serviceType });
+    setEstimatedFare(fare);
 
-  }, [destination, serviceType, origin, maps]);
+  }, [destination, serviceType]);
   
   useEffect(() => {
     const prevStatus = prevRideRef.current?.status;
