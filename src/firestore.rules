@@ -29,7 +29,7 @@ service cloud.firestore {
       // Admins can list all rides.
       allow list: if isAdmin();
       // Drivers can list rides available for pickup.
-      allow list: if isDriver() && request.query.where[0][2] == 'searching_driver';
+      // allow list: if isDriver() && request.query.where[0][2] == 'searching_driver';
 
       // Read ride only if participating or admin.
       allow get: if isAdmin() || (isSignedIn() && (resource.data.driverId == request.auth.uid || resource.data.passengerId == request.auth.uid));
