@@ -32,7 +32,7 @@ import { speak } from '@/lib/speak';
 export default function Home() {
   const auth = useAuth();
   const firestore = useFirestore();
-  const { user, isUserLoading } = useUser();
+  const { user, profile, loading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -47,8 +47,7 @@ export default function Home() {
   const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
   const [estimatedFare, setEstimatedFare] = useState(0);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
-  const [isRedirecting, setIsRedirecting] = useState(true);
-
+  
   const activeRideRef = useMemoFirebase(
     () => (firestore && activeRideId ? doc(firestore, 'rides', activeRideId) : null),
     [firestore, activeRideId]
@@ -59,27 +58,22 @@ export default function Home() {
       () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
       [firestore, user]
   );
-  const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
   
   const prevRideRef = useRef<WithId<Ride> | null | undefined>(null);
 
   const status = ride?.status || 'idle';
 
   useEffect(() => {
-    if (isUserLoading || isProfileLoading) {
-      return; 
-    }
-
-    if (user && userProfile) {
-      if (userProfile.isDriver) {
+    if (!loading) {
+      if (profile?.role === 'driver') {
         router.replace('/driver');
-      } else {
-        setIsRedirecting(false);
       }
-    } else {
-      setIsRedirecting(false);
+       if (profile?.role === 'admin') {
+        router.replace('/admin');
+      }
     }
-  }, [user, userProfile, isUserLoading, isProfileLoading, router]);
+  }, [profile, loading, router]);
+
 
   useEffect(() => {
     if (!destination) {
@@ -144,14 +138,14 @@ export default function Home() {
     let rideFare = estimatedFare;
     let discountAmount = 0;
 
-    if(userProfile?.activeBonus) {
+    if(profile?.activeBonus) {
         discountAmount = rideFare * 0.10;
     }
 
     const ridesCollection = collection(firestore, 'rides');
     const newRideData = {
       passengerId: user.uid,
-      passengerName: userProfile?.name || 'Pasajero Anónimo',
+      passengerName: profile?.name || 'Pasajero Anónimo',
       origin: { lat: origin.lat, lng: origin.lng },
       destination: {
         address: destination.address,
@@ -182,10 +176,10 @@ export default function Home() {
                 title: '¡Buscando conductor!',
                 description: 'Tu pedido fue enviado. Esperá la confirmación.',
             });
-            if (userProfile?.activeBonus) {
+            if (profile?.activeBonus && profile.vamoPoints) {
                 await updateDocumentNonBlocking(userProfileRef, { 
                     activeBonus: false,
-                    vamoPoints: userProfile.vamoPoints - 30
+                    vamoPoints: profile.vamoPoints - 30
                 });
             }
         }
@@ -233,7 +227,7 @@ export default function Home() {
   const currentAction = getAction();
 
 
-  if (isUserLoading || isRedirecting) {
+  if (loading) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
         <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
@@ -242,8 +236,8 @@ export default function Home() {
     );
   }
 
-  const fareToDisplay = userProfile?.activeBonus ? estimatedFare * 0.9 : estimatedFare;
-  const userName = userProfile?.name || (user?.isAnonymous ? "Invitado" : user?.displayName || "Usuario");
+  const fareToDisplay = profile?.activeBonus ? estimatedFare * 0.9 : estimatedFare;
+  const userName = profile?.name || (user?.isAnonymous ? "Invitado" : user?.displayName || "Usuario");
 
   return (
     <main className="max-w-md mx-auto pb-4 px-4">
@@ -267,7 +261,7 @@ export default function Home() {
             value={serviceType} 
             onChange={(val) => setServiceType(val as any)} 
           />
-          <PriceDisplay price={fareToDisplay} isNight={false} originalPrice={userProfile?.activeBonus ? estimatedFare : undefined} />
+          <PriceDisplay price={fareToDisplay} isNight={false} originalPrice={profile?.activeBonus ? estimatedFare : undefined} />
         </>
       )}
       <MainActionButton 

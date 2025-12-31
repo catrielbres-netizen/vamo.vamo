@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 
 export default function LoginPage() {
     const auth = useAuth();
-    const { user, isUserLoading } = useUser();
+    const { user, profile, loading } = useUser();
     const router = useRouter();
     const { toast } = useToast();
     
@@ -23,13 +23,19 @@ export default function LoginPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        // If user is logged in, redirect them away from login page
-        if (user) {
-            router.replace('/'); 
+        if (!loading && user) {
+            if (profile?.role === 'admin') {
+                router.replace('/admin');
+            } else if (profile?.role === 'driver') {
+                router.replace('/driver');
+            } else {
+                router.replace('/');
+            }
         }
-    }, [user, router]);
+    }, [user, profile, loading, router]);
 
-    if (isUserLoading || user) { // Also show loading/null if user exists to prevent flicker before redirect
+
+    if (loading) { 
         return (
              <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
                 <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
@@ -44,14 +50,13 @@ export default function LoginPage() {
             return;
         }
         setIsSubmitting(true);
-        try {
-            await initiateEmailSignIn(auth, email, password);
-            // The onAuthStateChanged listener in the provider will handle the redirect
-            toast({ title: 'Iniciando sesión...', description: 'Serás redirigido en un momento.' });
-        } catch (error: any) {
+        initiateEmailSignIn(auth, email, password)
+          .catch((error) => {
             toast({ variant: 'destructive', title: 'Error de inicio de sesión', description: 'Credenciales incorrectas. Por favor, intenta de nuevo.' });
+          })
+          .finally(() => {
             setIsSubmitting(false);
-        }
+          });
     };
     
     const handleSignUp = async () => {
@@ -71,6 +76,18 @@ export default function LoginPage() {
             setIsSubmitting(false);
         }
     };
+
+    // If user is already logged in, the useEffect will handle the redirect.
+    // Render nothing here to prevent flicker.
+    if (user) {
+        return (
+            <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
+               <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
+               <p className="text-center mt-4">Redirigiendo...</p>
+           </main>
+       )
+    }
+
 
     return (
         <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">

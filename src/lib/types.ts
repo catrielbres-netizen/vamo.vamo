@@ -73,9 +73,9 @@ export interface Ride {
 
 export interface UserProfile {
   name: string;
+  role: Role;
   email?: string;
   phone?: string;
-  role: Role;
   photoURL?: string | null;
   createdAt: Timestamp;
   updatedAt?: Timestamp;

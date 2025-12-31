@@ -1,46 +1,40 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check if the user is an admin
-    function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Helper function to check if the user is the owner of a document
-    function isOwner(userId) {
-      return request.auth.uid == userId;
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
-    
-    // Helper function to check if the user is an authenticated user
-    function isAuthenticated() {
-      return request.auth != null;
+
+    function isDriver() {
+       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver';
     }
 
     // User Profiles
     match /users/{userId} {
-      // Admins can read/write any profile
-      // Users can read/write their own profile
-      allow read, write: if isAdmin() || isOwner(userId);
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin() || request.auth.uid == userId;
     }
     
     // Rides
     match /rides/{rideId} {
-      // Admins can read/write any ride
-      allow read, write: if isAdmin();
-      
-      // Allow any authenticated user to list rides that are looking for a driver.
-      // This is crucial for the driver dashboard. The 'where' clause is enforced by the rule.
-      allow list: if isAuthenticated() && request.query.status == 'searching_driver';
-      
-      // Passengers and drivers involved in the ride can read it
-      allow read: if isOwner(resource.data.passengerId) || (resource.data.driverId != null && isOwner(resource.data.driverId));
-      
-      // Passengers can create rides for themselves
-      allow create: if isOwner(request.resource.data.passengerId);
-      
-      // Involved parties can update, but not all fields (logic enforced in app)
-      allow update: if isOwner(resource.data.passengerId) || (resource.data.driverId != null && isOwner(resource.data.driverId));
+      // Drivers: view available rides
+      allow list: if isDriver() && request.query.where[0][2] == 'searching_driver';
+
+      // Read ride only if participating or admin
+      allow get: if isAdmin() || (isSignedIn() && (resource.data.driverId == request.auth.uid || resource.data.passengerId == request.auth.uid));
+
+      // Create ride (passenger)
+      allow create: if isSignedIn() && request.resource.data.passengerId == request.auth.uid;
+
+      // Controlled update
+      allow update: if isAdmin() || (isDriver() && resource.data.status == 'searching_driver') || (isSignedIn() && (resource.data.driverId == request.auth.uid || resource.data.passengerId == request.auth.uid));
+
+      allow delete: if isAdmin();
     }
 
     // Driver Summaries

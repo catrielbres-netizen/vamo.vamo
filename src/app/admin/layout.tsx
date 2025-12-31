@@ -1,18 +1,15 @@
 // src/app/admin/layout.tsx
 'use client';
-import { useUser, useDoc, useMemoFirebase } from '@/firebase';
-import { useFirestore } from '@/firebase';
+import { useUser } from '@/firebase';
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { doc } from 'firebase/firestore';
-import { UserProfile } from '@/lib/types';
+import { useEffect } from 'react';
 import { VamoIcon } from '@/components/icons';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
 
 function AdminSidebar() {
   const pathname = usePathname();
-  const activeTab = pathname.split('/admin/')[1] || '';
+  const activeTab = pathname.split('/admin/')[1]?.split('/')[0] || '';
 
   const tabs = [
     { value: '', label: 'Dashboard' },
@@ -50,34 +47,30 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isUserLoading } = useUser();
-  const firestore = useFirestore();
+  const { user, profile, loading } = useUser();
   const router = useRouter();
-  const [isAuthorized, setIsAuthorized] = useState(false);
-
-  const userProfileRef = useMemoFirebase(
-    () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
-    [firestore, user]
-  );
-  const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
 
   useEffect(() => {
-    const isLoading = isUserLoading || isProfileLoading;
-    if (isLoading) return;
-
-    if (!user || userProfile?.role !== 'admin') {
-      router.replace('/login');
-    } else {
-      setIsAuthorized(true);
+    if (!loading) {
+      if (!user || profile?.role !== 'admin') {
+        router.replace('/login');
+      }
     }
-  }, [user, userProfile, isUserLoading, isProfileLoading, router]);
+  }, [user, profile, loading, router]);
 
-  if (!isAuthorized) {
+  if (loading || !profile) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <VamoIcon className="h-12 w-12 animate-pulse text-primary" />
+        <p className="ml-4">Verificando autorización...</p>
       </div>
     );
+  }
+
+  if (profile.role !== 'admin') {
+    // This will be briefly rendered before the useEffect triggers the redirect.
+    // It's a fallback.
+    return null;
   }
 
   return (
