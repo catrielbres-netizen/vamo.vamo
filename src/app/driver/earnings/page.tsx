@@ -171,9 +171,9 @@ export default function EarningsPage() {
     
     const isPaymentWindow = () => {
         // Lógica real: Habilitado los domingos de 18:00 a 19:59 hs.
-        // const now = new Date();
-        // const day = now.getDay(); // 0 = Sunday
-        // const hour = now.getHours();
+        const now = new Date();
+        const day = now.getDay(); // 0 = Sunday
+        const hour = now.getHours();
         // return day === 0 && hour >= 18 && hour < 20;
         return false; // Revert to original logic, now we use Mercado Pago
     }
