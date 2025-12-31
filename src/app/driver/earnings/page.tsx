@@ -64,7 +64,6 @@ export default function EarningsPage() {
             const summarySnapshot = await getDocs(summaryQuery);
             const existingSummary = summarySnapshot.empty ? null : { ...summarySnapshot.docs[0].data(), id: summarySnapshot.docs[0].id } as DriverSummary & { id: string };
 
-            // If commission is already paid, don't fetch rides, just show the paid summary.
             if (existingSummary?.status === 'paid') {
                 setSummary(existingSummary);
                 setWeeklyRides([]);
@@ -148,6 +147,8 @@ export default function EarningsPage() {
         };
 
         try {
+            // Directly update Firestore. The useEffect will handle re-fetching if needed,
+            // but the immediate state update gives a better UX.
             await setDoc(summaryRef, updatedSummaryData, { merge: true });
             
             // Update local state to reflect the change immediately
@@ -188,6 +189,8 @@ export default function EarningsPage() {
 
     const progressToNextTier = commissionInfo.nextTier ? (weeklyRides.length / commissionInfo.nextTier) * 100 : 100;
 
+    const isPaid = summary.status === 'paid';
+
     return (
         <div className="space-y-6">
             <Card className="border-primary">
@@ -198,14 +201,14 @@ export default function EarningsPage() {
                 <CardContent className="space-y-3">
                     <div className="flex justify-between items-baseline">
                         <p className="text-sm font-medium">Comisión actual</p>
-                        <p className="text-2xl font-bold text-primary">{(commissionInfo.rate * 100)}%</p>
+                        <p className="text-2xl font-bold text-primary">{isPaid ? '0%' : (commissionInfo.rate * 100)}%</p>
                     </div>
                      <div className="space-y-2">
                         <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Viajes completados: {weeklyRides.length}</span>
+                            <span>Viajes completados: {isPaid ? 0 : weeklyRides.length}</span>
                             {commissionInfo.nextTier && <span>Meta: {commissionInfo.nextTier}</span>}
                         </div>
-                        <Progress value={progressToNextTier} />
+                        <Progress value={isPaid ? 0 : progressToNextTier} />
                         {summary.status !== 'paid' && commissionInfo.ridesToNext !== null ? (
                              <p className="text-center text-sm text-muted-foreground">
                                 ¡Te faltan <strong>{commissionInfo.ridesToNext} {commissionInfo.ridesToNext === 1 ? 'viaje' : 'viajes'}</strong> para bajar tu comisión al <strong>{(getCommissionInfo(weeklyRides.length + commissionInfo.ridesToNext).rate * 100)}%</strong>!
@@ -228,13 +231,13 @@ export default function EarningsPage() {
                      <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Viajes completados</span>
-                            <span className="font-medium">{weeklyRides.length}</span>
+                            <span className="font-medium">{isPaid ? 0 : weeklyRides.length}</span>
                         </div>
                          <div className="flex justify-between">
                             <span className="text-muted-foreground">Total bruto facturado</span>
-                            <span className="font-medium">{formatCurrency(summary.totalEarnings)}</span>
+                            <span className="font-medium">{isPaid ? formatCurrency(0) : formatCurrency(summary.totalEarnings)}</span>
                         </div>
-                        {summary.bonusesApplied > 0 && (
+                        {summary.bonusesApplied > 0 && !isPaid && (
                             <div className="flex justify-between text-blue-500">
                                 <span className="flex items-center gap-1"><Percent className="w-3 h-3" /> Reembolso por bonos</span>
                                 <span className="font-medium">{formatCurrency(summary.bonusesApplied)}</span>
@@ -243,8 +246,8 @@ export default function EarningsPage() {
                      </div>
                      <div className="border-t pt-4 space-y-2 text-base">
                         <div className="flex justify-between items-center text-red-500">
-                            <span className="font-medium">Comisión VamO ({(summary.commissionRate * 100).toFixed(0)}%)</span>
-                            <span className="font-bold">{formatCurrency(summary.commissionOwed)}</span>
+                            <span className="font-medium">Comisión VamO ({(isPaid ? 0 : summary.commissionRate * 100).toFixed(0)}%)</span>
+                            <span className="font-bold">{isPaid ? formatCurrency(0) : formatCurrency(summary.commissionOwed)}</span>
                         </div>
                         <div className="flex justify-between items-center text-green-500">
                             <span className="font-medium">Total a recibir</span>
@@ -264,7 +267,7 @@ export default function EarningsPage() {
                 )}
             </Card>
 
-             {summary.status === 'paid' ? (
+             {isPaid ? (
                 <Alert variant="default" className="bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800">
                     <CheckCircle className="h-4 w-4 text-green-500" />
                     <AlertTitle className="text-green-700 dark:text-green-400">Comisión Pagada</AlertTitle>
