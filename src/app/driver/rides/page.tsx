@@ -2,7 +2,7 @@
 // /app/driver/rides/page.tsx
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useFirestore, useUser } from '@/firebase';
 import { collection, query, where, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
@@ -13,7 +13,9 @@ import { speak } from '@/lib/speak';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, ServiceType } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, MapIcon, List } from 'lucide-react';
+import { Map, AdvancedMarker, APIProvider, Pin } from '@vis.gl/react-google-maps';
+import { Button } from '@/components/ui/button';
 
 
 // Helper function to determine which services a driver can see
@@ -31,6 +33,9 @@ export default function DriverRidesPage() {
   const [availableRides, setAvailableRides] = useState<WithId<Ride>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
+  const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
+
+  const driverPosition = useMemo(() => ({ lat: -43.3005, lng: -65.1023 }), []);
   
 
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
@@ -39,8 +44,6 @@ export default function DriverRidesPage() {
   const activeRideStateRef = useRef<WithId<Ride> | null>(null);
 
   useEffect(() => {
-    // This ref helps the snapshot callback to know the previous state
-    // without including the state variable `activeRide` in the dependency array.
     activeRideStateRef.current = activeRide;
   }, [activeRide]);
 
@@ -109,7 +112,6 @@ export default function DriverRidesPage() {
         availableRidesUnsubscribe.current = onSnapshot(availableRidesQuery, (snapshot) => {
             const rides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
             
-            // Only play sound/toast if initial load is done.
             if (!isLoading) { 
                 const newRides = rides.filter(
                     (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
@@ -177,17 +179,51 @@ export default function DriverRidesPage() {
                     Ya podés recibir viajes. ¡Buenas rutas!
                 </AlertDescription>
             </Alert>
-            <h2 className="text-xl font-semibold text-center">Viajes Disponibles</h2>
-            {availableRides.length > 0 ? (
-                availableRides.map((ride) => (
-                <DriverRideCard
-                    key={ride.id}
-                    ride={ride}
-                    onAccept={handleAcceptRide}
-                />
-                ))
+            <div className="flex justify-center my-4">
+                <Button variant="outline" onClick={() => setViewMode(viewMode === 'map' ? 'list' : 'map')}>
+                    {viewMode === 'map' ? <List className="mr-2 h-4 w-4" /> : <MapIcon className="mr-2 h-4 w-4" />}
+                    Ver en {viewMode === 'map' ? 'Lista' : 'Mapa'}
+                </Button>
+            </div>
+
+            {viewMode === 'map' ? (
+                <div className="h-[400px] w-full rounded-lg overflow-hidden border">
+                    <Map
+                        mapId="vamo-driver-map"
+                        defaultCenter={driverPosition}
+                        defaultZoom={12}
+                        gestureHandling={'greedy'}
+                        disableDefaultUI={true}
+                    >
+                        <AdvancedMarker position={driverPosition} title={"Tu ubicación"}>
+                           <Pin background={'#FBBC04'} glyphColor={'#000'} borderColor={'#000'} />
+                        </AdvancedMarker>
+                        {availableRides.map(ride => (
+                            <AdvancedMarker key={ride.id} position={ride.origin} title={`Viaje a ${ride.destination.address}`}>
+                                <Pin />
+                            </AdvancedMarker>
+                        ))}
+                    </Map>
+                </div>
             ) : (
-                <p className="text-center text-muted-foreground pt-8">No hay viajes buscando conductor en este momento.</p>
+                <>
+                    <h2 className="text-xl font-semibold text-center">Viajes Disponibles</h2>
+                    {availableRides.length > 0 ? (
+                        availableRides.map((ride) => (
+                        <DriverRideCard
+                            key={ride.id}
+                            ride={ride}
+                            onAccept={handleAcceptRide}
+                        />
+                        ))
+                    ) : (
+                        <p className="text-center text-muted-foreground pt-8">No hay viajes buscando conductor en este momento.</p>
+                    )}
+                </>
+            )}
+            
+            {availableRides.length === 0 && viewMode === 'map' && (
+                 <p className="text-center text-muted-foreground pt-4">No hay viajes buscando conductor en este momento.</p>
             )}
         </div>
     );
