@@ -3,7 +3,7 @@
 import { VamoIcon } from '@/components/icons';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
-import { Car, Wallet, Percent, User } from 'lucide-react';
+import { Car, Wallet, Percent } from 'lucide-react';
 
 export default function DriverLayout({
   children,
@@ -32,7 +32,7 @@ export default function DriverLayout({
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full mb-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="rides" className="gap-2">
             <Car className="w-4 h-4" /> Viajes
           </TabsTrigger>
@@ -41,9 +41,6 @@ export default function DriverLayout({
           </TabsTrigger>
           <TabsTrigger value="discounts" className="gap-2">
             <Percent className="w-4 h-4" /> Bonos
-          </TabsTrigger>
-           <TabsTrigger value="profile" className="gap-2">
-            <User className="w-4 h-4" /> Perfil
           </TabsTrigger>
         </TabsList>
       </Tabs>

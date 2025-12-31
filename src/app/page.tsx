@@ -17,20 +17,17 @@ import {
   useMemoFirebase,
   addDocumentNonBlocking,
   updateDocumentNonBlocking,
-  setDocumentNonBlocking
 } from '@/firebase';
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/icons';
 import { calculateFare } from '@/lib/pricing';
-import { collection, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
 import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile } from '@/lib/types';
 import { speak } from '@/lib/speak';
-import ProfileForm from '@/components/ProfileForm';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 export default function Home() {
   const auth = useAuth();
@@ -43,7 +40,6 @@ export default function Home() {
   const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
   const [estimatedFare, setEstimatedFare] = useState(0);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
-  const [isProfileModalOpen, setProfileModalOpen] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(true);
 
   const activeRideRef = useMemoFirebase(
@@ -79,14 +75,6 @@ export default function Home() {
         router.replace('/driver');
       } else {
         setIsRedirecting(false);
-        if (!userProfile.name) {
-          setProfileModalOpen(true);
-        }
-      }
-    } else if (user) {
-        setIsRedirecting(false);
-        if (!userProfile) {
-          setProfileModalOpen(true);
       }
     } else {
       setIsRedirecting(false);
@@ -128,11 +116,6 @@ export default function Home() {
         title: 'Error',
         description: 'Por favor, completá el destino para pedir un viaje.',
       });
-      return;
-    }
-
-    if (!userProfile?.name) {
-      setProfileModalOpen(true);
       return;
     }
 
@@ -208,42 +191,6 @@ export default function Home() {
       setDestination('');
   }
 
-  const handleProfileSave = (profileData: Partial<UserProfile>) => {
-    if (!userProfileRef) return;
-    
-    const dataToSave: Partial<UserProfile> = {
-        ...profileData,
-        updatedAt: serverTimestamp(),
-    };
-    
-    if (!userProfile) { // If profile doesn't exist, create it
-        dataToSave.createdAt = serverTimestamp();
-        dataToSave.vamoPoints = 0;
-        dataToSave.ridesCompleted = 0;
-        dataToSave.averageRating = null;
-        dataToSave.activeBonus = false;
-        dataToSave.isDriver = profileData.isDriver || false;
-        dataToSave.vehicleVerificationStatus = profileData.isDriver ? 'pending_review' : 'unverified';
-    } else { // If profile exists, update it
-        if(profileData.isDriver && userProfile.vehicleVerificationStatus === 'unverified') {
-           dataToSave.vehicleVerificationStatus = 'pending_review';
-        }
-    }
-    
-    setDocumentNonBlocking(userProfileRef, dataToSave, { merge: true });
-    
-    toast({
-        title: '¡Perfil guardado!',
-        description: 'Tus datos han sido actualizados.',
-    });
-    setProfileModalOpen(false);
-
-    if (dataToSave.isDriver) {
-        setIsRedirecting(true);
-        router.replace('/driver/rides');
-    }
-};
-
   const getAction = () => {
     switch (status) {
         case 'idle':
@@ -278,25 +225,9 @@ export default function Home() {
 
   return (
     <main className="max-w-md mx-auto pb-4 px-4">
-      <Dialog open={isProfileModalOpen} onOpenChange={setProfileModalOpen}>
-        <DialogContent>
-           <DialogHeader className="text-center">
-              <DialogTitle>Completá tu Perfil</DialogTitle>
-              <DialogDescription>Necesitamos algunos datos para empezar.</DialogDescription>
-            </DialogHeader>
-           <ProfileForm 
-             userProfile={userProfile}
-             onSave={handleProfileSave}
-             onCancel={() => setProfileModalOpen(false)}
-             isDialog={true}
-           />
-        </DialogContent>
-      </Dialog>
-      
       <PassengerHeader 
         userName={userName}
         location="Rawson, Chubut" 
-        onProfileClick={() => setProfileModalOpen(true)}
       />
 
       {status !== 'idle' && ride ? (
