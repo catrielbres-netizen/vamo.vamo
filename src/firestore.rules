@@ -13,32 +13,16 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // Allow authenticated users to list users for admin panel functionality.
-      // In production, this should be restricted to admins only.
       allow list: if request.auth != null;
-
-      // An admin or the user themselves can get a specific profile.
       allow get: if isAdmin() || isOwner(userId);
-      
-      // An admin or the user themselves can write to their own profile.
       allow write: if isAdmin() || isOwner(userId);
     }
     
     match /rides/{rideId} {
-      // Allow authenticated users to list rides for admin panel functionality.
-      // In production, this should be restricted to admins only.
       allow list: if request.auth != null;
-
-      // An admin, the passenger, or the driver can get a single ride document.
       allow get: if isAdmin() || isOwner(resource.data.passengerId) || (resource.data.driverId != null && isOwner(resource.data.driverId));
-      
-      // Passengers or admins can create rides.
       allow create: if isAdmin() || (request.resource.data.passengerId == request.auth.uid);
-      
-      // Involved parties or admins can update.
       allow update: if isAdmin() || isOwner(resource.data.passengerId) || (resource.data.driverId != null && isOwner(resource.data.driverId));
-      
-      // Only admins should be able to delete rides.
       allow delete: if isAdmin();
     }
 
