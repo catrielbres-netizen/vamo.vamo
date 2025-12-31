@@ -9,19 +9,19 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Helper function to check if the user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
+    // Helper function to check if the user is the owner of a document
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
     }
 
     // User Profiles
     match /users/{userId} {
       // An admin or the user can get a specific profile.
-      allow get: if isAdmin() || request.auth.uid == userId;
+      allow get: if isAdmin() || isOwner(userId);
       // Only admins can list all users.
       allow list: if isAdmin();
       // An admin or the user can write to their own profile.
-      allow write: if isAdmin() || request.auth.uid == userId;
+      allow write: if isAdmin() || isOwner(userId);
     }
     
     // Rides
@@ -33,30 +33,23 @@ service cloud.firestore {
       // Passengers or admins can create rides.
       allow create: if isAdmin() || (request.resource.data.passengerId == request.auth.uid);
       // Involved parties or admins can update.
-      allow update: if isAdmin() || (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid);
+      allow update: if isAdmin() || isOwner(resource.data.passengerId) || isOwner(resource.data.driverId);
       // Only admins should be able to delete rides.
       allow delete: if isAdmin();
     }
 
     // Driver Summaries
     match /driver_summaries/{summaryId} {
-        // Admins can read any summary.
-        allow get: if isAdmin();
-        // Drivers can read their own summaries.
-        allow list: if exists(/databases/$(database)/documents/driver_summaries/$(summaryId)) && resource.data.driverId == request.auth.uid;
-        // Writes are handled by secure backend logic (or admin panel).
-        allow write: if isAdmin();
+        // Admins can read/write any summary
+        allow read, write: if isAdmin();
+        // Drivers can read their own summaries
+        allow get: if exists(/databases/$(database)/documents/driver_summaries/$(summaryId)) && resource.data.driverId == request.auth.uid;
     }
     
     // Audit Logs - Only admins can create and read
     match /auditLogs/{logId} {
       allow read, create: if isAdmin();
       allow update, delete: if false; // Logs should be immutable
-    }
-
-    // Fallback: Deny all other access by default
-    match /{document=**} {
-      allow read, write: if false;
     }
   }
 }
