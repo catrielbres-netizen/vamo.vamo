@@ -64,15 +64,13 @@ export default function Home() {
   const status = ride?.status || 'idle';
 
   useEffect(() => {
-    if (!loading) {
-      if (profile?.role === 'driver') {
-        router.replace('/driver');
-      }
-       if (profile?.role === 'admin') {
-        router.replace('/admin');
-      }
+    // This is the ONLY redirect that should be on this page.
+    // If the user is not logged in after loading, send them to the login page.
+    // Role-based redirects are handled in their respective layouts.
+    if (!loading && !user) {
+      router.replace('/login');
     }
-  }, [profile, loading, router]);
+  }, [user, loading, router]);
 
 
   useEffect(() => {
@@ -236,6 +234,18 @@ export default function Home() {
     );
   }
 
+  // Redirect non-passengers away if they land here
+  if (profile && profile.role !== 'passenger') {
+      // Show loading while redirecting to avoid flashing content
+       return (
+        <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
+          <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
+          <p className="text-center mt-4">Redirigiendo a tu panel...</p>
+        </main>
+      );
+  }
+
+
   const fareToDisplay = profile?.activeBonus ? estimatedFare * 0.9 : estimatedFare;
   const userName = profile?.name || (user?.isAnonymous ? "Invitado" : user?.displayName || "Usuario");
 
@@ -278,3 +288,5 @@ export default function Home() {
     </main>
   );
 }
+
+    

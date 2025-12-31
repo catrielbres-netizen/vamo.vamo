@@ -4,14 +4,26 @@ import { VamoIcon } from '@/components/icons';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
 import { Car, Wallet, Percent } from 'lucide-react';
+import { useUser } from '@/firebase';
+import { useEffect } from 'react';
 
 export default function DriverLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user, profile, loading } = useUser();
   const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (!loading) {
+      if (!user || profile?.role !== 'driver') {
+        router.replace('/login');
+      }
+    }
+  }, [user, profile, loading, router]);
+
 
   // Determine the active tab from the URL
   const activeTabValue = pathname.split('/driver/')[1] || 'rides';
@@ -23,6 +35,20 @@ export default function DriverLayout({
   const handleTabChange = (value: string) => {
     router.push(`/driver/${value}`);
   };
+
+  if (loading || !profile) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <VamoIcon className="h-12 w-12 animate-pulse text-primary" />
+        <p className="ml-4">Verificando autorización...</p>
+      </div>
+    );
+  }
+
+  if (profile.role !== 'driver') {
+    return null; // Render nothing while redirecting
+  }
+
 
   return (
     <div className="container mx-auto max-w-md p-4">
@@ -49,3 +75,5 @@ export default function DriverLayout({
     </div>
   );
 }
+
+    
