@@ -55,24 +55,32 @@ export default function EarningsPage() {
             const beginningOfWeek = startOfWeek(new Date(), { weekStartsOn: 1 /* Monday */ });
             const beginningOfWeekTimestamp = Timestamp.fromDate(beginningOfWeek);
 
+            const summaryQuery = query(
+                collection(firestore, 'driver_summaries'),
+                where('driverId', '==', user.uid),
+                where('weekId', '==', weekId)
+            );
+            
+            const summarySnapshot = await getDocs(summaryQuery);
+            const existingSummary = summarySnapshot.empty ? null : { ...summarySnapshot.docs[0].data(), id: summarySnapshot.docs[0].id } as DriverSummary & { id: string };
+
+            // If commission is already paid, don't fetch rides, just show the paid summary.
+            if (existingSummary?.status === 'paid') {
+                setSummary(existingSummary);
+                setWeeklyRides([]);
+                setIsLoading(false);
+                return;
+            }
+
             const ridesQuery = query(
                 collection(firestore, 'rides'),
                 where('driverId', '==', user.uid),
                 where('status', '==', 'finished'),
                 where('finishedAt', '>=', beginningOfWeekTimestamp)
             );
-            
-            const summaryQuery = query(
-                collection(firestore, 'driver_summaries'),
-                where('driverId', '==', user.uid),
-                where('weekId', '==', weekId)
-            );
 
             try {
-                const [ridesSnapshot, summarySnapshot] = await Promise.all([
-                    getDocs(ridesQuery),
-                    getDocs(summaryQuery)
-                ]);
+                const ridesSnapshot = await getDocs(ridesQuery);
 
                 const rides = ridesSnapshot.docs.map(doc => doc.data() as Ride);
                 setWeeklyRides(rides);
@@ -82,7 +90,7 @@ export default function EarningsPage() {
                 const bonusesCovered = rides.reduce((acc, ride) => acc + (ride.pricing.discountAmount || 0), 0);
                 const commissionOwed = totalEarnings * commissionInfo.rate;
                 
-                if (summarySnapshot.empty) {
+                if (!existingSummary) {
                     const newSummary: DriverSummary = {
                         driverId: user.uid,
                         weekId: weekId,
@@ -97,10 +105,9 @@ export default function EarningsPage() {
                     setDoc(summaryRef, newSummary, { merge: true });
                     setSummary(newSummary);
                 } else {
-                    const existingSummary = { ...summarySnapshot.docs[0].data(), id: summarySnapshot.docs[0].id } as DriverSummary & { id: string };
                     const summaryRef = doc(firestore, 'driver_summaries', existingSummary.id as string);
                     
-                    if(existingSummary.status !== 'paid' && (existingSummary.totalEarnings !== totalEarnings || existingSummary.commissionOwed !== commissionOwed || existingSummary.bonusesApplied !== bonusesCovered || existingSummary.commissionRate !== commissionInfo.rate)) {
+                    if(existingSummary.totalEarnings !== totalEarnings || existingSummary.commissionOwed !== commissionOwed || existingSummary.bonusesApplied !== bonusesCovered || existingSummary.commissionRate !== commissionInfo.rate) {
                         const updatedData = { 
                             totalEarnings: totalEarnings,
                             commissionOwed: commissionOwed,
@@ -132,7 +139,6 @@ export default function EarningsPage() {
 
         const summaryRef = doc(firestore, 'driver_summaries', `${user.uid}_${weekId}`);
         
-        // Create the update object
         const updatedSummaryData = {
             status: 'paid' as const,
             commissionOwed: 0,
@@ -146,6 +152,7 @@ export default function EarningsPage() {
             
             // Update local state to reflect the change immediately
             setSummary(prevSummary => prevSummary ? { ...prevSummary, ...updatedSummaryData } : null);
+            setWeeklyRides([]); // Reset weekly rides on payment
             
             toast({
                 title: '¡Pago Registrado!',
@@ -158,7 +165,7 @@ export default function EarningsPage() {
     };
     
     const isPaymentWindow = () => {
-        // Para pruebas, se puede cambiar a `true` para simular la ventana de pago.
+        // Para pruebas, se puede cambiar a `true` o `false`
         return false;
         
         // Lógica real: Habilitado los domingos de 18:00 a 19:59 hs.
@@ -199,15 +206,15 @@ export default function EarningsPage() {
                             {commissionInfo.nextTier && <span>Meta: {commissionInfo.nextTier}</span>}
                         </div>
                         <Progress value={progressToNextTier} />
-                        {commissionInfo.ridesToNext !== null ? (
+                        {summary.status !== 'paid' && commissionInfo.ridesToNext !== null ? (
                              <p className="text-center text-sm text-muted-foreground">
                                 ¡Te faltan <strong>{commissionInfo.ridesToNext} {commissionInfo.ridesToNext === 1 ? 'viaje' : 'viajes'}</strong> para bajar tu comisión al <strong>{(getCommissionInfo(weeklyRides.length + commissionInfo.ridesToNext).rate * 100)}%</strong>!
                              </p>
-                        ) : (
+                        ) : summary.status !== 'paid' && commissionInfo.nextTier === null ? (
                             <p className="text-center text-sm font-semibold text-green-500 flex items-center justify-center gap-2">
                                 <Target/> ¡Alcanzaste la comisión más baja!
                             </p>
-                        )}
+                        ) : null}
                      </div>
                 </CardContent>
             </Card>
