@@ -1,6 +1,6 @@
 // src/app/login/page.tsx
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth, useUser } from '@/firebase';
 import { initiateEmailSignIn, initiateEmailSignUp } from '@/firebase/non-blocking-login';
 import { useRouter } from 'next/navigation';
@@ -22,19 +22,20 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    if (isUserLoading) {
+    useEffect(() => {
+        // If user is logged in, redirect them away from login page
+        if (user) {
+            router.replace('/'); 
+        }
+    }, [user, router]);
+
+    if (isUserLoading || user) { // Also show loading/null if user exists to prevent flicker before redirect
         return (
              <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
                 <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
                 <p className="text-center mt-4">Cargando...</p>
             </main>
         )
-    }
-
-    // If user is logged in, redirect them away from login page
-    if (user) {
-        router.replace('/'); 
-        return null;
     }
 
     const handleSignIn = async () => {
