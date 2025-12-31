@@ -2,8 +2,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
-import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { doc, serverTimestamp } from 'firebase/firestore';
+import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { doc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { UserProfile } from '@/lib/types';
 import ProfileForm from '@/components/ProfileForm';
@@ -27,6 +27,26 @@ export default function DriverProfilePage() {
   const handleProfileSave = (profileData: Partial<UserProfile & { cedulaUploaded?: boolean, seguroUploaded?: boolean, dniUploaded?: boolean }>) => {
     if (!userProfileRef || isSaving) return;
     setIsSaving(true);
+    
+    // --- START: Manual Validation ---
+    if (profileData.isDriver) {
+      const missingDocs = [];
+      if (!profileData.carModelYear) missingDocs.push("año del modelo");
+      if (!profileData.cedulaUploaded) missingDocs.push("cédula");
+      if (!profileData.seguroUploaded) missingDocs.push("seguro");
+      if (!profileData.dniUploaded) missingDocs.push("DNI");
+      
+      if (missingDocs.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Faltan datos para ser conductor",
+          description: `Por favor, completá lo siguiente: ${missingDocs.join(', ')}.`,
+        });
+        setIsSaving(false);
+        return;
+      }
+    }
+    // --- END: Manual Validation ---
 
     const dataToSave: Partial<UserProfile> = {
         name: profileData.name,
@@ -45,11 +65,9 @@ export default function DriverProfilePage() {
         dataToSave.ridesCompleted = 0;
         dataToSave.averageRating = null;
         dataToSave.activeBonus = false;
+        dataToSave.vehicleVerificationStatus = profileData.isDriver ? 'pending_review' : 'unverified';
         if (profileData.isDriver) {
-          dataToSave.vehicleVerificationStatus = 'pending_review';
           shouldRedirect = true;
-        } else {
-          dataToSave.vehicleVerificationStatus = 'unverified';
         }
     } else { // If profile exists, update it.
         if (profileData.isDriver && userProfile.vehicleVerificationStatus === 'unverified') {
@@ -57,7 +75,7 @@ export default function DriverProfilePage() {
            shouldRedirect = true;
         }
     }
-
+    
     setDocumentNonBlocking(userProfileRef, dataToSave, { merge: true });
 
     toast({

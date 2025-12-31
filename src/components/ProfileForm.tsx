@@ -58,22 +58,6 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   const isDriver = watch('isDriver');
 
   const onSubmit = (data: ProfileFormData) => {
-    if (data.isDriver) {
-      const missingDocs = [];
-      if (!data.carModelYear) missingDocs.push("año del modelo");
-      if (!data.cedulaUploaded) missingDocs.push("cédula");
-      if (!data.seguroUploaded) missingDocs.push("seguro");
-      if (!data.dniUploaded) missingDocs.push("DNI");
-      
-      if (missingDocs.length > 0) {
-        toast({
-          variant: "destructive",
-          title: "Faltan datos para ser conductor",
-          description: `Por favor, completá lo siguiente: ${missingDocs.join(', ')}.`,
-        });
-        return;
-      }
-    }
     onSave({ ...data, photoURL: photoUrl });
   };
   
