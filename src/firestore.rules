@@ -31,7 +31,7 @@ service cloud.firestore {
       // Passengers, drivers involved, or admins can read a single ride.
       allow get: if isAdmin() || (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid);
       // Passengers or admins can create rides.
-      allow create: if isAdmin() || request.resource.data.passengerId == request.auth.uid;
+      allow create: if isAdmin() || (request.resource.data.passengerId == request.auth.uid);
       // Involved parties or admins can update.
       allow update: if isAdmin() || (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid);
       // Only admins should be able to delete rides.
@@ -41,9 +41,9 @@ service cloud.firestore {
     // Driver Summaries
     match /driver_summaries/{summaryId} {
         // Admins can read any summary.
-        allow read: if isAdmin();
+        allow get: if isAdmin();
         // Drivers can read their own summaries.
-        allow read: if exists(/databases/$(database)/documents/driver_summaries/$(summaryId)) && resource.data.driverId == request.auth.uid;
+        allow list: if exists(/databases/$(database)/documents/driver_summaries/$(summaryId)) && resource.data.driverId == request.auth.uid;
         // Writes are handled by secure backend logic (or admin panel).
         allow write: if isAdmin();
     }
