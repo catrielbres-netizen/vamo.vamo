@@ -4,6 +4,8 @@ import { type Timestamp } from "firebase/firestore";
 
 export type ServiceType = "premium" | "privado" | "express";
 
+export type Role = "admin" | "driver" | "passenger";
+
 export type RideStatus = 
   | "searching_driver"
   | "driver_assigned"
@@ -15,6 +17,14 @@ export type RideStatus =
   | "cancelled";
 
 export type VerificationStatus = "unverified" | "pending_review" | "approved" | "rejected";
+
+export type DriverStatus = "inactive" | "online" | "in_ride";
+
+export type AuditLogAction = 
+  | "driver_approved"
+  | "driver_rejected"
+  | "ride_cancelled_by_admin"
+  | "ride_marked_as_audited";
 
 export interface Place {
   address: string;
@@ -58,18 +68,26 @@ export interface Ride {
   passengerComments?: string | null;
   driverComments?: string | null;
   vamoPointsAwarded?: number | null;
+  audited?: boolean;
 }
 
 export interface UserProfile {
   name: string;
+  email?: string;
+  phone?: string;
+  role: Role;
   photoURL?: string | null;
   createdAt: Timestamp;
   updatedAt?: Timestamp;
-  vamoPoints: number;
-  averageRating: number | null;
-  ridesCompleted: number;
-  activeBonus: boolean;
+  // Passenger fields
+  vamoPoints?: number;
+  averageRating?: number | null;
+  ridesCompleted?: number;
+  activeBonus?: boolean;
+  // Driver fields
   isDriver?: boolean;
+  approved?: boolean;
+  driverStatus?: DriverStatus;
   carModelYear?: number | null;
   vehicleVerificationStatus?: VerificationStatus;
 }
@@ -83,4 +101,13 @@ export interface DriverSummary {
     bonusesApplied: number;
     status: 'pending' | 'paid';
     updatedAt: Timestamp;
+}
+
+export interface AuditLog {
+    adminId: string;
+    adminName: string;
+    action: AuditLogAction;
+    entityId: string; // ID of the ride, driver, etc.
+    timestamp: Timestamp;
+    details?: string;
 }

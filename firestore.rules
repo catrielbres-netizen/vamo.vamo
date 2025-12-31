@@ -1,11 +1,55 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // usuarios logueados pueden leer/escribir
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    
+    // Helper function to check if the user is an admin
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // Helper function to check if the user is the owner of a document
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // User Profiles
+    match /users/{userId} {
+      // Admins can read/write any profile
+      // Users can read/write their own profile
+      allow read, write: if isAdmin() || isOwner(userId);
+    }
+    
+    // Rides
+    match /rides/{rideId} {
+      // Admins can read/write any ride
+      allow read, write: if isAdmin();
+      // Passengers and drivers involved in the ride can read it
+      allow read: if request.auth.uid == resource.data.passengerId || request.auth.uid == resource.data.driverId;
+      // Passengers can create rides for themselves
+      allow create: if isOwner(request.resource.data.passengerId);
+      // Involved parties can update, but not all fields (logic enforced in app)
+      allow update: if isOwner(resource.data.passengerId) || isOwner(resource.data.driverId);
+    }
+
+    // Driver Summaries
+    match /driver_summaries/{summaryId} {
+        // Admins can read any summary
+        allow read: if isAdmin();
+        // Drivers can read their own summaries
+        allow read: if exists(/databases/$(database)/documents/driver_summaries/$(summaryId)) && resource.data.driverId == request.auth.uid;
+        // Writes are handled by secure backend logic (or admin panel)
+        allow write: if isAdmin();
+    }
+    
+    // Audit Logs - Only admins can create and read
+    match /auditLogs/{logId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false; // Logs should be immutable
+    }
+
+    // Fallback: Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
