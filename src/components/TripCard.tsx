@@ -28,26 +28,6 @@ export function TripCard({
     progress: 0,
   };
 
-  // Local state for the simple text input
-  const [destinationInput, setDestinationInput] = useState('');
-
-  const handleDestinationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const address = e.target.value;
-    setDestinationInput(address);
-
-    if (address) {
-      // Simulate a Place object from the text input
-      onDestinationSelect({
-        address: address,
-        lat: -43.3, // Mock coordinates
-        lng: -65.1,
-      });
-    } else {
-      onDestinationSelect(null);
-    }
-  };
-
-
   return (
     <div className="m-4 p-4 rounded-xl shadow-lg bg-card">
       <div className="flex items-center gap-3 mb-3">
@@ -65,14 +45,7 @@ export function TripCard({
         <div className="flex items-center">
           <span className="w-16 text-muted-foreground">Destino:</span>
           {isInteractive ? (
-            // Use a simple input instead of PlaceAutocomplete
-             <Input
-                type="text"
-                placeholder="Ingresá una dirección"
-                className="h-8"
-                value={destinationInput}
-                onChange={handleDestinationChange}
-            />
+            <PlaceAutocomplete onPlaceSelect={onDestinationSelect} />
           ) : (
             <p className="font-medium">{destination?.address || '—'}</p>
           )}

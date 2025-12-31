@@ -28,7 +28,7 @@ import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
-// import { useMapsLibrary } from '@vis.gl/react-google-maps';
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 export default function Home() {
   const auth = useAuth();
@@ -36,7 +36,9 @@ export default function Home() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
-  // const places = useMapsLibrary('places');
+  const places = useMapsLibrary('places');
+  const directions = useMapsLibrary('routes');
+
 
   const [origin, setOrigin] = useState<Place | null>({
       address: 'Rawson, Chubut, Argentina',
@@ -83,20 +85,35 @@ export default function Home() {
   }, [user, userProfile, isUserLoading, isProfileLoading, router]);
 
   useEffect(() => {
-    // We remove the DirectionsService logic and simulate distance
-    if (!destination) {
+    if (!directions || !origin || !destination) {
         setEstimatedFare(0);
         setDistanceMeters(0);
         return;
     }
-    
-    // Simulate a distance when a destination is set
-    const simulatedDistance = 5000; // 5km
-    setDistanceMeters(simulatedDistance);
-    const fare = calculateFare({ distanceMeters: simulatedDistance, service: serviceType });
-    setEstimatedFare(fare);
 
-  }, [destination, serviceType]);
+    const directionsService = new directions.DirectionsService();
+
+    directionsService.route(
+        {
+            origin: { lat: origin.lat, lng: origin.lng },
+            destination: { lat: destination.lat, lng: destination.lng },
+            travelMode: google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+            if (status === google.maps.DirectionsStatus.OK && result) {
+                const route = result.routes[0];
+                if (route && route.legs[0] && route.legs[0].distance) {
+                    const dist = route.legs[0].distance.value;
+                    setDistanceMeters(dist);
+                    const fare = calculateFare({ distanceMeters: dist, service: serviceType });
+                    setEstimatedFare(fare);
+                }
+            } else {
+                console.error(`error fetching directions ${result}`);
+            }
+        }
+    );
+  }, [origin, destination, serviceType, directions]);
   
   useEffect(() => {
     const prevStatus = prevRideRef.current?.status;
@@ -126,7 +143,6 @@ export default function Home() {
       return;
     }
     
-    // Initiate sign-in only when the user requests a ride
     if (!user) {
         initiateAnonymousSignIn(auth);
         toast({
