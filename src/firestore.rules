@@ -16,21 +16,21 @@ service cloud.firestore {
 
     // User Profiles
     match /users/{userId} {
-      // Allow any authenticated user to list users (temporary for development)
-      allow list: if isAuthenticated();
-      // An authenticated user can read their own profile, or an admin can read any profile.
-      allow get: if request.auth.uid == userId || isAdmin();
-      // An admin or the user themselves can write to the profile.
+      // An admin or the user can get a specific profile.
+      allow get: if isAdmin() || request.auth.uid == userId;
+      // Only admins can list all users.
+      allow list: if isAdmin();
+      // An admin or the user can write to their own profile.
       allow write: if isAdmin() || request.auth.uid == userId;
     }
     
     // Rides
     match /rides/{rideId} {
-      // Allow any authenticated user to list rides (temporary for development)
-      allow list: if isAuthenticated();
+      // Only admins can list all rides.
+      allow list: if isAdmin();
       // Passengers, drivers involved, or admins can read a single ride.
       allow get: if isAdmin() || (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid);
-      // Passengers can create rides. Admins can also create rides.
+      // Passengers or admins can create rides.
       allow create: if isAdmin() || request.resource.data.passengerId == request.auth.uid;
       // Involved parties or admins can update.
       allow update: if isAdmin() || (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid);
