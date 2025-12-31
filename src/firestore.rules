@@ -18,8 +18,8 @@ service cloud.firestore {
     match /users/{userId} {
       // An admin or the user can get a specific profile.
       allow get: if isAdmin() || isOwner(userId);
-      // Only admins can list all users.
-      allow list: if isAdmin();
+      // ANY authenticated user can list users (for development).
+      allow list: if request.auth != null;
       // An admin or the user can write to their own profile.
       allow write: if isAdmin() || isOwner(userId);
     }
@@ -28,8 +28,8 @@ service cloud.firestore {
     match /rides/{rideId} {
       // An admin, the passenger, or the driver can get a single ride document.
       allow get: if isAdmin() || isOwner(resource.data.passengerId) || isOwner(resource.data.driverId);
-      // Only admins can list all rides.
-      allow list: if isAdmin();
+      // ANY authenticated user can list rides (for development).
+      allow list: if request.auth != null;
       // Passengers or admins can create rides.
       allow create: if isAdmin() || (request.resource.data.passengerId == request.auth.uid);
       // Involved parties or admins can update.
