@@ -100,20 +100,19 @@ export default function EarningsPage() {
                     const existingSummary = { ...summarySnapshot.docs[0].data(), id: summarySnapshot.docs[0].id } as DriverSummary & { id: string };
                     const summaryRef = doc(firestore, 'driver_summaries', existingSummary.id as string);
                     
-                    if(existingSummary.totalEarnings !== totalEarnings || existingSummary.commissionOwed !== commissionOwed || existingSummary.bonusesApplied !== bonusesCovered || existingSummary.commissionRate !== commissionInfo.rate) {
-                        existingSummary.totalEarnings = totalEarnings;
-                        existingSummary.commissionOwed = commissionOwed;
-                        existingSummary.bonusesApplied = bonusesCovered;
-                        existingSummary.commissionRate = commissionInfo.rate;
-                        updateDocumentNonBlocking(summaryRef, { 
+                    if(existingSummary.status !== 'paid' && (existingSummary.totalEarnings !== totalEarnings || existingSummary.commissionOwed !== commissionOwed || existingSummary.bonusesApplied !== bonusesCovered || existingSummary.commissionRate !== commissionInfo.rate)) {
+                        const updatedData = { 
                             totalEarnings: totalEarnings,
                             commissionOwed: commissionOwed,
                             bonusesApplied: bonusesCovered,
                             commissionRate: commissionInfo.rate,
                             updatedAt: Timestamp.now()
-                        });
+                        };
+                        updateDocumentNonBlocking(summaryRef, updatedData);
+                        setSummary({...existingSummary, ...updatedData});
+                    } else {
+                      setSummary(existingSummary);
                     }
-                    setSummary(existingSummary);
                 }
 
             } catch (error) {
@@ -132,15 +131,20 @@ export default function EarningsPage() {
         if (!firestore || !user || !summary) return;
 
         const summaryRef = doc(firestore, 'driver_summaries', `${user.uid}_${weekId}`);
-        const updatedSummary: DriverSummary = {
-            ...summary,
-            status: 'paid',
+        
+        // Create the update object
+        const updatedSummaryData = {
+            status: 'paid' as const,
+            commissionOwed: 0, // Reset commission owed on payment
             updatedAt: Timestamp.now()
         };
 
         try {
-            await setDoc(summaryRef, updatedSummary, { merge: true });
-            setSummary(updatedSummary);
+            await setDoc(summaryRef, updatedSummaryData, { merge: true });
+            
+            // Update local state to reflect the change immediately
+            setSummary(prevSummary => prevSummary ? { ...prevSummary, ...updatedSummaryData } : null);
+            
             toast({
                 title: '¡Pago Registrado!',
                 description: 'Gracias por ponerte al día con tu comisión.',
@@ -170,7 +174,7 @@ export default function EarningsPage() {
         return <p className="text-center text-muted-foreground">No hay datos de ganancias para esta semana.</p>;
     }
 
-    const netToReceive = summary.totalEarnings - summary.commissionOwed + summary.bonusesApplied;
+    const netToReceive = summary.totalEarnings - (summary.status === 'paid' ? 0 : summary.commissionOwed) + summary.bonusesApplied;
     const commissionInfo = getCommissionInfo(weeklyRides.length);
 
     const progressToNextTier = commissionInfo.nextTier ? (weeklyRides.length / commissionInfo.nextTier) * 100 : 100;
