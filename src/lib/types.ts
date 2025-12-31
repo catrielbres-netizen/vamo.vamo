@@ -16,6 +16,12 @@ export type RideStatus =
 
 export type VerificationStatus = "unverified" | "pending_review" | "approved" | "rejected";
 
+export interface Place {
+  address: string;
+  lat: number;
+  lng: number;
+}
+
 export interface Ride {
   passengerId: string;
   passengerName?: string | null;

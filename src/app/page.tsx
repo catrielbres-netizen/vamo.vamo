@@ -26,8 +26,9 @@ import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
 import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride, UserProfile } from '@/lib/types';
+import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 export default function Home() {
   const auth = useAuth();
@@ -35,8 +36,15 @@ export default function Home() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
+  const maps = useMapsLibrary('routes');
 
-  const [destination, setDestination] = useState('');
+  const [origin, setOrigin] = useState<Place | null>({
+      address: 'Rawson, Chubut, Argentina',
+      lat: -43.3005,
+      lng: -65.1023
+  });
+  const [destination, setDestination] = useState<Place | null>(null);
+  const [distanceMeters, setDistanceMeters] = useState(0);
   const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
   const [estimatedFare, setEstimatedFare] = useState(0);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
@@ -82,14 +90,31 @@ export default function Home() {
   }, [user, userProfile, isUserLoading, isProfileLoading, router]);
 
   useEffect(() => {
-    if (destination.length > 3) {
-      const mockDistance = 4200;
-      const fare = calculateFare({ distanceMeters: mockDistance, service: serviceType });
-      setEstimatedFare(fare);
-    } else {
-      setEstimatedFare(0);
+    if (!maps || !origin || !destination) {
+        setEstimatedFare(0);
+        return;
     }
-  }, [destination, serviceType]);
+    const directionsService = new maps.DirectionsService();
+    directionsService.route({
+        origin: new google.maps.LatLng(origin.lat, origin.lng),
+        destination: new google.maps.LatLng(destination.lat, destination.lng),
+        travelMode: google.maps.TravelMode.DRIVING,
+    }, (response, status) => {
+        if (status === 'OK' && response && response.routes.length > 0) {
+            const route = response.routes[0];
+            const leg = route.legs[0];
+            if (leg && leg.distance) {
+                const distance = leg.distance.value;
+                setDistanceMeters(distance);
+                const fare = calculateFare({ distanceMeters: distance, service: serviceType });
+                setEstimatedFare(fare);
+            }
+        } else {
+            console.error(`Directions request failed due to ${status}`);
+        }
+    });
+
+  }, [destination, serviceType, origin, maps]);
   
   useEffect(() => {
     const prevStatus = prevRideRef.current?.status;
@@ -110,7 +135,7 @@ export default function Home() {
 
 
   const handleRequestRide = async () => {
-    if (!firestore || !user || !destination || !userProfileRef) {
+    if (!firestore || !user || !destination || !origin || !userProfileRef) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -130,16 +155,16 @@ export default function Home() {
     const newRideData = {
       passengerId: user.uid,
       passengerName: userProfile?.name || 'Pasajero Anónimo',
-      origin: { lat: -43.3005, lng: -65.1023 },
+      origin: { lat: origin.lat, lng: origin.lng },
       destination: {
-        address: destination,
-        lat: -43.25,
-        lng: -65.05,
+        address: destination.address,
+        lat: destination.lat,
+        lng: destination.lng,
       },
       serviceType: serviceType,
       pricing: {
         estimatedTotal: rideFare,
-        estimatedDistanceMeters: 4200,
+        estimatedDistanceMeters: distanceMeters,
         finalTotal: null,
         discountAmount: discountAmount,
       },
@@ -188,7 +213,7 @@ export default function Home() {
   
   const handleReset = () => {
       setActiveRideId(null);
-      setDestination('');
+      setDestination(null);
   }
 
   const getAction = () => {
@@ -236,9 +261,9 @@ export default function Home() {
         <>
           <TripCard 
             status={status} 
-            origin="Ubicación actual (simulada)" 
+            origin={origin?.address || 'Ubicación actual'} 
             destination={destination}
-            onDestinationChange={setDestination}
+            onDestinationSelect={setDestination}
             isInteractive={true}
           />
           <ServiceSelector 

@@ -1,20 +1,22 @@
 'use client';
 
-import { Input } from './ui/input';
 import { RideStatusInfo } from '@/lib/ride-status';
 import { Progress } from './ui/progress';
+import { PlaceAutocomplete } from './PlaceAutocomplete';
+import { Place } from '@/lib/types';
+
 
 export function TripCard({
   status,
   origin,
   destination,
-  onDestinationChange,
+  onDestinationSelect,
   isInteractive,
 }: {
   status: string;
   origin: string;
-  destination: string;
-  onDestinationChange: (value: string) => void;
+  destination: Place | null;
+  onDestinationSelect: (place: Place | null) => void;
   isInteractive: boolean;
 }) {
   const statusInfo = RideStatusInfo[status as keyof typeof RideStatusInfo] || {
@@ -40,15 +42,9 @@ export function TripCard({
         <div className="flex items-center">
           <span className="w-16 text-muted-foreground">Destino:</span>
           {isInteractive ? (
-            <Input
-              type="text"
-              placeholder="Ingresá una dirección"
-              value={destination}
-              onChange={(e) => onDestinationChange(e.target.value)}
-              className="h-8"
-            />
+            <PlaceAutocomplete onPlaceSelect={onDestinationSelect} />
           ) : (
-            <p className="font-medium">{destination || '—'}</p>
+            <p className="font-medium">{destination?.address || '—'}</p>
           )}
         </div>
       </div>
