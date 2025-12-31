@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import { cn } from '@/lib/utils';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
-import { FirebaseClientProvider } from '@/firebase';
-import { APIProvider } from '@vis.gl/react-google-maps';
+import { Providers } from './providers';
+
 
 export const metadata: Metadata = {
   title: 'VamO - Tu Viaje, a Tu Manera',
@@ -35,14 +35,12 @@ export default function RootLayout({
           'dark'
         )}
       >
-        <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
-          <FirebaseClientProvider>
+        <Providers>
             <div className="relative flex min-h-screen flex-col">
               <main className="flex-1">{children}</main>
             </div>
             <Toaster />
-          </FirebaseClientProvider>
-        </APIProvider>
+        </Providers>
       </body>
     </html>
   );
