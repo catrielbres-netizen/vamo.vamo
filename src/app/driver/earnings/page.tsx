@@ -135,7 +135,9 @@ export default function EarningsPage() {
         // Create the update object
         const updatedSummaryData = {
             status: 'paid' as const,
-            commissionOwed: 0, // Reset commission owed on payment
+            commissionOwed: 0,
+            totalEarnings: 0,
+            bonusesApplied: 0,
             updatedAt: Timestamp.now()
         };
 
@@ -174,7 +176,7 @@ export default function EarningsPage() {
         return <p className="text-center text-muted-foreground">No hay datos de ganancias para esta semana.</p>;
     }
 
-    const netToReceive = summary.totalEarnings - (summary.status === 'paid' ? 0 : summary.commissionOwed) + summary.bonusesApplied;
+    const netToReceive = summary.status === 'paid' ? 0 : summary.totalEarnings - summary.commissionOwed + summary.bonusesApplied;
     const commissionInfo = getCommissionInfo(weeklyRides.length);
 
     const progressToNextTier = commissionInfo.nextTier ? (weeklyRides.length / commissionInfo.nextTier) * 100 : 100;
