@@ -1,8 +1,13 @@
+'use client'
+
+import { useUser } from '@/firebase'
+
 export default function AdminPage() {
+  const { user, profile, loading } = useUser()
+
   return (
-    <div style={{ padding: 40 }}>
-      <h1>ADMIN OK</h1>
-      <p>Si ves esto, Next.js funciona.</p>
-    </div>
+    <pre style={{ padding: 20, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+      {JSON.stringify({ loading, uid: user?.uid, profile }, null, 2)}
+    </pre>
   )
 }
