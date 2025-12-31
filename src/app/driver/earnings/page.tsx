@@ -10,9 +10,10 @@ import { Button } from '@/components/ui/button';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Info, CheckCircle, Percent, TrendingUp, Target } from 'lucide-react';
+import { Info, CheckCircle, Percent, TrendingUp, Target, CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
+import { createPaymentPreference } from '@/ai/flows/create-payment-flow';
 
 
 function formatCurrency(value: number) {
@@ -41,6 +42,7 @@ export default function EarningsPage() {
     const [weeklyRides, setWeeklyRides] = useState<Ride[]>([]);
     const [summary, setSummary] = useState<DriverSummary | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isPaying, setIsPaying] = useState(false);
 
     const today = new Date();
     const weekStartsOn = 1; // Monday
@@ -75,7 +77,11 @@ export default function EarningsPage() {
                 const ridesSnapshot = await getDocs(ridesQuery);
 
                 const rides = ridesSnapshot.docs.map(doc => doc.data() as Ride);
-                setWeeklyRides(rides);
+                if (existingSummary?.status !== 'paid') {
+                  setWeeklyRides(rides);
+                } else {
+                  setWeeklyRides([]);
+                }
                 
                 const commissionInfo = getCommissionInfo(rides.length);
                 const totalEarnings = rides.reduce((acc, ride) => acc + (ride.pricing.finalTotal || ride.pricing.estimatedTotal || 0), 0);
@@ -99,7 +105,12 @@ export default function EarningsPage() {
                 } else {
                     const summaryRef = doc(firestore, 'driver_summaries', existingSummary.id as string);
                     
-                    if(existingSummary.totalEarnings !== totalEarnings || existingSummary.commissionOwed !== commissionOwed || existingSummary.bonusesApplied !== bonusesCovered || existingSummary.commissionRate !== commissionInfo.rate) {
+                    const needsUpdate = existingSummary.totalEarnings !== totalEarnings || 
+                                       existingSummary.commissionOwed !== commissionOwed || 
+                                       existingSummary.bonusesApplied !== bonusesCovered || 
+                                       existingSummary.commissionRate !== commissionInfo.rate;
+
+                    if(needsUpdate && existingSummary.status !== 'paid') {
                         const updatedData = { 
                             totalEarnings: totalEarnings,
                             commissionOwed: commissionOwed,
@@ -107,12 +118,15 @@ export default function EarningsPage() {
                             commissionRate: commissionInfo.rate,
                             updatedAt: Timestamp.now()
                         };
-                         if (existingSummary.status === 'paid') {
-                            updatedData.status = 'pending';
-                        }
                         updateDocumentNonBlocking(summaryRef, updatedData);
                         setSummary({...existingSummary, ...updatedData});
-                    } else {
+                    } else if (existingSummary.status === 'pending' && totalEarnings === 0 && existingSummary.totalEarnings > 0) {
+                        // This case happens when a payment was just made, but a re-render happens.
+                        // We reset the local state to match the "paid" status.
+                        setSummary({...existingSummary, totalEarnings: 0, commissionOwed: 0, bonusesApplied: 0});
+                        setWeeklyRides([]);
+                    }
+                    else {
                       setSummary(existingSummary);
                     }
                 }
@@ -129,41 +143,39 @@ export default function EarningsPage() {
 
     }, [firestore, user?.uid, weekId, toast]);
 
-    const handleRegisterPayment = async () => {
-        if (!firestore || !user || !summary) return;
+    const handleMercadoPagoPayment = async () => {
+        if (!summary || summary.commissionOwed <= 0) {
+            toast({ variant: 'destructive', title: 'No hay comisión para pagar.' });
+            return;
+        }
 
-        const summaryRef = doc(firestore, 'driver_summaries', `${user.uid}_${weekId}`);
-        
-        const updatedSummaryData = {
-            status: 'paid' as const,
-            commissionOwed: 0,
-            totalEarnings: 0,
-            bonusesApplied: 0,
-            updatedAt: Timestamp.now()
-        };
-
+        setIsPaying(true);
         try {
-            await setDoc(summaryRef, updatedSummaryData, { merge: true });
-            
-            setSummary(prevSummary => prevSummary ? { ...prevSummary, ...updatedSummaryData } : null);
-            setWeeklyRides([]); 
-            
-            toast({
-                title: '¡Pago Registrado!',
-                description: 'Gracias por ponerte al día con tu comisión.',
+            const preference = await createPaymentPreference({
+                summaryId: `${user?.uid}_${weekId}`,
+                amount: summary.commissionOwed,
+                description: `Comisión VamO Semana ${weekId}`
             });
+
+            if (preference && preference.redirectUrl) {
+                window.location.href = preference.redirectUrl;
+            } else {
+                throw new Error('No se pudo obtener la URL de pago.');
+            }
         } catch (error) {
-            console.error("Error registering payment:", error);
-            toast({ variant: 'destructive', title: 'No se pudo registrar el pago.' });
+            console.error("Error creating Mercado Pago preference:", error);
+            toast({ variant: 'destructive', title: 'Error al iniciar el pago', description: 'No se pudo conectar con Mercado Pago.' });
+            setIsPaying(false);
         }
     };
     
     const isPaymentWindow = () => {
         // Lógica real: Habilitado los domingos de 18:00 a 19:59 hs.
-        const now = new Date();
-        const day = now.getDay(); // 0 = Sunday
-        const hour = now.getHours();
-        return day === 0 && hour >= 18 && hour < 20;
+        // const now = new Date();
+        // const day = now.getDay(); // 0 = Sunday
+        // const hour = now.getHours();
+        // return day === 0 && hour >= 18 && hour < 20;
+        return false; // Revert to original logic, now we use Mercado Pago
     }
 
     if (isLoading) {
@@ -174,9 +186,16 @@ export default function EarningsPage() {
         return <p className="text-center text-muted-foreground">No hay datos de ganancias para esta semana.</p>;
     }
     const isPaid = summary.status === 'paid';
-    const netToReceive = isPaid ? 0 : summary.totalEarnings - summary.commissionOwed + summary.bonusesApplied;
-    const commissionInfo = getCommissionInfo(isPaid ? 0 : weeklyRides.length);
-    const progressToNextTier = commissionInfo.nextTier ? ((isPaid ? 0 : weeklyRides.length) / commissionInfo.nextTier) * 100 : 100;
+    
+    const ridesCount = isPaid ? 0 : weeklyRides.length;
+    const totalEarnings = isPaid ? 0 : summary.totalEarnings;
+    const commissionOwed = isPaid ? 0 : summary.commissionOwed;
+    const bonusesApplied = isPaid ? 0 : summary.bonusesApplied;
+    const commissionRate = isPaid ? 0 : summary.commissionRate;
+    
+    const netToReceive = totalEarnings - commissionOwed + bonusesApplied;
+    const commissionInfo = getCommissionInfo(ridesCount);
+    const progressToNextTier = commissionInfo.nextTier ? (ridesCount / commissionInfo.nextTier) * 100 : 100;
     
     return (
         <div className="space-y-6">
@@ -192,13 +211,13 @@ export default function EarningsPage() {
                     </div>
                      <div className="space-y-2">
                         <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Viajes completados: {isPaid ? 0 : weeklyRides.length}</span>
+                            <span>Viajes completados: {ridesCount}</span>
                             {commissionInfo.nextTier && <span>Meta: {commissionInfo.nextTier}</span>}
                         </div>
                         <Progress value={isPaid ? 0 : progressToNextTier} />
                         {!isPaid && commissionInfo.ridesToNext !== null ? (
                              <p className="text-center text-sm text-muted-foreground">
-                                ¡Te faltan <strong>{commissionInfo.ridesToNext} {commissionInfo.ridesToNext === 1 ? 'viaje' : 'viajes'}</strong> para bajar tu comisión al <strong>{(getCommissionInfo(weeklyRides.length + commissionInfo.ridesToNext).rate * 100)}%</strong>!
+                                ¡Te faltan <strong>{commissionInfo.ridesToNext} {commissionInfo.ridesToNext === 1 ? 'viaje' : 'viajes'}</strong> para bajar tu comisión al <strong>{(getCommissionInfo(ridesCount + commissionInfo.ridesToNext).rate * 100)}%</strong>!
                              </p>
                         ) : !isPaid && commissionInfo.nextTier === null ? (
                             <p className="text-center text-sm font-semibold text-green-500 flex items-center justify-center gap-2">
@@ -218,23 +237,23 @@ export default function EarningsPage() {
                      <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Viajes completados</span>
-                            <span className="font-medium">{isPaid ? 0 : weeklyRides.length}</span>
+                            <span className="font-medium">{ridesCount}</span>
                         </div>
                          <div className="flex justify-between">
                             <span className="text-muted-foreground">Total bruto facturado</span>
-                            <span className="font-medium">{formatCurrency(isPaid ? 0 : summary.totalEarnings)}</span>
+                            <span className="font-medium">{formatCurrency(totalEarnings)}</span>
                         </div>
-                        {summary.bonusesApplied > 0 && !isPaid && (
+                        {bonusesApplied > 0 && (
                             <div className="flex justify-between text-blue-500">
                                 <span className="flex items-center gap-1"><Percent className="w-3 h-3" /> Reembolso por bonos</span>
-                                <span className="font-medium">{formatCurrency(isPaid ? 0 : summary.bonusesApplied)}</span>
+                                <span className="font-medium">{formatCurrency(bonusesApplied)}</span>
                             </div>
                         )}
                      </div>
                      <div className="border-t pt-4 space-y-2 text-base">
                         <div className="flex justify-between items-center text-red-500">
-                            <span className="font-medium">Comisión VamO ({(isPaid ? 0 : summary.commissionRate * 100).toFixed(0)}%)</span>
-                            <span className="font-bold">{formatCurrency(isPaid ? 0 : summary.commissionOwed)}</span>
+                            <span className="font-medium">Comisión VamO ({(commissionRate * 100).toFixed(0)}%)</span>
+                            <span className="font-bold">{formatCurrency(commissionOwed)}</span>
                         </div>
                         <div className="flex justify-between items-center text-green-500">
                             <span className="font-medium">Total a recibir</span>
@@ -245,10 +264,14 @@ export default function EarningsPage() {
                         El total a recibir es el bruto facturado, menos la comisión, más los bonos de pasajero que VamO te cubre.
                      </p>
                 </CardContent>
-                {summary.status === 'pending' && summary.commissionOwed > 0 && (
+                {summary.status === 'pending' && commissionOwed > 0 && (
                     <CardFooter>
-                        <Button className="w-full" onClick={handleRegisterPayment} disabled={!isPaymentWindow()}>
-                            Registrar Pago de Comisión
+                        <Button className="w-full" onClick={handleMercadoPagoPayment} disabled={isPaying}>
+                            {isPaying ? 'Procesando...' : (
+                                <>
+                                    <CreditCard className="mr-2 h-4 w-4" /> Pagar con Mercado Pago
+                                </>
+                            )}
                         </Button>
                     </CardFooter>
                 )}
@@ -262,15 +285,15 @@ export default function EarningsPage() {
                         ¡Gracias! La comisión de esta semana ya fue registrada.
                     </AlertDescription>
                 </Alert>
-             ) : !isPaymentWindow() && summary.commissionOwed > 0 ? (
+             ) : !isPaymentWindow() && summary.commissionOwed > 0 && (
                 <Alert>
                     <Info className="h-4 w-4" />
-                    <AlertTitle>Ventana de Pagos</AlertTitle>
+                    <AlertTitle>Pago de Comisiones</AlertTitle>
                     <AlertDescription>
-                        El registro de pago de comisiones está habilitado únicamente los días domingo entre las 18:00 y 20:00 hs.
+                        Podés pagar tu comisión semanal usando Mercado Pago en cualquier momento. El pago se acredita y la cuenta se reinicia al instante.
                     </AlertDescription>
                 </Alert>
-             ) : null}
+             )}
 
         </div>
     );
