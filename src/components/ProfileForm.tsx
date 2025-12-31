@@ -1,6 +1,6 @@
 // src/components/ProfileForm.tsx
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -21,60 +21,54 @@ const profileSchema = z.object({
   name: z.string().min(3, { message: 'El nombre debe tener al menos 3 caracteres.' }),
   isDriver: z.boolean().default(false),
   carModelYear: z.number().nullable().optional(),
-  cedulaUploaded: z.boolean().default(false),
-  seguroUploaded: z.boolean().default(false),
-  dniUploaded: z.boolean().default(false),
 });
-
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 interface ProfileFormProps {
   userProfile: UserProfile | null;
-  onSave: (data: Partial<UserProfile & ProfileFormData>) => void;
+  onSave: (data: Partial<UserProfile>) => void;
   onCancel: () => void;
   isDialog?: boolean;
+  // Document state lifted up
+  cedulaUploaded: boolean;
+  seguroUploaded: boolean;
+  dniUploaded: boolean;
+  setCedulaUploaded: (value: boolean) => void;
+  setSeguroUploaded: (value: boolean) => void;
+  setDniUploaded: (value: boolean) => void;
 }
 
-export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = false }: ProfileFormProps) {
+export default function ProfileForm({ 
+  userProfile, 
+  onSave, 
+  onCancel, 
+  isDialog = false,
+  cedulaUploaded,
+  seguroUploaded,
+  dniUploaded,
+  setCedulaUploaded,
+  setSeguroUploaded,
+  setDniUploaded
+}: ProfileFormProps) {
   const { user } = useUser();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(userProfile?.photoURL || user?.photoURL || null);
   
-  const { control, register, handleSubmit, watch, formState: { errors, isValid, isDirty }, setValue } = useForm<ProfileFormData>({
+  const { control, register, handleSubmit, watch, formState: { errors }, setValue } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     mode: 'onChange',
     defaultValues: {
       name: userProfile?.name || '',
       isDriver: userProfile?.isDriver || false,
       carModelYear: userProfile?.carModelYear || null,
-      // These should default to false. Their "truthiness" comes from user interaction.
-      cedulaUploaded: false,
-      seguroUploaded: false,
-      dniUploaded: false,
     },
   });
 
   const isDriver = watch('isDriver');
 
   const onSubmit = (data: ProfileFormData) => {
-    if (data.isDriver) {
-      const missingDocs = [];
-      if (!data.carModelYear) missingDocs.push("año del modelo");
-      if (!data.cedulaUploaded) missingDocs.push("cédula");
-      if (!data.seguroUploaded) missingDocs.push("seguro");
-      if (!data.dniUploaded) missingDocs.push("DNI");
-      
-      if (missingDocs.length > 0) {
-        toast({
-          variant: "destructive",
-          title: "Faltan datos para ser conductor",
-          description: `Por favor, completá lo siguiente: ${missingDocs.join(', ')}.`,
-        });
-        return; // Stop submission
-      }
-    }
     onSave({ ...data, photoURL: photoUrl });
   };
   
@@ -85,8 +79,6 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // In a real app, you'd upload this file and get a URL.
-      // Here, we'll just use a local blob URL for visual feedback.
       const blobUrl = URL.createObjectURL(file);
       setPhotoUrl(blobUrl);
     }
@@ -110,14 +102,13 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
     return years;
   };
   
-  const handleDocUpload = (field: 'cedulaUploaded' | 'seguroUploaded' | 'dniUploaded') => {
-      setValue(field, true, { shouldValidate: true, shouldDirty: true });
-       toast({
+  const handleDocUpload = (setter: (value: boolean) => void, docName: string) => {
+      setter(true);
+      toast({
           title: '¡Documento simulado!',
-          description: `Se simuló la subida de ${field.replace('Uploaded', '')}.`,
-        });
+          description: `Se simuló la subida de ${docName}.`,
+      });
   }
-
 
   return (
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -196,18 +187,18 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
                
                 <div className="space-y-2">
                   <Label>Documentación requerida</Label>
-                  <Button type="button" variant="outline" className="w-full justify-start text-left font-normal gap-2" onClick={() => handleDocUpload('cedulaUploaded')} >
-                    {watch('cedulaUploaded') ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
+                  <Button type="button" variant="outline" className="w-full justify-start text-left font-normal gap-2" onClick={() => handleDocUpload(setCedulaUploaded, 'cédula')} >
+                    {cedulaUploaded ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
                     Cédula del vehículo
                   </Button>
 
-                   <Button type="button" variant="outline" className="w-full justify-start text-left font-normal gap-2" onClick={() => handleDocUpload('seguroUploaded')}>
-                    {watch('seguroUploaded') ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
+                   <Button type="button" variant="outline" className="w-full justify-start text-left font-normal gap-2" onClick={() => handleDocUpload(setSeguroUploaded, 'seguro')}>
+                    {seguroUploaded ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
                     Comprobante de seguro al día
                   </Button>
 
-                   <Button type="button" variant="outline" className="w-full justify-start text-left font-normal gap-2" onClick={() => handleDocUpload('dniUploaded')}>
-                    {watch('dniUploaded') ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
+                   <Button type="button" variant="outline" className="w-full justify-start text-left font-normal gap-2" onClick={() => handleDocUpload(setDniUploaded, 'DNI')}>
+                    {dniUploaded ? <CheckCircle className="text-green-500"/> : <UploadCloud />}
                     DNI (frente y dorso)
                   </Button>
                 </div>

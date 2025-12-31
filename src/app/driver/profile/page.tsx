@@ -18,18 +18,40 @@ export default function DriverProfilePage() {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
 
+  // State for document uploads, lifted up from the form
+  const [cedulaUploaded, setCedulaUploaded] = useState(false);
+  const [seguroUploaded, setSeguroUploaded] = useState(false);
+  const [dniUploaded, setDniUploaded] = useState(false);
+
   const userProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
     [firestore, user]
   );
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
 
-  const handleProfileSave = (profileData: Partial<UserProfile & { cedulaUploaded?: boolean; seguroUploaded?: boolean; dniUploaded?: boolean }>) => {
+  const handleProfileSave = (profileData: Partial<UserProfile>) => {
     if (!userProfileRef || isSaving) return;
+    
+    // Manual validation before saving
+    if (profileData.isDriver) {
+        const missingDocs = [];
+        if (!cedulaUploaded) missingDocs.push("cédula");
+        if (!seguroUploaded) missingDocs.push("seguro");
+        if (!dniUploaded) missingDocs.push("DNI");
+        if (!profileData.carModelYear) missingDocs.push("año del modelo");
+
+        if (missingDocs.length > 0) {
+            toast({
+                variant: "destructive",
+                title: "Faltan datos para ser conductor",
+                description: `Por favor, completá lo siguiente: ${missingDocs.join(', ')}.`,
+            });
+            return;
+        }
+    }
+    
     setIsSaving(true);
     
-    // This is the data that will be saved to Firestore.
-    // We only include fields that are part of the UserProfile type.
     const dataToSave: Partial<UserProfile> = {
         name: profileData.name,
         carModelYear: profileData.carModelYear,
@@ -40,30 +62,21 @@ export default function DriverProfilePage() {
 
     let shouldRedirect = false;
 
-    // Logic for CREATING a new profile
-    if (!userProfile) {
+    if (!userProfile) { // Logic for CREATING a new profile
         dataToSave.createdAt = serverTimestamp();
         dataToSave.vamoPoints = 0;
         dataToSave.ridesCompleted = 0;
         dataToSave.averageRating = null;
         dataToSave.activeBonus = false;
-        // If they want to be a driver from the start, set to pending.
-        if (profileData.isDriver) {
-          dataToSave.vehicleVerificationStatus = 'pending_review';
-          shouldRedirect = true;
-        } else {
-          dataToSave.vehicleVerificationStatus = 'unverified';
-        }
+        dataToSave.vehicleVerificationStatus = profileData.isDriver ? 'pending_review' : 'unverified';
+        if (profileData.isDriver) shouldRedirect = true;
     } else { // Logic for UPDATING an existing profile
-        // CRITICAL FIX: If an unverified user completes their driver info,
-        // move them to pending_review.
         if (profileData.isDriver && userProfile.vehicleVerificationStatus === 'unverified') {
            dataToSave.vehicleVerificationStatus = 'pending_review';
            shouldRedirect = true;
         }
     }
     
-    // Perform the save operation. It's non-blocking.
     setDocumentNonBlocking(userProfileRef, dataToSave, { merge: true });
 
     toast({
@@ -71,7 +84,6 @@ export default function DriverProfilePage() {
         description: 'Tus datos han sido actualizados.',
     });
 
-    // If the status changed to pending, redirect to the rides page.
     if (shouldRedirect) {
        router.push('/driver/rides');
     }
@@ -98,7 +110,13 @@ export default function DriverProfilePage() {
        <ProfileForm 
          userProfile={userProfile}
          onSave={handleProfileSave}
-         onCancel={() => {}} // No cancel button needed here, but prop is required
+         onCancel={() => {}} // No cancel button needed here
+         cedulaUploaded={cedulaUploaded}
+         seguroUploaded={seguroUploaded}
+         dniUploaded={dniUploaded}
+         setCedulaUploaded={setCedulaUploaded}
+         setSeguroUploaded={setSeguroUploaded}
+         setDniUploaded={setDniUploaded}
        />
     </Card>
   );
