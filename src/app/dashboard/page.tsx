@@ -63,10 +63,12 @@ export default function DashboardPage() {
   const status = ride?.status || 'idle';
 
   useEffect(() => {
-    // This is the core redirection logic based on roles.
-    if (loading) return; // Wait until user data is fully loaded
+    // Esta es la lógica de redirección basada en roles que se ejecuta DESPUÉS
+    // de que la página de inicio nos mande aquí.
+    if (loading) return; // Esperar hasta que el usuario y el perfil estén completamente cargados
 
     if (!user) {
+        // Esto no debería ocurrir si page.tsx funciona, pero es una salvaguarda.
         router.replace('/login');
         return;
     }
@@ -77,7 +79,7 @@ export default function DashboardPage() {
         } else if (profile.role === 'driver') {
             router.replace('/driver');
         }
-        // Passengers just stay on this page, no redirect needed.
+        // Si el rol es 'passenger', no se hace nada y se queda en esta página.
     }
   }, [user, profile, loading, router]);
 
@@ -234,7 +236,7 @@ export default function DashboardPage() {
   const currentAction = getAction();
 
 
-  if (loading || !user) {
+  if (loading) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
         <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
@@ -243,8 +245,8 @@ export default function DashboardPage() {
     );
   }
   
-  // If user has a role, the useEffect will redirect them.
-  // This content is for passengers or users without a specific role yet.
+  // Si el usuario no es pasajero, el useEffect lo redirigirá.
+  // Se muestra un loader mientras ocurre la redirección para evitar parpadeos.
   if (profile && profile.role !== 'passenger') {
       return (
           <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">

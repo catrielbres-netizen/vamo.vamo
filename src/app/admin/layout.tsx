@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { requireAdmin } from '@/lib/auth/requireAdmin'
 import AdminSidebar from '@/components/AdminSidebar'
+import { VamoIcon } from '@/components/icons'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useUser()
@@ -19,7 +20,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [status, router])
 
   if (status === 'loading') {
-    return <div className="p-4">Cargando panel admin…</div>
+    return (
+        <div className="flex h-screen w-full items-center justify-center">
+            <VamoIcon className="h-12 w-12 animate-pulse text-primary" />
+            <p className="ml-4">Verificando autorización de administrador...</p>
+        </div>
+    );
   }
 
   if (status !== 'authorized') {
