@@ -2,8 +2,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
-import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { doc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { UserProfile } from '@/lib/types';
 import ProfileForm from '@/components/ProfileForm';
@@ -24,30 +24,12 @@ export default function DriverProfilePage() {
   );
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
 
-  const handleProfileSave = (profileData: Partial<UserProfile & { cedulaUploaded?: boolean, seguroUploaded?: boolean, dniUploaded?: boolean }>) => {
+  const handleProfileSave = (profileData: Partial<UserProfile & { cedulaUploaded?: boolean; seguroUploaded?: boolean; dniUploaded?: boolean }>) => {
     if (!userProfileRef || isSaving) return;
     setIsSaving(true);
     
-    // --- START: Manual Validation ---
-    if (profileData.isDriver) {
-      const missingDocs = [];
-      if (!profileData.carModelYear) missingDocs.push("año del modelo");
-      if (!profileData.cedulaUploaded) missingDocs.push("cédula");
-      if (!profileData.seguroUploaded) missingDocs.push("seguro");
-      if (!profileData.dniUploaded) missingDocs.push("DNI");
-      
-      if (missingDocs.length > 0) {
-        toast({
-          variant: "destructive",
-          title: "Faltan datos para ser conductor",
-          description: `Por favor, completá lo siguiente: ${missingDocs.join(', ')}.`,
-        });
-        setIsSaving(false);
-        return;
-      }
-    }
-    // --- END: Manual Validation ---
-
+    // This is the data that will be saved to Firestore.
+    // We only include fields that are part of the UserProfile type.
     const dataToSave: Partial<UserProfile> = {
         name: profileData.name,
         carModelYear: profileData.carModelYear,
@@ -58,24 +40,30 @@ export default function DriverProfilePage() {
 
     let shouldRedirect = false;
 
-    // Logic for creating or updating the profile
-    if (!userProfile) { // If profile doesn't exist, create it.
+    // Logic for CREATING a new profile
+    if (!userProfile) {
         dataToSave.createdAt = serverTimestamp();
         dataToSave.vamoPoints = 0;
         dataToSave.ridesCompleted = 0;
         dataToSave.averageRating = null;
         dataToSave.activeBonus = false;
-        dataToSave.vehicleVerificationStatus = profileData.isDriver ? 'pending_review' : 'unverified';
+        // If they want to be a driver from the start, set to pending.
         if (profileData.isDriver) {
+          dataToSave.vehicleVerificationStatus = 'pending_review';
           shouldRedirect = true;
+        } else {
+          dataToSave.vehicleVerificationStatus = 'unverified';
         }
-    } else { // If profile exists, update it.
+    } else { // Logic for UPDATING an existing profile
+        // CRITICAL FIX: If an unverified user completes their driver info,
+        // move them to pending_review.
         if (profileData.isDriver && userProfile.vehicleVerificationStatus === 'unverified') {
            dataToSave.vehicleVerificationStatus = 'pending_review';
            shouldRedirect = true;
         }
     }
     
+    // Perform the save operation. It's non-blocking.
     setDocumentNonBlocking(userProfileRef, dataToSave, { merge: true });
 
     toast({
@@ -83,6 +71,7 @@ export default function DriverProfilePage() {
         description: 'Tus datos han sido actualizados.',
     });
 
+    // If the status changed to pending, redirect to the rides page.
     if (shouldRedirect) {
        router.push('/driver/rides');
     }

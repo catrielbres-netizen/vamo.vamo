@@ -42,13 +42,14 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(userProfile?.photoURL || user?.photoURL || null);
   
-  const { control, register, handleSubmit, watch, formState: { errors }, setValue } = useForm<ProfileFormData>({
+  const { control, register, handleSubmit, watch, formState: { errors, isValid, isDirty }, setValue } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     mode: 'onChange',
     defaultValues: {
       name: userProfile?.name || '',
       isDriver: userProfile?.isDriver || false,
       carModelYear: userProfile?.carModelYear || null,
+      // These should default to false. Their "truthiness" comes from user interaction.
       cedulaUploaded: false,
       seguroUploaded: false,
       dniUploaded: false,
@@ -58,6 +59,22 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   const isDriver = watch('isDriver');
 
   const onSubmit = (data: ProfileFormData) => {
+    if (data.isDriver) {
+      const missingDocs = [];
+      if (!data.carModelYear) missingDocs.push("año del modelo");
+      if (!data.cedulaUploaded) missingDocs.push("cédula");
+      if (!data.seguroUploaded) missingDocs.push("seguro");
+      if (!data.dniUploaded) missingDocs.push("DNI");
+      
+      if (missingDocs.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Faltan datos para ser conductor",
+          description: `Por favor, completá lo siguiente: ${missingDocs.join(', ')}.`,
+        });
+        return; // Stop submission
+      }
+    }
     onSave({ ...data, photoURL: photoUrl });
   };
   
@@ -68,15 +85,19 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // In a real app, you'd upload this file and get a URL.
+      // Here, we'll just use a local blob URL for visual feedback.
       const blobUrl = URL.createObjectURL(file);
       setPhotoUrl(blobUrl);
     }
   };
   
   const getInitials = (name: string | null | undefined) => {
-    if (!name) return '?';
+    if (!name || name === "Invitado") return '?';
     const names = name.split(' ');
-    if (names.length > 1) return `${names[0][0]}${names[names.length - 1][0]}`;
+    if (names.length > 1) {
+      return `${names[0][0]}${names[names.length - 1][0]}`;
+    }
     return name[0];
   }
   
@@ -90,7 +111,7 @@ export default function ProfileForm({ userProfile, onSave, onCancel, isDialog = 
   };
   
   const handleDocUpload = (field: 'cedulaUploaded' | 'seguroUploaded' | 'dniUploaded') => {
-      setValue(field, true, { shouldValidate: true });
+      setValue(field, true, { shouldValidate: true, shouldDirty: true });
        toast({
           title: '¡Documento simulado!',
           description: `Se simuló la subida de ${field.replace('Uploaded', '')}.`,

@@ -180,12 +180,14 @@ export default function DriverRidesPage() {
       return <p className="text-center">Cargando estado...</p>;
     }
     if (!driverProfile) {
+        // This case can happen briefly while the profile is being created for the first time.
+        // Or if there's a serious error loading it.
         return (
             <Alert>
                 <ShieldX className="h-4 w-4" />
                 <AlertTitle>Perfil no encontrado</AlertTitle>
                 <AlertDescription>
-                    No pudimos cargar tu perfil. Por favor, intentá recargar la página.
+                    Aún no tenés un perfil. Andá a la pestaña "Perfil" para completar tu registro.
                 </AlertDescription>
             </Alert>
         );
