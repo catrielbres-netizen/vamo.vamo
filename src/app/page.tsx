@@ -67,13 +67,6 @@ export default function Home() {
   const status = ride?.status || 'idle';
 
   useEffect(() => {
-    if (!auth) return;
-    if (!user && !isUserLoading) {
-      initiateAnonymousSignIn(auth);
-    }
-  }, [user, isUserLoading, auth]);
-
-  useEffect(() => {
     if (isUserLoading || isProfileLoading) {
       return; 
     }
@@ -135,7 +128,7 @@ export default function Home() {
 
 
   const handleRequestRide = async () => {
-    if (!firestore || !user || !destination || !origin || !userProfileRef) {
+    if (!firestore || !auth || !destination || !origin) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -143,6 +136,26 @@ export default function Home() {
       });
       return;
     }
+    
+    // Initiate sign-in only when the user requests a ride
+    if (!user) {
+        initiateAnonymousSignIn(auth);
+        toast({
+            title: 'Iniciando sesión...',
+            description: 'Un momento por favor. Vuelve a presionar "Pedir Viaje" en unos segundos.',
+        });
+        return; 
+    }
+
+    if (!userProfileRef) {
+        toast({
+            variant: 'destructive',
+            title: 'Error de perfil',
+            description: 'No se pudo cargar tu perfil de usuario. Inténtalo de nuevo.',
+        });
+        return;
+    }
+
 
     let rideFare = estimatedFare;
     let discountAmount = 0;
@@ -236,7 +249,7 @@ export default function Home() {
   const currentAction = getAction();
 
 
-  if (isUserLoading || isProfileLoading || isRedirecting) {
+  if (isUserLoading || isRedirecting) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
         <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
