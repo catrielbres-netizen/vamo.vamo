@@ -53,6 +53,12 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       setUser(firebaseUser);
       setIsAuthLoading(false);
     });
+    // Ensure that loading state is updated even if onAuthStateChanged doesn't fire
+    // on initial load (e.g. from cache).
+    if (auth.currentUser) {
+        setUser(auth.currentUser);
+        setIsAuthLoading(false);
+    }
     return () => unsubscribe();
   }, [auth]);
 
