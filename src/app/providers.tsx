@@ -1,14 +1,13 @@
 'use client';
 
 import { FirebaseClientProvider } from '@/firebase';
-import { APIProvider } from '@vis.gl/react-google-maps';
+
+// Removed APIProvider from @vis.gl/react-google-maps to disable Maps functionality
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
       <FirebaseClientProvider>
         {children}
       </FirebaseClientProvider>
-    </APIProvider>
   );
 }

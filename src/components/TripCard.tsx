@@ -3,7 +3,6 @@
 
 import { RideStatusInfo } from '@/lib/ride-status';
 import { Progress } from './ui/progress';
-import { PlaceAutocomplete } from './PlaceAutocomplete';
 import { Place } from '@/lib/types';
 import { Input } from './ui/input';
 import { useState } from 'react';
@@ -27,6 +26,24 @@ export function TripCard({
     icon: <></>,
     progress: 0,
   };
+  
+  const [inputValue, setInputValue] = useState('');
+
+  const handleDestinationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const address = e.target.value;
+    setInputValue(address);
+    if (address) {
+      // Simulate a Place object for the non-maps version
+      onDestinationSelect({
+        address: address,
+        lat: 0, // Mock coordinates
+        lng: 0, // Mock coordinates
+      });
+    } else {
+      onDestinationSelect(null);
+    }
+  };
+
 
   return (
     <div className="m-4 p-4 rounded-xl shadow-lg bg-card">
@@ -45,7 +62,13 @@ export function TripCard({
         <div className="flex items-center">
           <span className="w-16 text-muted-foreground">Destino:</span>
           {isInteractive ? (
-            <PlaceAutocomplete onPlaceSelect={onDestinationSelect} />
+             <Input
+                type="text"
+                placeholder="Ingresá una dirección"
+                className="h-8"
+                value={inputValue}
+                onChange={handleDestinationChange}
+            />
           ) : (
             <p className="font-medium">{destination?.address || '—'}</p>
           )}

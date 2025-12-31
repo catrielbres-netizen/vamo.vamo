@@ -28,7 +28,6 @@ import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
-import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 export default function Home() {
   const auth = useAuth();
@@ -36,8 +35,6 @@ export default function Home() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
-  const places = useMapsLibrary('places');
-  const directions = useMapsLibrary('routes');
 
 
   const [origin, setOrigin] = useState<Place | null>({
@@ -85,35 +82,17 @@ export default function Home() {
   }, [user, userProfile, isUserLoading, isProfileLoading, router]);
 
   useEffect(() => {
-    if (!directions || !origin || !destination) {
+    if (!destination) {
         setEstimatedFare(0);
         setDistanceMeters(0);
         return;
     }
-
-    const directionsService = new directions.DirectionsService();
-
-    directionsService.route(
-        {
-            origin: { lat: origin.lat, lng: origin.lng },
-            destination: { lat: destination.lat, lng: destination.lng },
-            travelMode: google.maps.TravelMode.DRIVING,
-        },
-        (result, status) => {
-            if (status === google.maps.DirectionsStatus.OK && result) {
-                const route = result.routes[0];
-                if (route && route.legs[0] && route.legs[0].distance) {
-                    const dist = route.legs[0].distance.value;
-                    setDistanceMeters(dist);
-                    const fare = calculateFare({ distanceMeters: dist, service: serviceType });
-                    setEstimatedFare(fare);
-                }
-            } else {
-                console.error(`error fetching directions ${result}`);
-            }
-        }
-    );
-  }, [origin, destination, serviceType, directions]);
+    // Simulate distance for pricing without Directions API
+    const simulatedDist = 5000; // 5km
+    setDistanceMeters(simulatedDist);
+    const fare = calculateFare({ distanceMeters: simulatedDist, service: serviceType });
+    setEstimatedFare(fare);
+  }, [destination, serviceType]);
   
   useEffect(() => {
     const prevStatus = prevRideRef.current?.status;
