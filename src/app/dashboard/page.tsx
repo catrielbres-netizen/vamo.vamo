@@ -63,23 +63,12 @@ export default function DashboardPage() {
   const status = ride?.status || 'idle';
 
   useEffect(() => {
-    // Esta es la lógica de redirección basada en roles que se ejecuta DESPUÉS
-    // de que la página de inicio nos mande aquí.
-    if (loading) return; // Esperar hasta que el usuario y el perfil estén completamente cargados
-
-    if (!user) {
-        // Esto no debería ocurrir si page.tsx funciona, pero es una salvaguarda.
-        router.replace('/login');
-        return;
-    }
-
-    if (profile) {
-        if (profile.role === 'admin') {
-            router.replace('/admin');
-        } else if (profile.role === 'driver') {
-            router.replace('/driver');
-        }
-        // Si el rol es 'passenger', no se hace nada y se queda en esta página.
+    // Ya no es necesario redirigir desde acá, page.tsx y los layouts se encargan.
+    // Esta página ahora asume que es solo para pasajeros.
+    if (!loading && profile && profile.role !== 'passenger') {
+      // Si un admin o driver llega acá, la lógica central de page.tsx lo debería haber redirigido.
+      // Como salvaguarda, podemos enviarlos al dashboard, aunque no debería ocurrir.
+      router.replace('/'); 
     }
   }, [user, profile, loading, router]);
 
@@ -251,7 +240,7 @@ export default function DashboardPage() {
       return (
           <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
               <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
-              <p className="text-center mt-4">Redirigiendo a tu panel...</p>
+              <p className="text-center mt-4">Redirigiendo...</p>
           </main>
       );
   }

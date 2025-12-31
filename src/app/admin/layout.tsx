@@ -3,9 +3,9 @@
 import { useUser } from '@/firebase'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { requireAdmin } from '@/lib/auth/requireAdmin'
 import { VamoIcon } from '@/components/icons'
 import AdminSidebar from '@/components/AdminSidebar'
+import { requireAdmin } from '@/lib/auth/requireAdmin'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useUser()

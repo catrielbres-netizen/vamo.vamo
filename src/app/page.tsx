@@ -6,23 +6,27 @@ import { useEffect } from 'react';
 import { VamoIcon } from '@/components/icons';
 
 export default function Home() {
-  const { user, loading } = useUser();
+  const { user, profile, loading } = useUser();
   const router = useRouter();
 
   useEffect(() => {
-    // Espera a que se resuelva el estado de autenticación
+    // Espera a que se resuelva el estado de autenticación y el perfil
     if (loading) return;
 
-    // Si no hay usuario, redirige a la página de login
     if (!user) {
       router.replace('/login');
     } else {
-      // Si hay un usuario, redirige al dashboard principal.
-      // Los layouts específicos de rol (/admin, /driver) se encargarán de la
-      // redirección final si es necesario.
-      router.replace('/dashboard');
+      // Redirección basada en rol
+      if (profile?.role === 'admin') {
+        router.replace('/admin');
+      } else if (profile?.role === 'driver') {
+        router.replace('/driver');
+      } else {
+        // Por defecto, para pasajeros o roles no definidos
+        router.replace('/dashboard');
+      }
     }
-  }, [user, loading, router]);
+  }, [user, profile, loading, router]);
 
   // Muestra una pantalla de carga universal mientras se determina el destino.
   return (
