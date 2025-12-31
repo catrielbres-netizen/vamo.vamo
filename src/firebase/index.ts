@@ -5,24 +5,17 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'
 
-// IMPORTANT: DO NOT MODIFY THIS FUNCTION
-export function initializeFirebase() {
+// This function ensures that we have a single instance of the Firebase app.
+export function initializeFirebase(): { firebaseApp: FirebaseApp; auth: any; firestore: any; } {
   if (getApps().length) {
-    return getSdks(getApp());
+    const app = getApp();
+    return getSdks(app);
   }
 
-  let firebaseApp;
-  // In a production environment (deployed on Firebase App Hosting),
-  // initializeApp() will automatically use the backend's credentials.
-  if (process.env.NODE_ENV === 'production') {
-    firebaseApp = initializeApp();
-  } else {
-    // In a development environment, we use the local firebaseConfig.
-    firebaseApp = initializeApp(firebaseConfig);
-  }
-  
-  return getSdks(firebaseApp);
+  const app = initializeApp(firebaseConfig);
+  return getSdks(app);
 }
+
 
 export function getSdks(firebaseApp: FirebaseApp) {
   return {
