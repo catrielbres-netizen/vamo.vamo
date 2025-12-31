@@ -26,10 +26,10 @@ service cloud.firestore {
     
     // Rides
     match /rides/{rideId} {
-      // Only admins can list all rides.
-      allow list: if isAdmin();
       // Passengers, drivers involved, or admins can read a single ride.
       allow get: if isAdmin() || (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid);
+      // Only admins can list all rides.
+      allow list: if isAdmin();
       // Passengers or admins can create rides.
       allow create: if isAdmin() || (request.resource.data.passengerId == request.auth.uid);
       // Involved parties or admins can update.
