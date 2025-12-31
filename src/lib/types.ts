@@ -71,25 +71,26 @@ export interface Ride {
   audited?: boolean;
 }
 
-export interface UserProfile {
-  name: string;
-  role: Role;
-  email?: string;
-  phone?: string;
-  photoURL?: string | null;
-  createdAt: Timestamp;
-  updatedAt?: Timestamp;
-  // Passenger fields
-  vamoPoints?: number;
-  averageRating?: number | null;
-  ridesCompleted?: number;
-  activeBonus?: boolean;
-  // Driver fields
-  approved?: boolean;
-  driverStatus?: DriverStatus;
-  carModelYear?: number | null;
-  vehicleVerificationStatus?: VerificationStatus;
-}
+export type UserProfile = {
+    name: string;
+    email: string;
+    role: 'admin' | 'driver' | 'passenger';
+    profileCompleted: boolean;
+    createdAt: any;
+    updatedAt: any;
+    phone?: string;
+    photoURL?: string | null;
+    // Passenger fields
+    vamoPoints?: number;
+    averageRating?: number | null;
+    ridesCompleted?: number;
+    activeBonus?: boolean;
+    // Driver fields
+    approved?: boolean;
+    driverStatus?: DriverStatus;
+    carModelYear?: number | null;
+    vehicleVerificationStatus?: VerificationStatus;
+};
 
 export interface DriverSummary {
     driverId: string;
