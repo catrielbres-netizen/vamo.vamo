@@ -1,27 +1,20 @@
+
 // src/app/admin/create/page.tsx
 'use client';
-import { useState, useEffect } from 'react';
-import { useAuth, useFirestore, useUser } from '@/firebase';
+import { useState } from 'react';
+import { useAuth, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, collection, getDocs, query, where, limit } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { VamoIcon } from '@/components/icons';
-
-async function hasAdminUsers(firestore: any): Promise<boolean> {
-    const adminsQuery = query(collection(firestore, 'users'), where('role', '==', 'admin'), limit(1));
-    const snapshot = await getDocs(adminsQuery);
-    return !snapshot.empty;
-}
 
 export default function CreateAdminPage() {
     const auth = useAuth();
     const firestore = useFirestore();
-    const { profile, loading: userLoading } = useUser();
     const router = useRouter();
     const { toast } = useToast();
 
@@ -29,34 +22,7 @@ export default function CreateAdminPage() {
     const [password, setPassword] = useState('');
     const [name, setName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [canCreate, setCanCreate] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        if (userLoading || !firestore) return;
-
-        const checkPermission = async () => {
-            const hasAdmins = await hasAdminUsers(firestore);
-            // Allow creation if:
-            // 1. There are no admins yet (to create the first one).
-            // 2. The current logged-in user is an admin.
-            if (!hasAdmins || (profile && profile.role === 'admin')) {
-                setCanCreate(true);
-            } else {
-                setCanCreate(false);
-                toast({
-                    variant: 'destructive',
-                    title: 'Acceso Denegado',
-                    description: 'Solo un administrador puede crear otro.',
-                });
-                router.replace('/admin/dashboard');
-            }
-            setIsLoading(false);
-        };
-        checkPermission();
-
-    }, [firestore, userLoading, profile, router, toast]);
-
+    
     const handleCreateAdmin = async () => {
         if (!email || !password || !name) {
             toast({ variant: 'destructive', title: 'Campos requeridos', description: 'Por favor, completa todos los campos.' });
@@ -89,9 +55,10 @@ export default function CreateAdminPage() {
                 description: `${name} ha sido registrado como administrador.`,
             });
             
-            setTimeout(() => router.push('/admin/users'), 2000);
+            // Redirect to login so the new admin can sign in
+            setTimeout(() => router.push('/login'), 2000);
 
-        } catch (error: any) {
+        } catch (error: any) => {
             console.error("Error creating admin:", error);
             toast({
                 variant: 'destructive',
@@ -103,29 +70,12 @@ export default function CreateAdminPage() {
         }
     };
     
-    if (isLoading) {
-        return (
-             <main className="container mx-auto p-4 flex flex-col justify-center items-center">
-                <p className="text-center mt-4">Verificando permisos...</p>
-            </main>
-        )
-    }
-
-    if (!canCreate && !isLoading) {
-        return (
-             <main className="container mx-auto p-4 flex flex-col justify-center items-center">
-                <p className="text-center mt-4 text-destructive">No tenés permiso para acceder a esta página.</p>
-             </main>
-        )
-    }
-
-
     return (
-        <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center">
+        <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
             <Card className="w-full">
                 <CardHeader className="text-center">
-                     <CardTitle>Crear Nuevo Administrador</CardTitle>
-                    <CardDescription>Registra un nuevo usuario con permisos de administrador.</CardDescription>
+                     <CardTitle>Crear Primer Administrador</CardTitle>
+                    <CardDescription>Registra el usuario administrador inicial de VamO.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="space-y-4">
