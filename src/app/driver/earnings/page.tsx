@@ -156,10 +156,10 @@ export default function EarningsPage() {
     };
     
     const isPaymentWindow = () => {
-        // SIMULACION: Se simula que es domingo a las 18hs para habilitar el botón.
-        return true;
+        // Para pruebas, se puede cambiar a `true` para simular la ventana de pago.
+        return false;
         
-        // Lógica original:
+        // Lógica real: Habilitado los domingos de 18:00 a 19:59 hs.
         // const now = new Date();
         // const day = now.getDay(); // 0 = Sunday
         // const hour = now.getHours();
