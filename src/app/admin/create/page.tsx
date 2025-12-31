@@ -58,7 +58,7 @@ export default function CreateAdminPage() {
             // Redirect to login so the new admin can sign in
             setTimeout(() => router.push('/login'), 2000);
 
-        } catch (error: any) => {
+        } catch (error: any) {
             console.error("Error creating admin:", error);
             toast({
                 variant: 'destructive',
