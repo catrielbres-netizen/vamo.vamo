@@ -17,10 +17,17 @@ export default function DriverLayout({
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading) {
-      if (!user || profile?.role !== 'driver') {
+    if (loading) return; // Esperar a que la autenticación y el perfil carguen.
+
+    // Si no hay usuario, redirigir a login.
+    if (!user) {
         router.replace('/login');
-      }
+        return;
+    }
+    
+    // Si el perfil ya cargó, pero no es de conductor, redirigir.
+    if (profile && profile.role !== 'driver') {
+        router.replace('/'); // A la página de pasajero/default
     }
   }, [user, profile, loading, router]);
 
@@ -36,6 +43,7 @@ export default function DriverLayout({
     router.push(`/driver/${value}`);
   };
 
+  // Mostrar un loader mientras se verifica todo.
   if (loading || !profile) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
@@ -45,6 +53,7 @@ export default function DriverLayout({
     );
   }
 
+  // Si después de cargar no es conductor, no renderizar nada.
   if (profile.role !== 'driver') {
     return null; // Render nothing while redirecting
   }
@@ -75,5 +84,3 @@ export default function DriverLayout({
     </div>
   );
 }
-
-    

@@ -51,13 +51,22 @@ export default function AdminLayout({
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading) {
-      if (!user || profile?.role !== 'admin') {
-        router.replace('/login');
-      }
+    if (loading) return; // Esperar a que toda la data de usuario esté lista.
+
+    // Si no hay usuario, redirigir a login.
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+
+    // Si el perfil ya cargó pero no es de admin, redirigir.
+    if (profile && profile.role !== 'admin') {
+      router.replace('/'); // A la página de pasajero/default
     }
   }, [user, profile, loading, router]);
 
+  // Mientras carga o si el perfil todavía no llega, mostrar un loader.
+  // Esto previene la redirección prematura.
   if (loading || !profile) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
@@ -67,9 +76,9 @@ export default function AdminLayout({
     );
   }
 
+  // Si después de cargar, el rol no es admin, no renderizar nada mientras
+  // el useEffect hace la redirección final.
   if (profile.role !== 'admin') {
-    // This will be briefly rendered before the useEffect triggers the redirect.
-    // It's a fallback.
     return null;
   }
 

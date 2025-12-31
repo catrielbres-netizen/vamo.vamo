@@ -65,15 +65,20 @@ export default function Home() {
 
   useEffect(() => {
     // This is the core redirection logic based on roles.
-    if (!loading && user) {
-        if (profile?.role === 'admin') {
+    if (loading) return; // Wait until user data is fully loaded
+
+    if (!user) {
+        router.replace('/login');
+        return;
+    }
+
+    if (profile) {
+        if (profile.role === 'admin') {
             router.replace('/admin');
-        } else if (profile?.role === 'driver') {
+        } else if (profile.role === 'driver') {
             router.replace('/driver');
         }
         // Passengers just stay on this page, no redirect needed.
-    } else if (!loading && !user) {
-        router.replace('/login');
     }
   }, [user, profile, loading, router]);
 
@@ -230,7 +235,7 @@ export default function Home() {
   const currentAction = getAction();
 
 
-  if (loading || (user && !profile)) {
+  if (loading || !user) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
         <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
@@ -240,7 +245,7 @@ export default function Home() {
   }
   
   // If user has a role, the useEffect will redirect them.
-  // This content is for passengers or anonymous users.
+  // This content is for passengers or users without a specific role yet.
   if (profile && profile.role !== 'passenger') {
       return (
           <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
