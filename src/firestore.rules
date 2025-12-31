@@ -26,25 +26,25 @@ service cloud.firestore {
     
     // Rides
     match /rides/{rideId} {
-      // Admins can list all rides
+      // Admins can list all rides.
       allow list: if isAdmin();
-      // Admins can read/write any ride
-      allow read, write: if isAdmin();
-      // Passengers and drivers involved in the ride can read it
-      allow read: if request.auth.uid == resource.data.passengerId || request.auth.uid == resource.data.driverId;
-      // Passengers can create rides for themselves
-      allow create: if isOwner(request.resource.data.passengerId);
-      // Involved parties can update, but not all fields (logic enforced in app)
-      allow update: if isOwner(resource.data.passengerId) || isOwner(resource.data.driverId);
+      // Passengers, drivers involved, or admins can read a single ride.
+      allow get: if isAdmin() || (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid);
+      // Passengers can create rides. Admins can also create rides.
+      allow create: if isAdmin() || request.resource.data.passengerId == request.auth.uid;
+      // Involved parties or admins can update.
+      allow update: if isAdmin() || (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid);
+      // Only admins should be able to delete rides.
+      allow delete: if isAdmin();
     }
 
     // Driver Summaries
     match /driver_summaries/{summaryId} {
-        // Admins can read any summary
+        // Admins can read any summary.
         allow read: if isAdmin();
-        // Drivers can read their own summaries
+        // Drivers can read their own summaries.
         allow read: if exists(/databases/$(database)/documents/driver_summaries/$(summaryId)) && resource.data.driverId == request.auth.uid;
-        // Writes are handled by secure backend logic (or admin panel)
+        // Writes are handled by secure backend logic (or admin panel).
         allow write: if isAdmin();
     }
     
