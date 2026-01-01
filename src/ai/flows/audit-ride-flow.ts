@@ -9,11 +9,13 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { getFirestore, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { initializeFirebase } from '@/firebase';
+import { initializeApp, getApps } from 'firebase/app';
+import { firebaseConfig } from '@/firebase/config';
 
-// Since this is a server-side flow, we need to initialize Firebase Admin here.
-// We get the config from the same place as the client.
-const { firestore } = initializeFirebase();
+// Server-side Firebase initialization
+const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const firestore = getFirestore(firebaseApp);
+
 
 const AuditRideInputSchema = z.object({
   rideId: z.string().describe('The unique ID of the ride to audit.'),

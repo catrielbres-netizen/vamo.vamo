@@ -10,11 +10,13 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { getFirestore, collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
-import { initializeFirebase } from '@/firebase';
+import { initializeApp, getApps } from 'firebase/app';
+import { firebaseConfig } from '@/firebase/config';
 import { Ride } from '@/lib/types';
 
-// Since this is a server-side flow, we can initialize Firebase Admin here.
-const { firestore } = initializeFirebase();
+// Server-side Firebase initialization
+const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const firestore = getFirestore(firebaseApp);
 
 const AnalyzeDriverRidesInputSchema = z.object({
   driverId: z.string().describe('The unique ID of the driver to analyze.'),
