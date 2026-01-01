@@ -312,8 +312,8 @@ export default function DriverDetailPage() {
                                 <AlertDialogContent>
                                     <AlertDialogHeader>
                                     <AlertDialogTitle>Análisis de Viajes por IA</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        <p className="whitespace-pre-wrap">{inspectionResult}</p>
+                                    <AlertDialogDescription className="whitespace-pre-wrap">
+                                        {inspectionResult}
                                     </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
