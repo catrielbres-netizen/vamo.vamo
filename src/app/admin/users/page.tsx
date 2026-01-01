@@ -15,7 +15,7 @@ const UserListItem = ({ user }: { user: WithId<UserProfile> }) => (
             <p className="font-semibold">{user.name ?? user.email}</p>
             <p className="text-sm text-muted-foreground">{user.email}</p>
         </div>
-        <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="capitalize">{user.role}</Badge>
+        <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} className="capitalize">{user.role || 'Sin rol'}</Badge>
     </li>
 );
 
@@ -47,31 +47,31 @@ export default function AdminUsers() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Conductores ({drivers.length})</CardTitle>
+                    <CardTitle>Conductores ({isLoading ? '...' : drivers.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {drivers.length > 0 ? (
+                    {!isLoading && drivers.length > 0 ? (
                         <ul className="space-y-3">
                             {drivers.map(user => <UserListItem key={user.id} user={user} />)}
                         </ul>
-                    ) : (
+                    ) : !isLoading ? (
                         <p className="text-muted-foreground">No hay conductores registrados.</p>
-                    )}
+                    ) : null}
                 </CardContent>
             </Card>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Pasajeros ({passengers.length})</CardTitle>
+                    <CardTitle>Pasajeros ({isLoading ? '...' : passengers.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {passengers.length > 0 ? (
+                     {!isLoading && passengers.length > 0 ? (
                         <ul className="space-y-3">
                             {passengers.map(user => <UserListItem key={user.id} user={user} />)}
                         </ul>
-                    ) : (
+                    ) : !isLoading ? (
                         <p className="text-muted-foreground">No hay pasajeros registrados.</p>
-                    )}
+                    ) : null}
                 </CardContent>
             </Card>
         </div>
