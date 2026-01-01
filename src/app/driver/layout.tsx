@@ -4,8 +4,11 @@ import { VamoIcon } from '@/components/icons';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
 import { Car, Wallet, Percent, User } from 'lucide-react';
-import { useUser } from '@/firebase';
-import { useEffect } from 'react';
+import { useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { useEffect, useMemo } from 'react';
+import { collection, query, where, limit } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { Ride } from '@/lib/types';
 
 export default function DriverLayout({
   children,
@@ -14,7 +17,25 @@ export default function DriverLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { profile, loading } = useUser();
+  const { profile, user, loading: userLoading } = useUser();
+  const firestore = useFirestore();
+
+  // Query to find any active ride for the current driver
+  const activeRideQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(
+        collection(firestore, 'rides'),
+        where('driverId', '==', user.uid),
+        where('status', 'in', ['driver_assigned', 'driver_arriving', 'arrived', 'in_progress', 'paused']),
+        limit(1)
+    );
+  }, [firestore, user?.uid]);
+  
+  const { data: activeRides, isLoading: rideLoading } = useCollection<Ride>(activeRideQuery);
+  const hasActiveRide = useMemo(() => activeRides && activeRides.length > 0, [activeRides]);
+
+  const loading = userLoading || (user ? rideLoading : false);
+
 
   useEffect(() => {
     if (loading) return; // Don't do anything while loading
@@ -58,24 +79,26 @@ export default function DriverLayout({
         <span className="text-sm font-medium text-muted-foreground">{profile?.name}</span>
       </div>
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full mb-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="rides" className="gap-2">
-            <Car className="w-4 h-4" /> Viajes
-          </TabsTrigger>
-          <TabsTrigger value="earnings" className="gap-2">
-            <Wallet className="w-4 h-4" /> Ganancias
-          </TabsTrigger>
-          <TabsTrigger value="discounts" className="gap-2">
-            <Percent className="w-4 h-4" /> Bonos
-          </TabsTrigger>
-           <TabsTrigger value="profile" className="gap-2">
-            <User className="w-4 h-4" /> Perfil
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {!hasActiveRide && (
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full mb-4">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="rides" className="gap-2">
+                <Car className="w-4 h-4" /> Viajes
+              </TabsTrigger>
+              <TabsTrigger value="earnings" className="gap-2">
+                <Wallet className="w-4 h-4" /> Ganancias
+              </TabsTrigger>
+              <TabsTrigger value="discounts" className="gap-2">
+                <Percent className="w-4 h-4" /> Bonos
+              </TabsTrigger>
+              <TabsTrigger value="profile" className="gap-2">
+                <User className="w-4 h-4" /> Perfil
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+      )}
       
-      <main>{children}</main>
+      <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
     </div>
   );
 }

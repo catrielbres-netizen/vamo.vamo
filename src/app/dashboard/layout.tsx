@@ -4,8 +4,11 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
 import { Car, User } from 'lucide-react';
 import { PassengerHeader } from '@/components/PassengerHeader';
-import { useUser } from '@/firebase';
-import { useEffect } from 'react';
+import { useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { useEffect, useMemo } from 'react';
+import { collection, query, where, limit } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { Ride } from '@/lib/types';
 
 
 export default function DashboardLayout({
@@ -15,7 +18,25 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { profile, user, loading } = useUser();
+  const { profile, user, loading: userLoading } = useUser();
+  const firestore = useFirestore();
+
+  // Query to find any active ride for the current passenger
+  const activeRideQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(
+        collection(firestore, 'rides'),
+        where('passengerId', '==', user.uid),
+        where('status', 'in', ['searching_driver', 'driver_assigned', 'driver_arriving', 'arrived', 'in_progress', 'paused']),
+        limit(1)
+    );
+  }, [firestore, user?.uid]);
+
+  const { data: activeRides, isLoading: rideLoading } = useCollection<Ride>(activeRideQuery);
+  const hasActiveRide = useMemo(() => activeRides && activeRides.length > 0, [activeRides]);
+
+  const loading = userLoading || (user ? rideLoading : false);
+
 
   useEffect(() => {
     if (loading) return; 
@@ -56,18 +77,20 @@ export default function DashboardLayout({
             location="Rawson, Chubut" 
         />
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="ride" className="gap-2">
-            <Car className="w-4 h-4" /> Viaje
-          </TabsTrigger>
-          <TabsTrigger value="profile" className="gap-2">
-            <User className="w-4 h-4" /> Perfil
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {!hasActiveRide && (
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="ride" className="gap-2">
+                <Car className="w-4 h-4" /> Viaje
+              </TabsTrigger>
+              <TabsTrigger value="profile" className="gap-2">
+                <User className="w-4 h-4" /> Perfil
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+      )}
       
-      <main>{children}</main>
+      <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
     </div>
   );
 }
