@@ -5,6 +5,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Car, User } from 'lucide-react';
 import { PassengerHeader } from '@/components/PassengerHeader';
 import { useUser } from '@/firebase';
+import { useEffect } from 'react';
+
 
 export default function DashboardLayout({
   children,
@@ -13,7 +15,30 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { profile, user } = useUser();
+  const { profile, user, loading } = useUser();
+
+  useEffect(() => {
+    if (loading) return; 
+
+    if (!profile) {
+      router.replace('/login');
+      return;
+    }
+    
+    if (!profile.profileCompleted && !pathname.startsWith('/dashboard/complete-profile')) {
+      router.replace('/dashboard/complete-profile');
+    }
+    
+  }, [profile, loading, pathname, router]);
+
+  if (loading || (!profile?.profileCompleted && !pathname.startsWith('/dashboard/complete-profile'))) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
+        <VamoIcon className="h-10 w-10 animate-pulse text-primary" />
+        <p className="mt-4 text-muted-foreground">Cargando panel de pasajero...</p>
+      </div>
+    );
+  }
 
   const activeTabValue = pathname.split('/dashboard/')[1] || 'ride';
   const activeTab = activeTabValue.split('/')[0];

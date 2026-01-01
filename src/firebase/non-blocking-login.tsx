@@ -26,7 +26,7 @@ export async function initiateEmailSignUp(authInstance: Auth, firestore: Firesto
         name: email.split('@')[0],
         email: email,
         role: 'passenger',
-        profileCompleted: true, // Passengers complete profile by default
+        profileCompleted: false, // Passengers now need to complete their profile
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         vamoPoints: 0,

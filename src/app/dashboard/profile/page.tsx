@@ -3,9 +3,13 @@
 import { useUser } from '@/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Star, Award, ShieldCheck, TrendingUp, Car } from 'lucide-react';
+import { Star, Award, ShieldCheck, Mail, Phone } from 'lucide-react';
 import { VamoIcon } from '@/components/icons';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { signOut } from 'firebase/auth';
+import { useAuth } from '@/firebase';
+import { useRouter } from 'next/navigation';
 
 const StatCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
     <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg">
@@ -17,8 +21,28 @@ const StatCard = ({ icon, title, value }: { icon: React.ReactNode, title: string
     </div>
 );
 
+const ProfileInfoRow = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string | number | null | undefined }) => (
+    <div className="flex items-start gap-4 text-sm">
+        <div className="text-muted-foreground w-6 pt-0.5">{icon}</div>
+        <div>
+            <p className="text-muted-foreground">{label}</p>
+            <p className="font-medium">{value || 'No especificado'}</p>
+        </div>
+    </div>
+);
+
+
 export default function ProfilePage() {
   const { profile, loading } = useUser();
+  const auth = useAuth();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    if (auth) {
+        await signOut(auth)
+        router.push('/login')
+    }
+  }
 
   if (loading) {
     return (
@@ -60,13 +84,12 @@ export default function ProfilePage() {
       <Card>
         <CardHeader>
           <CardTitle>{profile.name}</CardTitle>
-          <CardDescription>{profile.email}</CardDescription>
+          <CardDescription>Pasajero en VamO</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-                <StatCard icon={<Car />} title="Viajes Completados" value={ridesCompleted} />
-                <StatCard icon={<Star />} title="Rating Promedio" value={averageRating} />
-            </div>
+             <ProfileInfoRow icon={<Mail />} label="Email" value={profile.email} />
+             <ProfileInfoRow icon={<Phone />} label="Teléfono" value={profile.phone} />
+             <ProfileInfoRow icon={<Star />} label="Rating Promedio" value={averageRating} />
         </CardContent>
       </Card>
       
@@ -97,6 +120,14 @@ export default function ProfilePage() {
                 </div>
             )}
            
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+            <Button variant="outline" size="sm" onClick={handleLogout} className="w-full">
+                Cerrar Sesión
+            </Button>
         </CardContent>
       </Card>
 

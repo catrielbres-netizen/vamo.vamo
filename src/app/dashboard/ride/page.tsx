@@ -133,6 +133,16 @@ export default function RidePage() {
       });
       return;
     }
+
+    if (!profile?.profileCompleted) {
+        toast({
+            variant: 'destructive',
+            title: 'Perfil Incompleto',
+            description: 'Por favor, completá tu perfil con tu nombre y teléfono antes de pedir un viaje.',
+        });
+        router.push('/dashboard/complete-profile');
+        return;
+    }
     
     let currentUser = user;
     if (!currentUser) {
