@@ -17,6 +17,7 @@ import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Ride } from '@/lib/types';
 import ServiceBadge from './ServiceBadge';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 const serviceCardStyles: Record<Ride['serviceType'], string> = {
     premium: "border-yellow-400/50",
@@ -32,17 +33,25 @@ export default function DriverRideCard({
   onAccept: () => void;
 }) {
   const firestore = useFirestore();
-  const { user } = useUser();
+  const { user, profile } = useUser(); // <-- Obtenemos el perfil del conductor
+  const { toast } = useToast();
 
   const handleAcceptRide = async () => {
-    if (!firestore || !user) return;
+    if (!firestore || !user || !profile) {
+        toast({
+            variant: "destructive",
+            title: "Error de perfil",
+            description: "No se pudo cargar tu perfil para aceptar el viaje. Intenta de nuevo.",
+        });
+        return;
+    };
     const rideRef = doc(firestore, 'rides', ride.id);
     
-    // For now, we simulate driver's car data. In a real app, this would come from the driver's profile.
+    // Usamos el nombre del perfil, que sí existe.
     updateDocumentNonBlocking(rideRef, {
         status: 'driver_assigned',
         driverId: user.uid,
-        driverName: user.displayName || 'Conductor Anónimo',
+        driverName: profile.name || 'Conductor Anónimo', // <-- ¡CORREGIDO!
         updatedAt: serverTimestamp(),
     });
 
@@ -69,7 +78,7 @@ export default function DriverRideCard({
         </p>
         <p className="flex items-center">
           <MapPin className="w-4 h-4 mr-2 text-muted-foreground" />
-          <strong>Desde:</strong> Rawson (Simulado)
+          <strong>Desde:</strong> {ride.origin.address || 'Ubicación simulada'}
         </p>
         <p className="flex items-center">
           <Flag className="w-4 h-4 mr-2 text-muted-foreground" />
