@@ -18,11 +18,13 @@ export default function VerifyPage() {
             return 'Hola, soy un nuevo conductor de VamO y quiero verificar mi cuenta.';
         }
 
+        const fullName = `${profile.name || ''} ${profile.lastName || ''}`.trim();
+
         const baseText = `
 Hola, soy un nuevo conductor de VamO. Quiero verificar mi cuenta.
 -----------------------------------
 *Mis Datos:*
-*Nombre:* ${profile.name} ${profile.lastName || ''}
+*Nombre:* ${fullName}
 *Email:* ${profile.email}
 -----------------------------------
 Adjunto mi documentación:
