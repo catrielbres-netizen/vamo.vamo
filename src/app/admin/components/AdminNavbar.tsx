@@ -14,7 +14,6 @@ const navLinks = [
     { href: '/admin/dashboard', label: 'Dashboard' },
     { href: '/admin/users', label: 'Usuarios' },
     { href: '/admin/rides', label: 'Conductores' },
-    { href: '/admin/audit', label: 'Auditoría' },
 ]
 
 export function AdminNavbar() {
@@ -26,9 +25,6 @@ export function AdminNavbar() {
   const isActive = (href: string) => {
     if (href === '/admin/rides') {
         return pathname.startsWith('/admin/rides') || pathname.startsWith('/admin/drivers');
-    }
-    if (href === '/admin/audit') {
-        return pathname.startsWith('/admin/audit');
     }
     return pathname === href;
   }

@@ -329,11 +329,25 @@ export default function DriverDetailPage() {
                         <ul className="space-y-3">
                             {weeklyRides.map(ride => (
                                 <li key={ride.id} className="border p-3 rounded-lg flex justify-between items-center">
-                                    <div>
-                                        <p className="font-medium">A {ride.destination.address}</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            {(ride.finishedAt as Timestamp).toDate().toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}hs
-                                        </p>
+                                    <div className="flex items-center gap-3">
+                                        {ride.auditComment && (
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger>
+                                                        <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p className="max-w-xs">{ride.auditComment}</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        )}
+                                        <div>
+                                            <p className="font-medium">A {ride.destination.address}</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {(ride.finishedAt as Timestamp).toDate().toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}hs
+                                            </p>
+                                        </div>
                                     </div>
                                     <div className="text-right">
                                         <p className="font-bold text-primary">{formatCurrency(ride.pricing.finalTotal || ride.pricing.estimatedTotal)}</p>
