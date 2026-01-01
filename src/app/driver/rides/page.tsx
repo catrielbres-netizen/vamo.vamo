@@ -3,7 +3,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, Unsubscribe, doc } from 'firebase/firestore';
+import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import DriverRideCard from '@/components/DriverRideCard';
 import ActiveDriverRide from '@/components/ActiveDriverRide';
 import FinishedRideSummary from '@/components/FinishedRideSummary';
@@ -53,6 +54,7 @@ export default function DriverRidesPage() {
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
   
   const activeRideUnsubscribe = useRef<Unsubscribe | null>(null);
+  const locationWatchId = useRef<number | null>(null);
   const activeRideStateRef = useRef<WithId<Ride> | null>(null);
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
 
@@ -70,6 +72,66 @@ export default function DriverRidesPage() {
   useEffect(() => {
     activeRideStateRef.current = activeRide;
   }, [activeRide]);
+
+
+  useEffect(() => {
+    if (!firestore || !user?.uid) return;
+
+    // ---- START: Location Tracking Logic ----
+    const startLocationTracking = () => {
+        const userProfileRef = doc(firestore, 'users', user.uid);
+        
+        // Set status to online
+        updateDocumentNonBlocking(userProfileRef, { driverStatus: 'online' });
+
+        locationWatchId.current = navigator.geolocation.watchPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                // Update Firestore with the new location non-blockingly
+                updateDocumentNonBlocking(userProfileRef, {
+                    currentLocation: { lat: latitude, lng: longitude }
+                });
+            },
+            (error) => {
+                console.error("Error getting driver location:", error);
+                toast({
+                    variant: "destructive",
+                    title: "Error de ubicación",
+                    description: "No pudimos obtener tu ubicación. Asegurate de tener el GPS activado y los permisos concedidos."
+                })
+                // If location fails, set status to inactive
+                updateDocumentNonBlocking(userProfileRef, { driverStatus: 'inactive', currentLocation: null });
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    };
+
+    const stopLocationTracking = () => {
+        if (locationWatchId.current !== null) {
+            navigator.geolocation.clearWatch(locationWatchId.current);
+            locationWatchId.current = null;
+        }
+        // Set status to inactive when tracking stops
+        if(user?.uid) {
+            const userProfileRef = doc(firestore, 'users', user.uid);
+            updateDocumentNonBlocking(userProfileRef, { driverStatus: 'inactive', currentLocation: null });
+        }
+    };
+    
+    if (profile?.approved && !activeRide) {
+        startLocationTracking();
+    } else {
+        stopLocationTracking();
+    }
+
+    // Cleanup function: stop tracking when component unmounts or dependencies change
+    return () => {
+        stopLocationTracking();
+    };
+    // ---- END: Location Tracking Logic ----
+
+  }, [firestore, user?.uid, profile?.approved, activeRide, toast]);
+
 
   useEffect(() => {
     if (!firestore || !user?.uid) {
