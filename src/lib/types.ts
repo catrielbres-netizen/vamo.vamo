@@ -55,9 +55,9 @@ export interface Ride {
     discountAmount?: number | null;
   };
   status: RideStatus;
-  createdAt: Timestamp | {seconds: number, nanoseconds: number};
-  updatedAt: Timestamp | {seconds: number, nanoseconds: number};
-  finishedAt?: Timestamp | {seconds: number, nanoseconds: number} | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  finishedAt?: Timestamp | null;
   driverId?: string | null;
   driverName?: string | null;
   driverArrivalInfo?: {

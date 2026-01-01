@@ -66,13 +66,13 @@ const analyzeDriverRidesFlow = ai.defineFlow(
   },
   async ({ driverId }) => {
 
-    // 1. Fetch the last 30 completed rides for the driver
+    // 1. Fetch the last 30 rides for the driver
     const ridesRef = collection(firestore, 'rides');
     const q = query(
         ridesRef, 
         where('driverId', '==', driverId),
         where('status', '==', 'finished'),
-        orderBy('finishedAt', 'desc'),
+        orderBy('createdAt', 'desc'),
         limit(30)
     );
     
@@ -98,7 +98,6 @@ const analyzeDriverRidesFlow = ai.defineFlow(
         distanceMeters: r.pricing.estimatedDistanceMeters,
         durationSeconds: r.pricing.estimatedDurationSeconds,
         finalTotal: r.pricing.finalTotal,
-        finishedAt: r.finishedAt,
     }));
     
     const ridesJson = JSON.stringify(simplifiedRides, null, 2);
