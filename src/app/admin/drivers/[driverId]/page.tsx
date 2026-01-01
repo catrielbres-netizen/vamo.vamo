@@ -2,13 +2,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useFirestore, useDoc, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { Ride, DriverSummary, UserProfile, AuditLog } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { es } from 'date-ns/locale';
 import { Progress } from '@/components/ui/progress';
-import { Target, CheckCircle, Percent, Shield, AlertTriangle, UserCheck } from 'lucide-react';
+import { Target, CheckCircle, Percent, Shield, AlertTriangle, UserCheck, Bot } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useParams } from 'next/navigation';
+import { analyzeDriverRides } from '@/ai/flows/analyze-driver-rides-flow';
 
 
 function formatCurrency(value: number) {
@@ -49,6 +50,8 @@ export default function DriverDetailPage() {
     const [weeklyRides, setWeeklyRides] = useState<WithId<Ride>[]>([]);
     const [summary, setSummary] = useState<DriverSummary | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isInspecting, setIsInspecting] = useState(false);
+    const [inspectionResult, setInspectionResult] = useState<string | null>(null);
 
     const driverProfileRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
     const { data: driver, isLoading: isDriverLoading } = useDoc<UserProfile>(driverProfileRef);
@@ -73,15 +76,14 @@ export default function DriverDetailPage() {
 
             // Create audit log
             const auditLogRef = collection(firestore, 'auditLogs');
-            const logEntry: Partial<AuditLog> = {
+            const logEntry: Omit<AuditLog, 'timestamp'> = {
                 adminId: user.uid,
                 adminName: adminProfile.name,
                 action: newStatus === 'approved' ? 'driver_approved' : 'driver_rejected',
                 entityId: driverId,
-                timestamp: serverTimestamp(),
                 details: `El administrador ${adminProfile.name} ${newStatus === 'approved' ? 'aprobó' : 'rechazó'} al conductor.`
             };
-            await addDoc(auditLogRef, logEntry);
+            await addDoc(auditLogRef, { ...logEntry, timestamp: serverTimestamp()});
 
 
             toast({
@@ -93,6 +95,25 @@ export default function DriverDetailPage() {
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado del conductor.' });
         }
     }
+
+    const handleInspectRides = async () => {
+        setIsInspecting(true);
+        setInspectionResult(null);
+        try {
+            const result = await analyzeDriverRides({ driverId });
+            setInspectionResult(result.analysis);
+        } catch (error) {
+            console.error("Error inspecting driver rides:", error);
+            toast({
+                variant: 'destructive',
+                title: 'Error de Inspección',
+                description: 'La IA no pudo completar el análisis. Inténtalo de nuevo.'
+            });
+            setInspectionResult('Error al realizar el análisis.');
+        } finally {
+            setIsInspecting(false);
+        }
+    };
 
 
     useEffect(() => {
@@ -278,7 +299,30 @@ export default function DriverDetailPage() {
             
             <Card>
                 <CardHeader>
-                    <CardTitle>Viajes de la Semana ({ridesCount})</CardTitle>
+                    <CardTitle className="flex justify-between items-center">
+                        <span>Viajes de la Semana ({ridesCount})</span>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                 <Button variant="outline" onClick={handleInspectRides} disabled={isInspecting}>
+                                    <Bot className="mr-2 h-4 w-4"/>
+                                    {isInspecting ? 'Analizando...' : 'Inspeccionar Viajes'}
+                                </Button>
+                            </AlertDialogTrigger>
+                            {inspectionResult && (
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                    <AlertDialogTitle>Análisis de Viajes por IA</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        <p className="whitespace-pre-wrap">{inspectionResult}</p>
+                                    </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogAction onClick={() => setInspectionResult(null)}>Entendido</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            )}
+                        </AlertDialog>
+                    </CardTitle>
                 </CardHeader>
                 <CardContent>
                     {weeklyRides.length > 0 ? (
