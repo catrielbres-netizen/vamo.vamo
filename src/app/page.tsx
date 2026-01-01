@@ -10,25 +10,40 @@ export default function Home() {
   const { user, profile, loading } = useUser();
 
   useEffect(() => {
-    if (loading) return; // Wait until user and profile are loaded
+    // Wait until the authentication state is fully loaded
+    if (loading) return;
 
     if (user) {
-      // User is logged in, redirect based on role
-      if (profile?.role === 'admin') {
-        router.replace('/admin/dashboard');
-      } else if (profile?.role === 'driver') {
-        router.replace('/driver');
+      // User is authenticated
+      if (profile) {
+        // User has a profile, redirect based on role
+        switch (profile.role) {
+          case 'admin':
+            router.replace('/admin/dashboard');
+            break;
+          case 'driver':
+            router.replace('/driver');
+            break;
+          case 'passenger':
+          default:
+            // Default to passenger dashboard if role is passenger or undefined
+            router.replace('/dashboard');
+            break;
+        }
       } else {
-        // Default to passenger dashboard if role is passenger or not yet defined
-        router.replace('/dashboard');
+        // This is a crucial state: user is authenticated but has no profile data yet.
+        // This might happen for a moment after sign-up. 
+        // We stay on the loading screen and let the next state change handle it.
+        // If it persists, it could indicate an error during profile creation.
+        // For now, we do nothing and wait for the 'profile' to be populated.
       }
     } else {
-      // No user, redirect to login
+      // No user is authenticated, redirect to the login page
       router.replace('/login');
     }
   }, [user, profile, loading, router]);
 
-  // Universal loading screen while determining destination.
+  // Universal loading screen while determining the user's destination.
   return (
     <div className="flex h-screen items-center justify-center">
       <div className="flex flex-col items-center gap-4">

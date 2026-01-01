@@ -18,7 +18,6 @@ import { getAuth } from 'firebase/auth';
 export default function LoginPage() {
     const auth = useAuth();
     const firestore = useFirestore();
-    const { user, loading } = useUser();
     const router = useRouter();
     const { toast } = useToast();
     
@@ -26,22 +25,12 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    useEffect(() => {
-        // If the user is logged in, the root page.tsx will handle redirection.
-        if (!loading && user) {
-            router.replace('/'); 
-        }
-    }, [user, loading, router]);
-
-
-    if (loading || user) { // Show loading screen if loading or if user exists (and is being redirected)
-        return (
-             <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
-                <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
-                <p className="text-center mt-4">Cargando...</p>
-            </main>
-        )
-    }
+    // This page should always show the form. Redirection logic is centralized in `src/app/page.tsx`.
+    // The only redirection here is after a successful login action.
+    const handleLoginSuccess = () => {
+        // Redirect to the root, which will handle role-based redirection.
+        router.replace('/');
+    };
 
     const handleSignIn = async () => {
         if (!email || !password) {
@@ -51,14 +40,14 @@ export default function LoginPage() {
         if (!auth) return;
 
         setIsSubmitting(true);
-        initiateEmailSignIn(auth, email, password);
-        
-        setTimeout(() => {
-          if(!getAuth().currentUser) { 
-              toast({ variant: 'destructive', title: 'Error de inicio de sesión', description: 'Credenciales incorrectas o el usuario no existe.' });
-              setIsSubmitting(false);
-          }
-        }, 2500); 
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+            toast({ title: '¡Bienvenido de nuevo!', description: 'Redirigiendo a tu panel...' });
+            handleLoginSuccess();
+        } catch (error: any) {
+             toast({ variant: 'destructive', title: 'Error de inicio de sesión', description: 'Credenciales incorrectas o el usuario no existe.' });
+             setIsSubmitting(false);
+        }
     };
     
     const handleSignUp = async () => {
@@ -75,12 +64,11 @@ export default function LoginPage() {
         try {
             await initiateEmailSignUp(auth, firestore, email, password);
             toast({ title: '¡Registro exitoso!', description: 'Iniciando sesión para llevarte a tu panel.' });
-            // The onAuthStateChanged listener will now redirect correctly.
+            // The root page will handle redirection on auth state change.
+            handleLoginSuccess();
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Error de registro', description: error.message });
-        } finally {
-            // Don't set isSubmitting to false immediately, wait for redirect
-            setTimeout(() => setIsSubmitting(false), 3000);
+            setIsSubmitting(false);
         }
     };
 
@@ -92,7 +80,7 @@ export default function LoginPage() {
                         <VamoIcon className="h-8 w-8 text-primary mr-2" />
                         <CardTitle>VamO</CardTitle>
                     </div>
-                    <CardDescription>Accede a tu cuenta</CardDescription>
+                    <CardDescription>Accede a tu cuenta o registrate</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="space-y-4">
@@ -111,7 +99,7 @@ export default function LoginPage() {
                     <Separator className="my-6" />
                     <div className="text-center space-y-2">
                          <div>
-                            <p className="text-sm text-muted-foreground">¿No tienes cuenta?</p>
+                            <p className="text-sm text-muted-foreground">¿No tienes cuenta de pasajero?</p>
                             <Button variant="link" onClick={handleSignUp} disabled={isSubmitting}>
                                 Registrate ahora
                             </Button>

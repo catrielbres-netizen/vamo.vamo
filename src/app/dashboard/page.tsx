@@ -62,9 +62,6 @@ export default function DashboardPage() {
 
   const status = ride?.status || 'idle';
 
-  // The redirection logic is now centralized in `src/app/page.tsx`.
-  // This useEffect is no longer needed here.
-
   useEffect(() => {
     if (!destination) {
         setEstimatedFare(0);
@@ -229,7 +226,7 @@ export default function DashboardPage() {
     );
   }
   
-  // If a non-passenger user lands here, `page.tsx` should have already redirected them.
+  // If a non-passenger user lands here, the root page.tsx should have already redirected them.
   // This is a UI fallback to prevent showing wrong content during a transition.
   if (profile && profile.role !== 'passenger') {
       return (
