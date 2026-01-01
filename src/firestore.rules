@@ -17,11 +17,6 @@ service cloud.firestore {
         return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    function isRideParticipant(ride) {
-        // Asegurarse de que ride.driverId no sea null antes de compararlo
-        return request.auth.uid == ride.passengerId || (ride.driverId != null && request.auth.uid == ride.driverId);
-    }
-
     // --- USERS ---
     match /users/{userId} {
       // Un usuario puede crear su propio perfil.
@@ -39,7 +34,7 @@ service cloud.firestore {
       // PERMISOS DE COLECCIÓN (list, create)
       
       // Permite que cualquier usuario autenticado haga consultas (queries) sobre la colección.
-      // La seguridad se delega a las 'where' clauses en la query del cliente.
+      // La seguridad REAL se delega a las cláusulas '.where()' en la consulta del cliente.
       allow list: if isAuthenticated();
       
       // Permite que cualquier usuario autenticado cree un nuevo viaje.
@@ -49,10 +44,10 @@ service cloud.firestore {
 
       // Permite leer un viaje específico solo a sus participantes o a un admin.
       // Aquí `resource.data` está disponible porque es un documento individual.
-      allow get: if isAuthenticated() && (isRideParticipant(resource.data) || isAdmin());
+      allow get: if isAuthenticated() && (isOwner(resource.data.passengerId) || isOwner(resource.data.driverId) || isAdmin());
 
       // Permite actualizar un viaje solo a sus participantes o a un admin.
-      allow update: if isAuthenticated() && (isRideParticipant(resource.data) || isAdmin());
+      allow update: if isAuthenticated() && (isOwner(resource.data.passengerId) || isOwner(resource.data.driverId) || isAdmin());
       
       // Se prefiere no borrar viajes para mantener el historial. Se cancelan cambiando el estado.
       allow delete: if false;
