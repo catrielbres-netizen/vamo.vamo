@@ -50,13 +50,23 @@ export default function LoginPage() {
             return;
         }
         setIsSubmitting(true);
-        initiateEmailSignIn(auth, email, password)
-          .catch((error) => {
-            toast({ variant: 'destructive', title: 'Error de inicio de sesión', description: 'Credenciales incorrectas. Por favor, intenta de nuevo.' });
-          })
-          .finally(() => {
-            setIsSubmitting(false);
-          });
+        try {
+            initiateEmailSignIn(auth, email, password);
+            // Non-blocking, so we can't catch here directly. 
+            // Auth errors are typically handled by onAuthStateChanged or global listeners, 
+            // but for a better UX on login, we can give a generic message and reset.
+            // A more advanced implementation might listen for a specific auth error event.
+            setTimeout(() => {
+              if(!auth.currentUser) {
+                  toast({ variant: 'destructive', title: 'Error de inicio de sesión', description: 'Credenciales incorrectas o el usuario no existe.' });
+                  setIsSubmitting(false);
+              }
+            }, 2500); // Wait 2.5s to see if login succeeds before showing error
+
+        } catch (error) {
+             toast({ variant: 'destructive', title: 'Error inesperado', description: 'Ocurrió un problema al intentar iniciar sesión.' });
+             setIsSubmitting(false);
+        }
     };
     
     const handleSignUp = async () => {
