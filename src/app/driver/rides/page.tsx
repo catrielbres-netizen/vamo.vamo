@@ -75,7 +75,8 @@ export default function DriverRidesPage() {
       setIsLoading(false);
     }, (error) => {
       console.error("Error fetching active ride:", error);
-      toast({ variant: 'destructive', title: 'Error al cargar tu viaje activo.' });
+      // El error de permisos es manejado por el FirebaseErrorListener global.
+      // No es necesario mostrar un toast aquí.
       setIsLoading(false);
     });
 
@@ -97,9 +98,6 @@ export default function DriverRidesPage() {
             return;
         }
 
-        // --- Simplified Query ---
-        // Only query for rides that are searching for a driver.
-        // Filtering by service type will happen on the client side.
         const availableRidesQuery = query(
             collection(firestore, 'rides'),
             where('status', '==', 'searching_driver')
@@ -108,7 +106,6 @@ export default function DriverRidesPage() {
         availableRidesUnsubscribe.current = onSnapshot(availableRidesQuery, (snapshot) => {
             const allSearchingRides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
             
-            // --- Client-side filtering ---
             const rides = allSearchingRides.filter(ride => allowedServices.includes(ride.serviceType));
 
             if (!isLoading) { 
@@ -132,8 +129,11 @@ export default function DriverRidesPage() {
             previousAvailableRides.current = rides;
             if(isLoading) setIsLoading(false);
         }, (error) => {
-            // Error is handled globally by FirebaseErrorListener for permission errors
-            toast({ variant: 'destructive', title: 'Error al buscar viajes', description: 'No se pudo cargar la lista de viajes disponibles.' });
+            // El error de permisos es manejado por el FirebaseErrorListener global.
+            // No es necesario mostrar un toast local aquí, ya que duplicaría el mensaje.
+            // El listener global lanzará un error más descriptivo.
+            console.error("Error fetching available rides:", error);
+            setIsLoading(false);
         });
     } else {
         setAvailableRides([]);

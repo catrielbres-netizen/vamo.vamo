@@ -1,10 +1,29 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regla de desarrollo permisiva:
-    // Permite la lectura y escritura a cualquier usuario que esté autenticado.
-    // Esto elimina los problemas de permisos durante el desarrollo.
-    match /{document=**} {
+
+    // Reglas para Perfiles de Usuario
+    match /users/{userId} {
+      // Cualquier usuario autenticado puede crear su perfil y leer/actualizar perfiles.
+      allow read, write: if request.auth != null;
+    }
+
+    // Reglas para Viajes
+    match /rides/{rideId} {
+      // Cualquier usuario autenticado puede leer y escribir en los viajes.
+      // Esto es permisivo para la etapa de desarrollo.
+      allow read, write: if request.auth != null;
+    }
+
+    // Reglas para Resúmenes de Conductores
+    match /driver_summaries/{summaryId} {
+      // Cualquier usuario autenticado puede interactuar con los resúmenes.
+      allow read, write: if request.auth != null;
+    }
+    
+    // Reglas para Logs de Auditoría
+    match /auditLogs/{logId} {
+       // Solo los usuarios autenticados pueden crear y leer logs.
       allow read, write: if request.auth != null;
     }
   }
