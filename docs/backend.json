@@ -76,7 +76,13 @@
         "approved": { "type": "boolean", "description": "(For Drivers) Indicates if the driver is approved by an admin." },
         "driverStatus": { "type": "string", "enum": ["inactive", "online", "in_ride"], "description": "The current status of the driver." },
         "carModelYear": { "type": ["number", "null"], "description": "The model year of the driver's car." },
-        "vehicleVerificationStatus": { "type": "string", "enum": ["unverified", "pending_review", "approved", "rejected"], "description": "The verification status of the driver's vehicle." }
+        "vehicleVerificationStatus": { "type": "string", "enum": ["unverified", "pending_review", "approved", "rejected"], "description": "The verification status of the driver's vehicle." },
+        "currentLocation": {
+          "type": ["object", "null"],
+          "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } },
+          "required": ["lat", "lng"],
+          "description": "The driver's current real-time location. Only applicable for drivers."
+        }
       },
       "required": ["name", "email", "role", "createdAt"]
     },

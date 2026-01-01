@@ -73,11 +73,11 @@ export interface Ride {
 
 export type UserProfile = {
     name: string;
-    email: string;
+    email?: string;
     role: 'admin' | 'driver' | 'passenger';
-    profileCompleted: boolean;
+    profileCompleted?: boolean;
     createdAt: any;
-    updatedAt: any;
+    updatedAt?: any;
     phone?: string;
     photoURL?: string | null;
     // Passenger fields
@@ -90,6 +90,10 @@ export type UserProfile = {
     driverStatus?: DriverStatus;
     carModelYear?: number | null;
     vehicleVerificationStatus?: VerificationStatus;
+    currentLocation?: {
+      lat: number;
+      lng: number;
+    } | null;
 };
 
 export interface DriverSummary {
