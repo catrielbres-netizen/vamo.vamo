@@ -2,12 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // DEVELOPMENT-ONLY RULES
-    // Allows any authenticated user to read and write to the entire database.
-    // This removes all security restrictions to speed up initial development.
+    // DEVELOPMENT-ONLY RULES (ULTRA PERMISSIVE)
+    // Allows any client (authenticated or not) to read and write to the entire database.
+    // This is ONLY for debugging connection/environment issues.
     // WARNING: DO NOT use these rules in a production environment.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
   }
 }
