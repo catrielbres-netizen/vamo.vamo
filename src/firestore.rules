@@ -4,9 +4,8 @@ service cloud.firestore {
 
     // DEVELOPMENT-ONLY RULES (ULTRA PERMISSIVE)
     // Allows any client (authenticated or not) to read and write to the entire database.
-    // This is ONLY for debugging connection/environment issues.
+    // This is ONLY for initial development and debugging.
     // WARNING: DO NOT use these rules in a production environment.
-    // Forcing a redeploy to fix connection issues.
     match /{document=**} {
       allow read, write: if true;
     }
