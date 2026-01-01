@@ -11,11 +11,6 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 
-// Agregá tu Access Token de Mercado Pago en un archivo .env.local
-// NUNCA lo subas a tu repositorio de código.
-const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN! });
-const preference = new Preference(client);
-
 const CreatePaymentPreferenceInputSchema = z.object({
   summaryId: z.string().describe('El ID del resumen de conductor a pagar.'),
   amount: z.number().describe('El monto a pagar.'),
@@ -41,6 +36,10 @@ const createPaymentPreferenceFlow = ai.defineFlow(
     outputSchema: CreatePaymentPreferenceOutputSchema,
   },
   async (input) => {
+    // Inicializa el cliente DENTRO del flow, donde las variables de entorno están disponibles.
+    const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN! });
+    const preference = new Preference(client);
+
     // La URL base debe ser la de tu aplicación deployada
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
 
