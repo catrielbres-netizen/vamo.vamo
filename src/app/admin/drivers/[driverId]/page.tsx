@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useParams } from 'next/navigation';
 
 
 function formatCurrency(value: number) {
@@ -38,10 +39,11 @@ const verificationStatusBadge: Record<UserProfile['vehicleVerificationStatus'] &
     rejected: { text: 'Rechazado', variant: 'destructive' },
 }
 
-export default function DriverDetailPage({ params }: { params: { driverId: string } }) {
+export default function DriverDetailPage() {
     const firestore = useFirestore();
     const { user, profile: adminProfile } = useUser();
-    const { driverId } = params;
+    const params = useParams();
+    const driverId = params.driverId as string;
     const { toast } = useToast();
 
     const [weeklyRides, setWeeklyRides] = useState<WithId<Ride>[]>([]);
