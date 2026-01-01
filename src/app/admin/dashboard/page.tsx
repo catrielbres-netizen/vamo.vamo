@@ -40,13 +40,7 @@ export default function AdminDashboard() {
 
 
   const onlineDrivers = useMemo(() => {
-    return users?.filter(u => u.role === 'driver' && u.driverStatus === 'online').map((driver, index) => ({
-      ...driver,
-      currentLocation: driver.currentLocation ?? {
-        lat: -43.3005 + (Math.random() - 0.5) * 0.1, // Simulate around Rawson
-        lng: -65.1023 + (Math.random() - 0.5) * 0.1,
-      }
-    })) ?? []
+    return users?.filter(u => u.role === 'driver' && u.driverStatus === 'online' && u.currentLocation) ?? []
   }, [users])
 
   const {

@@ -82,15 +82,15 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
                         ridesCompleted = profileData.ridesCompleted || 0;
                     } else {
                         // Create profile if it doesn't exist
-                        const newProfile: UserProfile = {
+                        const newProfile: Partial<UserProfile> = {
                             name: ride.passengerName || 'Pasajero Anónimo',
                             email: '', // Should be filled from auth, but not available here
                             role: 'passenger',
                             createdAt: Timestamp.now(),
+                            profileCompleted: true,
                             vamoPoints: 0,
-                            averageRating: null,
                             ridesCompleted: 0,
-                            activeBonus: false
+                            activeBonus: false,
                         };
                         transaction.set(userProfileRef, newProfile);
                     }
@@ -249,9 +249,6 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
           ride.driverId
             ? {
                 name: ride.driverName || 'Conductor',
-                car: 'Auto (simulado)',
-                plate: 'AB123CD',
-                rating: '5.0',
                 arrivalInfo: ride.driverArrivalInfo ? `${formatDuration(ride.driverArrivalInfo.durationSeconds)}` : 'Calculando...',
               }
             : null

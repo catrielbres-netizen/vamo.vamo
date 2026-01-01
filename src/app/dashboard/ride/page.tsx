@@ -88,21 +88,17 @@ export default function RidePage() {
                         return;
                     }
                 }
-                // Fallback to simulation if API fails
-                const simulatedDist = 5000;
-                setDistanceMeters(simulatedDist);
-                setDurationSeconds(600); // 10 minutes
-                const fare = calculateFare({ distanceMeters: simulatedDist, service: serviceType });
-                setEstimatedFare(fare);
+                // If API fails, reset to 0
+                setDistanceMeters(0);
+                setDurationSeconds(0);
+                setEstimatedFare(0);
             }
         );
     } else {
         // Fallback for when Google Maps script is not ready
-        const simulatedDist = 5000; // 5km
-        setDistanceMeters(simulatedDist);
-        setDurationSeconds(600); // 10 minutes
-        const fare = calculateFare({ distanceMeters: simulatedDist, service: serviceType });
-        setEstimatedFare(fare);
+        setDistanceMeters(0);
+        setDurationSeconds(0);
+        setEstimatedFare(0);
     }
   }, [destination, origin, serviceType]);
   
@@ -295,7 +291,7 @@ export default function RidePage() {
         onClick={currentAction.handler}
         label={currentAction.label}
         variant={currentAction.variant}
-        disabled={isRideLoading || (status==='idle' && (!destination || !origin))}
+        disabled={isRideLoading || (status==='idle' && (!destination || !origin || distanceMeters === 0))}
       />
        <div className="mt-8">
         <Separator />

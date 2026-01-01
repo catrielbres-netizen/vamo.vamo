@@ -34,7 +34,7 @@ export async function initiateEmailSignUp(authInstance: Auth, firestore: Firesto
         activeBonus: false,
     };
 
-    await setDoc(userProfileRef, newUserProfile);
+    await setDoc(userProfileRef, newUserProfile, { merge: true });
 
   } catch (error) {
     console.error("Error during sign up and profile creation:", error);
@@ -60,12 +60,12 @@ export async function initiateDriverEmailSignUp(authInstance: Auth, firestore: F
         // Driver specific fields
         approved: false,
         driverStatus: 'inactive',
-        averageRating: null,
+        averageRating: 0,
         ridesCompleted: 0,
         vehicleVerificationStatus: 'unverified',
     };
 
-    await setDoc(userProfileRef, newDriverProfile);
+    await setDoc(userProfileRef, newDriverProfile, { merge: true });
 
   } catch (error) {
     console.error("Error during driver sign up and profile creation:", error);
