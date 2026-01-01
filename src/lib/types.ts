@@ -73,17 +73,17 @@ export interface Ride {
 
 export type UserProfile = {
     name: string;
-    email?: string;
+    email: string;
     role: 'admin' | 'driver' | 'passenger';
-    profileCompleted?: boolean;
     createdAt: any;
     updatedAt?: any;
+    // Common fields
     phone?: string;
     photoURL?: string | null;
-    // Passenger fields
-    vamoPoints?: number;
     averageRating?: number | null;
     ridesCompleted?: number;
+    // Passenger fields
+    vamoPoints?: number;
     activeBonus?: boolean;
     // Driver fields
     approved?: boolean;

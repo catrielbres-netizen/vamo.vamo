@@ -19,7 +19,7 @@ export function PassengerHeader({ userName, location }: { userName: string, loca
   }
 
   return (
-    <div className="p-4 border-b flex justify-between items-center">
+    <div className="flex justify-between items-center">
       <div>
         <p className="text-sm text-gray-500">Hola, {userName} 👋</p>
         <p className="font-medium">📍 {location || 'Ubicación no disponible'}</p>
