@@ -1,3 +1,4 @@
+
 // src/app/login/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
@@ -11,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { VamoIcon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
+import Link from 'next/link';
 
 export default function LoginPage() {
     const auth = useAuth();
@@ -124,11 +126,19 @@ export default function LoginPage() {
                         </Button>
                     </div>
                     <Separator className="my-6" />
-                    <div className="text-center">
-                         <p className="text-sm text-muted-foreground">¿No tienes cuenta?</p>
-                         <Button variant="link" onClick={handleSignUp} disabled={isSubmitting}>
-                            Registrate ahora
-                         </Button>
+                    <div className="text-center space-y-2">
+                         <div>
+                            <p className="text-sm text-muted-foreground">¿No tienes cuenta?</p>
+                            <Button variant="link" onClick={handleSignUp} disabled={isSubmitting}>
+                                Registrate ahora
+                            </Button>
+                         </div>
+                         <div>
+                             <p className="text-sm text-muted-foreground">¿Necesitas crear un administrador?</p>
+                             <Button variant="link" asChild>
+                                <Link href="/admin/create">Crear admin</Link>
+                             </Button>
+                         </div>
                     </div>
                 </CardContent>
             </Card>
