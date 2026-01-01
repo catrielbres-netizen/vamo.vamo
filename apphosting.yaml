@@ -3,11 +3,9 @@
 
 # The command to build your web framework.
 build:
-  # You can specify a build command here. For example:
   run: npm run build
 # The command to run your web framework.
 run:
-  # You can specify a run command here. For example:
   run: npm run start
 runConfig:
   # Increase this value if you'd like to automatically spin up
@@ -16,6 +14,11 @@ runConfig:
 # Pass environment variables to your build and run commands.
 # https://firebase.google.com/docs/app-hosting/configure-backend#set-env-vars
 env:
+  - variable: GENKIT_ENV
+    availability:
+      - BUILD
+      - RUNTIME
+    value: production
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     availability:
       - BUILD
