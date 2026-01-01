@@ -1,4 +1,3 @@
-
 // src/lib/types.ts
 
 import { type Timestamp } from "firebase/firestore";
@@ -79,6 +78,7 @@ export interface Ride {
 }
 
 export type UserProfile = {
+    id?: any;
     name: string;
     lastName?: string | null;
     email: string;
@@ -122,5 +122,5 @@ export interface AuditLog {
     action: AuditLogAction;
     entityId: string; // ID of the ride, driver, etc.
     timestamp: Timestamp;
-    details?: string;
+    details?: string | null;
 }

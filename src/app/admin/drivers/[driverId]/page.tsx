@@ -1,18 +1,20 @@
 // src/app/admin/drivers/[driverId]/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
-import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, Timestamp, doc } from 'firebase/firestore';
-import { Ride, DriverSummary, UserProfile } from '@/lib/types';
+import { useFirestore, useDoc, useMemoFirebase, useUser } from '@/firebase';
+import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { Ride, DriverSummary, UserProfile, AuditLog } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Progress } from '@/components/ui/progress';
-import { Target, CheckCircle, Percent } from 'lucide-react';
+import { Target, CheckCircle, Percent, Shield, AlertTriangle, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { WithId } from '@/firebase/firestore/use-collection';
+import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 
 function formatCurrency(value: number) {
@@ -29,9 +31,18 @@ const getCommissionInfo = (rideCount: number): { rate: number, nextTier: number 
     return { rate: 0.04, nextTier: null, ridesToNext: null };
 }
 
+const verificationStatusBadge: Record<UserProfile['vehicleVerificationStatus'] & string, { text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+    unverified: { text: 'No Verificado', variant: 'destructive' },
+    pending_review: { text: 'Pendiente de Revisión', variant: 'secondary' },
+    approved: { text: 'Aprobado', variant: 'default' },
+    rejected: { text: 'Rechazado', variant: 'destructive' },
+}
+
 export default function DriverDetailPage({ params }: { params: { driverId: string } }) {
     const firestore = useFirestore();
+    const { profile: adminProfile } = useUser();
     const { driverId } = params;
+    const { toast } = useToast();
 
     const [weeklyRides, setWeeklyRides] = useState<WithId<Ride>[]>([]);
     const [summary, setSummary] = useState<DriverSummary | null>(null);
@@ -44,6 +55,43 @@ export default function DriverDetailPage({ params }: { params: { driverId: strin
     const weekStartsOn = 1; // Monday
     const firstDayOfWeek = startOfWeek(today, { weekStartsOn });
     const weekId = `${getYear(firstDayOfWeek)}-W${getWeek(firstDayOfWeek, { weekStartsOn })}`;
+
+    const handleVerification = async (newStatus: 'approved' | 'rejected') => {
+        if (!firestore || !driverProfileRef || !adminProfile?.name) {
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo completar la acción.' });
+            return;
+        }
+
+        try {
+            await updateDoc(driverProfileRef, {
+                vehicleVerificationStatus: newStatus,
+                approved: newStatus === 'approved', // Only approve if status is approved
+                updatedAt: serverTimestamp(),
+            });
+
+            // Create audit log
+            const auditLogRef = collection(firestore, 'auditLogs');
+            const logEntry: Partial<AuditLog> = {
+                adminId: adminProfile.id,
+                adminName: adminProfile.name,
+                action: newStatus === 'approved' ? 'driver_approved' : 'driver_rejected',
+                entityId: driverId,
+                timestamp: serverTimestamp(),
+                details: `El administrador ${adminProfile.name} ${newStatus === 'approved' ? 'aprobó' : 'rechazó'} al conductor.`
+            };
+            await addDoc(auditLogRef, logEntry);
+
+
+            toast({
+                title: '¡Acción completada!',
+                description: `El conductor ha sido ${newStatus === 'approved' ? 'aprobado' : 'rechazado'}.`,
+            });
+        } catch (error) {
+            console.error("Error updating driver status:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado del conductor.' });
+        }
+    }
+
 
     useEffect(() => {
         if (!firestore || !driverId) return;
@@ -104,18 +152,72 @@ export default function DriverDetailPage({ params }: { params: { driverId: strin
     const commissionOwed = summary?.commissionOwed ?? 0;
     const bonusesApplied = summary?.bonusesApplied ?? 0;
     const netToReceive = totalEarnings - commissionOwed + bonusesApplied;
+    const verificationInfo = verificationStatusBadge[driver.vehicleVerificationStatus || 'unverified'];
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold">{driver.name}</h1>
-                    <p className="text-muted-foreground">{driver.email}</p>
+                    <h1 className="text-3xl font-bold flex items-center gap-2">
+                        {driver.name}
+                        <Badge variant={verificationInfo.variant}>{verificationInfo.text}</Badge>
+                    </h1>
+                    <p className="text-muted-foreground">{driver.email} | {driver.phone}</p>
+                    <p className="text-sm text-muted-foreground">Año del vehículo: {driver.carModelYear || 'N/A'}</p>
                 </div>
                 <Button asChild variant="outline">
                     <Link href="/admin/rides">Volver a la lista</Link>
                 </Button>
             </div>
+            
+            {driver.vehicleVerificationStatus === 'pending_review' && (
+                <Card className="border-yellow-500">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><AlertTriangle className="text-yellow-500"/> Conductor Pendiente de Aprobación</CardTitle>
+                        <CardDescription>Revisá la documentación recibida por WhatsApp y tomá una acción.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex gap-4">
+                         <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="default" className="w-full bg-green-600 hover:bg-green-700">
+                                    <UserCheck className="mr-2"/> Aprobar Conductor
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>¿Estás seguro que querés aprobar a este conductor?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Esta acción activará la cuenta del conductor y le permitirá empezar a recibir viajes. Asegurate de haber verificado toda su documentación.
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleVerification('approved')} className="bg-green-600 hover:bg-green-700">Aprobar</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" className="w-full">Rechazar Conductor</Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>¿Estás seguro que querés rechazar a este conductor?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Esta acción marcará al conductor como rechazado y no podrá acceder a la app. Deberá contactar a soporte si cree que es un error.
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleVerification('rejected')} variant="destructive">Rechazar</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </CardContent>
+                </Card>
+            )}
+
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                  <Card className="border-primary">

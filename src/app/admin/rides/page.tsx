@@ -7,22 +7,33 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { UserProfile } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
 import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, AlertTriangle } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 
-const DriverListItem = ({ driver }: { driver: WithId<UserProfile> }) => (
-    <Link href={`/admin/drivers/${driver.id}`}>
-        <li className="border p-4 rounded-lg flex justify-between items-center hover:bg-accent transition-colors">
-            <div>
-                <p className="font-semibold">{driver.name ?? driver.email}</p>
-                <p className="text-sm text-muted-foreground">{driver.email}</p>
-            </div>
-            <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Ver Detalles</span>
-                <ChevronRight className="h-4 w-4" />
-            </div>
-        </li>
-    </Link>
-);
+const verificationStatusBadge: Record<UserProfile['vehicleVerificationStatus'] & string, { text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+    unverified: { text: 'No Verificado', variant: 'destructive' },
+    pending_review: { text: 'Pendiente', variant: 'secondary' },
+    approved: { text: 'Aprobado', variant: 'default' },
+    rejected: { text: 'Rechazado', variant: 'destructive' },
+}
+
+const DriverListItem = ({ driver }: { driver: WithId<UserProfile> }) => {
+    const verificationInfo = verificationStatusBadge[driver.vehicleVerificationStatus || 'unverified'];
+    return (
+        <Link href={`/admin/drivers/${driver.id}`}>
+            <li className="border p-4 rounded-lg flex justify-between items-center hover:bg-accent transition-colors">
+                <div>
+                    <p className="font-semibold">{driver.name ?? driver.email}</p>
+                    <p className="text-sm text-muted-foreground">{driver.email}</p>
+                </div>
+                <div className="flex items-center gap-4">
+                    <Badge variant={verificationInfo.variant}>{verificationInfo.text}</Badge>
+                    <ChevronRight className="h-4 w-4" />
+                </div>
+            </li>
+        </Link>
+    );
+}
 
 
 export default function AdminRidesPage() {
@@ -33,13 +44,30 @@ export default function AdminRidesPage() {
     [db]
   );
   const { data: drivers, isLoading } = useCollection<UserProfile>(driversQuery)
+  
+  const pendingDrivers = drivers?.filter(d => d.vehicleVerificationStatus === 'pending_review');
 
   return (
     <div className="space-y-6">
         <h1 className="text-3xl font-bold">Actividad de Conductores</h1>
+        
+        {pendingDrivers && pendingDrivers.length > 0 && (
+            <Card className="border-yellow-500">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-yellow-600"><AlertTriangle /> Conductores Pendientes</CardTitle>
+                    <CardDescription>Estos conductores completaron su perfil y están esperando aprobación.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                     <ul className="space-y-3">
+                        {pendingDrivers.map(driver => <DriverListItem key={driver.id} driver={driver} />)}
+                    </ul>
+                </CardContent>
+            </Card>
+        )}
+
         <Card>
             <CardHeader>
-                <CardTitle>Conductores Registrados ({drivers?.length ?? 0})</CardTitle>
+                <CardTitle>Todos los Conductores ({drivers?.length ?? 0})</CardTitle>
                 <CardDescription>Seleccioná un conductor para ver sus viajes y progreso semanal.</CardDescription>
             </CardHeader>
             <CardContent>
