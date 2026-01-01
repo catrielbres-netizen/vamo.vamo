@@ -1,3 +1,4 @@
+
 // src/app/admin/drivers/[driverId]/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
@@ -76,14 +77,13 @@ export default function DriverDetailPage() {
 
             // Create audit log
             const auditLogRef = collection(firestore, 'auditLogs');
-            const logEntry: Omit<AuditLog, 'timestamp'> = {
+            const logEntry: Omit<AuditLog, 'timestamp' | 'details'> = {
                 adminId: user.uid,
                 adminName: adminProfile.name,
                 action: newStatus === 'approved' ? 'driver_approved' : 'driver_rejected',
                 entityId: driverId,
-                details: `El administrador ${adminProfile.name} ${newStatus === 'approved' ? 'aprobó' : 'rechazó'} al conductor.`
             };
-            await addDoc(auditLogRef, { ...logEntry, timestamp: serverTimestamp()});
+            await addDoc(auditLogRef, { ...logEntry, timestamp: serverTimestamp(), details: `El administrador ${adminProfile.name} ${newStatus === 'approved' ? 'aprobó' : 'rechazó'} al conductor.` });
 
 
             toast({
@@ -311,10 +311,10 @@ export default function DriverDetailPage() {
                             {inspectionResult && (
                                 <AlertDialogContent>
                                     <AlertDialogHeader>
-                                    <AlertDialogTitle>Análisis de Viajes por IA</AlertDialogTitle>
-                                    <AlertDialogDescription className="whitespace-pre-wrap">
-                                        {inspectionResult}
-                                    </AlertDialogDescription>
+                                        <AlertDialogTitle>Análisis de Viajes por IA</AlertDialogTitle>
+                                        <div className="text-sm text-muted-foreground whitespace-pre-wrap pt-2">
+                                            {inspectionResult}
+                                        </div>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                         <AlertDialogAction onClick={() => setInspectionResult(null)}>Entendido</AlertDialogAction>
