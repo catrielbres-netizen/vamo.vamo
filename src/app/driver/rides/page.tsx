@@ -1,7 +1,7 @@
 // /app/driver/rides/page.tsx
 'use client';
 
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
@@ -10,10 +10,9 @@ import FinishedRideSummary from '@/components/FinishedRideSummary';
 import { useToast } from "@/hooks/use-toast";
 import { speak } from '@/lib/speak';
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride, ServiceType } from '@/lib/types';
+import { Ride, ServiceType, UserProfile } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { ShieldCheck, MapIcon, List } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ShieldCheck, Clock, Loader } from 'lucide-react';
 
 
 // Helper function to determine which services a driver can see
@@ -21,10 +20,33 @@ const getAllowedServices = (): ServiceType[] => {
     return ['premium', 'privado', 'express'];
 }
 
+const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, {title: string, description: string, icon: React.ReactNode}> = {
+    unverified: {
+        title: 'Perfil Incompleto',
+        description: 'Debes completar tu perfil y enviar la documentación para empezar a recibir viajes.',
+        icon: <Loader className="animate-spin" />
+    },
+    pending_review: {
+        title: 'Cuenta en Revisión',
+        description: 'Nuestro equipo está verificando tu documentación. Recibirás una notificación cuando tu cuenta sea aprobada. Esto puede demorar hasta 24hs.',
+        icon: <Clock />
+    },
+    rejected: {
+        title: 'Cuenta Rechazada',
+        description: 'Hubo un problema con tu documentación. Por favor, contactá a soporte para más información.',
+        icon: <Clock />
+    },
+    approved: {
+        title: '¡Estás en línea!',
+        description: 'Ya podés recibir viajes. ¡Buenas rutas!',
+        icon: <ShieldCheck />
+    }
+}
+
 
 export default function DriverRidesPage() {
   const firestore = useFirestore();
-  const { user } = useUser();
+  const { user, profile, loading: isUserLoading } = useUser();
   const { toast } = useToast();
   
   const [activeRide, setActiveRide] = useState<WithId<Ride> | null>(null);
@@ -34,15 +56,16 @@ export default function DriverRidesPage() {
   const activeRideStateRef = useRef<WithId<Ride> | null>(null);
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
 
+  // Only query for rides if the driver is approved
   const availableRidesQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid || activeRide) return null;
+    if (!firestore || !user?.uid || activeRide || !profile?.approved) return null;
     return query(
         collection(firestore, 'rides'),
         where('status', '==', 'searching_driver')
     );
-  }, [firestore, user?.uid, activeRide]);
+  }, [firestore, user?.uid, activeRide, profile?.approved]);
 
-  const { data: availableRides, isLoading } = useCollection<Ride>(availableRidesQuery);
+  const { data: availableRides, isLoading: areRidesLoading } = useCollection<Ride>(availableRidesQuery);
 
   useEffect(() => {
     activeRideStateRef.current = activeRide;
@@ -88,7 +111,7 @@ export default function DriverRidesPage() {
 
 
   useEffect(() => {
-    if (isLoading || !availableRides) return;
+    if (areRidesLoading || !availableRides || !profile?.approved) return;
 
     const allowedServices = getAllowedServices();
     const filteredRides = availableRides.filter(ride => allowedServices.includes(ride.serviceType));
@@ -110,7 +133,7 @@ export default function DriverRidesPage() {
     
     previousAvailableRides.current = filteredRides;
 
-  }, [availableRides, isLoading, toast]);
+  }, [availableRides, areRidesLoading, toast, profile?.approved]);
 
 
   const handleAcceptRide = () => {
@@ -133,17 +156,34 @@ export default function DriverRidesPage() {
   const filteredAvailableRides = availableRides?.filter(ride => allowedServices.includes(ride.serviceType)) ?? [];
   
   const renderAvailableRides = () => {
-    if (isLoading) {
+    if (areRidesLoading || isUserLoading) {
       return <p className="text-center">Buscando viajes...</p>;
     }
     
+    // Si el conductor no está aprobado, mostrarle un mensaje de estado
+    if (!profile?.approved) {
+        const statusKey = profile?.vehicleVerificationStatus || 'unverified';
+        const message = statusMessages[statusKey];
+        return (
+            <Alert variant="default" className="border-yellow-400 bg-yellow-50 dark:bg-yellow-900/30">
+                <div className="text-yellow-500">{message.icon}</div>
+                <AlertTitle className="text-yellow-700 dark:text-yellow-300">{message.title}</AlertTitle>
+                <AlertDescription className="text-yellow-600 dark:text-yellow-500">
+                    {message.description}
+                </AlertDescription>
+            </Alert>
+        );
+    }
+
+    // Si el conductor está aprobado, mostrar la lista de viajes
+    const statusInfo = statusMessages['approved'];
     return (
         <div className="space-y-4">
             <Alert variant="default" className="bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400">
-                 <ShieldCheck className="h-4 w-4 text-green-500" />
-                <AlertTitle>¡Estás en línea!</AlertTitle>
+                 <div className="text-green-500">{statusInfo.icon}</div>
+                <AlertTitle>{statusInfo.title}</AlertTitle>
                 <AlertDescription className="text-green-600 dark:text-green-500">
-                    Ya podés recibir viajes. ¡Buenas rutas!
+                    {statusInfo.description}
                 </AlertDescription>
             </Alert>
             
