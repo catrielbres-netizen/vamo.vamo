@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useMemo } from 'react';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import DriverRideCard from '@/components/DriverRideCard';
 import ActiveDriverRide from '@/components/ActiveDriverRide';
@@ -28,14 +28,21 @@ export default function DriverRidesPage() {
   const { toast } = useToast();
   
   const [activeRide, setActiveRide] = useState<WithId<Ride> | null>(null);
-  const [availableRides, setAvailableRides] = useState<WithId<Ride>[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
   
-  const previousAvailableRides = useRef<WithId<Ride>[]>([]);
   const activeRideUnsubscribe = useRef<Unsubscribe | null>(null);
-  const availableRidesUnsubscribe = useRef<Unsubscribe | null>(null);
   const activeRideStateRef = useRef<WithId<Ride> | null>(null);
+  const previousAvailableRides = useRef<WithId<Ride>[]>([]);
+
+  const availableRidesQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid || activeRide) return null;
+    return query(
+        collection(firestore, 'rides'),
+        where('status', '==', 'searching_driver')
+    );
+  }, [firestore, user?.uid, activeRide]);
+
+  const { data: availableRides, isLoading } = useCollection<Ride>(availableRidesQuery);
 
   useEffect(() => {
     activeRideStateRef.current = activeRide;
@@ -43,11 +50,9 @@ export default function DriverRidesPage() {
 
   useEffect(() => {
     if (!firestore || !user?.uid) {
-      setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
     activeRideUnsubscribe.current?.();
 
     const activeRideQuery = query(
@@ -71,13 +76,9 @@ export default function DriverRidesPage() {
             variant: "destructive",
           });
       }
-      
-      setIsLoading(false);
     }, (error) => {
       console.error("Error fetching active ride:", error);
       // El error de permisos es manejado por el FirebaseErrorListener global.
-      // No es necesario mostrar un toast aquí.
-      setIsLoading(false);
     });
 
     return () => {
@@ -87,65 +88,29 @@ export default function DriverRidesPage() {
 
 
   useEffect(() => {
-    if (firestore && user?.uid && !activeRide) {
-        availableRidesUnsubscribe.current?.();
+    if (isLoading || !availableRides) return;
 
-        const allowedServices = getAllowedServices();
-        
-        if (allowedServices.length === 0) {
-            setAvailableRides([]);
-            setIsLoading(false);
-            return;
-        }
+    const allowedServices = getAllowedServices();
+    const filteredRides = availableRides.filter(ride => allowedServices.includes(ride.serviceType));
 
-        const availableRidesQuery = query(
-            collection(firestore, 'rides'),
-            where('status', '==', 'searching_driver')
-        );
+    const newRides = filteredRides.filter(
+        (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
+    );
 
-        availableRidesUnsubscribe.current = onSnapshot(availableRidesQuery, (snapshot) => {
-            const allSearchingRides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
-            
-            const rides = allSearchingRides.filter(ride => allowedServices.includes(ride.serviceType));
-
-            if (!isLoading) { 
-                const newRides = rides.filter(
-                    (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
-                );
-
-                if (newRides.length > 0) {
-                     newRides.forEach(newRide => {
-                        const destinationText = newRide.destination.address;
-                        toast({
-                            title: `¡Nuevo viaje ${newRide.serviceType}!`,
-                            description: `Un pasajero solicita un viaje a ${destinationText}.`,
-                        });
-                        speak(`Nuevo viaje ${newRide.serviceType} disponible hacia ${destinationText}.`);
-                     });
-                }
-            }
-            
-            setAvailableRides(rides);
-            previousAvailableRides.current = rides;
-            if(isLoading) setIsLoading(false);
-        }, (error) => {
-            // El error de permisos es manejado por el FirebaseErrorListener global.
-            // No es necesario mostrar un toast local aquí, ya que duplicaría el mensaje.
-            // El listener global lanzará un error más descriptivo.
-            console.error("Error fetching available rides:", error);
-            setIsLoading(false);
-        });
-    } else {
-        setAvailableRides([]);
-        previousAvailableRides.current = [];
-        availableRidesUnsubscribe.current?.();
-        if(isLoading) setIsLoading(false);
+    if (newRides.length > 0) {
+          newRides.forEach(newRide => {
+            const destinationText = newRide.destination.address;
+            toast({
+                title: `¡Nuevo viaje ${newRide.serviceType}!`,
+                description: `Un pasajero solicita un viaje a ${destinationText}.`,
+            });
+            speak(`Nuevo viaje ${newRide.serviceType} disponible hacia ${destinationText}.`);
+          });
     }
+    
+    previousAvailableRides.current = filteredRides;
 
-    return () => {
-        availableRidesUnsubscribe.current?.();
-    }
-  }, [firestore, user?.uid, activeRide, isLoading, toast]);
+  }, [availableRides, isLoading, toast]);
 
 
   const handleAcceptRide = () => {
@@ -163,6 +128,9 @@ export default function DriverRidesPage() {
   const handleCloseSummary = () => {
     setLastFinishedRide(null);
   }
+
+  const allowedServices = getAllowedServices();
+  const filteredAvailableRides = availableRides?.filter(ride => allowedServices.includes(ride.serviceType)) ?? [];
   
   const renderAvailableRides = () => {
     if (isLoading) {
@@ -180,8 +148,8 @@ export default function DriverRidesPage() {
             </Alert>
             
             <h2 className="text-xl font-semibold text-center pt-4">Viajes Disponibles</h2>
-            {availableRides.length > 0 ? (
-                availableRides.map((ride) => (
+            {filteredAvailableRides.length > 0 ? (
+                filteredAvailableRides.map((ride) => (
                 <DriverRideCard
                     key={ride.id}
                     ride={ride}
