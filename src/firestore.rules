@@ -2,75 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- Helper Functions ---
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-    
-    function isAdmin() {
-        // En una app de producción, esto debería usar custom claims.
-        // Leer un documento para verificar el rol es útil para prototipado.
-        return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    // --- USERS ---
-    match /users/{userId} {
-      // Un usuario puede crear su propio perfil.
-      allow create: if isAuthenticated();
-
-      // Solo el dueño del perfil o un admin pueden leerlo o actualizarlo.
-      allow get, update, delete: if isOwner(userId) || isAdmin();
-      
-      // Solo un admin puede listar todos los usuarios.
-      allow list: if isAdmin();
-    }
-
-    // --- RIDES ---
-    match /rides/{rideId} {
-      // PERMISOS DE COLECCIÓN (list, create)
-      
-      // Permite que cualquier usuario autenticado haga consultas (queries) sobre la colección.
-      // La seguridad REAL se delega a las cláusulas '.where()' en la consulta del cliente.
-      allow list: if isAuthenticated();
-      
-      // Permite que cualquier usuario autenticado cree un nuevo viaje.
-      allow create: if isAuthenticated();
-
-      // PERMISOS DE DOCUMENTO (get, update, delete)
-
-      // Permite leer un viaje específico solo a sus participantes o a un admin.
-      // Aquí `resource.data` está disponible porque es un documento individual.
-      allow get: if isAuthenticated() && (isOwner(resource.data.passengerId) || isOwner(resource.data.driverId) || isAdmin());
-
-      // Permite actualizar un viaje solo a sus participantes o a un admin.
-      allow update: if isAuthenticated() && (isOwner(resource.data.passengerId) || isOwner(resource.data.driverId) || isAdmin());
-      
-      // Se prefiere no borrar viajes para mantener el historial. Se cancelan cambiando el estado.
-      allow delete: if false;
-    }
-
-    // --- DRIVER SUMMARIES ---
-    match /driver_summaries/{summaryId} {
-        // Un conductor solo puede escribir en su propio resumen.
-        allow create, update: if isAuthenticated() && isOwner(request.resource.data.driverId);
-
-        // Un conductor puede leer su propio resumen. Un admin puede leer cualquiera.
-        allow get: if isAuthenticated() && (isOwner(resource.data.driverId) || isAdmin());
-
-        // Solo los admins pueden listar todos los resúmenes.
-        allow list: if isAdmin();
-        
-        allow delete: if false;
-    }
-    
-    // --- AUDIT LOGS ---
-    match /auditLogs/{logId} {
-       // Solo los admins pueden leer o escribir en los logs de auditoría.
-      allow read, write: if isAdmin();
+    // DEVELOPMENT-ONLY RULES
+    // Allows any authenticated user to read and write to the entire database.
+    // This removes all security restrictions to speed up initial development.
+    // WARNING: DO NOT use these rules in a production environment.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }
