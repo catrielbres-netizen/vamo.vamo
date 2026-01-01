@@ -2,7 +2,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useFirestore, useDoc, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Ride, DriverSummary, UserProfile, AuditLog } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
@@ -40,7 +40,7 @@ const verificationStatusBadge: Record<UserProfile['vehicleVerificationStatus'] &
 
 export default function DriverDetailPage({ params }: { params: { driverId: string } }) {
     const firestore = useFirestore();
-    const { profile: adminProfile } = useUser();
+    const { user, profile: adminProfile } = useUser();
     const { driverId } = params;
     const { toast } = useToast();
 
@@ -57,8 +57,8 @@ export default function DriverDetailPage({ params }: { params: { driverId: strin
     const weekId = `${getYear(firstDayOfWeek)}-W${getWeek(firstDayOfWeek, { weekStartsOn })}`;
 
     const handleVerification = async (newStatus: 'approved' | 'rejected') => {
-        if (!firestore || !driverProfileRef || !adminProfile?.name) {
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo completar la acción.' });
+        if (!firestore || !driverProfileRef || !adminProfile?.name || !user?.uid) {
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo completar la acción. Faltan datos del administrador.' });
             return;
         }
 
@@ -72,7 +72,7 @@ export default function DriverDetailPage({ params }: { params: { driverId: strin
             // Create audit log
             const auditLogRef = collection(firestore, 'auditLogs');
             const logEntry: Partial<AuditLog> = {
-                adminId: adminProfile.id,
+                adminId: user.uid,
                 adminName: adminProfile.name,
                 action: newStatus === 'approved' ? 'driver_approved' : 'driver_rejected',
                 entityId: driverId,
