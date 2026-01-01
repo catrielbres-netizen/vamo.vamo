@@ -13,6 +13,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy } from 
 import { initializeApp, getApps } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
 import { Ride } from '@/lib/types';
+import { Timestamp } from 'firebase/firestore';
+
 
 // Server-side Firebase initialization
 const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
@@ -68,11 +70,11 @@ const analyzeDriverRidesFlow = ai.defineFlow(
 
     // 1. Fetch the last 30 rides for the driver
     const ridesRef = collection(firestore, 'rides');
+    // Simplified query to avoid composite index requirement. We will sort in the code.
     const q = query(
         ridesRef, 
         where('driverId', '==', driverId),
         where('status', '==', 'finished'),
-        orderBy('createdAt', 'desc'),
         limit(30)
     );
     
@@ -85,6 +87,14 @@ const analyzeDriverRidesFlow = ai.defineFlow(
         querySnapshot.forEach(doc => {
             rides.push(doc.data() as Ride);
         });
+
+        // Sort the rides by creation date descending in the code
+        rides.sort((a, b) => {
+            const dateA = a.createdAt as Timestamp;
+            const dateB = b.createdAt as Timestamp;
+            return dateB.seconds - dateA.seconds;
+        });
+
     } catch (error) {
         console.error("Failed to fetch rides for analysis:", error);
         throw new Error(`Failed to fetch rides for driver ${driverId}`);
