@@ -240,9 +240,13 @@ export default function RidePage() {
             return { handler: handleRequestRide, label: 'Pedir Viaje', variant: 'default' as const };
         case 'searching_driver':
         case 'driver_assigned':
-        case 'arrived':
         case 'driver_arriving':
              return { handler: handleCancelRide, label: 'Cancelar Viaje', variant: 'destructive' as const };
+        case 'arrived':
+        case 'in_progress':
+        case 'paused':
+            // Una vez que el conductor llega, el pasajero no puede cancelar.
+            return { handler: () => {}, label: 'Viaje en Curso...', variant: 'secondary' as const, disabled: true };
         case 'finished':
         case 'cancelled':
              return { handler: handleReset, label: 'Pedir Otro Viaje', variant: 'default' as const };
@@ -291,7 +295,7 @@ export default function RidePage() {
         onClick={currentAction.handler}
         label={currentAction.label}
         variant={currentAction.variant}
-        disabled={isRideLoading || (status==='idle' && (!destination || !origin || distanceMeters === 0))}
+        disabled={isRideLoading || (status==='idle' && (!destination || !origin || distanceMeters === 0)) || currentAction.disabled}
       />
        <div className="mt-8">
         <Separator />
