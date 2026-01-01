@@ -6,7 +6,7 @@ import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, s
 import { Ride, DriverSummary, UserProfile, AuditLog } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
-import { es } from 'date-ns/locale';
+import { es } from 'date-fns/locale';
 import { Progress } from '@/components/ui/progress';
 import { Target, CheckCircle, Percent, Shield, AlertTriangle, UserCheck, Bot } from 'lucide-react';
 import Link from 'next/link';
