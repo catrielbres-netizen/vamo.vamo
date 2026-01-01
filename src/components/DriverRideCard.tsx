@@ -1,3 +1,4 @@
+
 // @/components/DriverRideCard.tsx
 'use client';
 
@@ -12,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Flag, MapPin, User } from 'lucide-react';
+import { Flag, MapPin, User, Clock, Route } from 'lucide-react';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Ride } from '@/lib/types';
 import ServiceBadge from './ServiceBadge';
@@ -25,6 +26,15 @@ const serviceCardStyles: Record<Ride['serviceType'], string> = {
     express: "border-gray-400/50",
 };
 
+const formatDistance = (meters: number) => {
+    if (meters < 1000) return `${meters} m`;
+    return `${(meters / 1000).toFixed(1)} km`;
+}
+
+const formatDuration = (seconds: number) => {
+    return `${Math.round(seconds / 60)} min`;
+}
+
 export default function DriverRideCard({
   ride,
   onAccept,
@@ -33,27 +43,59 @@ export default function DriverRideCard({
   onAccept: () => void;
 }) {
   const firestore = useFirestore();
-  const { user, profile } = useUser(); // <-- Obtenemos el perfil del conductor
+  const { user, profile } = useUser();
   const { toast } = useToast();
 
   const handleAcceptRide = async () => {
-    if (!firestore || !user || !profile) {
+    if (!firestore || !user || !profile || !profile.currentLocation) {
         toast({
             variant: "destructive",
             title: "Error de perfil",
-            description: "No se pudo cargar tu perfil para aceptar el viaje. Intenta de nuevo.",
+            description: "No se pudo cargar tu perfil o ubicación para aceptar el viaje. Intenta de nuevo.",
         });
         return;
     };
     const rideRef = doc(firestore, 'rides', ride.id);
     
-    // Usamos el nombre del perfil, que sí existe.
-    updateDocumentNonBlocking(rideRef, {
-        status: 'driver_assigned',
-        driverId: user.uid,
-        driverName: profile.name || 'Conductor Anónimo', // <-- ¡CORREGIDO!
-        updatedAt: serverTimestamp(),
-    });
+    // Calculate arrival info
+    if (window.google && window.google.maps && window.google.maps.DirectionsService) {
+        const directionsService = new window.google.maps.DirectionsService();
+        directionsService.route(
+            {
+                origin: new window.google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
+                destination: new window.google.maps.LatLng(ride.origin.lat, ride.origin.lng),
+                travelMode: window.google.maps.TravelMode.DRIVING,
+            },
+            (result, status) => {
+                 let arrivalInfo = null;
+                 if (status === window.google.maps.DirectionsStatus.OK && result) {
+                    const route = result.routes[0];
+                    if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
+                        arrivalInfo = {
+                            distanceMeters: route.legs[0].distance.value,
+                            durationSeconds: route.legs[0].duration.value,
+                        };
+                    }
+                }
+                
+                updateDocumentNonBlocking(rideRef, {
+                    status: 'driver_assigned',
+                    driverId: user.uid,
+                    driverName: profile.name || 'Conductor Anónimo',
+                    driverArrivalInfo: arrivalInfo,
+                    updatedAt: serverTimestamp(),
+                });
+            }
+        );
+    } else {
+        // Fallback if google maps is not available
+         updateDocumentNonBlocking(rideRef, {
+            status: 'driver_assigned',
+            driverId: user.uid,
+            driverName: profile.name || 'Conductor Anónimo',
+            updatedAt: serverTimestamp(),
+        });
+    }
 
     onAccept();
   };
@@ -84,7 +126,19 @@ export default function DriverRideCard({
           <Flag className="w-4 h-4 mr-2 text-muted-foreground" />
           <strong>Hasta:</strong> {ride.destination.address}
         </p>
-        <div className="!mt-4 bg-secondary/50 p-3 rounded-lg">
+
+        <div className="!mt-4 grid grid-cols-2 gap-2 text-center text-xs text-muted-foreground">
+            <div className="flex items-center justify-center gap-2">
+                <Route className="w-4 h-4" />
+                <span>{formatDistance(ride.pricing.estimatedDistanceMeters)}</span>
+            </div>
+             <div className="flex items-center justify-center gap-2">
+                <Clock className="w-4 h-4" />
+                <span>{formatDuration(ride.pricing.estimatedDurationSeconds || 0)}</span>
+            </div>
+        </div>
+
+        <div className="!mt-2 bg-secondary/50 p-3 rounded-lg">
             <p className="font-bold text-base text-center">
             Tarifa Estimada:{' '}
             <span className="text-primary">

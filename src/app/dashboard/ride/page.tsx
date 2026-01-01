@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -37,6 +38,7 @@ export default function RidePage() {
   const [origin, setOrigin] = useState<Place | null>(null);
   const [destination, setDestination] = useState<Place | null>(null);
   const [distanceMeters, setDistanceMeters] = useState(0);
+  const [durationSeconds, setDurationSeconds] = useState(0);
   const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
   const [estimatedFare, setEstimatedFare] = useState(0);
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
@@ -60,6 +62,7 @@ export default function RidePage() {
     if (!destination || !origin) {
         setEstimatedFare(0);
         setDistanceMeters(0);
+        setDurationSeconds(0);
         return;
     }
     
@@ -75,9 +78,11 @@ export default function RidePage() {
             (result, status) => {
                 if (status === window.google.maps.DirectionsStatus.OK && result) {
                     const route = result.routes[0];
-                    if (route && route.legs[0] && route.legs[0].distance) {
+                    if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
                         const dist = route.legs[0].distance.value;
+                        const duration = route.legs[0].duration.value;
                         setDistanceMeters(dist);
+                        setDurationSeconds(duration);
                         const fare = calculateFare({ distanceMeters: dist, service: serviceType });
                         setEstimatedFare(fare);
                         return;
@@ -86,6 +91,7 @@ export default function RidePage() {
                 // Fallback to simulation if API fails
                 const simulatedDist = 5000;
                 setDistanceMeters(simulatedDist);
+                setDurationSeconds(600); // 10 minutes
                 const fare = calculateFare({ distanceMeters: simulatedDist, service: serviceType });
                 setEstimatedFare(fare);
             }
@@ -94,6 +100,7 @@ export default function RidePage() {
         // Fallback for when Google Maps script is not ready
         const simulatedDist = 5000; // 5km
         setDistanceMeters(simulatedDist);
+        setDurationSeconds(600); // 10 minutes
         const fare = calculateFare({ distanceMeters: simulatedDist, service: serviceType });
         setEstimatedFare(fare);
     }
@@ -168,6 +175,7 @@ export default function RidePage() {
       pricing: {
         estimatedTotal: rideFare,
         estimatedDistanceMeters: distanceMeters,
+        estimatedDurationSeconds: durationSeconds,
         finalTotal: null,
         discountAmount: discountAmount,
       },

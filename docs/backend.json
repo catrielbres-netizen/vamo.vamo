@@ -28,6 +28,7 @@
             "estimatedTotal": { "type": "number" },
             "finalTotal": { "type": ["number", "null"] },
             "estimatedDistanceMeters": { "type": "number" },
+            "estimatedDurationSeconds": { "type": ["number", "null"], "description": "Estimated travel time in seconds from origin to destination." },
             "discountAmount": { "type": ["number", "null"], "description": "The amount discounted from the ride, covered by the app." }
           },
           "required": ["estimatedTotal", "estimatedDistanceMeters"],
@@ -38,6 +39,14 @@
         "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the ride was last updated." },
         "finishedAt": { "type": ["string", "null"], "format": "date-time", "description": "Timestamp of when the ride was finished." },
         "driverId": { "type": ["string", "null"], "description": "The unique identifier of the driver assigned to the ride." },
+        "driverArrivalInfo": {
+          "type": ["object", "null"],
+          "properties": {
+            "distanceMeters": { "type": "number" },
+            "durationSeconds": { "type": "number" }
+          },
+          "description": "Estimated distance and duration for the driver to arrive at the origin."
+        },
         "pauseStartedAt": { "type": ["string", "null"], "format": "date-time", "description": "Timestamp of when the current pause started." },
         "pauseHistory": {
           "type": "array",

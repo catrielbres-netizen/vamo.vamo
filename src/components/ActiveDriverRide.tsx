@@ -1,7 +1,8 @@
+
 // @/components/ActiveDriverRide.tsx
 'use client';
 
-import { useFirestore } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { doc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { RideStatusInfo } from '@/lib/ride-status';
 import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
-import { Flag, User, Hourglass, Play, Clock, Map, MapPin } from 'lucide-react';
+import { Flag, User, Hourglass, Play, Clock, Map, MapPin, Route, Car } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
@@ -34,9 +35,15 @@ const formatDuration = (seconds: number) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+const formatDistance = (meters: number) => {
+    if (meters < 1000) return `${meters} m`;
+    return `${(meters / 1000).toFixed(1)} km`;
+}
+
 export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<Ride>, onFinishRide: (ride: WithId<Ride>) => void }) {
   const firestore = useFirestore();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
+  const { profile } = useUser();
 
   const totalAccumulatedWaitSeconds = (ride.pauseHistory || []).reduce((acc: number, p: any) => acc + p.duration, 0);
 
@@ -81,6 +88,31 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
             ...(ride.pauseHistory || []),
             { started: pausedAt, ended: now, duration: diffSeconds }
         ];
+    }
+    
+    if(newStatus === 'arrived' && profile?.currentLocation) {
+        // When arriving, re-calculate route to destination
+        const directionsService = new window.google.maps.DirectionsService();
+        directionsService.route(
+            {
+                origin: new window.google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
+                destination: new window.google.maps.LatLng(ride.destination.lat, ride.destination.lng),
+                travelMode: window.google.maps.TravelMode.DRIVING,
+            },
+            (result, status) => {
+                if (status === window.google.maps.DirectionsStatus.OK && result) {
+                    const route = result.routes[0];
+                    if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
+                        const pricing = { 
+                            ...ride.pricing, 
+                            estimatedDistanceMeters: route.legs[0].distance.value,
+                            estimatedDurationSeconds: route.legs[0].duration.value
+                        };
+                        updateDocumentNonBlocking(rideRef, { ...payload, pricing });
+                    }
+                }
+            }
+        );
     }
 
     if(newStatus === 'finished') {
@@ -132,6 +164,12 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
   const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
   const currentTotal = ride.pricing.estimatedTotal + waitingCost;
+  
+  const arrivalInfo = ride.driverArrivalInfo;
+  const mainTripInfo = {
+      distance: ride.pricing.estimatedDistanceMeters,
+      duration: ride.pricing.estimatedDurationSeconds
+  };
 
   return (
     <Card>
@@ -144,24 +182,44 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
             {statusInfo.text}
         </Badge>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm">
+      <CardContent className="space-y-4 text-sm">
         <p className="flex items-center">
             <User className="w-4 h-4 mr-2 text-muted-foreground" />
             <strong>Pasajero:</strong> {ride.passengerName || 'No especificado'}
         </p>
-        <p className="flex items-center">
-          <Flag className="w-4 h-4 mr-2 text-muted-foreground" />
-          <strong>Destino:</strong> {ride.destination.address}
-        </p>
+
+        {ride.status === 'driver_assigned' && arrivalInfo && (
+             <div className="bg-secondary/50 p-3 rounded-lg text-center">
+                <p className="font-semibold">Recoger Pasajero</p>
+                <p className="text-xs text-muted-foreground">{ride.origin.address}</p>
+                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center justify-center gap-1.5"><Car className="w-4 h-4 text-primary"/> <span>{formatDistance(arrivalInfo.distanceMeters)}</span></div>
+                    <div className="flex items-center justify-center gap-1.5"><Clock className="w-4 h-4 text-primary"/> <span>{formatDuration(arrivalInfo.durationSeconds)}</span></div>
+                 </div>
+            </div>
+        )}
+
+        {['arrived', 'in_progress', 'paused'].includes(ride.status) && (
+            <div className="bg-secondary/50 p-3 rounded-lg text-center">
+                <p className="font-semibold">Llevar Pasajero a Destino</p>
+                <p className="flex items-center justify-center text-xs text-muted-foreground">
+                    <Flag className="w-3 h-3 mr-1"/> {ride.destination.address}
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center justify-center gap-1.5"><Route className="w-4 h-4 text-primary"/> <span>{formatDistance(mainTripInfo.distance)}</span></div>
+                    <div className="flex items-center justify-center gap-1.5"><Clock className="w-4 h-4 text-primary"/> <span>{formatDuration(mainTripInfo.duration || 0)}</span></div>
+                </div>
+            </div>
+        )}
 
         <div className="!mt-4 grid grid-cols-1 gap-2">
-            {['driver_assigned', 'arrived'].includes(ride.status) && (
+            {ride.status === 'driver_assigned' && (
                  <Button onClick={openNavigationToOrigin} className="w-full" variant="outline">
                     <MapPin className="mr-2 h-4 w-4"/>
                     Ir al Origen
                 </Button>
             )}
-             {ride.status === 'in_progress' && (
+             {['arrived', 'in_progress', 'paused'].includes(ride.status) && (
                 <Button onClick={openNavigationToDestination} className="w-full" variant="outline">
                     <Map className="mr-2 h-4 w-4"/>
                     Ir al Destino
@@ -170,13 +228,13 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
         </div>
        
         {(totalWaitWithCurrent > 0) && (
-            <div className="!mt-4 bg-secondary/50 p-3 rounded-lg">
+            <div className="!mt-4 bg-accent/50 p-3 rounded-lg">
                 <p className="flex items-center justify-center font-mono text-center">
-                    <Clock className="w-4 h-4 mr-2 text-primary" />
+                    <Hourglass className="w-4 h-4 mr-2 text-destructive" />
                     <span className="font-semibold">Tiempo de espera:</span>
                     <span className="ml-2 tabular-nums">{formatDuration(totalWaitWithCurrent)}</span>
                 </p>
-                <p className="mt-1 text-center font-semibold text-sm">
+                <p className="mt-1 text-center font-semibold text-sm text-destructive">
                     Costo de espera: ${new Intl.NumberFormat('es-AR').format(waitingCost)}
                 </p>
             </div>

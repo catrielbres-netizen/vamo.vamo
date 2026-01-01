@@ -30,7 +30,8 @@ function formatCurrency(value: number) {
 const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    if (mins < 1) return `~1 min`;
+    return `~${mins} min`;
 };
 
 export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
@@ -188,8 +189,14 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
                 <div className="border-t border-b py-4 space-y-2">
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Tarifa base</span>
-                        <span>{formatCurrency(ride.pricing.estimatedTotal - waitingCostFinal)}</span>
+                        <span>{formatCurrency(finalPrice - waitingCostFinal)}</span>
                     </div>
+                    {ride.pricing.discountAmount && ride.pricing.discountAmount > 0 ? (
+                        <div className="flex justify-between items-center text-sm text-green-500">
+                             <span className="text-muted-foreground">Descuento VamO</span>
+                             <span>-{formatCurrency(ride.pricing.discountAmount)}</span>
+                        </div>
+                    ) : null}
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Costo por espera</span>
                         <span>{formatCurrency(waitingCostFinal)}</span>
@@ -245,6 +252,7 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
                 car: 'Auto (simulado)',
                 plate: 'AB123CD',
                 rating: '5.0',
+                arrivalInfo: ride.driverArrivalInfo ? `${formatDuration(ride.driverArrivalInfo.durationSeconds)}` : 'Calculando...',
               }
             : null
         }

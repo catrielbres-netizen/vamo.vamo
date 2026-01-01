@@ -1,3 +1,4 @@
+
 // src/lib/types.ts
 
 import { type Timestamp } from "firebase/firestore";
@@ -50,6 +51,7 @@ export interface Ride {
     estimatedTotal: number;
     finalTotal?: number | null;
     estimatedDistanceMeters: number;
+    estimatedDurationSeconds?: number | null;
     discountAmount?: number | null;
   };
   status: RideStatus;
@@ -58,6 +60,10 @@ export interface Ride {
   finishedAt?: Timestamp | null;
   driverId?: string | null;
   driverName?: string | null;
+  driverArrivalInfo?: {
+    distanceMeters: number;
+    durationSeconds: number;
+  } | null;
   pauseStartedAt?: Timestamp | null;
   pauseHistory?: {
     started: Timestamp;
