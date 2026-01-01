@@ -55,7 +55,7 @@ export default function DriverLayout({
           <VamoIcon className="h-8 w-8 text-primary" />
           <h1 className="text-2xl font-bold">Panel Conductor</h1>
         </div>
-        <span className="text-sm font-medium text-muted-foreground">{profile.name}</span>
+        <span className="text-sm font-medium text-muted-foreground">{profile?.name}</span>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full mb-4">
