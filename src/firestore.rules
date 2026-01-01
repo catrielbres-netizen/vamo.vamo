@@ -12,8 +12,15 @@ service cloud.firestore {
     }
     
     function isAdmin() {
+        // In a real app, you would get custom claims instead of reading a document.
+        // This is okay for prototyping.
         return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+
+    function isRideParticipant(ride) {
+        return request.auth.uid == ride.passengerId || request.auth.uid == ride.driverId;
+    }
+
 
     // --- USERS ---
     match /users/{userId} {
@@ -31,34 +38,30 @@ service cloud.firestore {
     match /rides/{rideId} {
       // Any authenticated user can create a ride request.
       allow create: if isAuthenticated();
-
-      // Any authenticated user can query the rides collection.
-      // The frontend queries will be responsible for filtering (e.g., where('passengerId', '==', uid)).
+      
+      // Queries on the collection are allowed for any authenticated user.
+      // Security is enforced by the queries themselves (e.g., where('passengerId', '==', uid)).
       allow list: if isAuthenticated();
 
-      // Only the passenger, driver, or an admin can read or update a specific ride.
-      allow get, update: if isAuthenticated() && (
-        request.auth.uid == resource.data.passengerId ||
-        request.auth.uid == resource.data.driverId ||
-        isAdmin()
-      );
+      // Individual ride documents can only be read by participants or admins.
+      allow get: if isAuthenticated() && (isRideParticipant(resource.data) || isAdmin());
+
+      // Rides can be updated by participants or admins.
+      allow update: if isAuthenticated() && (isRideParticipant(resource.data) || isAdmin());
       
-      // Deletes are disallowed for now to preserve ride history.
+      // Deletes are disallowed to preserve ride history. An admin could "cancel" a ride by changing its status.
       allow delete: if false;
     }
 
     // --- DRIVER SUMMARIES ---
     match /driver_summaries/{summaryId} {
-        // Any authenticated user can create/update their summary.
-        allow create, update: if isAuthenticated();
+        // A driver can create/update their own summary.
+        allow create, update: if isAuthenticated() && isOwner(resource.data.driverId);
 
-        // Drivers can read their own summaries, Admins can read any summary.
-        allow get: if isAuthenticated() && (
-            resource.data.driverId == request.auth.uid ||
-            isAdmin()
-        );
+        // Drivers can read their own summaries. Admins can read any summary.
+        allow get: if isAuthenticated() && (isOwner(resource.data.driverId) || isAdmin());
 
-        // Admins can list all summaries.
+        // Only admins can list all summaries.
         allow list: if isAdmin();
     }
     

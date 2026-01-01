@@ -6,7 +6,7 @@ import { collection, query, where } from 'firebase/firestore'
 import { useFirestore } from '@/firebase'
 import { Users, Car, Search, Map as MapIcon } from 'lucide-react'
 import DriversMap from '../components/DriversMap'
-import { UserProfile } from '@/lib/types'
+import { UserProfile, Ride } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
 import { useMemo } from 'react'
 
@@ -14,10 +14,14 @@ export default function AdminDashboard() {
   const db = useFirestore()
 
   const usersQuery = useMemoFirebase(() => db ? collection(db, 'users') : null, [db]);
-  const ridesQuery = useMemoFirebase(() => db ? collection(db, 'rides') : null, [db]);
+  const ridesQuery = useMemoFirebase(() => db ? query(collection(db, 'rides'), where('status', 'in', ['in_progress', 'driver_arriving'])) : null, [db]);
+  const allRidesQuery = useMemoFirebase(() => db ? collection(db, 'rides') : null, [db]);
+
 
   const { data: users, isLoading: usersLoading } = useCollection<UserProfile>(usersQuery)
-  const { data: rides, isLoading: ridesLoading } = useCollection(ridesQuery)
+  const { data: activeRidesData, isLoading: activeRidesLoading } = useCollection<Ride>(ridesQuery)
+  const { data: allRides, isLoading: allRidesLoading } = useCollection<Ride>(allRidesQuery);
+
 
   const onlineDrivers = useMemo(() => {
     // We add a mock location because we are not tracking it yet
@@ -31,18 +35,21 @@ export default function AdminDashboard() {
   }, [users])
 
   const totalUsers = users?.length ?? 0
-  const totalRides = rides?.length ?? 0
-  const activeRides = rides?.filter(r => r.status === 'in_progress' || r.status === 'driver_arriving').length ?? 0
+  const totalRides = allRides?.length ?? 0;
+  const activeRides = activeRidesData?.length ?? 0
+
+  const isLoading = usersLoading || activeRidesLoading || allRidesLoading;
+
 
   return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold">Dashboard</h1>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatCard title="Usuarios registrados" value={usersLoading ? '...' : totalUsers} icon={<Users className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Viajes totales" value={ridesLoading ? '...' : totalRides} icon={<Car className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Viajes activos" value={ridesLoading ? '...' : activeRides} icon={<Search className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Conductores en línea" value={usersLoading ? '...' : onlineDrivers.length} icon={<MapIcon className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Usuarios registrados" value={isLoading ? '...' : totalUsers} icon={<Users className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Viajes totales" value={isLoading ? '...' : totalRides} icon={<Car className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Viajes activos" value={isLoading ? '...' : activeRides} icon={<Search className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Conductores en línea" value={isLoading ? '...' : onlineDrivers.length} icon={<MapIcon className="h-5 w-5 text-muted-foreground"/>} />
         </div>
 
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
