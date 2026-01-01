@@ -1,6 +1,7 @@
 // src/app/admin/audit/page.tsx
 'use client'
 
+import React from 'react'
 import { useCollection, useMemoFirebase, useUser } from '@/firebase'
 import { collection, query, where, doc, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore'
 import { useFirestore } from '@/firebase'
