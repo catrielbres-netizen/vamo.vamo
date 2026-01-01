@@ -4,26 +4,28 @@ service cloud.firestore {
 
     // Reglas para Perfiles de Usuario
     match /users/{userId} {
-      // Cualquier usuario autenticado puede crear su perfil y leer/actualizar perfiles.
+      // Permite la lectura y escritura de perfiles de usuario individuales por cualquier usuario autenticado.
+      // Las consultas a la colección 'users' están permitidas si el usuario está autenticado.
       allow read, write: if request.auth != null;
     }
 
     // Reglas para Viajes
     match /rides/{rideId} {
-      // Cualquier usuario autenticado puede leer y escribir en los viajes.
-      // Esto es permisivo para la etapa de desarrollo.
+      // Permite leer y escribir en documentos de viaje individuales.
+      // Lo más importante es que 'read' aquí incluye 'list', permitiendo consultas 
+      // en la colección 'rides' por cualquier usuario autenticado.
       allow read, write: if request.auth != null;
     }
 
     // Reglas para Resúmenes de Conductores
     match /driver_summaries/{summaryId} {
-      // Cualquier usuario autenticado puede interactuar con los resúmenes.
+      // Permite la lectura y escritura de resúmenes por cualquier usuario autenticado.
       allow read, write: if request.auth != null;
     }
     
     // Reglas para Logs de Auditoría
     match /auditLogs/{logId} {
-       // Solo los usuarios autenticados pueden crear y leer logs.
+       // Permite la creación y lectura de logs por cualquier usuario autenticado.
       allow read, write: if request.auth != null;
     }
   }
