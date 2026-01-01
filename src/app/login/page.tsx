@@ -2,7 +2,7 @@
 // src/app/login/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
-import { useAuth, useUser } from '@/firebase';
+import { useAuth, useUser, useFirestore }from '@/firebase';
 import { initiateEmailSignIn, initiateEmailSignUp } from '@/firebase/non-blocking-login';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -13,10 +13,12 @@ import { useToast } from '@/hooks/use-toast';
 import { VamoIcon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
+import { getAuth } from 'firebase/auth';
 
 export default function LoginPage() {
     const auth = useAuth();
-    const { user, loading } = useUser(); // We only need user and loading here now
+    const firestore = useFirestore();
+    const { user, loading } = useUser();
     const router = useRouter();
     const { toast } = useToast();
     
@@ -26,7 +28,6 @@ export default function LoginPage() {
 
     useEffect(() => {
         // If the user is logged in, the root page.tsx will handle redirection.
-        // This avoids conflicting redirection logic.
         if (!loading && user) {
             router.replace('/'); 
         }
@@ -50,16 +51,13 @@ export default function LoginPage() {
         if (!auth) return;
 
         setIsSubmitting(true);
-        // We use a timeout to check if login was successful, as initiateEmailSignIn is non-blocking.
         initiateEmailSignIn(auth, email, password);
         
         setTimeout(() => {
-          // If after 2.5s we still don't have a user, assume it failed.
           if(!getAuth().currentUser) { 
               toast({ variant: 'destructive', title: 'Error de inicio de sesión', description: 'Credenciales incorrectas o el usuario no existe.' });
               setIsSubmitting(false);
           }
-          // On success, the useEffect will trigger the redirect.
         }, 2500); 
     };
     
@@ -68,14 +66,21 @@ export default function LoginPage() {
             toast({ variant: 'destructive', title: 'Campos requeridos', description: 'Por favor, ingresa email y contraseña para registrarte.' });
             return;
         }
+        if (!auth || !firestore) {
+            toast({ variant: 'destructive', title: 'Error de sistema', description: 'Firebase no está inicializado.' });
+            return;
+        }
+
         setIsSubmitting(true);
         try {
-            await initiateEmailSignUp(auth, email, password);
-            toast({ title: 'Registro exitoso', description: 'Ahora puedes iniciar sesión.' });
+            await initiateEmailSignUp(auth, firestore, email, password);
+            toast({ title: '¡Registro exitoso!', description: 'Iniciando sesión para llevarte a tu panel.' });
+            // The onAuthStateChanged listener will now redirect correctly.
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Error de registro', description: error.message });
         } finally {
-            setIsSubmitting(false);
+            // Don't set isSubmitting to false immediately, wait for redirect
+            setTimeout(() => setIsSubmitting(false), 3000);
         }
     };
 
@@ -96,7 +101,7 @@ export default function LoginPage() {
                             <Input id="email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSubmitting} />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="password">Contraseña</Label>
+                            <Label htmlFor="password">Contraseña</Label>                            
                             <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting}/>
                         </div>
                         <Button onClick={handleSignIn} disabled={isSubmitting} className="w-full">
