@@ -1,9 +1,5 @@
 import type {NextConfig} from 'next';
 
-// Cargar variables de entorno
-require('dotenv').config({ path: './.env' });
-
-
 const nextConfig: NextConfig = {
   /* config options here */
   typescript: {
@@ -34,9 +30,10 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  env: {
-    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
-  }
+  // La configuración de 'env' en Next.js se usa para exponer variables de entorno
+  // del lado del servidor al cliente. Sin embargo, para variables con el prefijo
+  // NEXT_PUBLIC_, Next.js las expone automáticamente.
+  // No es necesario duplicar la configuración aquí si ya usas el prefijo.
 };
 
 export default nextConfig;
