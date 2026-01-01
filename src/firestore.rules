@@ -2,59 +2,70 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check for authenticated users
+    // --- Helper Functions ---
     function isAuthenticated() {
       return request.auth != null;
     }
 
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+        return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     // --- USERS ---
     match /users/{userId} {
-      // Any authenticated user can create their own profile
+      // Any authenticated user can create their own profile.
       allow create: if isAuthenticated();
 
-      // Users can only read/update/delete their own profile
-      // Admins can do anything
-      allow read, update, delete: if isAuthenticated() && (request.auth.uid == userId || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      // Only the owner or an admin can read/update their profile.
+      allow get, update, delete: if isOwner(userId) || isAdmin();
+      
+      // Admins can list all users.
+      allow list: if isAdmin();
     }
 
     // --- RIDES ---
     match /rides/{rideId} {
-      // Any authenticated user can list the collection for querying
-      allow list: if isAuthenticated();
-
-      // Any authenticated user can create a ride
+      // Any authenticated user can create a ride request.
       allow create: if isAuthenticated();
 
-      // Only the passenger, the assigned driver, or an admin can read or update a ride
+      // Any authenticated user can query the rides collection.
+      // The frontend queries will be responsible for filtering (e.g., where('passengerId', '==', uid)).
+      allow list: if isAuthenticated();
+
+      // Only the passenger, driver, or an admin can read or update a specific ride.
       allow get, update: if isAuthenticated() && (
         request.auth.uid == resource.data.passengerId ||
         request.auth.uid == resource.data.driverId ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        isAdmin()
       );
       
-      // Deletes are disallowed for now to preserve ride history
+      // Deletes are disallowed for now to preserve ride history.
       allow delete: if false;
     }
 
     // --- DRIVER SUMMARIES ---
     match /driver_summaries/{summaryId} {
-        // Drivers can read their own summaries, Admins can read any summary
+        // Any authenticated user can create/update their summary.
+        allow create, update: if isAuthenticated();
+
+        // Drivers can read their own summaries, Admins can read any summary.
         allow get: if isAuthenticated() && (
             resource.data.driverId == request.auth.uid ||
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+            isAdmin()
         );
 
-        // Allow listing for admins
-        allow list: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-
-        // Creation/updates can be done by the system (or any authenticated user for now)
-        allow create, update: if isAuthenticated();
+        // Admins can list all summaries.
+        allow list: if isAdmin();
     }
     
     // --- AUDIT LOGS ---
     match /auditLogs/{logId} {
-       // Only admins can read or write audit logs
-      allow read, write: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+       // Only admins can read or write audit logs.
+      allow read, write: if isAdmin();
     }
   }
 }
