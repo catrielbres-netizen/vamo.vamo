@@ -97,15 +97,20 @@ export default function DriverRidesPage() {
             return;
         }
 
+        // --- Simplified Query ---
+        // Only query for rides that are searching for a driver.
+        // Filtering by service type will happen on the client side.
         const availableRidesQuery = query(
             collection(firestore, 'rides'),
-            where('status', '==', 'searching_driver'),
-            where('serviceType', 'in', allowedServices)
+            where('status', '==', 'searching_driver')
         );
 
         availableRidesUnsubscribe.current = onSnapshot(availableRidesQuery, (snapshot) => {
-            const rides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
+            const allSearchingRides = snapshot.docs.map(doc => ({ ...(doc.data() as Ride), id: doc.id }));
             
+            // --- Client-side filtering ---
+            const rides = allSearchingRides.filter(ride => allowedServices.includes(ride.serviceType));
+
             if (!isLoading) { 
                 const newRides = rides.filter(
                     (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
