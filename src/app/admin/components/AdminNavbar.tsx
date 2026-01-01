@@ -4,6 +4,11 @@ import Link from 'next/link'
 import { VamoIcon } from '@/components/icons'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/firebase'
+import { signOut } from 'firebase/auth'
+import { useRouter } from 'next/navigation'
+import { LogOut } from 'lucide-react'
 
 const navLinks = [
     { href: '/admin/dashboard', label: 'Dashboard' },
@@ -13,6 +18,8 @@ const navLinks = [
 
 export function AdminNavbar() {
   const pathname = usePathname()
+  const auth = useAuth()
+  const router = useRouter()
 
   // Helper to determine if a link is active, considering nested routes
   const isActive = (href: string) => {
@@ -20,6 +27,13 @@ export function AdminNavbar() {
         return pathname.startsWith('/admin/rides') || pathname.startsWith('/admin/drivers');
     }
     return pathname === href;
+  }
+
+  const handleLogout = async () => {
+    if (auth) {
+        await signOut(auth)
+        router.push('/login')
+    }
   }
 
   return (
@@ -40,6 +54,12 @@ export function AdminNavbar() {
                 {link.label}
             </Link>
         ))}
+        <div className="ml-auto">
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Cerrar Sesión
+            </Button>
+        </div>
     </nav>
   )
 }
