@@ -11,12 +11,14 @@ export function TripCard({
   status,
   origin,
   destination,
+  onOriginSelect,
   onDestinationSelect,
   isInteractive,
 }: {
   status: string;
-  origin: string;
+  origin: Place | null;
   destination: Place | null;
+  onOriginSelect: (place: Place | null) => void;
   onDestinationSelect: (place: Place | null) => void;
   isInteractive: boolean;
 }) {
@@ -38,7 +40,11 @@ export function TripCard({
       <div className="space-y-2 text-sm">
         <div className="flex items-center">
           <span className="w-16 text-muted-foreground">Origen:</span>
-          <p className="font-medium">{origin || 'Ubicación actual'}</p>
+          {isInteractive ? (
+             <PlaceAutocomplete onPlaceSelect={onOriginSelect} />
+          ) : (
+            <p className="font-medium">{origin?.address || 'No especificado'}</p>
+          )}
         </div>
         <div className="flex items-center">
           <span className="w-16 text-muted-foreground">Destino:</span>

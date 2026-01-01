@@ -36,6 +36,7 @@ export interface Ride {
   passengerId: string;
   passengerName?: string | null;
   origin: {
+    address: string;
     lat: number;
     lng: number;
   };

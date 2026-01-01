@@ -34,11 +34,7 @@ export default function RidePage() {
   const router = useRouter();
 
 
-  const [origin, setOrigin] = useState<Place | null>({
-      address: 'Rawson, Chubut, Argentina',
-      lat: -43.3005,
-      lng: -65.1023
-  });
+  const [origin, setOrigin] = useState<Place | null>(null);
   const [destination, setDestination] = useState<Place | null>(null);
   const [distanceMeters, setDistanceMeters] = useState(0);
   const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
@@ -126,7 +122,7 @@ export default function RidePage() {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Por favor, completá el destino para pedir un viaje.',
+        description: 'Por favor, completá el origen y el destino para pedir un viaje.',
       });
       return;
     }
@@ -162,7 +158,7 @@ export default function RidePage() {
     const newRideData = {
       passengerId: currentUser.uid,
       passengerName: profile?.name || 'Pasajero Anónimo',
-      origin: { lat: origin.lat, lng: origin.lng },
+      origin: { lat: origin.lat, lng: origin.lng, address: origin.address },
       destination: {
         address: destination.address,
         lat: destination.lat,
@@ -221,6 +217,7 @@ export default function RidePage() {
   const handleReset = () => {
       setActiveRideId(null);
       setDestination(null);
+      setOrigin(null);
   }
 
   const getAction = () => {
@@ -262,7 +259,8 @@ export default function RidePage() {
         <>
           <TripCard 
             status={status} 
-            origin={origin?.address || 'Ubicación actual'} 
+            origin={origin}
+            onOriginSelect={setOrigin}
             destination={destination}
             onDestinationSelect={setDestination}
             isInteractive={true}
@@ -279,7 +277,7 @@ export default function RidePage() {
         onClick={currentAction.handler}
         label={currentAction.label}
         variant={currentAction.variant}
-        disabled={isRideLoading || (status==='idle' && !destination)}
+        disabled={isRideLoading || (status==='idle' && (!destination || !origin))}
       />
        <div className="mt-8">
         <Separator />

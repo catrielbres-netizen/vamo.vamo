@@ -83,6 +83,8 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
                         // Create profile if it doesn't exist
                         const newProfile: UserProfile = {
                             name: ride.passengerName || 'Pasajero Anónimo',
+                            email: '', // Should be filled from auth, but not available here
+                            role: 'passenger',
                             createdAt: Timestamp.now(),
                             vamoPoints: 0,
                             averageRating: null,
@@ -115,7 +117,7 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
 
         awardPoints();
     }
-  }, [ride.status, ride.id, ride.passengerId, firestore, ride.vamoPointsAwarded]);
+  }, [ride.status, ride.id, ride.passengerId, firestore, ride.vamoPointsAwarded, ride.passengerName]);
 
 
   const handleRatingSubmit = async (rating: number, comments: string) => {
@@ -229,9 +231,10 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
     <div>
       <TripCard
         status={ride.status}
-        origin={"Ubicación actual (simulada)"}
-        destination={ride.destination.address}
-        onDestinationChange={() => {}}
+        origin={ride.origin}
+        destination={ride.destination}
+        onOriginSelect={() => {}}
+        onDestinationSelect={() => {}}
         isInteractive={false}
       />
       <DriverInfo
