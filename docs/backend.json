@@ -62,7 +62,8 @@
         "passengerComments": { "type": ["string", "null"], "description": "Comments from the driver about the passenger." },
         "driverComments": { "type": ["string", "null"], "description": "Comments from the passenger about the driver." },
         "vamoPointsAwarded": { "type": ["number", "null"], "description": "Vamo points awarded to the passenger for this ride." },
-        "audited": { "type": "boolean", "description": "Indicates if a ride has been reviewed by an admin." }
+        "audited": { "type": "boolean", "default": false, "description": "Indicates if a ride has been reviewed by an admin." },
+        "auditComment": { "type": ["string", "null"], "description": "A comment left by the AI fraud detection system or an admin." }
       },
       "required": ["passengerId", "origin", "destination", "serviceType", "pricing", "status", "createdAt", "updatedAt"]
     },
@@ -123,7 +124,7 @@
         "properties": {
           "adminId": { "type": "string", "description": "The UID of the admin who performed the action." },
           "adminName": { "type": "string", "description": "The name of the admin for easy reference." },
-          "action": { "type": "string", "enum": ["driver_approved", "driver_rejected", "ride_cancelled_by_admin", "ride_marked_as_audited"], "description": "The type of action performed." },
+          "action": { "type": "string", "enum": ["driver_approved", "driver_rejected", "ride_cancelled_by_admin", "ride_marked_as_audited", "ride_flagged_by_ai"], "description": "The type of action performed." },
           "entityId": { "type": "string", "description": "The ID of the document that was affected (e.g., a user ID or ride ID)." },
           "timestamp": { "type": "string", "format": "date-time", "description": "When the action occurred." },
           "details": { "type": ["string", "null"], "description": "Optional extra details about the action." }

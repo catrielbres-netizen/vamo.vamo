@@ -24,7 +24,8 @@ export type AuditLogAction =
   | "driver_approved"
   | "driver_rejected"
   | "ride_cancelled_by_admin"
-  | "ride_marked_as_audited";
+  | "ride_marked_as_audited"
+  | "ride_flagged_by_ai";
 
 export interface Place {
   address: string;
@@ -74,7 +75,8 @@ export interface Ride {
   passengerComments?: string | null;
   driverComments?: string | null;
   vamoPointsAwarded?: number | null;
-  audited?: boolean;
+  audited: boolean;
+  auditComment?: string | null;
 }
 
 export type UserProfile = {
