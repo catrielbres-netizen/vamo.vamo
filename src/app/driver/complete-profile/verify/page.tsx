@@ -5,23 +5,41 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { WhatsAppLogo } from '@/components/icons';
 import { Check, FileText, Shield, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@/firebase';
 
 export default function VerifyPage() {
     const adminWhatsAppNumber = "2804967673";
     const router = useRouter();
+    const { profile, loading } = useUser();
 
-    const message = `
-Hola, soy un nuevo conductor de VamO.
-Quiero verificar mi cuenta. Adjunto mi documentación.
+    // The message is now constructed dynamically
+    const createWhatsAppMessage = () => {
+        if (loading || !profile) {
+            return 'Hola, soy un nuevo conductor de VamO y quiero verificar mi cuenta.';
+        }
+
+        const baseText = `
+Hola, soy un nuevo conductor de VamO. Quiero verificar mi cuenta.
+-----------------------------------
+*Mis Datos:*
+*Nombre:* ${profile.name} ${profile.lastName || ''}
+*Email:* ${profile.email}
+-----------------------------------
+Adjunto mi documentación:
 - Foto de DNI (frente y dorso)
 - Foto de Licencia de Conducir (frente y dorso)
 - Foto del Seguro del Vehículo vigente
 - Foto de la Cédula del Vehículo (para verificar el modelo)
 
 Gracias.
-    `.trim().replace(/\n/g, '%0A').replace(/ /g, '%20');
+        `.trim().replace(/\n/g, '%0A').replace(/ /g, '%20');
+        
+        return baseText;
+    };
+
 
     const handleWhatsAppClick = () => {
+        const message = createWhatsAppMessage();
         const url = `https://wa.me/${adminWhatsAppNumber}?text=${message}`;
         window.open(url, '_blank');
     };
@@ -49,9 +67,9 @@ Gracias.
                         </ul>
                     </div>
 
-                    <Button onClick={handleWhatsAppClick} className="w-full" size="lg">
+                    <Button onClick={handleWhatsAppClick} className="w-full" size="lg" disabled={loading}>
                         <WhatsAppLogo className="mr-2 h-5 w-5" />
-                        Enviar Documentación por WhatsApp
+                        {loading ? 'Cargando datos...' : 'Enviar Documentación por WhatsApp'}
                     </Button>
                     
                     <div className="text-center text-sm text-muted-foreground pt-4">
