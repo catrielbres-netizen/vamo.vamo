@@ -1,39 +1,56 @@
 'use client'
 
 import { useCollection, useMemoFirebase } from '@/firebase'
-import { collection } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { useFirestore } from '@/firebase'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { UserProfile } from '@/lib/types'
+import { WithId } from '@/firebase/firestore/use-collection'
+import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 
-export default function AdminRides() {
+const DriverListItem = ({ driver }: { driver: WithId<UserProfile> }) => (
+    <Link href={`/admin/drivers/${driver.id}`}>
+        <li className="border p-4 rounded-lg flex justify-between items-center hover:bg-accent transition-colors">
+            <div>
+                <p className="font-semibold">{driver.name ?? driver.email}</p>
+                <p className="text-sm text-muted-foreground">{driver.email}</p>
+            </div>
+            <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Ver Detalles</span>
+                <ChevronRight className="h-4 w-4" />
+            </div>
+        </li>
+    </Link>
+);
+
+
+export default function AdminRidesPage() {
   const db = useFirestore()
-  const ridesQuery = useMemoFirebase(() => db ? collection(db, 'rides') : null, [db]);
-  const { data: rides, isLoading } = useCollection(ridesQuery)
+  
+  const driversQuery = useMemoFirebase(
+    () => db ? query(collection(db, 'users'), where('role', '==', 'driver')) : null, 
+    [db]
+  );
+  const { data: drivers, isLoading } = useCollection<UserProfile>(driversQuery)
 
   return (
     <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Viajes</h1>
+        <h1 className="text-3xl font-bold">Actividad de Conductores</h1>
         <Card>
             <CardHeader>
-                <CardTitle>Todos los Viajes ({rides?.length ?? 0})</CardTitle>
+                <CardTitle>Conductores Registrados ({drivers?.length ?? 0})</CardTitle>
+                <CardDescription>Seleccioná un conductor para ver sus viajes y progreso semanal.</CardDescription>
             </CardHeader>
             <CardContent>
-                {isLoading && <p>Cargando viajes...</p>}
-                <ul className="space-y-3">
-                {rides?.map(ride => (
-                    <li key={ride.id} className="border p-4 rounded-lg">
-                        <div className="flex justify-between items-center">
-                            <p className="font-semibold">Viaje a {ride.destination?.address ?? 'Destino desconocido'}</p>
-                            <Badge variant="outline" className="capitalize">{ride.status}</Badge>
-                        </div>
-                        <div className="text-sm text-muted-foreground mt-2 space-y-1">
-                            <p>Pasajero: {ride.passengerName ?? ride.passengerId}</p>
-                            <p>Conductor: {ride.driverName ?? ride.driverId ?? 'No asignado'}</p>
-                        </div>
-                    </li>
-                ))}
-                </ul>
+                {isLoading && <p>Cargando conductores...</p>}
+                {!isLoading && drivers && drivers.length > 0 ? (
+                     <ul className="space-y-3">
+                        {drivers.map(driver => <DriverListItem key={driver.id} driver={driver} />)}
+                    </ul>
+                ) : !isLoading && (
+                    <p className="text-center text-muted-foreground py-8">No hay conductores registrados.</p>
+                )}
             </CardContent>
         </Card>
     </div>
