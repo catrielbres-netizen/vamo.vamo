@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useFirestore, useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,28 @@ export default function CompletePassengerProfilePage() {
 
         setIsSubmitting(true);
         try {
+            // Check for phone number uniqueness
+            const usersRef = collection(firestore, 'users');
+            const q = query(usersRef, where('phone', '==', phone));
+            const querySnapshot = await getDocs(q);
+
+            let isPhoneTaken = false;
+            querySnapshot.forEach((doc) => {
+                if (doc.id !== user.uid) {
+                    isPhoneTaken = true;
+                }
+            });
+
+            if (isPhoneTaken) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Teléfono en uso',
+                    description: 'Este número de teléfono ya está registrado en otra cuenta.',
+                });
+                setIsSubmitting(false);
+                return;
+            }
+
             const userProfileRef = doc(firestore, 'users', user.uid);
             await updateDoc(userProfileRef, {
                 name,
