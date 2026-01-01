@@ -16,10 +16,11 @@ import { Badge } from '@/components/ui/badge';
 import { RideStatusInfo } from '@/lib/ride-status';
 import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
 import { Flag, User, Hourglass, Play, Clock, Map, MapPin, Route, Car } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
 import { auditRide } from '@/ai/flows/audit-ride-flow';
+import { speak } from '@/lib/speak';
 
 
 const statusActions: { [key: string]: { action: string, label: string } } = {
@@ -44,6 +45,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
   const firestore = useFirestore();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
   const { profile } = useUser();
+  const prevStatusRef = useRef<Ride['status'] | undefined>();
 
   const totalAccumulatedWaitSeconds = (ride.pauseHistory || []).reduce((acc: number, p: any) => acc + p.duration, 0);
 
@@ -63,6 +65,25 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
     
     return () => clearInterval(timer);
   }, [ride.status, ride.pauseStartedAt]);
+  
+  useEffect(() => {
+    if (ride.status !== prevStatusRef.current) {
+        switch (ride.status) {
+            case 'driver_assigned':
+                speak("Viaje aceptado. Dirígete al origen y presiona 'Llegué al origen' al llegar.");
+                break;
+            case 'arrived':
+                speak("Llegaste. Recoge al pasajero y presiona 'Iniciar Viaje' para comenzar.");
+                break;
+            case 'in_progress':
+                 if(prevStatusRef.current === 'arrived') { // Only speak when starting, not when resuming
+                    speak("Viaje en curso. Al llegar a destino, presiona 'Finalizar Viaje'.");
+                 }
+                break;
+        }
+        prevStatusRef.current = ride.status;
+    }
+  }, [ride.status]);
 
   const updateStatus = (newStatus: string) => {
     if (!firestore) return;
