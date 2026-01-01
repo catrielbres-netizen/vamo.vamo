@@ -11,8 +11,8 @@
         "passengerName": { "type": ["string", "null"], "description": "The name of the passenger." },
         "origin": {
           "type": "object",
-          "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } },
-          "required": ["lat", "lng"],
+          "properties": { "address": { "type": "string" }, "lat": { "type": "number" }, "lng": { "type": "number" } },
+          "required": ["address", "lat", "lng"],
           "description": "The origin coordinates of the ride."
         },
         "destination": {
@@ -39,6 +39,7 @@
         "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the ride was last updated." },
         "finishedAt": { "type": ["string", "null"], "format": "date-time", "description": "Timestamp of when the ride was finished." },
         "driverId": { "type": ["string", "null"], "description": "The unique identifier of the driver assigned to the ride." },
+        "driverName": { "type": ["string", "null"] },
         "driverArrivalInfo": {
           "type": ["object", "null"],
           "properties": {
@@ -71,13 +72,15 @@
       "type": "object",
       "description": "Stores public profile information for a user (passenger, driver, or admin).",
       "properties": {
-        "name": { "type": "string", "description": "The user's display name." },
+        "name": { "type": "string", "description": "The user's first name." },
+        "lastName": { "type": ["string", "null"], "description": "The user's last name." },
         "email": { "type": "string", "format": "email", "description": "User's email for login and communication." },
-        "phone": { "type": "string", "description": "User's phone number." },
+        "phone": { "type": ["string", "null"], "description": "User's phone number." },
         "role": { "type": "string", "enum": ["passenger", "driver", "admin"], "description": "The role of the user within the system." },
         "photoURL": { "type": ["string", "null"], "format": "uri", "description": "URL of the user's profile picture." },
         "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the profile was created." },
         "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the profile was last updated." },
+        "profileCompleted": { "type": "boolean", "description": "Flag to indicate if user has completed their profile information." },
         "vamoPoints": { "type": "number", "description": "Total accumulated Vamo points (for passengers)." },
         "averageRating": { "type": ["number", "null"], "description": "The user's average rating." },
         "ridesCompleted": { "type": "number", "description": "Total number of completed rides." },
@@ -93,7 +96,7 @@
           "description": "The driver's current real-time location. Only applicable for drivers."
         }
       },
-      "required": ["name", "email", "role", "createdAt"]
+      "required": ["name", "email", "role", "createdAt", "profileCompleted"]
     },
     "DriverSummary": {
       "$schema": "http://json-schema.org/draft-07/schema#",

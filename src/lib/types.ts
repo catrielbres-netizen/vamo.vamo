@@ -80,12 +80,14 @@ export interface Ride {
 
 export type UserProfile = {
     name: string;
+    lastName?: string | null;
     email: string;
     role: 'admin' | 'driver' | 'passenger';
     createdAt: any;
     updatedAt?: any;
+    profileCompleted: boolean;
     // Common fields
-    phone?: string;
+    phone?: string | null;
     photoURL?: string | null;
     averageRating?: number | null;
     ridesCompleted?: number;

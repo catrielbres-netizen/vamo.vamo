@@ -47,7 +47,7 @@ export default function DriverRideCard({
   const { toast } = useToast();
 
   const handleAcceptRide = async () => {
-    if (!firestore || !user || !profile || !profile.currentLocation) {
+    if (!firestore || !user || !profile?.currentLocation) {
         toast({
             variant: "destructive",
             title: "Error de perfil",
@@ -78,10 +78,12 @@ export default function DriverRideCard({
                     }
                 }
                 
+                const driverFullName = `${profile.name || ''} ${profile.lastName || ''}`.trim();
+
                 updateDocumentNonBlocking(rideRef, {
                     status: 'driver_assigned',
                     driverId: user.uid,
-                    driverName: profile.name || 'Conductor Anónimo',
+                    driverName: driverFullName || 'Conductor Anónimo',
                     driverArrivalInfo: arrivalInfo,
                     updatedAt: serverTimestamp(),
                 });
@@ -89,10 +91,11 @@ export default function DriverRideCard({
         );
     } else {
         // Fallback if google maps is not available
+         const driverFullName = `${profile.name || ''} ${profile.lastName || ''}`.trim();
          updateDocumentNonBlocking(rideRef, {
             status: 'driver_assigned',
             driverId: user.uid,
-            driverName: profile.name || 'Conductor Anónimo',
+            driverName: driverFullName || 'Conductor Anónimo',
             updatedAt: serverTimestamp(),
         });
     }

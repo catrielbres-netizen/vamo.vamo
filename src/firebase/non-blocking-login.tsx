@@ -26,6 +26,7 @@ export async function initiateEmailSignUp(authInstance: Auth, firestore: Firesto
         name: email.split('@')[0],
         email: email,
         role: 'passenger',
+        profileCompleted: true, // Passengers complete profile by default
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         vamoPoints: 0,
@@ -53,6 +54,7 @@ export async function initiateDriverEmailSignUp(authInstance: Auth, firestore: F
         name: email.split('@')[0],
         email: email,
         role: 'driver',
+        profileCompleted: false, // Drivers need to complete their profile
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         // Driver specific fields
