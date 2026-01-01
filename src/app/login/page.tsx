@@ -1,9 +1,8 @@
-
 // src/app/login/page.tsx
 'use client';
-import { useState, useEffect } from 'react';
-import { useAuth, useUser, useFirestore }from '@/firebase';
-import { initiateEmailSignIn, initiateEmailSignUp } from '@/firebase/non-blocking-login';
+import { useState } from 'react';
+import { useAuth, useFirestore }from '@/firebase';
+import { initiateEmailSignUp, initiateDriverEmailSignUp } from '@/firebase/non-blocking-login';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,8 +11,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { VamoIcon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
-import Link from 'next/link';
-import { getAuth } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 export default function LoginPage() {
     const auth = useAuth();
@@ -25,10 +23,7 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // This page should always show the form. Redirection logic is centralized in `src/app/page.tsx`.
-    // The only redirection here is after a successful login action.
     const handleLoginSuccess = () => {
-        // Redirect to the root, which will handle role-based redirection.
         router.replace('/');
     };
 
@@ -46,11 +41,12 @@ export default function LoginPage() {
             handleLoginSuccess();
         } catch (error: any) {
              toast({ variant: 'destructive', title: 'Error de inicio de sesión', description: 'Credenciales incorrectas o el usuario no existe.' });
-             setIsSubmitting(false);
+        } finally {
+            setIsSubmitting(false);
         }
     };
     
-    const handleSignUp = async () => {
+    const handleSignUp = async (role: 'passenger' | 'driver') => {
          if (!email || !password) {
             toast({ variant: 'destructive', title: 'Campos requeridos', description: 'Por favor, ingresa email y contraseña para registrarte.' });
             return;
@@ -62,13 +58,17 @@ export default function LoginPage() {
 
         setIsSubmitting(true);
         try {
-            await initiateEmailSignUp(auth, firestore, email, password);
+            if (role === 'driver') {
+                 await initiateDriverEmailSignUp(auth, firestore, email, password);
+            } else {
+                 await initiateEmailSignUp(auth, firestore, email, password);
+            }
             toast({ title: '¡Registro exitoso!', description: 'Iniciando sesión para llevarte a tu panel.' });
-            // The root page will handle redirection on auth state change.
             handleLoginSuccess();
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Error de registro', description: error.message });
-            setIsSubmitting(false);
+        } finally {
+             setIsSubmitting(false);
         }
     };
 
@@ -98,18 +98,15 @@ export default function LoginPage() {
                     </div>
                     <Separator className="my-6" />
                     <div className="text-center space-y-2">
-                         <div>
-                            <p className="text-sm text-muted-foreground">¿No tienes cuenta de pasajero?</p>
-                            <Button variant="link" onClick={handleSignUp} disabled={isSubmitting}>
-                                Registrate ahora
+                        <p className="text-sm text-muted-foreground">¿No tienes cuenta? Registrate como:</p>
+                        <div className="flex gap-4 justify-center">
+                            <Button variant="link" onClick={() => handleSignUp('passenger')} disabled={isSubmitting}>
+                                Pasajero
                             </Button>
-                         </div>
-                         <div>
-                             <p className="text-sm text-muted-foreground">¿Necesitas crear un administrador?</p>
-                             <Button variant="link" asChild>
-                                <Link href="/admin/create">Crear admin</Link>
-                             </Button>
-                         </div>
+                            <Button variant="link" onClick={() => handleSignUp('driver')} disabled={isSubmitting}>
+                                Conductor
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>

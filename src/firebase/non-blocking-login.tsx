@@ -4,7 +4,6 @@ import {
   Auth,
   signInAnonymously,
   createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
 } from 'firebase/auth';
 import { Firestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { UserProfile } from '@/lib/types';
@@ -21,15 +20,12 @@ export async function initiateEmailSignUp(authInstance: Auth, firestore: Firesto
     const userCredential = await createUserWithEmailAndPassword(authInstance, email, password);
     const user = userCredential.user;
 
-    // After creating the user, create their profile in Firestore with the 'passenger' role.
     const userProfileRef = doc(firestore, 'users', user.uid);
     
-    // Explicitly type the new profile
     const newUserProfile: Partial<UserProfile> = {
-        name: email.split('@')[0], // Default name from email
+        name: email.split('@')[0],
         email: email,
         role: 'passenger',
-        profileCompleted: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         vamoPoints: 0,
@@ -37,18 +33,40 @@ export async function initiateEmailSignUp(authInstance: Auth, firestore: Firesto
         activeBonus: false,
     };
 
-    // Use setDoc to create the document. Use a non-blocking version if available,
-    // but for this critical step, a blocking call is acceptable.
     await setDoc(userProfileRef, newUserProfile);
 
   } catch (error) {
     console.error("Error during sign up and profile creation:", error);
-    // Re-throw the error so the calling component can handle it (e.g., show a toast)
     throw error;
   }
 }
 
-/** Initiate email/password sign-in (non-blocking). */
-export function initiateEmailSignIn(authInstance: Auth, email: string, password: string): void {
-  signInWithEmailAndPassword(authInstance, email, password);
+/** Initiate email/password sign-up for a DRIVER (non-blocking). */
+export async function initiateDriverEmailSignUp(authInstance: Auth, firestore: Firestore, email: string, password: string): Promise<void> {
+  try {
+    const userCredential = await createUserWithEmailAndPassword(authInstance, email, password);
+    const user = userCredential.user;
+
+    const userProfileRef = doc(firestore, 'users', user.uid);
+    
+    const newDriverProfile: Partial<UserProfile> = {
+        name: email.split('@')[0],
+        email: email,
+        role: 'driver',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        // Driver specific fields
+        approved: false,
+        driverStatus: 'inactive',
+        averageRating: null,
+        ridesCompleted: 0,
+        vehicleVerificationStatus: 'unverified',
+    };
+
+    await setDoc(userProfileRef, newDriverProfile);
+
+  } catch (error) {
+    console.error("Error during driver sign up and profile creation:", error);
+    throw error;
+  }
 }
