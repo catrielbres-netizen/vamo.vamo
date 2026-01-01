@@ -12,62 +12,69 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-        // In a real app, you would get custom claims instead of reading a document.
-        // This is okay for prototyping.
+        // En una app de producción, esto debería usar custom claims.
+        // Leer un documento para verificar el rol es útil para prototipado.
         return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     function isRideParticipant(ride) {
-        return request.auth.uid == ride.passengerId || request.auth.uid == ride.driverId;
+        // Asegurarse de que ride.driverId no sea null antes de compararlo
+        return request.auth.uid == ride.passengerId || (ride.driverId != null && request.auth.uid == ride.driverId);
     }
-
 
     // --- USERS ---
     match /users/{userId} {
-      // Any authenticated user can create their own profile.
+      // Un usuario puede crear su propio perfil.
       allow create: if isAuthenticated();
 
-      // Only the owner or an admin can read/update their profile.
+      // Solo el dueño del perfil o un admin pueden leerlo o actualizarlo.
       allow get, update, delete: if isOwner(userId) || isAdmin();
       
-      // Admins can list all users.
+      // Solo un admin puede listar todos los usuarios.
       allow list: if isAdmin();
     }
 
     // --- RIDES ---
     match /rides/{rideId} {
-      // Any authenticated user can create a ride request.
-      allow create: if isAuthenticated();
+      // PERMISOS DE COLECCIÓN (list, create)
       
-      // Queries on the collection are allowed for any authenticated user.
-      // Security is enforced by the queries themselves (e.g., where('passengerId', '==', uid)).
+      // Permite que cualquier usuario autenticado haga consultas (queries) sobre la colección.
+      // La seguridad se delega a las 'where' clauses en la query del cliente.
       allow list: if isAuthenticated();
+      
+      // Permite que cualquier usuario autenticado cree un nuevo viaje.
+      allow create: if isAuthenticated();
 
-      // Individual ride documents can only be read by participants or admins.
+      // PERMISOS DE DOCUMENTO (get, update, delete)
+
+      // Permite leer un viaje específico solo a sus participantes o a un admin.
+      // Aquí `resource.data` está disponible porque es un documento individual.
       allow get: if isAuthenticated() && (isRideParticipant(resource.data) || isAdmin());
 
-      // Rides can be updated by participants or admins.
+      // Permite actualizar un viaje solo a sus participantes o a un admin.
       allow update: if isAuthenticated() && (isRideParticipant(resource.data) || isAdmin());
       
-      // Deletes are disallowed to preserve ride history. An admin could "cancel" a ride by changing its status.
+      // Se prefiere no borrar viajes para mantener el historial. Se cancelan cambiando el estado.
       allow delete: if false;
     }
 
     // --- DRIVER SUMMARIES ---
     match /driver_summaries/{summaryId} {
-        // A driver can create/update their own summary.
-        allow create, update: if isAuthenticated() && isOwner(resource.data.driverId);
+        // Un conductor solo puede escribir en su propio resumen.
+        allow create, update: if isAuthenticated() && isOwner(request.resource.data.driverId);
 
-        // Drivers can read their own summaries. Admins can read any summary.
+        // Un conductor puede leer su propio resumen. Un admin puede leer cualquiera.
         allow get: if isAuthenticated() && (isOwner(resource.data.driverId) || isAdmin());
 
-        // Only admins can list all summaries.
+        // Solo los admins pueden listar todos los resúmenes.
         allow list: if isAdmin();
+        
+        allow delete: if false;
     }
     
     // --- AUDIT LOGS ---
     match /auditLogs/{logId} {
-       // Only admins can read or write audit logs.
+       // Solo los admins pueden leer o escribir en los logs de auditoría.
       allow read, write: if isAdmin();
     }
   }
