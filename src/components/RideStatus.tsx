@@ -7,13 +7,18 @@ import { TripTimers } from './TripTimers';
 import { WAITING_PER_MIN } from '@/lib/pricing';
 import { useEffect, useState, useRef } from 'react';
 import { Timestamp, doc, runTransaction, collection, getDocs, where, query } from 'firebase/firestore';
+import { format } from 'date-fns';
+import es from 'date-fns/locale/es';
 import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Button } from './ui/button';
+import { WhatsAppLogo } from './icons';
 import RatingForm from './RatingForm';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
 import { WithId } from '@/firebase/firestore/use-collection';
@@ -169,6 +174,38 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
     }
   };
 
+  const handleSendWhatsAppReceipt = () => {
+    const rideDate = ride.finishedAt instanceof Timestamp 
+        ? format((ride.finishedAt as Timestamp).toDate(), "d 'de' MMMM 'de' yyyy 'a las' HH:mm'hs'", { locale: es })
+        : 'Fecha no disponible';
+    
+    const finalPrice = ride.pricing.finalTotal || ride.pricing.estimatedTotal;
+    const discount = ride.pricing.discountAmount || 0;
+    const priceBeforeDiscount = finalPrice + discount;
+
+    const message = `
+*Comprobante de Viaje - VamO* 🚕
+-----------------------------------
+*Datos del Viaje*
+*Fecha:* ${rideDate}
+*Conductor:* ${ride.driverName || 'No especificado'}
+*Origen:* ${ride.origin.address}
+*Destino:* ${ride.destination.address}
+*Servicio:* ${ride.serviceType.charAt(0).toUpperCase() + ride.serviceType.slice(1)}
+
+*Detalle de Costos*
+  - Tarifa del viaje: ${formatCurrency(priceBeforeDiscount)}
+  ${discount > 0 ? `- Descuento VamO: -${formatCurrency(discount)}` : ''}
+-----------------------------------
+*TOTAL PAGADO:* *${formatCurrency(finalPrice)}*
+-----------------------------------
+¡Gracias por viajar con VamO!
+    `.trim().replace(/\n/g, '%0A').replace(/ /g, '%20');
+
+    const url = `https://wa.me/?text=${message}`;
+    window.open(url, '_blank');
+  };
+
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
   const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
   const currentTotal = ride.pricing.estimatedTotal + waitingCost;
@@ -211,6 +248,12 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
                     Conductor: {ride.driverName || 'No disponible'}
                 </p>
             </CardContent>
+            <CardFooter>
+                 <Button onClick={handleSendWhatsAppReceipt} className="w-full" variant="outline">
+                    <WhatsAppLogo className="mr-2 h-5 w-5" />
+                    Enviar Comprobante
+                </Button>
+            </CardFooter>
             <RatingForm
               participantName={ride.driverName || 'Conductor'}
               participantRole="conductor"
