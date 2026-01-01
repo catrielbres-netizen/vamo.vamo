@@ -13,7 +13,8 @@ import { speak } from '@/lib/speak';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, ServiceType, UserProfile } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { ShieldCheck, Clock, Loader } from 'lucide-react';
+import { ShieldCheck, Clock, Loader, Info } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 
 // Helper function to determine which services a driver can see
@@ -248,6 +249,23 @@ export default function DriverRidesPage() {
                     {statusInfo.description}
                 </AlertDescription>
             </Alert>
+
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="item-1">
+                <AccordionTrigger>
+                    <div className="flex items-center gap-2">
+                        <Info className="w-4 h-4"/> ¿Cómo funciona un viaje?
+                    </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-xs text-muted-foreground space-y-2">
+                  <p><strong>1. Aceptar Viaje:</strong> Cuando un viaje esté disponible, aparecerá una tarjeta. Acéptala para que sea tuya.</p>
+                  <p><strong>2. Recoger al Pasajero:</strong> Dirígete al punto de origen. Al llegar, presiona <strong>"Llegué al origen"</strong>. Esto le avisa al pasajero.</p>
+                  <p><strong>3. Iniciar Viaje:</strong> Una vez que el pasajero esté en el vehículo, presiona <strong>"Iniciar Viaje"</strong> para comenzar la ruta hacia el destino.</p>
+                  <p><strong>4. Pausas (Espera):</strong> Usa el botón <strong>"Pausar Viaje"</strong> SOLO si el pasajero pide detenerse (ej: kiosco). Esto activa el cobro por minuto de espera. Cuando el pasajero vuelva, presiona <strong>"Reanudar Viaje"</strong>.</p>
+                   <p><strong>5. Finalizar Viaje:</strong> Al llegar al destino, presiona <strong>"Finalizar Viaje"</strong>. La app calculará la tarifa final, incluyendo las esperas, y te mostrará el resumen para cobrarle al pasajero.</p>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
             
             <h2 className="text-xl font-semibold text-center pt-4">Viajes Disponibles</h2>
             {filteredAvailableRides.length > 0 ? (
