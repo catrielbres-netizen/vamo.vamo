@@ -16,7 +16,7 @@ import Link from 'next/link';
 
 export default function LoginPage() {
     const auth = useAuth();
-    const { user, profile, loading } = useUser();
+    const { user, loading } = useUser(); // We only need user and loading here now
     const router = useRouter();
     const { toast } = useToast();
     
@@ -25,19 +25,15 @@ export default function LoginPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
+        // If the user is logged in, the root page.tsx will handle redirection.
+        // This avoids conflicting redirection logic.
         if (!loading && user) {
-            if (profile?.role === 'admin') {
-                router.replace('/admin');
-            } else if (profile?.role === 'driver') {
-                router.replace('/driver');
-            } else {
-                router.replace('/');
-            }
+            router.replace('/'); 
         }
-    }, [user, profile, loading, router]);
+    }, [user, loading, router]);
 
 
-    if (loading) { 
+    if (loading || user) { // Show loading screen if loading or if user exists (and is being redirected)
         return (
              <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
                 <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
@@ -51,24 +47,20 @@ export default function LoginPage() {
             toast({ variant: 'destructive', title: 'Campos requeridos', description: 'Por favor, ingresa email y contraseña.' });
             return;
         }
-        setIsSubmitting(true);
-        try {
-            initiateEmailSignIn(auth, email, password);
-            // Non-blocking, so we can't catch here directly. 
-            // Auth errors are typically handled by onAuthStateChanged or global listeners, 
-            // but for a better UX on login, we can give a generic message and reset.
-            // A more advanced implementation might listen for a specific auth error event.
-            setTimeout(() => {
-              if(!auth.currentUser) {
-                  toast({ variant: 'destructive', title: 'Error de inicio de sesión', description: 'Credenciales incorrectas o el usuario no existe.' });
-                  setIsSubmitting(false);
-              }
-            }, 2500); // Wait 2.5s to see if login succeeds before showing error
+        if (!auth) return;
 
-        } catch (error) {
-             toast({ variant: 'destructive', title: 'Error inesperado', description: 'Ocurrió un problema al intentar iniciar sesión.' });
-             setIsSubmitting(false);
-        }
+        setIsSubmitting(true);
+        // We use a timeout to check if login was successful, as initiateEmailSignIn is non-blocking.
+        initiateEmailSignIn(auth, email, password);
+        
+        setTimeout(() => {
+          // If after 2.5s we still don't have a user, assume it failed.
+          if(!getAuth().currentUser) { 
+              toast({ variant: 'destructive', title: 'Error de inicio de sesión', description: 'Credenciales incorrectas o el usuario no existe.' });
+              setIsSubmitting(false);
+          }
+          // On success, the useEffect will trigger the redirect.
+        }, 2500); 
     };
     
     const handleSignUp = async () => {
@@ -78,8 +70,6 @@ export default function LoginPage() {
         }
         setIsSubmitting(true);
         try {
-            // Note: In a real app, we'd collect more info and set a default role.
-            // Here, it just creates the auth user. A Firestore document with role would need to be created separately.
             await initiateEmailSignUp(auth, email, password);
             toast({ title: 'Registro exitoso', description: 'Ahora puedes iniciar sesión.' });
         } catch (error: any) {
@@ -88,18 +78,6 @@ export default function LoginPage() {
             setIsSubmitting(false);
         }
     };
-
-    // If user is already logged in, the useEffect will handle the redirect.
-    // Render nothing here to prevent flicker.
-    if (user) {
-        return (
-            <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
-               <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
-               <p className="text-center mt-4">Redirigiendo...</p>
-           </main>
-       )
-    }
-
 
     return (
         <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">

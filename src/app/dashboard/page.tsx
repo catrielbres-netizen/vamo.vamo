@@ -20,7 +20,7 @@ import {
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/icons';
 import { calculateFare } from '@/lib/pricing';
-import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, getAuth } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
 import { Separator } from '@/components/ui/separator';
@@ -62,8 +62,8 @@ export default function DashboardPage() {
 
   const status = ride?.status || 'idle';
 
-  // **REMOVED** el useEffect que causaba la redirección conflictiva.
-  // La lógica ahora está centralizada en `src/app/page.tsx`.
+  // The redirection logic is now centralized in `src/app/page.tsx`.
+  // This useEffect is no longer needed here.
 
   useEffect(() => {
     if (!destination) {
@@ -106,12 +106,15 @@ export default function DashboardPage() {
       return;
     }
     
-    if (!user) {
+    let currentUser = user;
+    if (!currentUser) {
         initiateAnonymousSignIn(auth);
         toast({
             title: 'Iniciando sesión...',
             description: 'Un momento por favor. Vuelve a presionar "Pedir Viaje" en unos segundos.',
         });
+        // We can't proceed until auth state changes, so we return.
+        // The user will have to click again.
         return; 
     }
 
@@ -134,7 +137,7 @@ export default function DashboardPage() {
 
     const ridesCollection = collection(firestore, 'rides');
     const newRideData = {
-      passengerId: user.uid,
+      passengerId: currentUser.uid,
       passengerName: profile?.name || 'Pasajero Anónimo',
       origin: { lat: origin.lat, lng: origin.lng },
       destination: {
@@ -226,8 +229,8 @@ export default function DashboardPage() {
     );
   }
   
-  // Si un usuario que no es pasajero llega acá, `page.tsx` ya lo debería haber redirigido.
-  // Este es un fallback de UI para evitar mostrar contenido incorrecto durante una transición.
+  // If a non-passenger user lands here, `page.tsx` should have already redirected them.
+  // This is a UI fallback to prevent showing wrong content during a transition.
   if (profile && profile.role !== 'passenger') {
       return (
           <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
