@@ -118,25 +118,25 @@ export default function DriverRideCard({
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <p className="flex items-center">
-            <VamoIcon name="User" className="w-4 h-4 mr-2 text-muted-foreground" />
+            <VamoIcon name="user" className="w-4 h-4 mr-2 text-muted-foreground" />
             <strong>Pasajero:</strong> {ride.passengerName || 'No especificado'}
         </p>
         <p className="flex items-center">
-          <VamoIcon name="MapPin" className="w-4 h-4 mr-2 text-muted-foreground" />
+          <VamoIcon name="map-pin" className="w-4 h-4 mr-2 text-muted-foreground" />
           <strong>Desde:</strong> {ride.origin.address || 'Ubicación simulada'}
         </p>
         <p className="flex items-center">
-          <VamoIcon name="Flag" className="w-4 h-4 mr-2 text-muted-foreground" />
+          <VamoIcon name="flag" className="w-4 h-4 mr-2 text-muted-foreground" />
           <strong>Hasta:</strong> {ride.destination.address}
         </p>
 
         <div className="!mt-4 grid grid-cols-2 gap-2 text-center text-xs text-muted-foreground">
             <div className="flex items-center justify-center gap-2">
-                <VamoIcon name="Route" className="w-4 h-4" />
+                <VamoIcon name="route" className="w-4 h-4" />
                 <span>{formatDistance(ride.pricing.estimatedDistanceMeters)}</span>
             </div>
              <div className="flex items-center justify-center gap-2">
-                <VamoIcon name="Clock" className="w-4 h-4" />
+                <VamoIcon name="clock" className="w-4 h-4" />
                 <span>{formatDuration(ride.pricing.estimatedDurationSeconds || 0)}</span>
             </div>
         </div>

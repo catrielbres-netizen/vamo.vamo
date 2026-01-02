@@ -38,7 +38,7 @@ export function AdminNavbar() {
 
   return (
     <nav className="flex items-center gap-6 border-b bg-background p-4 sticky top-0 z-10">
-        <VamoIcon name="LayoutDashboard" className="h-6 w-6 text-primary" />
+        <VamoIcon name="layout-dashboard" className="h-6 w-6 text-primary" />
         <span className="hidden md:inline">Admin</span>
         {navLinks.map(link => (
             <Link 
@@ -54,7 +54,7 @@ export function AdminNavbar() {
         ))}
         <div className="ml-auto">
             <Button variant="ghost" size="sm" onClick={handleLogout}>
-                <VamoIcon name="LogOut" className="mr-2 h-4 w-4" />
+                <VamoIcon name="log-out" className="mr-2 h-4 w-4" />
                 Cerrar Sesión
             </Button>
         </div>

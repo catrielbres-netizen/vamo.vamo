@@ -1,3 +1,4 @@
+
 // src/app/login/page.tsx
 'use client';
 import { useState } from 'react';
@@ -97,7 +98,7 @@ export default function LoginPage() {
             <Card className="w-full">
                 <CardHeader className="text-center">
                     <div className="flex justify-center items-center mb-4">
-                        <VamoIcon className="h-8 w-8 text-primary mr-2" />
+                        <VamoIcon name="car" className="h-8 w-8 text-primary mr-2" />
                         <CardTitle>VamO</CardTitle>
                     </div>
                     <CardDescription>Accede a tu cuenta o registrate</CardDescription>

@@ -11,7 +11,7 @@ export function TripTimers({ waitMinutes, waitCost, currentTotal }: { waitMinute
         {hasWaitTime && (
             <div className="flex items-center justify-center gap-4 text-center">
                 <div className="flex items-center gap-2">
-                    <VamoIcon name="Hourglass" className="w-4 h-4 text-primary" />
+                    <VamoIcon name="hourglass" className="w-4 h-4 text-primary" />
                     <span>Espera: <strong>{waitMinutes}</strong></span>
                 </div>
                 <div>

@@ -83,10 +83,10 @@ export default function DriverProfilePage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-            <ProfileInfoRow icon={<VamoIcon name="Mail" />} label="Email" value={profile.email} />
-            <ProfileInfoRow icon={<VamoIcon name="Phone" />} label="Teléfono" value={profile.phone} />
-            <ProfileInfoRow icon={<VamoIcon name="Car" />} label="Año del Vehículo" value={profile.carModelYear} />
-            <ProfileInfoRow icon={<VamoIcon name="Star" />} label="Rating Promedio" value={averageRating} />
+            <ProfileInfoRow icon={<VamoIcon name="mail" />} label="Email" value={profile.email} />
+            <ProfileInfoRow icon={<VamoIcon name="phone" />} label="Teléfono" value={profile.phone} />
+            <ProfileInfoRow icon={<VamoIcon name="car" />} label="Año del Vehículo" value={profile.carModelYear} />
+            <ProfileInfoRow icon={<VamoIcon name="star" />} label="Rating Promedio" value={averageRating} />
         </CardContent>
         <CardContent>
              <Button variant="outline" size="sm" onClick={handleLogout} className="w-full">

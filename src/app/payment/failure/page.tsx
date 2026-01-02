@@ -17,7 +17,7 @@ export default function PaymentFailurePage() {
             <Card className="w-full text-center border-destructive">
                 <CardHeader>
                     <CardTitle className="flex items-center justify-center gap-2 text-destructive">
-                        <VamoIcon name="XCircle" />
+                        <VamoIcon name="x-circle" />
                         Pago Rechazado
                     </CardTitle>
                     <CardDescription>

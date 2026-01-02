@@ -17,7 +17,7 @@ export default function PaymentPendingPage() {
             <Card className="w-full text-center border-blue-500">
                 <CardHeader>
                     <CardTitle className="flex items-center justify-center gap-2 text-blue-600">
-                        <VamoIcon name="Hourglass" />
+                        <VamoIcon name="hourglass" />
                         Pago Pendiente
                     </CardTitle>
                     <CardDescription>

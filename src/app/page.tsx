@@ -48,7 +48,7 @@ export default function Home() {
   return (
     <div className="flex h-screen items-center justify-center">
       <div className="flex flex-col items-center gap-4">
-        <VamoIcon name="Car" className="h-12 w-12 animate-pulse text-primary" />
+        <VamoIcon name="car" className="h-12 w-12 animate-pulse text-primary" />
         <p>Cargando VamO...</p>
       </div>
     </div>

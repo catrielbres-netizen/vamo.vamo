@@ -27,22 +27,22 @@ const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, 
     unverified: {
         title: 'Perfil Incompleto',
         description: 'Debes completar tu perfil y enviar la documentación para empezar a recibir viajes.',
-        icon: <VamoIcon name="Loader" className="animate-spin" />
+        icon: <VamoIcon name="loader" className="animate-spin" />
     },
     pending_review: {
         title: 'Cuenta en Revisión',
         description: 'Nuestro equipo está verificando tu documentación. Recibirás una notificación cuando tu cuenta sea aprobada. Esto puede demorar hasta 24hs.',
-        icon: <VamoIcon name="Clock" />
+        icon: <VamoIcon name="clock" />
     },
     rejected: {
         title: 'Cuenta Rechazada',
         description: 'Hubo un problema con tu documentación. Por favor, contactá a soporte para más información.',
-        icon: <VamoIcon name="XCircle" />
+        icon: <VamoIcon name="x-circle" />
     },
     approved: {
         title: '¡Estás en línea!',
         description: 'Ya podés recibir viajes. ¡Buenas rutas!',
-        icon: <VamoIcon name="ShieldCheck" />
+        icon: <VamoIcon name="shield-check" />
     }
 }
 
@@ -250,7 +250,7 @@ export default function DriverRidesPage() {
               <AccordionItem value="item-1">
                 <AccordionTrigger>
                     <div className="flex items-center gap-2">
-                        <VamoIcon name="Info" className="w-4 h-4"/> ¿Cómo funciona un viaje?
+                        <VamoIcon name="info" className="w-4 h-4"/> ¿Cómo funciona un viaje?
                     </div>
                 </AccordionTrigger>
                 <AccordionContent className="text-xs text-muted-foreground space-y-2">

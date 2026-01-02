@@ -187,14 +187,14 @@ export default function DriverDetailPage() {
             {driver.vehicleVerificationStatus === 'pending_review' && (
                 <Card className="border-yellow-500">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><VamoIcon name="AlertTriangle" className="text-yellow-500"/> Conductor Pendiente de Aprobación</CardTitle>
+                        <CardTitle className="flex items-center gap-2"><VamoIcon name="alert-triangle" className="text-yellow-500"/> Conductor Pendiente de Aprobación</CardTitle>
                         <CardDescription>Revisá la documentación recibida por WhatsApp y tomá una acción.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex gap-4">
                          <AlertDialog>
                             <AlertDialogTrigger asChild>
                                 <Button variant="default" className="w-full bg-green-600 hover:bg-green-700">
-                                    <VamoIcon name="UserCheck" className="mr-2"/> Aprobar Conductor
+                                    <VamoIcon name="user-check" className="mr-2"/> Aprobar Conductor
                                 </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
@@ -240,7 +240,7 @@ export default function DriverDetailPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                  <Card className="border-primary">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><VamoIcon name="Target"/> Metas Semanales</CardTitle>
+                        <CardTitle className="flex items-center gap-2"><VamoIcon name="target"/> Metas Semanales</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                         <div className="flex justify-between items-baseline">
@@ -259,7 +259,7 @@ export default function DriverDetailPage() {
                                 </p>
                             ) : (
                                 <p className="text-center text-sm font-semibold text-green-500 flex items-center justify-center gap-2">
-                                    <VamoIcon name="CheckCircle" className="w-4 h-4" /> ¡Alcanzó la comisión más baja!
+                                    <VamoIcon name="check-circle" className="w-4 h-4" /> ¡Alcanzó la comisión más baja!
                                 </p>
                             )}
                         </div>
@@ -277,7 +277,7 @@ export default function DriverDetailPage() {
                             <span className="font-medium">{formatCurrency(totalEarnings)}</span>
                         </div>
                         <div className="flex justify-between text-blue-500">
-                                <span className="flex items-center gap-1"><VamoIcon name="Percent" className="w-3 h-3" /> Reembolso por bonos</span>
+                                <span className="flex items-center gap-1"><VamoIcon name="percent" className="w-3 h-3" /> Reembolso por bonos</span>
                                 <span className="font-medium">{formatCurrency(bonusesApplied)}</span>
                             </div>
                         <div className="flex justify-between items-center text-red-500">
@@ -299,7 +299,7 @@ export default function DriverDetailPage() {
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
                                  <Button variant="outline" onClick={handleInspectRides} disabled={isInspecting}>
-                                    <VamoIcon name="Bot" className="mr-2 h-4 w-4"/>
+                                    <VamoIcon name="bot" className="mr-2 h-4 w-4"/>
                                     {isInspecting ? 'Analizando...' : 'Inspeccionar Viajes'}
                                 </Button>
                             </AlertDialogTrigger>
@@ -329,7 +329,7 @@ export default function DriverDetailPage() {
                                             <TooltipProvider>
                                                 <Tooltip>
                                                     <TooltipTrigger>
-                                                        <VamoIcon name="AlertTriangle" className="w-5 h-5 text-yellow-500" />
+                                                        <VamoIcon name="alert-triangle" className="w-5 h-5 text-yellow-500" />
                                                     </TooltipTrigger>
                                                     <TooltipContent>
                                                         <p className="max-w-xs">{ride.auditComment}</p>
