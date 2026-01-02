@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useCollection, useMemoFirebase } from '@/firebase'
@@ -7,8 +8,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { UserProfile } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
 import Link from 'next/link'
-import { ChevronRight, AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import dynamic from "next/dynamic"
+
+const ChevronRight = dynamic(
+  () => import("lucide-react").then(m => m.ChevronRight),
+  { ssr: false }
+);
+
+const AlertTriangle = dynamic(
+  () => import("lucide-react").then(m => m.AlertTriangle),
+  { ssr: false }
+);
 
 const verificationStatusBadge: Record<UserProfile['vehicleVerificationStatus'] & string, { text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
     unverified: { text: 'No Verificado', variant: 'destructive' },
