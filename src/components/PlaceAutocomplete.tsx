@@ -22,6 +22,8 @@ interface PlaceAutocompleteProps {
 }
 
 export function PlaceAutocomplete({ onPlaceSelect, defaultValue = '', className }: PlaceAutocompleteProps) {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
   const {
     ready,
     value,
@@ -40,23 +42,12 @@ export function PlaceAutocomplete({ onPlaceSelect, defaultValue = '', className 
     },
     debounce: 300,
     defaultValue,
+    initOnMount: !!apiKey, // Do not initialize if API key is missing
   });
 
   const [isFocused, setIsFocused] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [showError, setShowError] = useState(false);
-
-  useEffect(() => {
-    // If the component has been mounted for a second and the API isn't ready, show an error.
-    // This usually means the API key is invalid or blocked.
-    const timer = setTimeout(() => {
-        if (!ready) {
-            setShowError(true);
-        }
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [ready]);
-
+  
   const handleSelect = async (address: string) => {
     setValue(address, false);
     clearSuggestions();
@@ -84,10 +75,10 @@ export function PlaceAutocomplete({ onPlaceSelect, defaultValue = '', className 
     };
   }, [wrapperRef, clearSuggestions]);
 
-  if (showError) {
+  if (!apiKey) {
        return (
-         <div className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-destructive flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" /> Error al cargar API de mapas.
+         <div className="h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" /> Buscador de direcciones deshabilitado.
         </div>
        )
   }

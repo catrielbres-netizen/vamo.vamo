@@ -50,12 +50,14 @@ function MapComponent({ drivers }: DriversMapProps) {
 
 
 export default function DriversMap({ drivers }: DriversMapProps) {
-    if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+    if (!apiKey) {
         return (
             <div className="h-[400px] flex items-center justify-center bg-muted">
-                <p className="text-destructive text-center">
-                    Google Maps API Key no configurada. <br/> 
-                    Agregá NEXT_PUBLIC_GOOGLE_MAPS_API_KEY a tu archivo .env
+                <p className="text-destructive text-center p-4">
+                    La funcionalidad de mapa está deshabilitada.<br/> 
+                    La API Key de Google Maps no está configurada en el entorno.
                 </p>
             </div>
         )
@@ -64,10 +66,8 @@ export default function DriversMap({ drivers }: DriversMapProps) {
     return (
         <div style={{ height: '400px', width: '100%' }}>
             <APIProvider 
-                apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}
+                apiKey={apiKey}
                 libraries={['places']}
-                // onLoad={() => console.log('Maps API loaded successfully.')}
-                // onError={(e) => console.error('Maps API load error:', e)}
             >
                 <MapComponent drivers={drivers} />
             </APIProvider>
