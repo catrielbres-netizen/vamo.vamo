@@ -19,7 +19,7 @@ import {
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/icons';
 import { calculateFare } from '@/lib/pricing';
-import { collection, doc, serverTimestamp, getAuth } from 'firebase/firestore';
+import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
 import { Separator } from '@/components/ui/separator';
