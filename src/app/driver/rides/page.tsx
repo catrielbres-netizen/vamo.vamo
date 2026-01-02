@@ -23,26 +23,26 @@ const getAllowedServices = (): ServiceType[] => {
     return ['premium', 'privado', 'express'];
 }
 
-const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, {title: string, description: string, icon: React.ReactNode}> = {
+const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, {title: string, description: string, icon: VamoIconName}> = {
     unverified: {
         title: 'Perfil Incompleto',
         description: 'Debes completar tu perfil y enviar la documentación para empezar a recibir viajes.',
-        icon: <VamoIcon name="loader" className="animate-spin" />
+        icon: 'loader'
     },
     pending_review: {
         title: 'Cuenta en Revisión',
         description: 'Nuestro equipo está verificando tu documentación. Recibirás una notificación cuando tu cuenta sea aprobada. Esto puede demorar hasta 24hs.',
-        icon: <VamoIcon name="clock" />
+        icon: 'clock'
     },
     rejected: {
         title: 'Cuenta Rechazada',
         description: 'Hubo un problema con tu documentación. Por favor, contactá a soporte para más información.',
-        icon: <VamoIcon name="x-circle" />
+        icon: 'x-circle'
     },
     approved: {
         title: '¡Estás en línea!',
         description: 'Ya podés recibir viajes. ¡Buenas rutas!',
-        icon: <VamoIcon name="shield-check" />
+        icon: 'shield-check'
     }
 }
 
@@ -225,7 +225,7 @@ export default function DriverRidesPage() {
         const message = statusMessages[statusKey];
         return (
             <Alert variant="default" className="border-yellow-400 bg-yellow-50 dark:bg-yellow-900/30">
-                <div className="text-yellow-500">{message.icon}</div>
+                <VamoIcon name={message.icon} className="h-4 w-4 text-yellow-500" />
                 <AlertTitle className="text-yellow-700 dark:text-yellow-300">{message.title}</AlertTitle>
                 <AlertDescription className="text-yellow-600 dark:text-yellow-500">
                     {message.description}
@@ -239,7 +239,7 @@ export default function DriverRidesPage() {
     return (
         <div className="space-y-4">
             <Alert variant="default" className="bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400">
-                 <div className="text-green-500">{statusInfo.icon}</div>
+                 <VamoIcon name={statusInfo.icon} className="h-4 w-4 text-green-500"/>
                 <AlertTitle>{statusInfo.title}</AlertTitle>
                 <AlertDescription className="text-green-600 dark:text-green-500">
                     {statusInfo.description}

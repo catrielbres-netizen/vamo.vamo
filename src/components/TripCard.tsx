@@ -5,6 +5,7 @@ import { RideStatusInfo } from '@/lib/ride-status';
 import { Progress } from './ui/progress';
 import { Place } from '@/lib/types';
 import { PlaceAutocomplete } from './PlaceAutocomplete';
+import { VamoIcon } from './icons';
 
 
 export function TripCard({
@@ -24,14 +25,18 @@ export function TripCard({
 }) {
   const statusInfo = RideStatusInfo[status as keyof typeof RideStatusInfo] || {
     text: '¿A dónde vamos?',
-    icon: <></>,
+    icon: 'search',
     progress: 0,
   };
+  
+  const iconClass = status === 'searching_driver' ? "animate-spin" : status === 'in_progress' ? "animate-pulse" : "";
 
   return (
     <div className="m-4 p-4 rounded-xl shadow-lg bg-card">
       <div className="flex items-center gap-3 mb-3">
-        <div className="w-6 flex justify-center">{statusInfo.icon}</div>
+        <div className="w-6 flex justify-center">
+            <VamoIcon name={statusInfo.icon} className={iconClass} />
+        </div>
         <span className="text-sm text-primary font-semibold">
           {statusInfo.text}
         </span>
