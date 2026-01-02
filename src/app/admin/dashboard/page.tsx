@@ -5,11 +5,19 @@ import { StatCard } from '../components/StatCard'
 import { useCollection, useMemoFirebase } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { useFirestore } from '@/firebase'
-import { Users, Car, Search, Map as MapIcon, DollarSign, Wallet, CalendarClock } from 'lucide-react'
 import { UserProfile, Ride, DriverSummary } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
 import { useMemo } from 'react'
 import { getWeek, getYear, startOfWeek } from 'date-fns'
+import dynamic from "next/dynamic";
+
+const Users = dynamic(() => import("lucide-react").then(m => m.Users), { ssr: false });
+const Car = dynamic(() => import("lucide-react").then(m => m.Car), { ssr: false });
+const Search = dynamic(() => import("lucide-react").then(m => m.Search), { ssr: false });
+const MapIcon = dynamic(() => import("lucide-react").then(m => m.Map), { ssr: false });
+const DollarSign = dynamic(() => import("lucide-react").then(m => m.DollarSign), { ssr: false });
+const Wallet = dynamic(() => import("lucide-react").then(m => m.Wallet), { ssr: false });
+const CalendarClock = dynamic(() => import("lucide-react").then(m => m.CalendarClock), { ssr: false });
 
 
 const formatCurrency = (value: number) => {
