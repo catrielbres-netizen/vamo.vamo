@@ -1,7 +1,7 @@
 runtime: nodejs20
 
 env:
-  NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: "TU_API_KEY_DE_GOOGLE_MAPS_AQUI"
+  NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: "AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA"
 
 build:
   command: npm install && npm run build
