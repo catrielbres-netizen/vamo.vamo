@@ -10,18 +10,6 @@ import { collection, query, where, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Ride } from '@/lib/types';
 import { MapsProvider } from '@/components/MapsProvider';
-import dynamic from 'next/dynamic';
-
-const Car = dynamic(
-  () => import("lucide-react").then(m => m.Car),
-  { ssr: false }
-);
-
-const User = dynamic(
-  () => import("lucide-react").then(m => m.User),
-  { ssr: false }
-);
-
 
 export default function DashboardLayout({
   children,
@@ -67,7 +55,7 @@ export default function DashboardLayout({
   if (loading || (!profile?.profileCompleted && !pathname.startsWith('/dashboard/complete-profile'))) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
-        <VamoIcon className="h-10 w-10 animate-pulse text-primary" />
+        <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />
         <p className="mt-4 text-muted-foreground">Cargando panel de pasajero...</p>
       </div>
     );
@@ -94,10 +82,10 @@ export default function DashboardLayout({
               <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="ride" className="gap-2">
-                    <Car className="w-4 h-4" /> Viaje
+                    <VamoIcon name="car" className="w-4 h-4" /> Viaje
                   </TabsTrigger>
                   <TabsTrigger value="profile" className="gap-2">
-                    <User className="w-4 h-4" /> Perfil
+                    <VamoIcon name="user" className="w-4 h-4" /> Perfil
                   </TabsTrigger>
                 </TabsList>
               </Tabs>

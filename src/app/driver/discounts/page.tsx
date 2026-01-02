@@ -7,7 +7,7 @@ import { Ride } from '@/lib/types';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { startOfWeek } from 'date-fns';
-import { Percent } from 'lucide-react';
+import { VamoIcon } from '@/components/icons';
 
 function formatCurrency(value: number) {
     return new Intl.NumberFormat('es-AR', {
@@ -81,7 +81,7 @@ export default function DiscountsPage() {
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2 text-primary font-bold">
-                                       <Percent className="w-4 h-4"/>
+                                       <VamoIcon name="percent" className="w-4 h-4"/>
                                        <span>{formatCurrency(ride.pricing.discountAmount || 0)}</span>
                                     </div>
                                 </li>

@@ -6,7 +6,7 @@ import { useUser } from '@/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { User, Mail, Phone, Car, Shield, Star } from 'lucide-react';
+import { VamoIcon } from '@/components/icons';
 import { UserProfile } from '@/lib/types';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '@/firebase';
@@ -83,10 +83,10 @@ export default function DriverProfilePage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-            <ProfileInfoRow icon={<Mail />} label="Email" value={profile.email} />
-            <ProfileInfoRow icon={<Phone />} label="Teléfono" value={profile.phone} />
-            <ProfileInfoRow icon={<Car />} label="Año del Vehículo" value={profile.carModelYear} />
-            <ProfileInfoRow icon={<Star />} label="Rating Promedio" value={averageRating} />
+            <ProfileInfoRow icon={<VamoIcon name="mail" />} label="Email" value={profile.email} />
+            <ProfileInfoRow icon={<VamoIcon name="phone" />} label="Teléfono" value={profile.phone} />
+            <ProfileInfoRow icon={<VamoIcon name="car" />} label="Año del Vehículo" value={profile.carModelYear} />
+            <ProfileInfoRow icon={<VamoIcon name="star" />} label="Rating Promedio" value={averageRating} />
         </CardContent>
         <CardContent>
              <Button variant="outline" size="sm" onClick={handleLogout} className="w-full">

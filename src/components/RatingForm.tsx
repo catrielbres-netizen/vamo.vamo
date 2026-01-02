@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Star } from 'lucide-react';
+import { VamoIcon } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 
@@ -42,7 +42,8 @@ export default function RatingForm({ participantName, participantRole, onSubmit,
             <>
                 <div className="flex justify-center items-center space-x-1">
                 {[1, 2, 3, 4, 5].map((star) => (
-                    <Star
+                    <VamoIcon
+                    name="star"
                     key={star}
                     className={cn(
                         'w-8 h-8 cursor-pointer transition-colors',

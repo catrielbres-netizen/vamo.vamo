@@ -13,7 +13,7 @@ import { speak } from '@/lib/speak';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, ServiceType, UserProfile } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { ShieldCheck, Clock, Loader, Info } from 'lucide-react';
+import { VamoIcon } from '@/components/icons';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 
@@ -26,22 +26,22 @@ const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, 
     unverified: {
         title: 'Perfil Incompleto',
         description: 'Debes completar tu perfil y enviar la documentación para empezar a recibir viajes.',
-        icon: <Loader className="animate-spin" />
+        icon: <VamoIcon name="loader" className="animate-spin" />
     },
     pending_review: {
         title: 'Cuenta en Revisión',
         description: 'Nuestro equipo está verificando tu documentación. Recibirás una notificación cuando tu cuenta sea aprobada. Esto puede demorar hasta 24hs.',
-        icon: <Clock />
+        icon: <VamoIcon name="clock" />
     },
     rejected: {
         title: 'Cuenta Rechazada',
         description: 'Hubo un problema con tu documentación. Por favor, contactá a soporte para más información.',
-        icon: <Clock />
+        icon: <VamoIcon name="clock" />
     },
     approved: {
         title: '¡Estás en línea!',
         description: 'Ya podés recibir viajes. ¡Buenas rutas!',
-        icon: <ShieldCheck />
+        icon: <VamoIcon name="shield-check" />
     }
 }
 
@@ -249,7 +249,7 @@ export default function DriverRidesPage() {
               <AccordionItem value="item-1">
                 <AccordionTrigger>
                     <div className="flex items-center gap-2">
-                        <Info className="w-4 h-4"/> ¿Cómo funciona un viaje?
+                        <VamoIcon name="info" className="w-4 h-4"/> ¿Cómo funciona un viaje?
                     </div>
                 </AccordionTrigger>
                 <AccordionContent className="text-xs text-muted-foreground space-y-2">

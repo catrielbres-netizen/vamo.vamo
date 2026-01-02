@@ -9,17 +9,7 @@ import { UserProfile } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
-import dynamic from "next/dynamic"
-
-const ChevronRight = dynamic(
-  () => import("lucide-react").then(m => m.ChevronRight),
-  { ssr: false }
-);
-
-const AlertTriangle = dynamic(
-  () => import("lucide-react").then(m => m.AlertTriangle),
-  { ssr: false }
-);
+import { VamoIcon } from '@/components/icons'
 
 const verificationStatusBadge: Record<UserProfile['vehicleVerificationStatus'] & string, { text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
     unverified: { text: 'No Verificado', variant: 'destructive' },
@@ -39,7 +29,7 @@ const DriverListItem = ({ driver }: { driver: WithId<UserProfile> }) => {
                 </div>
                 <div className="flex items-center gap-4">
                     <Badge variant={verificationInfo.variant}>{verificationInfo.text}</Badge>
-                    <ChevronRight className="h-4 w-4" />
+                    <VamoIcon name="chevron-right" className="h-4 w-4" />
                 </div>
             </li>
         </Link>
@@ -65,7 +55,7 @@ export default function AdminRidesPage() {
         {pendingDrivers && pendingDrivers.length > 0 && (
             <Card className="border-yellow-500">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-yellow-600"><AlertTriangle /> Conductores Pendientes</CardTitle>
+                    <CardTitle className="flex items-center gap-2 text-yellow-600"><VamoIcon name="alert-triangle" /> Conductores Pendientes</CardTitle>
                     <CardDescription>Estos conductores completaron su perfil y están esperando aprobación.</CardDescription>
                 </CardHeader>
                 <CardContent>

@@ -9,16 +9,7 @@ import { UserProfile, Ride, DriverSummary } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
 import { useMemo } from 'react'
 import { getWeek, getYear, startOfWeek } from 'date-fns'
-import dynamic from "next/dynamic";
-
-const Users = dynamic(() => import("lucide-react").then(m => m.Users), { ssr: false });
-const Car = dynamic(() => import("lucide-react").then(m => m.Car), { ssr: false });
-const Search = dynamic(() => import("lucide-react").then(m => m.Search), { ssr: false });
-const MapIcon = dynamic(() => import("lucide-react").then(m => m.Map), { ssr: false });
-const DollarSign = dynamic(() => import("lucide-react").then(m => m.DollarSign), { ssr: false });
-const Wallet = dynamic(() => import("lucide-react").then(m => m.Wallet), { ssr: false });
-const CalendarClock = dynamic(() => import("lucide-react").then(m => m.CalendarClock), { ssr: false });
-
+import { VamoIcon } from '@/components/icons'
 
 const formatCurrency = (value: number) => {
   if (typeof value !== 'number') return '$...';
@@ -96,16 +87,16 @@ export default function AdminDashboard() {
         <h1 className="text-3xl font-bold">Dashboard</h1>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatCard title="Comisión Total (Histórico)" value={isLoading ? '...' : formatCurrency(totalCommissionEarned)} icon={<DollarSign className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Facturación Bruta (Semana)" value={isLoading ? '...' : formatCurrency(currentWeekGross)} icon={<CalendarClock className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Comisión a Recibir (Semana)" value={isLoading ? '...' : formatCurrency(currentWeekCommission)} icon={<Wallet className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Viajes activos" value={isLoading ? '...' : activeRides} icon={<Search className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Comisión Total (Histórico)" value={isLoading ? '...' : formatCurrency(totalCommissionEarned)} icon={<VamoIcon name="dollar-sign" className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Facturación Bruta (Semana)" value={isLoading ? '...' : formatCurrency(currentWeekGross)} icon={<VamoIcon name="calendar-clock" className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Comisión a Recibir (Semana)" value={isLoading ? '...' : formatCurrency(currentWeekCommission)} icon={<VamoIcon name="wallet" className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Viajes activos" value={isLoading ? '...' : activeRides} icon={<VamoIcon name="search" className="h-5 w-5 text-muted-foreground"/>} />
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard title="Usuarios registrados" value={isLoading ? '...' : totalUsers} icon={<Users className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Viajes totales" value={isLoading ? '...' : totalRides} icon={<Car className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Conductores en línea" value={isLoading ? '...' : onlineDrivers.length} icon={<MapIcon className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Usuarios registrados" value={isLoading ? '...' : totalUsers} icon={<VamoIcon name="users" className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Viajes totales" value={isLoading ? '...' : totalRides} icon={<VamoIcon name="car" className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Conductores en línea" value={isLoading ? '...' : onlineDrivers.length} icon={<VamoIcon name="map" className="h-5 w-5 text-muted-foreground"/>} />
         </div>
       </div>
   )

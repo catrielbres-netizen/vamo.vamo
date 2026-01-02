@@ -1,17 +1,20 @@
-export const VamoIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <path d="M4 6L8 18L12 6L16 18L20 6" />
-  </svg>
-);
+// src/components/icons.tsx
+'use client';
+import dynamic from 'next/dynamic';
+import type { LucideProps } from 'lucide-react';
+import dynamicIconImports from 'lucide-react/dynamicIconImports';
+
+interface VamoIconProps extends LucideProps {
+  name: keyof typeof dynamicIconImports;
+}
+
+const VamoIcon = ({ name, ...props }: VamoIconProps) => {
+  const LucideIcon = dynamic(dynamicIconImports[name]);
+  return <LucideIcon {...props} />;
+};
+
+export { VamoIcon };
+
 
 export const WhatsAppLogo = (props: React.SVGProps<SVGSVGElement>) => (
     <svg 

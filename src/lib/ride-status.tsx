@@ -1,49 +1,39 @@
 // @/lib/ride-status.tsx
-import {
-    Car,
-    CircleDashed,
-    Flag,
-    MapPin,
-    PartyPopper,
-    UserCheck,
-    Hourglass,
-    Play,
-    CheckCircle2
-  } from 'lucide-react';
+import { VamoIcon } from '@/components/icons';
   
 export const RideStatusInfo: {
     [key: string]: { text: string; icon: React.ReactNode; progress: number };
 } = {
     searching_driver: {
       text: 'Buscando conductor',
-      icon: <CircleDashed className="animate-spin" />,
+      icon: <VamoIcon name="circle-dashed" className="animate-spin" />,
       progress: 15,
     },
     driver_assigned: {
       text: 'Conductor en camino',
-      icon: <UserCheck />,
+      icon: <VamoIcon name="user-check" />,
       progress: 30,
     },
     driver_arriving: {
       text: 'Tu conductor está en camino',
-      icon: <Car />,
+      icon: <VamoIcon name="car" />,
       progress: 50,
     },
     arrived: {
       text: 'Tu conductor llegó al origen',
-      icon: <MapPin />,
+      icon: <VamoIcon name="map-pin" />,
       progress: 75,
     },
     in_progress: {
       text: 'Viaje en curso',
-      icon: <Car className="animate-pulse" />,
+      icon: <VamoIcon name="car" className="animate-pulse" />,
       progress: 90,
     },
     paused: {
         text: 'Viaje en espera',
-        icon: <Hourglass />,
+        icon: <VamoIcon name="hourglass" />,
         progress: 90,
     },
-    finished: { text: 'Viaje finalizado', icon: <CheckCircle2 />, progress: 100 },
-    cancelled: { text: 'Viaje cancelado', icon: <Flag />, progress: 0 },
+    finished: { text: 'Viaje finalizado', icon: <VamoIcon name="check-circle-2" />, progress: 100 },
+    cancelled: { text: 'Viaje cancelado', icon: <VamoIcon name="flag" />, progress: 0 },
 };

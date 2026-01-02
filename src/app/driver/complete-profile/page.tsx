@@ -12,9 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { VamoIcon } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import dynamic from 'next/dynamic';
-
-const ShieldAlert = dynamic(() => import('lucide-react').then(m => m.ShieldAlert), { ssr: false });
 
 const years = Array.from({ length: 2026 - 2008 + 1 }, (_, i) => (2008 + i).toString()).reverse();
 
@@ -99,7 +96,7 @@ export default function CompleteDriverProfilePage() {
             <Card className="w-full">
                 <CardHeader className="text-center">
                      <div className="flex justify-center items-center mb-2">
-                        <VamoIcon className="h-8 w-8 text-primary mr-2" />
+                        <VamoIcon name="user" className="h-8 w-8 text-primary mr-2" />
                         <CardTitle>Completá tu Perfil</CardTitle>
                     </div>
                     <CardDescription>Necesitamos algunos datos más para activar tu cuenta de conductor.</CardDescription>
@@ -132,7 +129,7 @@ export default function CompleteDriverProfilePage() {
                     </div>
                     
                     <Alert variant="destructive" className="bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-700">
-                        <ShieldAlert className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                        <VamoIcon name="shield-alert" className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                         <AlertTitle className="text-yellow-800 dark:text-yellow-300">¡Atención!</AlertTitle>
                         <AlertDescription className="text-yellow-700 dark:text-yellow-500">
                             Si el año del modelo no coincide con la documentación que envíes, tu cuenta podría ser suspendida.

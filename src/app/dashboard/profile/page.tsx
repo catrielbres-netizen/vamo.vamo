@@ -9,14 +9,6 @@ import { Button } from '@/components/ui/button';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
-
-const Star = dynamic(() => import("lucide-react").then(m => m.Star), { ssr: false });
-const Award = dynamic(() => import("lucide-react").then(m => m.Award), { ssr: false });
-const ShieldCheck = dynamic(() => import("lucide-react").then(m => m.ShieldCheck), { ssr: false });
-const Mail = dynamic(() => import("lucide-react").then(m => m.Mail), { ssr: false });
-const Phone = dynamic(() => import("lucide-react").then(m => m.Phone), { ssr: false });
-
 
 const StatCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
     <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg">
@@ -74,7 +66,7 @@ export default function ProfilePage() {
   if (!profile) {
     return (
         <div className="text-center py-10">
-            <VamoIcon className="mx-auto h-12 w-12 text-muted-foreground" />
+            <VamoIcon name="user" className="mx-auto h-12 w-12 text-muted-foreground" />
             <p className="mt-4 text-muted-foreground">No se pudo cargar tu perfil.</p>
         </div>
     );
@@ -94,15 +86,15 @@ export default function ProfilePage() {
           <CardDescription>Pasajero en VamO</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-             <ProfileInfoRow icon={<Mail />} label="Email" value={profile.email} />
-             <ProfileInfoRow icon={<Phone />} label="Teléfono" value={profile.phone} />
-             <ProfileInfoRow icon={<Star />} label="Rating Promedio" value={averageRating} />
+             <ProfileInfoRow icon={<VamoIcon name="mail" />} label="Email" value={profile.email} />
+             <ProfileInfoRow icon={<VamoIcon name="phone" />} label="Teléfono" value={profile.phone} />
+             <ProfileInfoRow icon={<VamoIcon name="star" />} label="Rating Promedio" value={averageRating} />
         </CardContent>
       </Card>
       
       <Card>
         <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Award className="text-primary"/> Puntos VamO</CardTitle>
+            <CardTitle className="flex items-center gap-2"><VamoIcon name="award" className="text-primary"/> Puntos VamO</CardTitle>
             <CardDescription>Ganá puntos con cada viaje y canjealos por descuentos.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -114,7 +106,7 @@ export default function ProfilePage() {
             {profile.activeBonus ? (
                  <div className="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-center">
                     <p className="font-semibold text-green-600 dark:text-green-400 flex items-center justify-center gap-2">
-                        <ShieldCheck className="w-5 h-5"/> ¡Tenés un bono del 10% activo!
+                        <VamoIcon name="shield-check" className="w-5 h-5"/> ¡Tenés un bono del 10% activo!
                     </p>
                     <p className="text-xs text-green-500 dark:text-green-500">Se usará en tu próximo viaje.</p>
                 </div>

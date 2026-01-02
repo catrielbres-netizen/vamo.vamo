@@ -9,12 +9,6 @@ import { Button } from '@/components/ui/button'
 import { useAuth } from '@/firebase'
 import { signOut } from 'firebase/auth'
 import { useRouter } from 'next/navigation'
-import dynamic from 'next/dynamic'
-
-const LogOut = dynamic(() =>
-  import("lucide-react").then(mod => mod.LogOut),
-  { ssr: false }
-);
 
 const navLinks = [
     { href: '/admin/dashboard', label: 'Dashboard' },
@@ -44,10 +38,8 @@ export function AdminNavbar() {
 
   return (
     <nav className="flex items-center gap-6 border-b bg-background p-4 sticky top-0 z-10">
-        <Link href="/admin/dashboard" className="flex items-center gap-2 font-semibold">
-            <VamoIcon className="h-6 w-6 text-primary" />
-            <span className="hidden md:inline">Admin</span>
-        </Link>
+        <VamoIcon name="layout-dashboard" className="h-6 w-6 text-primary" />
+        <span className="hidden md:inline">Admin</span>
         {navLinks.map(link => (
             <Link 
                 key={link.href}
@@ -62,7 +54,7 @@ export function AdminNavbar() {
         ))}
         <div className="ml-auto">
             <Button variant="ghost" size="sm" onClick={handleLogout}>
-                <LogOut className="mr-2 h-4 w-4" />
+                <VamoIcon name="log-out" className="mr-2 h-4 w-4" />
                 Cerrar Sesión
             </Button>
         </div>
