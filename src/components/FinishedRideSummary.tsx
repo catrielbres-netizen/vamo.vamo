@@ -1,3 +1,4 @@
+
 // @/components/FinishedRideSummary.tsx
 'use client';
 
@@ -15,7 +16,7 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
 import { Timestamp, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
-import es from 'date-fns/locale/es';
+import { es } from 'date-fns/locale';
 import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
 import RatingForm from './RatingForm';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
