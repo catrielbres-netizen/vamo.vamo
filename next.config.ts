@@ -1,7 +1,7 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: 'standalone',
   images: {
     remotePatterns: [
       {
@@ -24,10 +24,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // La configuración de 'env' en Next.js se usa para exponer variables de entorno
-  // del lado del servidor al cliente. Sin embargo, para variables con el prefijo
-  // NEXT_PUBLIC_, Next.js las expone automáticamente.
-  // No es necesario duplicar la configuración aquí si ya usas el prefijo.
 };
 
 export default nextConfig;
