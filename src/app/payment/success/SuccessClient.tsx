@@ -6,7 +6,7 @@ import { useFirestore } from '@/firebase';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { CheckCircle, AlertTriangle } from 'lucide-react';
+import { VamoIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 
 export default function SuccessClient() {
@@ -51,7 +51,7 @@ export default function SuccessClient() {
                  <Card className="w-full text-center border-yellow-500">
                     <CardHeader>
                         <CardTitle className="flex items-center justify-center gap-2 text-yellow-600">
-                            <AlertTriangle />
+                            <VamoIcon name="alert-triangle" />
                             Estado de Pago Incierto
                         </CardTitle>
                         <CardDescription>
@@ -74,7 +74,7 @@ export default function SuccessClient() {
             <Card className="w-full text-center border-green-500">
                 <CardHeader>
                     <CardTitle className="flex items-center justify-center gap-2 text-green-600">
-                        <CheckCircle />
+                        <VamoIcon name="check-circle" />
                         ¡Pago Realizado con Éxito!
                     </CardTitle>
                     <CardDescription>

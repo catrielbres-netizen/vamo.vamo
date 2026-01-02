@@ -1,7 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { XCircle } from 'lucide-react';
+import { VamoIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 
 export default function PaymentFailurePage() {
@@ -16,7 +16,7 @@ export default function PaymentFailurePage() {
             <Card className="w-full text-center border-destructive">
                 <CardHeader>
                     <CardTitle className="flex items-center justify-center gap-2 text-destructive">
-                        <XCircle />
+                        <VamoIcon name="x-circle" />
                         Pago Rechazado
                     </CardTitle>
                     <CardDescription>

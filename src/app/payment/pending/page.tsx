@@ -1,7 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Hourglass } from 'lucide-react';
+import { VamoIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 
 export default function PaymentPendingPage() {
@@ -16,7 +16,7 @@ export default function PaymentPendingPage() {
             <Card className="w-full text-center border-blue-500">
                 <CardHeader>
                     <CardTitle className="flex items-center justify-center gap-2 text-blue-600">
-                        <Hourglass />
+                        <VamoIcon name="hourglass" />
                         Pago Pendiente
                     </CardTitle>
                     <CardDescription>

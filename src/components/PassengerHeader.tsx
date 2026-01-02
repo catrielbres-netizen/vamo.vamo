@@ -1,7 +1,6 @@
 
 'use client';
 
-import { UserCircle2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useUser } from '@/firebase';
 
