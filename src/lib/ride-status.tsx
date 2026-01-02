@@ -1,4 +1,3 @@
-
 // @/lib/ride-status.tsx
 import { VamoIcon } from '@/components/icons';
   
@@ -35,6 +34,6 @@ export const RideStatusInfo: {
         icon: <VamoIcon name="hourglass" />,
         progress: 90,
     },
-    finished: { text: 'Viaje finalizado', icon: <VamoIcon name="check-circle-2" />, progress: 100 },
+    finished: { text: 'Viaje finalizado', icon: <VamoIcon name="check-circle" />, progress: 100 },
     cancelled: { text: 'Viaje cancelado', icon: <VamoIcon name="flag" />, progress: 0 },
 };

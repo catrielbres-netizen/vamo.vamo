@@ -1,26 +1,107 @@
-
 // src/components/icons.tsx
 'use client';
-import dynamic from 'next/dynamic';
-import type { LucideProps } from 'lucide-react';
-import dynamicIconImports from 'lucide-react/dynamicIconImports';
+import {
+  AlertCircle,
+  Award,
+  Bot,
+  Car,
+  Check,
+  CheckCircle,
+  ChevronRight,
+  CircleAlert,
+  CircleDashed,
+  Clock,
+  CreditCard,
+  DollarSign,
+  FileText,
+  Flag,
+  Hourglass,
+  Info,
+  LayoutDashboard,
+  LogOut,
+  Mail,
+  Map,
+  MapPin,
+  Percent,
+  Phone,
+  Play,
+  Route,
+  Search,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Star,
+  Target,
+  TrendingUp,
+  User,
+  UserCheck,
+  Users,
+  Wallet,
+  XCircle,
+  CalendarClock
+} from "lucide-react";
 
-interface VamoIconProps extends Omit<LucideProps, 'name'> {
-  name: keyof typeof dynamicIconImports;
-}
-
-const VamoIcon = ({ name, ...props }: VamoIconProps) => {
-  const LucideIcon = dynamic(dynamicIconImports[name]);
-
-  if (!LucideIcon) {
-    // Fallback or error logging
-    return null;
-  }
-
-  return <LucideIcon {...props} />;
+// This map defines the explicit set of icons available in the app.
+// The key is the string `name` you pass to VamoIcon, and the value is the imported component.
+const icons = {
+  "alert-circle": AlertCircle,
+  "award": Award,
+  "bot": Bot,
+  "car": Car,
+  "check": Check,
+  "check-circle": CheckCircle,
+  "chevron-right": ChevronRight,
+  "circle-alert": CircleAlert,
+  "circle-dashed": CircleDashed,
+  "clock": Clock,
+  "credit-card": CreditCard,
+  "dollar-sign": DollarSign,
+  "file-text": FileText,
+  "flag": Flag,
+  "hourglass": Hourglass,
+  "info": Info,
+  "layout-dashboard": LayoutDashboard,
+  "log-out": LogOut,
+  "mail": Mail,
+  "map": Map,
+  "map-pin": MapPin,
+  "percent": Percent,
+  "phone": Phone,
+  "play": Play,
+  "route": Route,
+  "search": Search,
+  "shield": Shield,
+  "shield-alert": ShieldAlert,
+  "shield-check": ShieldCheck,
+  "star": Star,
+  "target": Target,
+  "trending-up": TrendingUp,
+  "user": User,
+  "user-check": UserCheck,
+  "users": Users,
+  "wallet": Wallet,
+  "x-circle": XCircle,
+  "calendar-clock": CalendarClock,
+  // loader is a common icon name, let's map it to circle-dashed
+  "loader": CircleDashed, 
 };
 
-export { VamoIcon };
+export type VamoIconName = keyof typeof icons;
+
+export interface VamoIconProps {
+  name: VamoIconName;
+  className?: string;
+  [key: string]: any; // Allow other props
+}
+
+export function VamoIcon({ name, className, ...props }: VamoIconProps) {
+  const Icon = icons[name];
+  if (!Icon) {
+    // In a real app, you might want to render a default "missing icon" placeholder
+    return null;
+  }
+  return <Icon className={className} {...props} />;
+}
 
 
 export const WhatsAppLogo = (props: React.SVGProps<SVGSVGElement>) => (
