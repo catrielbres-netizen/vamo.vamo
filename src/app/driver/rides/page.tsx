@@ -1,3 +1,4 @@
+
 // /app/driver/rides/page.tsx
 'use client';
 
@@ -36,7 +37,7 @@ const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, 
     rejected: {
         title: 'Cuenta Rechazada',
         description: 'Hubo un problema con tu documentación. Por favor, contactá a soporte para más información.',
-        icon: <VamoIcon name="clock" />
+        icon: <VamoIcon name="x-circle" />
     },
     approved: {
         title: '¡Estás en línea!',

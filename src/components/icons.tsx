@@ -4,12 +4,18 @@ import dynamic from 'next/dynamic';
 import type { LucideProps } from 'lucide-react';
 import dynamicIconImports from 'lucide-react/dynamicIconImports';
 
-interface VamoIconProps extends LucideProps {
+interface VamoIconProps extends Omit<LucideProps, 'name'> {
   name: keyof typeof dynamicIconImports;
 }
 
 const VamoIcon = ({ name, ...props }: VamoIconProps) => {
   const LucideIcon = dynamic(dynamicIconImports[name]);
+
+  if (!LucideIcon) {
+    // Fallback or error logging
+    return null;
+  }
+
   return <LucideIcon {...props} />;
 };
 

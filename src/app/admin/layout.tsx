@@ -1,3 +1,4 @@
+
 'use client'
 
 import { AdminNavbar } from './components/AdminNavbar'
@@ -26,7 +27,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (authStatus === 'loading') {
     return (
         <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
-            <VamoIcon className="h-10 w-10 animate-pulse text-primary" />
+            <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />
             <p className="mt-4 text-muted-foreground">Verificando acceso...</p>
         </div>
     )
