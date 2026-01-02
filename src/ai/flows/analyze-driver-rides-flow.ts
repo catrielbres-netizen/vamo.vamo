@@ -9,16 +9,9 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { getFirestore, collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
-import { initializeApp, getApps } from 'firebase/app';
-import { firebaseConfig } from '@/firebase/config';
+import { getRecentFinishedRidesForDriver } from '@/lib/server/firestore';
 import { Ride } from '@/lib/types';
-import { Timestamp } from 'firebase/firestore';
 
-
-// Server-side Firebase initialization
-const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const firestore = getFirestore(firebaseApp);
 
 const AnalyzeDriverRidesInputSchema = z.object({
   driverId: z.string().describe('The unique ID of the driver to analyze.'),
@@ -68,33 +61,12 @@ const analyzeDriverRidesFlow = ai.defineFlow(
   },
   async ({ driverId }) => {
 
-    // 1. Fetch the last 30 rides for the driver
-    const ridesRef = collection(firestore, 'rides');
-    // Simplified query to avoid composite index requirement. We will sort in the code.
-    const q = query(
-        ridesRef, 
-        where('driverId', '==', driverId),
-        where('status', '==', 'finished'),
-        limit(30)
-    );
-    
     let rides: Ride[] = [];
     try {
-        const querySnapshot = await getDocs(q);
-        if (querySnapshot.empty) {
+        rides = await getRecentFinishedRidesForDriver(driverId, 30);
+        if (rides.length === 0) {
             return { analysis: "✅ COMPORTAMIENTO NORMAL: No se encontraron viajes completados recientes para este conductor." };
         }
-        querySnapshot.forEach(doc => {
-            rides.push(doc.data() as Ride);
-        });
-
-        // Sort the rides by creation date descending in the code
-        rides.sort((a, b) => {
-            const dateA = a.createdAt as Timestamp;
-            const dateB = b.createdAt as Timestamp;
-            return dateB.seconds - dateA.seconds;
-        });
-
     } catch (error) {
         console.error("Failed to fetch rides for analysis:", error);
         throw new Error(`Failed to fetch rides for driver ${driverId}`);

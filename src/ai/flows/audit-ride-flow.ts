@@ -8,13 +8,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { getFirestore, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { initializeApp, getApps } from 'firebase/app';
-import { firebaseConfig } from '@/firebase/config';
-
-// Server-side Firebase initialization
-const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const firestore = getFirestore(firebaseApp);
+import { flagRideAsSuspicious } from '@/lib/server/firestore';
 
 
 const AuditRideInputSchema = z.object({
@@ -76,15 +70,8 @@ const auditRideFlow = ai.defineFlow(
     const { output } = await auditPrompt(input);
     
     if (output && output.isSuspicious) {
-      // If the AI flags the ride, update the document in Firestore.
-      const rideRef = doc(firestore, 'rides', input.rideId);
-      
       try {
-        await updateDoc(rideRef, {
-            audited: false, // Mark as NOT audited, so it appears in the admin queue
-            auditComment: `AI Flag: ${output.reason}`,
-            updatedAt: serverTimestamp(),
-        });
+        await flagRideAsSuspicious(input.rideId, `AI Flag: ${output.reason}`);
         console.log(`Ride ${input.rideId} flagged as suspicious. Reason: ${output.reason}`);
       } catch (error) {
         console.error(`Failed to update ride ${input.rideId} in Firestore:`, error);
