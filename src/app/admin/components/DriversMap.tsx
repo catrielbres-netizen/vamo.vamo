@@ -1,6 +1,6 @@
 // src/app/admin/components/DriversMap.tsx
 'use client'
-import { APIProvider, Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, Pin, useApiIsLoaded } from '@vis.gl/react-google-maps';
 import { UserProfile } from '@/lib/types';
 import { WithId } from '@/firebase/firestore/use-collection';
 
@@ -11,6 +11,16 @@ interface DriversMapProps {
 const mapCenter = { lat: -43.3005, lng: -65.1023 }; // Rawson, Chubut
 
 function MapComponent({ drivers }: DriversMapProps) {
+    const isLoaded = useApiIsLoaded();
+
+    if (!isLoaded) {
+        return (
+             <div className="h-[400px] flex items-center justify-center bg-muted">
+                <p className="text-muted-foreground text-center">Cargando mapa...</p>
+            </div>
+        )
+    }
+
     return (
         <Map
             defaultCenter={mapCenter}
@@ -56,6 +66,8 @@ export default function DriversMap({ drivers }: DriversMapProps) {
             <APIProvider 
                 apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}
                 libraries={['places']}
+                // onLoad={() => console.log('Maps API loaded successfully.')}
+                // onError={(e) => console.error('Maps API load error:', e)}
             >
                 <MapComponent drivers={drivers} />
             </APIProvider>

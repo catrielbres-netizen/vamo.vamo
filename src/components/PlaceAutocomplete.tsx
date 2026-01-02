@@ -13,7 +13,7 @@ import {
 import { Place } from '@/lib/types';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { MapPin } from 'lucide-react';
+import { MapPin, AlertTriangle } from 'lucide-react';
 
 interface PlaceAutocompleteProps {
   onPlaceSelect: (place: Place | null) => void;
@@ -30,7 +30,13 @@ export function PlaceAutocomplete({ onPlaceSelect, defaultValue = '', className 
     clearSuggestions,
   } = usePlacesAutocomplete({
     requestOptions: {
+      // Limit search to a rough bounding box around Chubut, Argentina
+      bounds: new google.maps.LatLngBounds(
+        new google.maps.LatLng(-46.0, -72.0), // Southwest
+        new google.maps.LatLng(-42.0, -63.0)  // Northeast
+      ),
       componentRestrictions: { country: 'AR' }, // Restringe a Argentina
+      strictBounds: false, // Be lenient, don't strictly exclude results outside bounds
     },
     debounce: 300,
     defaultValue,
@@ -38,6 +44,18 @@ export function PlaceAutocomplete({ onPlaceSelect, defaultValue = '', className 
 
   const [isFocused, setIsFocused] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const [showError, setShowError] = useState(false);
+
+  useEffect(() => {
+    // If the component has been mounted for a second and the API isn't ready, show an error.
+    // This usually means the API key is invalid or blocked.
+    const timer = setTimeout(() => {
+        if (!ready) {
+            setShowError(true);
+        }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [ready]);
 
   const handleSelect = async (address: string) => {
     setValue(address, false);
@@ -66,6 +84,14 @@ export function PlaceAutocomplete({ onPlaceSelect, defaultValue = '', className 
     };
   }, [wrapperRef, clearSuggestions]);
 
+  if (showError) {
+       return (
+         <div className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-destructive flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" /> Error al cargar API de mapas.
+        </div>
+       )
+  }
+
   return (
     <div ref={wrapperRef} className={cn('w-full relative', className)}>
       <Command shouldFilter={false} className="h-auto rounded-lg border border-input bg-transparent">
@@ -73,7 +99,7 @@ export function PlaceAutocomplete({ onPlaceSelect, defaultValue = '', className 
           value={value}
           onValueChange={setValue}
           disabled={!ready}
-          placeholder="Ingresá una dirección..."
+          placeholder={!ready ? "Cargando buscador..." : "Ingresá una dirección..."}
           className="h-8"
           onFocus={() => setIsFocused(true)}
         />
