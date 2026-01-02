@@ -37,6 +37,9 @@ import {
   Hourglass,
   CircleDashed,
   ShieldAlert,
+  Check,
+  TrendingUp,
+  X,
 } from "lucide-react";
 
 const icons = {
@@ -77,7 +80,9 @@ const icons = {
   hourglass: Hourglass,
   "circle-dashed": CircleDashed,
   "shield-alert": ShieldAlert,
-  check: CheckCircle, // Alias para Check
+  check: Check,
+  "trending-up": TrendingUp,
+  x: X,
 };
 
 export type VamoIconName = keyof typeof icons;
@@ -97,7 +102,6 @@ export function VamoIcon({
   return <Icon className={className} />;
 }
 
-// Para mantener compatibilidad con algunos usos que puedan quedar
 export const WhatsAppLogo = ({ className }: { className?: string }) => (
     <svg
       role="img"
