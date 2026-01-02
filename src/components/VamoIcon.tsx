@@ -1,6 +1,6 @@
+
 import {
   AlertCircle,
-  AlertTriangle,
   LayoutDashboard,
   User,
   Users,
@@ -41,7 +41,6 @@ import {
 
 const icons = {
   "alert-circle": AlertCircle,
-  "alert-triangle": AlertTriangle,
   "layout-dashboard": LayoutDashboard,
   user: User,
   users: Users,
