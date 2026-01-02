@@ -17,10 +17,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     // Si no está autorizado y no es la página de crear admin (que es pública si no hay admins)
-    if (authStatus === 'unauthorized' && pathname !== '/admin/create') {
+    if (authStatus === 'unauthorized') {
         router.replace('/login')
     }
-  },[authStatus, router, pathname])
+  },[authStatus, router])
 
 
   if (authStatus === 'loading') {
@@ -30,12 +30,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <p className="mt-4 text-muted-foreground">Verificando acceso...</p>
         </div>
     )
-  }
-  
-  // Si no está autorizado pero está en la página de creación, se le permite el paso.
-  // El componente de la página /admin/create tiene su propia lógica para decidir si mostrarse.
-  if (authStatus === 'unauthorized' && pathname === '/admin/create') {
-       return <main>{children}</main>;
   }
   
   if (authStatus === 'unauthorized') {
