@@ -1,9 +1,8 @@
 
 // @/lib/ride-status.tsx
-import { VamoIconName } from '@/components/VamoIcon';
   
 export const RideStatusInfo: {
-    [key: string]: { text: string; icon: VamoIconName; progress: number };
+    [key: string]: { text: string; icon: string; progress: number };
 } = {
     searching_driver: {
       text: 'Buscando conductor',

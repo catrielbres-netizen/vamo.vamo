@@ -14,7 +14,7 @@ import { speak } from '@/lib/speak';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, ServiceType, UserProfile } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { VamoIcon, VamoIconName } from '@/components/VamoIcon';
+import { VamoIcon } from '@/components/VamoIcon';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 
@@ -23,7 +23,7 @@ const getAllowedServices = (): ServiceType[] => {
     return ['premium', 'privado', 'express'];
 }
 
-const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, {title: string, description: string, icon: VamoIconName}> = {
+const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, {title: string, description: string, icon: string}> = {
     unverified: {
         title: 'Perfil Incompleto',
         description: 'Debes completar tu perfil y enviar la documentación para empezar a recibir viajes.',
