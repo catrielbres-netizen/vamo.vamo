@@ -207,7 +207,9 @@ export default function DriverDetailPage() {
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleVerification('approved')} className="bg-green-600 hover:bg-green-700">Aprobar</AlertDialogAction>
+                                <AlertDialogAction asChild>
+                                    <Button onClick={() => handleVerification('approved')} className="bg-green-600 hover:bg-green-700">Aprobar</Button>
+                                </AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>
@@ -225,7 +227,9 @@ export default function DriverDetailPage() {
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleVerification('rejected')} variant="destructive">Rechazar</AlertDialogAction>
+                                <AlertDialogAction asChild>
+                                    <Button variant="destructive" onClick={() => handleVerification('rejected')}>Rechazar</Button>
+                                </AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>
