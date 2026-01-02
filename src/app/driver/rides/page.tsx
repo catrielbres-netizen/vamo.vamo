@@ -95,11 +95,6 @@ export default function DriverRidesPage() {
             },
             (error) => {
                 console.error("Error getting driver location:", error);
-                toast({
-                    variant: "destructive",
-                    title: "Error de ubicación",
-                    description: "No pudimos obtener tu ubicación. Asegurate de tener el GPS activado y los permisos concedidos."
-                })
                 // If location fails, set status to inactive
                 updateDocumentNonBlocking(userProfileRef, { driverStatus: 'inactive', currentLocation: null });
             },
@@ -131,7 +126,7 @@ export default function DriverRidesPage() {
     };
     // ---- END: Location Tracking Logic ----
 
-  }, [firestore, user?.uid, profile?.approved, activeRide, toast]);
+  }, [firestore, user?.uid, profile?.approved, activeRide]);
 
 
   useEffect(() => {
