@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { VamoIcon } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ShieldAlert } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const ShieldAlert = dynamic(() => import('lucide-react').then(m => m.ShieldAlert), { ssr: false });
 
 const years = Array.from({ length: 2026 - 2008 + 1 }, (_, i) => (2008 + i).toString()).reverse();
 
