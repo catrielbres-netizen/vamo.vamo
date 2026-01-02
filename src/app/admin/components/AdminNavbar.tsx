@@ -8,7 +8,12 @@ import { Button } from '@/components/ui/button'
 import { useAuth } from '@/firebase'
 import { signOut } from 'firebase/auth'
 import { useRouter } from 'next/navigation'
-import { LogOut } from 'lucide-react'
+import dynamic from 'next/dynamic'
+
+const LogOut = dynamic(() =>
+  import("lucide-react").then(mod => mod.LogOut),
+  { ssr: false }
+);
 
 const navLinks = [
     { href: '/admin/dashboard', label: 'Dashboard' },
