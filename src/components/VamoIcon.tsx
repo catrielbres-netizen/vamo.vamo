@@ -1,5 +1,6 @@
 
 import {
+  LucideProps,
   AlertCircle,
   LayoutDashboard,
   User,
@@ -23,13 +24,10 @@ import {
   Target,
   Percent,
   XCircle,
-  Loader,
-  CircleAlert,
-  MapPin,
-  Flag,
-  Route,
-  Clock,
+  TrendingUp,
   Map,
+  Loader,
+  Check,
   UserCheck,
   CreditCard,
   Info,
@@ -37,8 +35,10 @@ import {
   Hourglass,
   CircleDashed,
   ShieldAlert,
-  Check,
-  TrendingUp,
+  MapPin,
+  Flag,
+  Route,
+  Clock,
   X,
 } from "lucide-react";
 
@@ -66,13 +66,10 @@ const icons = {
   target: Target,
   percent: Percent,
   "x-circle": XCircle,
-  loader: Loader,
-  "circle-alert": CircleAlert,
-  "map-pin": MapPin,
-  flag: Flag,
-  route: Route,
-  clock: Clock,
+  "trending-up": TrendingUp,
   map: Map,
+  loader: Loader,
+  check: Check,
   "user-check": UserCheck,
   "credit-card": CreditCard,
   info: Info,
@@ -80,27 +77,28 @@ const icons = {
   hourglass: Hourglass,
   "circle-dashed": CircleDashed,
   "shield-alert": ShieldAlert,
-  check: Check,
-  "trending-up": TrendingUp,
+  "map-pin": MapPin,
+  flag: Flag,
+  route: Route,
+  clock: Clock,
   x: X,
 };
 
 export type VamoIconName = keyof typeof icons;
 
-export function VamoIcon({
-  name,
-  className,
-}: {
+export type VamoIconProps = Omit<LucideProps, 'name'> & {
   name: VamoIconName;
-  className?: string;
-}) {
+};
+
+export function VamoIcon({ name, ...props }: VamoIconProps) {
   const Icon = icons[name];
   if (!Icon) {
     // Fallback o manejo de error si el ícono no se encuentra
     return null;
   }
-  return <Icon className={className} />;
+  return <Icon {...props} />;
 }
+
 
 export const WhatsAppLogo = ({ className }: { className?: string }) => (
     <svg
