@@ -1,3 +1,4 @@
+
 // @/components/ActiveDriverRide.tsx
 'use client';
 
@@ -204,7 +205,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <p className="flex items-center">
-            <VamoIcon name="user" className="w-4 h-4 mr-2 text-muted-foreground" />
+            <VamoIcon name="User" className="w-4 h-4 mr-2 text-muted-foreground" />
             <strong>Pasajero:</strong> {ride.passengerName || 'No especificado'}
         </p>
 
@@ -213,8 +214,8 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 <p className="font-semibold">Recoger Pasajero</p>
                 <p className="text-xs text-muted-foreground">{ride.origin.address}</p>
                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex items-center justify-center gap-1.5"><VamoIcon name="car" className="w-4 h-4 text-primary"/> <span>{formatDistance(arrivalInfo.distanceMeters)}</span></div>
-                    <div className="flex items-center justify-center gap-1.5"><VamoIcon name="clock" className="w-4 h-4 text-primary"/> <span>{formatDuration(arrivalInfo.durationSeconds)}</span></div>
+                    <div className="flex items-center justify-center gap-1.5"><VamoIcon name="Car" className="w-4 h-4 text-primary"/> <span>{formatDistance(arrivalInfo.distanceMeters)}</span></div>
+                    <div className="flex items-center justify-center gap-1.5"><VamoIcon name="Clock" className="w-4 h-4 text-primary"/> <span>{formatDuration(arrivalInfo.durationSeconds)}</span></div>
                  </div>
             </div>
         )}
@@ -223,11 +224,11 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
             <div className="bg-secondary/50 p-3 rounded-lg text-center">
                 <p className="font-semibold">Llevar Pasajero a Destino</p>
                 <p className="flex items-center justify-center text-xs text-muted-foreground">
-                    <VamoIcon name="flag" className="w-3 h-3 mr-1"/> {ride.destination.address}
+                    <VamoIcon name="Flag" className="w-3 h-3 mr-1"/> {ride.destination.address}
                 </p>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex items-center justify-center gap-1.5"><VamoIcon name="route" className="w-4 h-4 text-primary"/> <span>{formatDistance(mainTripInfo.distance)}</span></div>
-                    <div className="flex items-center justify-center gap-1.5"><VamoIcon name="clock" className="w-4 h-4 text-primary"/> <span>{formatDuration(mainTripInfo.duration || 0)}</span></div>
+                    <div className="flex items-center justify-center gap-1.5"><VamoIcon name="Route" className="w-4 h-4 text-primary"/> <span>{formatDistance(mainTripInfo.distance)}</span></div>
+                    <div className="flex items-center justify-center gap-1.5"><VamoIcon name="Clock" className="w-4 h-4 text-primary"/> <span>{formatDuration(mainTripInfo.duration || 0)}</span></div>
                 </div>
             </div>
         )}
@@ -235,13 +236,13 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
         <div className="!mt-4 grid grid-cols-1 gap-2">
             {ride.status === 'driver_assigned' && (
                  <Button onClick={openNavigationToOrigin} className="w-full" variant="outline">
-                    <VamoIcon name="map-pin" className="mr-2 h-4 w-4"/>
+                    <VamoIcon name="MapPin" className="mr-2 h-4 w-4"/>
                     Ir al Origen
                 </Button>
             )}
              {['arrived', 'in_progress', 'paused'].includes(ride.status) && (
                 <Button onClick={openNavigationToDestination} className="w-full" variant="outline">
-                    <VamoIcon name="map" className="mr-2 h-4 w-4"/>
+                    <VamoIcon name="Map" className="mr-2 h-4 w-4"/>
                     Ir al Destino
                 </Button>
             )}
@@ -250,7 +251,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
         {(totalWaitWithCurrent > 0) && (
             <div className="!mt-4 bg-accent/50 p-3 rounded-lg">
                 <p className="flex items-center justify-center font-mono text-center">
-                    <VamoIcon name="hourglass" className="w-4 h-4 mr-2 text-destructive" />
+                    <VamoIcon name="Hourglass" className="w-4 h-4 mr-2 text-destructive" />
                     <span className="font-semibold">Tiempo de espera:</span>
                     <span className="ml-2 tabular-nums">{formatDuration(totalWaitWithCurrent)}</span>
                 </p>
@@ -278,7 +279,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 size="lg"
                 variant={nextAction.action === 'finished' ? 'destructive' : 'default'}
             >
-                {nextAction.action === 'in_progress' && ride.status === 'paused' && <VamoIcon name="play" className="mr-2 h-4 w-4" />}
+                {nextAction.action === 'in_progress' && ride.status === 'paused' && <VamoIcon name="Play" className="mr-2 h-4 w-4" />}
                 {nextAction.label}
             </Button>
             )}
@@ -288,7 +289,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                     className="w-full"
                     variant="outline"
                 >
-                    <VamoIcon name="hourglass" className="mr-2 h-4 w-4" />
+                    <VamoIcon name="Hourglass" className="mr-2 h-4 w-4" />
                     Pausar Viaje
                 </Button>
             )}

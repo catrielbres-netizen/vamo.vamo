@@ -1,3 +1,4 @@
+
 // @/components/RatingForm.tsx
 'use client';
 
@@ -43,7 +44,7 @@ export default function RatingForm({ participantName, participantRole, onSubmit,
                 <div className="flex justify-center items-center space-x-1">
                 {[1, 2, 3, 4, 5].map((star) => (
                     <VamoIcon
-                    name="star"
+                    name="Star"
                     key={star}
                     className={cn(
                         'w-8 h-8 cursor-pointer transition-colors',

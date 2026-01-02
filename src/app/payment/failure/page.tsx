@@ -1,3 +1,4 @@
+
 'use client';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -16,7 +17,7 @@ export default function PaymentFailurePage() {
             <Card className="w-full text-center border-destructive">
                 <CardHeader>
                     <CardTitle className="flex items-center justify-center gap-2 text-destructive">
-                        <VamoIcon name="x-circle" />
+                        <VamoIcon name="XCircle" />
                         Pago Rechazado
                     </CardTitle>
                     <CardDescription>

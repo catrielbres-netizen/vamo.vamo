@@ -79,7 +79,7 @@ export function PlaceAutocomplete({ onPlaceSelect, defaultValue = '', className 
   if (!apiKey) {
        return (
          <div className="relative w-full">
-            <VamoIcon name="map-pin" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <VamoIcon name="MapPin" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
               type="text"
               placeholder="Buscador no disponible. Falta API Key."
@@ -94,7 +94,7 @@ export function PlaceAutocomplete({ onPlaceSelect, defaultValue = '', className 
     <div ref={wrapperRef} className={cn('w-full relative', className)}>
       <Command shouldFilter={false} className="h-auto rounded-lg border border-input bg-transparent">
         <div className="flex items-center" cmdk-input-wrapper="">
-          <VamoIcon name="map-pin" className="mr-2 ml-3 h-4 w-4 shrink-0 opacity-50" />
+          <VamoIcon name="MapPin" className="mr-2 ml-3 h-4 w-4 shrink-0 opacity-50" />
           <CommandInput
             value={value}
             onValueChange={setValue}

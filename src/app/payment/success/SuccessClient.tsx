@@ -51,7 +51,7 @@ export default function SuccessClient() {
                  <Card className="w-full text-center border-yellow-500">
                     <CardHeader>
                         <CardTitle className="flex items-center justify-center gap-2 text-yellow-600">
-                            <VamoIcon name="alert-triangle" />
+                            <VamoIcon name="AlertTriangle" />
                             Estado de Pago Incierto
                         </CardTitle>
                         <CardDescription>
@@ -74,7 +74,7 @@ export default function SuccessClient() {
             <Card className="w-full text-center border-green-500">
                 <CardHeader>
                     <CardTitle className="flex items-center justify-center gap-2 text-green-600">
-                        <VamoIcon name="check-circle" />
+                        <VamoIcon name="CheckCircle" />
                         ¡Pago Realizado con Éxito!
                     </CardTitle>
                     <CardDescription>

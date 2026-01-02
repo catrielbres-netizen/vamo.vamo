@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useUser } from '@/firebase';
@@ -66,7 +67,7 @@ export default function ProfilePage() {
   if (!profile) {
     return (
         <div className="text-center py-10">
-            <VamoIcon name="user" className="mx-auto h-12 w-12 text-muted-foreground" />
+            <VamoIcon name="User" className="mx-auto h-12 w-12 text-muted-foreground" />
             <p className="mt-4 text-muted-foreground">No se pudo cargar tu perfil.</p>
         </div>
     );
@@ -86,15 +87,15 @@ export default function ProfilePage() {
           <CardDescription>Pasajero en VamO</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-             <ProfileInfoRow icon={<VamoIcon name="mail" />} label="Email" value={profile.email} />
-             <ProfileInfoRow icon={<VamoIcon name="phone" />} label="Teléfono" value={profile.phone} />
-             <ProfileInfoRow icon={<VamoIcon name="star" />} label="Rating Promedio" value={averageRating} />
+             <ProfileInfoRow icon={<VamoIcon name="Mail" />} label="Email" value={profile.email} />
+             <ProfileInfoRow icon={<VamoIcon name="Phone" />} label="Teléfono" value={profile.phone} />
+             <ProfileInfoRow icon={<VamoIcon name="Star" />} label="Rating Promedio" value={averageRating} />
         </CardContent>
       </Card>
       
       <Card>
         <CardHeader>
-            <CardTitle className="flex items-center gap-2"><VamoIcon name="award" className="text-primary"/> Puntos VamO</CardTitle>
+            <CardTitle className="flex items-center gap-2"><VamoIcon name="Award" className="text-primary"/> Puntos VamO</CardTitle>
             <CardDescription>Ganá puntos con cada viaje y canjealos por descuentos.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -106,7 +107,7 @@ export default function ProfilePage() {
             {profile.activeBonus ? (
                  <div className="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-center">
                     <p className="font-semibold text-green-600 dark:text-green-400 flex items-center justify-center gap-2">
-                        <VamoIcon name="shield-check" className="w-5 h-5"/> ¡Tenés un bono del 10% activo!
+                        <VamoIcon name="ShieldCheck" className="w-5 h-5"/> ¡Tenés un bono del 10% activo!
                     </p>
                     <p className="text-xs text-green-500 dark:text-green-500">Se usará en tu próximo viaje.</p>
                 </div>

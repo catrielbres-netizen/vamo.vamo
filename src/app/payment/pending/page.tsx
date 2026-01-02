@@ -1,3 +1,4 @@
+
 'use client';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -16,7 +17,7 @@ export default function PaymentPendingPage() {
             <Card className="w-full text-center border-blue-500">
                 <CardHeader>
                     <CardTitle className="flex items-center justify-center gap-2 text-blue-600">
-                        <VamoIcon name="hourglass" />
+                        <VamoIcon name="Hourglass" />
                         Pago Pendiente
                     </CardTitle>
                     <CardDescription>

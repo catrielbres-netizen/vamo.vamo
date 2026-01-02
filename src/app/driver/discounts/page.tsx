@@ -1,3 +1,4 @@
+
 // src/app/driver/discounts/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
@@ -81,7 +82,7 @@ export default function DiscountsPage() {
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2 text-primary font-bold">
-                                       <VamoIcon name="percent" className="w-4 h-4"/>
+                                       <VamoIcon name="Percent" className="w-4 h-4"/>
                                        <span>{formatCurrency(ride.pricing.discountAmount || 0)}</span>
                                     </div>
                                 </li>

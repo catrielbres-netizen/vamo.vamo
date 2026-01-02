@@ -61,10 +61,10 @@ Gracias.
                     <div className="p-4 bg-secondary rounded-lg space-y-3">
                         <p className="font-semibold text-center">Envíanos por WhatsApp la siguiente documentación:</p>
                         <ul className="text-sm space-y-2">
-                            <li className="flex items-center gap-2"><VamoIcon name="user" className="w-4 h-4 text-primary" /> Foto de tu DNI (frente y dorso).</li>
-                            <li className="flex items-center gap-2"><VamoIcon name="file-text" className="w-4 h-4 text-primary" /> Foto de tu Licencia de Conducir.</li>
-                            <li className="flex items-center gap-2"><VamoIcon name="shield" className="w-4 h-4 text-primary" /> Foto del Seguro de tu vehículo.</li>
-                            <li className="flex items-center gap-2"><VamoIcon name="check" className="w-4 h-4 text-primary" /> Comprobante del modelo del auto.</li>
+                            <li className="flex items-center gap-2"><VamoIcon name="User" className="w-4 h-4 text-primary" /> Foto de tu DNI (frente y dorso).</li>
+                            <li className="flex items-center gap-2"><VamoIcon name="FileText" className="w-4 h-4 text-primary" /> Foto de tu Licencia de Conducir.</li>
+                            <li className="flex items-center gap-2"><VamoIcon name="Shield" className="w-4 h-4 text-primary" /> Foto del Seguro de tu vehículo.</li>
+                            <li className="flex items-center gap-2"><VamoIcon name="Check" className="w-4 h-4 text-primary" /> Comprobante del modelo del auto.</li>
                         </ul>
                     </div>
 

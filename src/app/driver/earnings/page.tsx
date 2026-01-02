@@ -189,7 +189,7 @@ export default function EarningsPage() {
         <div className="space-y-6">
             <Card className="border-primary">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><VamoIcon name="trending-up"/> Metas Semanales</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><VamoIcon name="TrendingUp"/> Metas Semanales</CardTitle>
                     <CardDescription>Completá más viajes para reducir tu comisión.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -209,7 +209,7 @@ export default function EarningsPage() {
                              </p>
                         ) : !isPaid && commissionInfo.nextTier === null ? (
                             <p className="text-center text-sm font-semibold text-green-500 flex items-center justify-center gap-2">
-                                <VamoIcon name="target"/> ¡Alcanzaste la comisión más baja!
+                                <VamoIcon name="Target"/> ¡Alcanzaste la comisión más baja!
                             </p>
                         ) : null}
                      </div>
@@ -233,7 +233,7 @@ export default function EarningsPage() {
                         </div>
                         {bonusesApplied > 0 && (
                             <div className="flex justify-between text-blue-500">
-                                <span className="flex items-center gap-1"><VamoIcon name="percent" className="w-3 h-3" /> Reembolso por bonos</span>
+                                <span className="flex items-center gap-1"><VamoIcon name="Percent" className="w-3 h-3" /> Reembolso por bonos</span>
                                 <span className="font-medium">{formatCurrency(bonusesApplied)}</span>
                             </div>
                         )}
@@ -257,7 +257,7 @@ export default function EarningsPage() {
                         <Button className="w-full" onClick={handleMercadoPagoPayment} disabled={isPaying}>
                             {isPaying ? 'Procesando...' : (
                                 <>
-                                    <VamoIcon name="credit-card" className="mr-2 h-4 w-4" /> Pagar con Mercado Pago
+                                    <VamoIcon name="CreditCard" className="mr-2 h-4 w-4" /> Pagar con Mercado Pago
                                 </>
                             )}
                         </Button>
@@ -267,7 +267,7 @@ export default function EarningsPage() {
 
              {isPaid ? (
                 <Alert variant="default" className="bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800">
-                    <VamoIcon name="check-circle" className="h-4 w-4 text-green-500" />
+                    <VamoIcon name="CheckCircle" className="h-4 w-4 text-green-500" />
                     <AlertTitle className="text-green-700 dark:text-green-400">Comisión Pagada</AlertTitle>
                     <AlertDescription className="text-green-600 dark:text-green-500">
                         ¡Gracias! La comisión de esta semana ya fue registrada.
@@ -275,7 +275,7 @@ export default function EarningsPage() {
                 </Alert>
              ) : !isPaymentWindow() && summary.commissionOwed > 0 && (
                 <Alert>
-                    <VamoIcon name="info" className="h-4 w-4" />
+                    <VamoIcon name="Info" className="h-4 w-4" />
                     <AlertTitle>Pago de Comisiones</AlertTitle>
                     <AlertDescription>
                         Podés pagar tu comisión semanal usando Mercado Pago en cualquier momento. El pago se acredita y la cuenta se reinicia al instante.
