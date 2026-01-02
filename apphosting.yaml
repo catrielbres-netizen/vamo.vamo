@@ -1,11 +1,7 @@
 runtime: nodejs20
 
-env:
-  - variable: NODE_ENV
-    value: production
-
 build:
   command: npm run build
 
 run:
-  command: npm run start
+  command: npm start

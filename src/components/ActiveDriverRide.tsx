@@ -19,7 +19,6 @@ import { Flag, User, Hourglass, Play, Clock, Map, MapPin, Route, Car } from 'luc
 import { useState, useEffect, useRef } from 'react';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
-import { auditRide } from '@/ai/flows/audit-ride-flow';
 import { speak } from '@/lib/speak';
 
 
@@ -155,16 +154,6 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
           pricing: finalPricing,
           finishedAt: payload.finishedAt
         };
-
-        // Non-blocking call to AI fraud detection flow
-        auditRide({
-            rideId: ride.id,
-            originAddress: ride.origin.address,
-            destinationAddress: ride.destination.address,
-            distanceMeters: ride.pricing.estimatedDistanceMeters,
-            durationSeconds: ride.pricing.estimatedDurationSeconds || 0,
-            finalTotal: finalPrice,
-        }).catch(e => console.error("Error calling audit ride flow:", e));
     }
 
     updateDocumentNonBlocking(rideRef, payload);

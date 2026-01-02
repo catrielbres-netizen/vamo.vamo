@@ -17,7 +17,6 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useParams } from 'next/navigation';
-import { analyzeDriverRides } from '@/ai/flows/analyze-driver-rides-flow';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
@@ -100,20 +99,12 @@ export default function DriverDetailPage() {
     const handleInspectRides = async () => {
         setIsInspecting(true);
         setInspectionResult(null);
-        try {
-            const result = await analyzeDriverRides({ driverId });
-            setInspectionResult(result.analysis);
-        } catch (error) {
-            console.error("Error inspecting driver rides:", error);
-            toast({
-                variant: 'destructive',
-                title: 'Error de Inspección',
-                description: 'La IA no pudo completar el análisis. Inténtalo de nuevo.'
-            });
-            setInspectionResult('Error al realizar el análisis.');
-        } finally {
-            setIsInspecting(false);
-        }
+        toast({
+            variant: 'destructive',
+            title: 'Función Deshabilitada',
+            description: 'La inspección por IA se ha deshabilitado temporalmente.'
+        });
+        setIsInspecting(false);
     };
 
 

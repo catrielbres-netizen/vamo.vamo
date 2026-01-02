@@ -12,7 +12,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info, CheckCircle, Percent, TrendingUp, Target, CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
-import { createPaymentPreference } from '@/ai/flows/create-payment-flow';
 
 
 function formatCurrency(value: number) {
@@ -99,7 +98,7 @@ export default function EarningsPage() {
                         updatedAt: Timestamp.now(),
                     };
                     const summaryRef = doc(firestore, 'driver_summaries', `${user.uid}_${weekId}`);
-                    setDoc(summaryRef, newSummary, { merge: true });
+                    await setDoc(summaryRef, newSummary, { merge: true });
                     setSummary(newSummary);
                 } else {
                     const summaryRef = doc(firestore, 'driver_summaries', existingSummary.id as string);
@@ -117,7 +116,7 @@ export default function EarningsPage() {
                             commissionRate: commissionInfo.rate,
                             updatedAt: Timestamp.now()
                         };
-                        setDoc(summaryRef, updatedData, { merge: true });
+                        await setDoc(summaryRef, updatedData, { merge: true });
                         setSummary({...existingSummary, ...updatedData});
                     } else if (existingSummary.status === 'pending' && totalEarnings === 0 && existingSummary.totalEarnings > 0) {
                         // This case happens when a payment was just made, but a re-render happens.
@@ -149,23 +148,12 @@ export default function EarningsPage() {
         }
 
         setIsPaying(true);
-        try {
-            const preference = await createPaymentPreference({
-                summaryId: `${user?.uid}_${weekId}`,
-                amount: summary.commissionOwed,
-                description: `Comisión VamO Semana ${weekId}`
-            });
-
-            if (preference && preference.redirectUrl) {
-                window.location.href = preference.redirectUrl;
-            } else {
-                throw new Error('No se pudo obtener la URL de pago.');
-            }
-        } catch (error) {
-            console.error("Error creating Mercado Pago preference:", error);
-            toast({ variant: 'destructive', title: 'Error al iniciar el pago', description: 'No se pudo conectar con Mercado Pago.' });
-            setIsPaying(false);
-        }
+        toast({
+            variant: 'destructive',
+            title: 'Función Deshabilitada',
+            description: 'El pago con Mercado Pago se ha deshabilitado temporalmente.'
+        });
+        setIsPaying(false);
     };
     
     const isPaymentWindow = () => {
