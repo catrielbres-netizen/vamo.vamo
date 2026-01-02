@@ -1,33 +1,6 @@
-# Settings to manage and configure a Firebase App Hosting backend.
-# https://firebase.google.com/docs/app-hosting/configure
-
-# The command to build your web framework.
-build:
-  run: npm run build
-# The command to run your web framework.
 run:
-  run: npm run start
-runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 2
-# Pass environment variables to your build and run commands.
-# https://firebase.google.com/docs/app-hosting/configure-backend#set-env-vars
-env:
-  - variable: GENKIT_ENV
-    availability:
-      - BUILD
-      - RUNTIME
-    value: production
-  - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    availability:
-      - BUILD
-      - RUNTIME
-  - variable: NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID
-    availability:
-      - BUILD
-      - RUNTIME
-  - variable: MP_ACCESS_TOKEN
-    availability:
-      - BUILD
-      - RUNTIME
+  command: npm start
+  port: 3000
+build:
+  command: npm run build
+runtime: nodejs20
