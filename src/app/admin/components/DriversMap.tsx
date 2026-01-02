@@ -12,6 +12,8 @@ const mapCenter = { lat: -43.3005, lng: -65.1023 }; // Rawson, Chubut
 
 function MapComponent({ drivers }: DriversMapProps) {
     const isLoaded = useApiIsLoaded();
+    const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
+
 
     if (!isLoaded) {
         return (
@@ -20,12 +22,25 @@ function MapComponent({ drivers }: DriversMapProps) {
             </div>
         )
     }
+    
+    if (!mapId) {
+        return (
+            <div className="h-[400px] flex items-center justify-center bg-muted">
+                <div className="text-center p-4 bg-destructive/10 border border-destructive/50 rounded-lg">
+                    <p className="font-bold text-destructive">Funcionalidad de Mapa Deshabilitada</p>
+                    <p className="text-destructive/80 text-sm mt-1">
+                        El ID del mapa no está configurado en el entorno.
+                    </p>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <Map
             defaultCenter={mapCenter}
             defaultZoom={12}
-            mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'}
+            mapId={mapId}
             gestureHandling={'greedy'}
             disableDefaultUI={true}
         >
