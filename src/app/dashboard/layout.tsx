@@ -1,6 +1,6 @@
 
 'use client';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from '@/components/VamoIcon';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
 import { PassengerHeader } from '@/components/PassengerHeader';

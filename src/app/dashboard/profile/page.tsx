@@ -4,7 +4,7 @@
 import { useUser } from '@/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from '@/components/VamoIcon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { signOut } from 'firebase/auth';

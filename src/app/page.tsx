@@ -3,7 +3,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from '@/components/VamoIcon';
 import { useUser } from '@/firebase';
 
 export default function Home() {

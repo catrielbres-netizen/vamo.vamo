@@ -1,7 +1,7 @@
 
 'use client';
 
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from '@/components/VamoIcon';
 
 export function TripTimers({ waitMinutes, waitCost, currentTotal }: { waitMinutes: string, waitCost: string, currentTotal: string }) {
   const hasWaitTime = waitMinutes !== '00:00';

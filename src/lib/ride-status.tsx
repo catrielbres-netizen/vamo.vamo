@@ -1,5 +1,6 @@
+
 // @/lib/ride-status.tsx
-import { VamoIcon, VamoIconName } from '@/components/icons';
+import { VamoIconName } from '@/components/VamoIcon';
   
 export const RideStatusInfo: {
     [key: string]: { text: string; icon: VamoIconName; progress: number };

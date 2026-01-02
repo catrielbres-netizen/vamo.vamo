@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from '@/components/VamoIcon';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 

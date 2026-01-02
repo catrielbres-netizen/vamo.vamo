@@ -16,7 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { RideStatusInfo } from '@/lib/ride-status';
 import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from '@/components/VamoIcon';
 import { useState, useEffect, useRef } from 'react';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
@@ -180,7 +180,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
   };
 
   const nextAction = statusActions[ride.status as keyof typeof statusActions];
-  const statusInfo = RideStatusInfo[ride.status as keyof typeof RideStatusInfo] || { text: 'Estado desconocido', icon: <></> };
+  const statusInfo = RideStatusInfo[ride.status as keyof typeof RideStatusInfo] || { text: 'Estado desconocido', icon: 'help-circle' };
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
   const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
@@ -199,7 +199,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
             Viaje en curso
         </CardTitle>
         <Badge variant={ride.status === 'paused' ? 'destructive' : 'secondary'} className="flex items-center gap-2 whitespace-nowrap">
-            {statusInfo.icon}
+            <VamoIcon name={statusInfo.icon} />
             {statusInfo.text}
         </Badge>
       </CardHeader>

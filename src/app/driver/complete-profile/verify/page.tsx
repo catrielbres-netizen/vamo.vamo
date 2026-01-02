@@ -2,7 +2,7 @@
 'use client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { WhatsAppLogo, VamoIcon } from '@/components/icons';
+import { VamoIcon, WhatsAppLogo } from '@/components/VamoIcon';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase';
 

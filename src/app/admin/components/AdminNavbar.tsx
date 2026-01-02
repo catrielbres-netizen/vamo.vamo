@@ -2,7 +2,7 @@
 'use client'
 
 import Link from 'next/link'
-import { VamoIcon } from '@/components/icons'
+import { VamoIcon } from '@/components/VamoIcon'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -54,7 +54,7 @@ export function AdminNavbar() {
         ))}
         <div className="ml-auto">
             <Button variant="ghost" size="sm" onClick={handleLogout}>
-                <VamoIcon name="log-out" className="mr-2 h-4 w-4" />
+                <VamoIcon name="logout" className="mr-2 h-4 w-4" />
                 Cerrar Sesión
             </Button>
         </div>

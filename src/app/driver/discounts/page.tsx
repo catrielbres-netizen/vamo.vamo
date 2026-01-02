@@ -8,7 +8,7 @@ import { Ride } from '@/lib/types';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { startOfWeek } from 'date-fns';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from '@/components/VamoIcon';
 
 function formatCurrency(value: number) {
     return new Intl.NumberFormat('es-AR', {

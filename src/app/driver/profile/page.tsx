@@ -6,7 +6,7 @@ import { useUser } from '@/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from '@/components/VamoIcon';
 import { UserProfile } from '@/lib/types';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '@/firebase';

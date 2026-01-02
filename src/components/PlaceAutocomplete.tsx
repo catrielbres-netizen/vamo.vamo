@@ -14,7 +14,7 @@ import {
 import { Place } from '@/lib/types';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from './VamoIcon';
 import { Input } from './ui/input';
 
 interface PlaceAutocompleteProps {

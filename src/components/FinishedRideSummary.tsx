@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from './ui/button';
-import { WhatsAppLogo } from './icons';
+import { WhatsAppLogo } from './VamoIcon';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
 import { Timestamp, doc, serverTimestamp, updateDoc } from 'firebase/firestore';

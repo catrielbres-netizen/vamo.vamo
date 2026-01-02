@@ -17,7 +17,7 @@ import {
   updateDocumentNonBlocking,
 } from '@/firebase';
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from '@/components/VamoIcon';
 import { calculateFare } from '@/lib/pricing';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -266,7 +266,7 @@ export default function RidePage() {
   if (loading) {
     return (
       <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
-        <VamoIcon className="h-12 w-12 text-primary animate-pulse" />
+        <VamoIcon name="car" className="h-12 w-12 text-primary animate-pulse" />
         <p className="text-center mt-4">Cargando tu sesión...</p>
       </main>
     );

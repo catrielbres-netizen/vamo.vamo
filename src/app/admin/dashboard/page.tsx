@@ -9,7 +9,7 @@ import { UserProfile, Ride, DriverSummary } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
 import { useMemo } from 'react'
 import { getWeek, getYear, startOfWeek } from 'date-fns'
-import { VamoIcon } from '@/components/icons'
+import { VamoIcon } from '@/components/VamoIcon'
 
 const formatCurrency = (value: number) => {
   if (typeof value !== 'number') return '$...';

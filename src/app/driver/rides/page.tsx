@@ -14,7 +14,7 @@ import { speak } from '@/lib/speak';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, ServiceType, UserProfile } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon, VamoIconName } from '@/components/VamoIcon';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 

@@ -6,7 +6,7 @@ import { useFirestore } from '@/firebase';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
 
 export default function SuccessClient() {

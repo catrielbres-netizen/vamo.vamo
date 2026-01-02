@@ -5,7 +5,7 @@ import { RideStatusInfo } from '@/lib/ride-status';
 import { Progress } from './ui/progress';
 import { Place } from '@/lib/types';
 import { PlaceAutocomplete } from './PlaceAutocomplete';
-import { VamoIcon } from './icons';
+import { VamoIcon } from './VamoIcon';
 
 
 export function TripCard({

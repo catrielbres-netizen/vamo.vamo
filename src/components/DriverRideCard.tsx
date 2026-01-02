@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { VamoIcon } from '@/components/icons';
+import { VamoIcon } from '@/components/VamoIcon';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Ride } from '@/lib/types';
 import ServiceBadge from './ServiceBadge';

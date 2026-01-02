@@ -9,7 +9,7 @@ import { UserProfile } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
-import { VamoIcon } from '@/components/icons'
+import { VamoIcon } from '@/components/VamoIcon'
 
 const verificationStatusBadge: Record<UserProfile['vehicleVerificationStatus'] & string, { text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
     unverified: { text: 'No Verificado', variant: 'destructive' },

@@ -5,7 +5,7 @@ import { AdminNavbar } from './components/AdminNavbar'
 import { usePathname } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth/requireAdmin'
 import { useUser } from '@/firebase'
-import { VamoIcon } from '@/components/icons'
+import { VamoIcon } from '@/components/VamoIcon'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
@@ -37,7 +37,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       // Este estado se ve brevemente antes de que el useEffect redirija.
       return (
         <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
-            <p className="text-muted-foreground">Redirigiendo...</p>
+            <p className="mt-4 text-muted-foreground">Redirigiendo...</p>
         </div>
     )
   }

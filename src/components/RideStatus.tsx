@@ -18,7 +18,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from './ui/button';
-import { WhatsAppLogo } from './icons';
+import { WhatsAppLogo } from './VamoIcon';
 import RatingForm from './RatingForm';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
 import { WithId } from '@/firebase/firestore/use-collection';
