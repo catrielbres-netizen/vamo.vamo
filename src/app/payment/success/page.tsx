@@ -8,6 +8,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { CheckCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+export const dynamic = 'force-dynamic';
+
 export default function PaymentSuccessPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
