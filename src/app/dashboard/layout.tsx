@@ -1,8 +1,8 @@
+
 'use client';
 import { VamoIcon } from '@/components/icons';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
-import { Car, User } from 'lucide-react';
 import { PassengerHeader } from '@/components/PassengerHeader';
 import { useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { useEffect, useMemo } from 'react';
@@ -10,6 +10,17 @@ import { collection, query, where, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Ride } from '@/lib/types';
 import { MapsProvider } from '@/components/MapsProvider';
+import dynamic from 'next/dynamic';
+
+const Car = dynamic(
+  () => import("lucide-react").then(m => m.Car),
+  { ssr: false }
+);
+
+const User = dynamic(
+  () => import("lucide-react").then(m => m.User),
+  { ssr: false }
+);
 
 
 export default function DashboardLayout({
