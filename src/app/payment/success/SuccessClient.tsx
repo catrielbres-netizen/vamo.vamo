@@ -51,7 +51,7 @@ export default function SuccessClient() {
                  <Card className="w-full text-center border-yellow-500">
                     <CardHeader>
                         <CardTitle className="flex items-center justify-center gap-2 text-yellow-600">
-                            <VamoIcon name="alert-triangle" />
+                            <VamoIcon name="alert-circle" />
                             Estado de Pago Incierto
                         </CardTitle>
                         <CardDescription>
