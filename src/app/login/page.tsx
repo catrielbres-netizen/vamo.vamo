@@ -11,7 +11,9 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { VamoIcon } from '@/components/icons';
 import { Separator } from '@/components/ui/separator';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+
 
 export default function LoginPage() {
     const auth = useAuth();
@@ -45,6 +47,24 @@ export default function LoginPage() {
             setIsSubmitting(false);
         }
     };
+
+    const handlePasswordReset = async () => {
+        if (!email) {
+            toast({ variant: 'destructive', title: 'Email requerido', description: 'Por favor, ingresá tu email para restablecer la contraseña.' });
+            return;
+        }
+        if (!auth) return;
+        
+        setIsSubmitting(true);
+        try {
+            await sendPasswordResetEmail(auth, email);
+            toast({ title: 'Correo enviado', description: 'Revisá tu bandeja de entrada para restablecer tu contraseña.' });
+        } catch (error: any) {
+             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo enviar el correo. ¿Estás seguro que el email es correcto?' });
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
     
     const handleSignUp = async (role: 'passenger' | 'driver') => {
          if (!email || !password) {
@@ -96,6 +116,32 @@ export default function LoginPage() {
                             {isSubmitting ? 'Ingresando...' : 'Iniciar Sesión'}
                         </Button>
                     </div>
+
+                    <div className="text-center text-sm mt-4">
+                         <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="link" className="text-muted-foreground p-0 h-auto">¿Olvidaste tu contraseña?</Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Restablecer Contraseña</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Ingresá tu email y te enviaremos un enlace para que puedas crear una nueva contraseña.
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                 <div className="space-y-2">
+                                    <Label htmlFor="reset-email">Email</Label>
+                                    <Input id="reset-email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                                </div>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handlePasswordReset}>Enviar Correo</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
+
+
                     <Separator className="my-6" />
                     <div className="text-center space-y-2">
                         <p className="text-sm text-muted-foreground">¿No tienes cuenta? Registrate como:</p>
