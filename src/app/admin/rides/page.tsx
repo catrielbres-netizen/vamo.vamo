@@ -55,7 +55,7 @@ export default function AdminRidesPage() {
         {pendingDrivers && pendingDrivers.length > 0 && (
             <Card className="border-yellow-500">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-yellow-600"><VamoIcon name="alert-circle" /> Conductores Pendientes</CardTitle>
+                    <CardTitle className="flex items-center gap-2 text-yellow-600"><VamoIcon name="circle-alert" /> Conductores Pendientes</CardTitle>
                     <CardDescription>Estos conductores completaron su perfil y están esperando aprobación.</CardDescription>
                 </CardHeader>
                 <CardContent>

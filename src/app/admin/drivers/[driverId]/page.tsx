@@ -187,7 +187,7 @@ export default function DriverDetailPage() {
             {driver.vehicleVerificationStatus === 'pending_review' && (
                 <Card className="border-yellow-500">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><VamoIcon name="alert-circle" className="text-yellow-500"/> Conductor Pendiente de Aprobación</CardTitle>
+                        <CardTitle className="flex items-center gap-2"><VamoIcon name="circle-alert" className="text-yellow-500"/> Conductor Pendiente de Aprobación</CardTitle>
                         <CardDescription>Revisá la documentación recibida por WhatsApp y tomá una acción.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex gap-4">
@@ -329,7 +329,7 @@ export default function DriverDetailPage() {
                                             <TooltipProvider>
                                                 <Tooltip>
                                                     <TooltipTrigger>
-                                                        <VamoIcon name="alert-circle" className="w-5 h-5 text-yellow-500" />
+                                                        <VamoIcon name="circle-alert" className="w-5 h-5 text-yellow-500" />
                                                     </TooltipTrigger>
                                                     <TooltipContent>
                                                         <p className="max-w-xs">{ride.auditComment}</p>
