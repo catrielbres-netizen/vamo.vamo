@@ -3,13 +3,19 @@
 import { VamoIcon } from '@/components/icons';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
-import { Car, Wallet, Percent, User } from 'lucide-react';
 import { useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { useEffect, useMemo } from 'react';
 import { collection, query, where, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Ride } from '@/lib/types';
 import { APIProvider } from '@vis.gl/react-google-maps';
+import dynamic from 'next/dynamic';
+
+const Car = dynamic(() => import("lucide-react").then(m => m.Car), { ssr: false });
+const Wallet = dynamic(() => import("lucide-react").then(m => m.Wallet), { ssr: false });
+const Percent = dynamic(() => import("lucide-react").then(m => m.Percent), { ssr: false });
+const User = dynamic(() => import("lucide-react").then(m => m.User), { ssr: false });
+
 
 export default function DriverLayout({
   children,

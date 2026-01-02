@@ -3,13 +3,20 @@
 import { useUser } from '@/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Star, Award, ShieldCheck, Mail, Phone } from 'lucide-react';
 import { VamoIcon } from '@/components/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '@/firebase';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+const Star = dynamic(() => import("lucide-react").then(m => m.Star), { ssr: false });
+const Award = dynamic(() => import("lucide-react").then(m => m.Award), { ssr: false });
+const ShieldCheck = dynamic(() => import("lucide-react").then(m => m.ShieldCheck), { ssr: false });
+const Mail = dynamic(() => import("lucide-react").then(m => m.Mail), { ssr: false });
+const Phone = dynamic(() => import("lucide-react").then(m => m.Phone), { ssr: false });
+
 
 const StatCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
     <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg">
