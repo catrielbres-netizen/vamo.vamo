@@ -26,8 +26,9 @@ import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
+import { APIProvider } from '@vis.gl/react-google-maps';
 
-export default function RidePage() {
+function RidePageContent() {
   const auth = useAuth();
   const firestore = useFirestore();
   const { user, profile, loading } = useUser();
@@ -308,4 +309,26 @@ export default function RidePage() {
        </div>
     </>
   );
+}
+
+export default function RidePage() {
+    if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+        return (
+            <div className="h-[400px] flex items-center justify-center bg-muted">
+                <p className="text-destructive text-center">
+                    Google Maps API Key no configurada. <br/> 
+                    Agregá NEXT_PUBLIC_GOOGLE_MAPS_API_KEY a tu archivo .env
+                </p>
+            </div>
+        )
+    }
+
+    return (
+        <APIProvider 
+            apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+            libraries={['places']}
+        >
+            <RidePageContent />
+        </APIProvider>
+    )
 }
