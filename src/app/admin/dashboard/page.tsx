@@ -6,7 +6,6 @@ import { useCollection, useMemoFirebase } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { useFirestore } from '@/firebase'
 import { Users, Car, Search, Map as MapIcon, DollarSign, Wallet, CalendarClock } from 'lucide-react'
-import DriversMap from '../components/DriversMap'
 import { UserProfile, Ride, DriverSummary } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
 import { useMemo } from 'react'
@@ -95,14 +94,10 @@ export default function AdminDashboard() {
           <StatCard title="Viajes activos" value={isLoading ? '...' : activeRides} icon={<Search className="h-5 w-5 text-muted-foreground"/>} />
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard title="Usuarios registrados" value={isLoading ? '...' : totalUsers} icon={<Users className="h-5 w-5 text-muted-foreground"/>} />
           <StatCard title="Viajes totales" value={isLoading ? '...' : totalRides} icon={<Car className="h-5 w-5 text-muted-foreground"/>} />
           <StatCard title="Conductores en línea" value={isLoading ? '...' : onlineDrivers.length} icon={<MapIcon className="h-5 w-5 text-muted-foreground"/>} />
-        </div>
-
-        <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
-          <DriversMap drivers={onlineDrivers as WithId<UserProfile>[]} />
         </div>
       </div>
   )
