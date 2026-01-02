@@ -14,6 +14,7 @@ import { Place } from '@/lib/types';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { MapPin, AlertTriangle } from 'lucide-react';
+import { Input } from './ui/input';
 
 interface PlaceAutocompleteProps {
   onPlaceSelect: (place: Place | null) => void;
@@ -77,28 +78,36 @@ export function PlaceAutocomplete({ onPlaceSelect, defaultValue = '', className 
 
   if (!apiKey) {
        return (
-         <div className="h-10 w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" /> Buscador de direcciones deshabilitado.
-        </div>
+         <div className="relative w-full">
+            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              type="text"
+              placeholder="Buscador no disponible. Falta API Key."
+              disabled
+              className="pl-9"
+            />
+         </div>
        )
   }
 
   return (
     <div ref={wrapperRef} className={cn('w-full relative', className)}>
       <Command shouldFilter={false} className="h-auto rounded-lg border border-input bg-transparent">
-        <CommandInput
-          value={value}
-          onValueChange={setValue}
-          disabled={!ready}
-          placeholder={!ready ? "Cargando buscador..." : "Ingresá una dirección..."}
-          className="h-8"
-          onFocus={() => setIsFocused(true)}
-        />
+        <div className="flex items-center" cmdk-input-wrapper="">
+          <MapPin className="mr-2 ml-3 h-4 w-4 shrink-0 opacity-50" />
+          <CommandInput
+            value={value}
+            onValueChange={setValue}
+            disabled={!ready}
+            placeholder={!ready ? "Cargando buscador..." : "Ingresá una dirección..."}
+            className="h-8 border-none focus:ring-0"
+            onFocus={() => setIsFocused(true)}
+          />
+        </div>
         {isFocused && status === 'OK' && (
           <CommandList className="absolute top-full left-0 z-10 w-full mt-1 bg-card border rounded-lg shadow-md">
             {data.map(({ place_id, description }) => (
               <CommandItem key={place_id} onSelect={() => handleSelect(description)}>
-                <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
                 {description}
               </CommandItem>
             ))}

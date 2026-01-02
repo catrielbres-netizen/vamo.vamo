@@ -55,10 +55,12 @@ export default function DriversMap({ drivers }: DriversMapProps) {
     if (!apiKey) {
         return (
             <div className="h-[400px] flex items-center justify-center bg-muted">
-                <p className="text-destructive text-center p-4">
-                    La funcionalidad de mapa está deshabilitada.<br/> 
-                    La API Key de Google Maps no está configurada en el entorno.
-                </p>
+                <div className="text-center p-4 bg-destructive/10 border border-destructive/50 rounded-lg">
+                    <p className="font-bold text-destructive">Funcionalidad de Mapa Deshabilitada</p>
+                    <p className="text-destructive/80 text-sm mt-1">
+                        La API Key de Google Maps no está configurada en el entorno.
+                    </p>
+                </div>
             </div>
         )
     }
