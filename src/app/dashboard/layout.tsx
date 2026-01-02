@@ -9,6 +9,7 @@ import { useEffect, useMemo } from 'react';
 import { collection, query, where, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Ride } from '@/lib/types';
+import { APIProvider } from '@vis.gl/react-google-maps';
 
 
 export default function DashboardLayout({
@@ -71,26 +72,31 @@ export default function DashboardLayout({
   const userName = profile?.name || (user?.isAnonymous ? "Invitado" : user?.displayName || "Usuario");
 
   return (
-    <div className="container mx-auto max-w-md p-4">
-        <PassengerHeader 
-            userName={userName}
-            location="Rawson, Chubut" 
-        />
+    <APIProvider 
+        apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}
+        libraries={['places']}
+    >
+        <div className="container mx-auto max-w-md p-4">
+            <PassengerHeader 
+                userName={userName}
+                location="Rawson, Chubut" 
+            />
 
-      {!hasActiveRide && (
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="ride" className="gap-2">
-                <Car className="w-4 h-4" /> Viaje
-              </TabsTrigger>
-              <TabsTrigger value="profile" className="gap-2">
-                <User className="w-4 h-4" /> Perfil
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-      )}
-      
-      <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
-    </div>
+          {!hasActiveRide && (
+              <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="ride" className="gap-2">
+                    <Car className="w-4 h-4" /> Viaje
+                  </TabsTrigger>
+                  <TabsTrigger value="profile" className="gap-2">
+                    <User className="w-4 h-4" /> Perfil
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+          )}
+          
+          <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
+        </div>
+    </APIProvider>
   );
 }

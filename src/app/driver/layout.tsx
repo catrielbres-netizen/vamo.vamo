@@ -9,6 +9,7 @@ import { useEffect, useMemo } from 'react';
 import { collection, query, where, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Ride } from '@/lib/types';
+import { APIProvider } from '@vis.gl/react-google-maps';
 
 export default function DriverLayout({
   children,
@@ -70,35 +71,40 @@ export default function DriverLayout({
   };
 
   return (
-    <div className="container mx-auto max-w-md p-4">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-2">
-          <VamoIcon className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold">Panel Conductor</h1>
+    <APIProvider 
+        apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}
+        libraries={['places']}
+    >
+      <div className="container mx-auto max-w-md p-4">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-2">
+            <VamoIcon className="h-8 w-8 text-primary" />
+            <h1 className="text-2xl font-bold">Panel Conductor</h1>
+          </div>
+          <span className="text-sm font-medium text-muted-foreground">{profile?.name}</span>
         </div>
-        <span className="text-sm font-medium text-muted-foreground">{profile?.name}</span>
-      </div>
 
-      {!hasActiveRide && (
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full mb-4">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="rides" className="gap-2">
-                <Car className="w-4 h-4" /> Viajes
-              </TabsTrigger>
-              <TabsTrigger value="earnings" className="gap-2">
-                <Wallet className="w-4 h-4" /> Ganancias
-              </TabsTrigger>
-              <TabsTrigger value="discounts" className="gap-2">
-                <Percent className="w-4 h-4" /> Bonos
-              </TabsTrigger>
-              <TabsTrigger value="profile" className="gap-2">
-                <User className="w-4 h-4" /> Perfil
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-      )}
-      
-      <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
-    </div>
+        {!hasActiveRide && (
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full mb-4">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="rides" className="gap-2">
+                  <Car className="w-4 h-4" /> Viajes
+                </TabsTrigger>
+                <TabsTrigger value="earnings" className="gap-2">
+                  <Wallet className="w-4 h-4" /> Ganancias
+                </TabsTrigger>
+                <TabsTrigger value="discounts" className="gap-2">
+                  <Percent className="w-4 h-4" /> Bonos
+                </TabsTrigger>
+                <TabsTrigger value="profile" className="gap-2">
+                  <User className="w-4 h-4" /> Perfil
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+        )}
+        
+        <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
+      </div>
+    </APIProvider>
   );
 }
