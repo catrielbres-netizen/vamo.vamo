@@ -103,8 +103,13 @@ export default function RidePage() {
   }, [destination, origin, serviceType]);
   
   useEffect(() => {
+    if (!ride) {
+      prevRideRef.current = null;
+      return;
+    };
+
     const prevStatus = prevRideRef.current?.status;
-    const currentStatus = ride?.status;
+    const currentStatus = ride.status;
 
     if (prevStatus !== currentStatus) {
         if (currentStatus === 'driver_assigned' && ride.driverName) {
