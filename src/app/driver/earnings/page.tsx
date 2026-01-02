@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useFirestore, useUser } from '@/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, setDoc } from 'firebase/firestore';
-import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Ride, DriverSummary } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -118,7 +117,7 @@ export default function EarningsPage() {
                             commissionRate: commissionInfo.rate,
                             updatedAt: Timestamp.now()
                         };
-                        updateDocumentNonBlocking(summaryRef, updatedData);
+                        setDoc(summaryRef, updatedData, { merge: true });
                         setSummary({...existingSummary, ...updatedData});
                     } else if (existingSummary.status === 'pending' && totalEarnings === 0 && existingSummary.totalEarnings > 0) {
                         // This case happens when a payment was just made, but a re-render happens.
