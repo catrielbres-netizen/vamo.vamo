@@ -35,11 +35,12 @@ export default function CreateAdminPage() {
 
         setIsSubmitting(true);
         try {
-            // Create user in Auth
+            // Step 1: Create user in Firebase Authentication
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             const { user } = userCredential;
 
-            // Create user profile in Firestore
+            // Step 2: If Auth creation is successful, create user profile in Firestore
+            // This ensures we never have a Firestore doc without a corresponding Auth user.
             const userProfileRef = doc(firestore, 'users', user.uid);
             await setDoc(userProfileRef, {
                 name: name,
@@ -60,10 +61,20 @@ export default function CreateAdminPage() {
 
         } catch (error: any) {
             console.error("Error creating admin:", error);
+            
+            let description = 'Ocurrió un error inesperado.';
+            if (error.code === 'auth/email-already-in-use') {
+                description = 'Este email ya está registrado. Si es tuyo, intentá iniciar sesión o restablecer la contraseña.';
+            } else if (error.code === 'auth/weak-password') {
+                description = 'La contraseña es demasiado débil. Debe tener al menos 6 caracteres.';
+            } else {
+                description = error.message;
+            }
+
             toast({
                 variant: 'destructive',
                 title: 'Error al crear administrador',
-                description: error.message || 'Ocurrió un error inesperado.',
+                description: description,
             });
         } finally {
             setIsSubmitting(false);
