@@ -1,5 +1,5 @@
 // src/lib/server/firestore.ts
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
+import { initializeApp, getApps, App } from 'firebase-admin/app';
 import { getFirestore, Firestore, Timestamp } from 'firebase-admin/firestore';
 import { Ride } from '@/lib/types';
 
