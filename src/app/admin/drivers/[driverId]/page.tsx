@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Progress } from '@/components/ui/progress';
-import { Target, CheckCircle, Percent, Shield, AlertTriangle, UserCheck, Bot } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +17,15 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useParams } from 'next/navigation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import dynamic from "next/dynamic";
+
+const Target = dynamic(() => import("lucide-react").then(m => m.Target), { ssr: false });
+const CheckCircle = dynamic(() => import("lucide-react").then(m => m.CheckCircle), { ssr: false });
+const Percent = dynamic(() => import("lucide-react").then(m => m.Percent), { ssr: false });
+const Shield = dynamic(() => import("lucide-react").then(m => m.Shield), { ssr: false });
+const AlertTriangle = dynamic(() => import("lucide-react").then(m => m.AlertTriangle), { ssr: false });
+const UserCheck = dynamic(() => import("lucide-react").then(m => m.UserCheck), { ssr: false });
+const Bot = dynamic(() => import("lucide-react").then(m => m.Bot), { ssr: false });
 
 
 function formatCurrency(value: number) {
