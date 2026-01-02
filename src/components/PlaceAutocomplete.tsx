@@ -1,3 +1,4 @@
+
 'use client';
 import usePlacesAutocomplete, {
   getGeocode,
@@ -39,7 +40,6 @@ export function PlaceAutocomplete({ onPlaceSelect, defaultValue = '', className 
         new google.maps.LatLng(-42.0, -63.0)  // Northeast
       ),
       componentRestrictions: { country: 'AR' }, // Restringe a Argentina
-      strictBounds: false, // Be lenient, don't strictly exclude results outside bounds
     },
     debounce: 300,
     defaultValue,
