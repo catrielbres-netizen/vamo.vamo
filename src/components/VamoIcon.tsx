@@ -23,7 +23,6 @@ import {
   Bot,
   Target,
   Percent,
-  XCircle,
   TrendingUp,
   Map,
   Loader,
@@ -34,16 +33,19 @@ import {
   Play,
   Hourglass,
   CircleDashed,
-  ShieldAlert,
+  AlertTriangle,
   MapPin,
   Flag,
   Route,
   Clock,
   X,
+  XCircle,
 } from "lucide-react";
 
+// The single source of truth for all available icons
 const icons = {
   "alert-circle": AlertCircle,
+  "alert-triangle": AlertTriangle,
   "layout-dashboard": LayoutDashboard,
   user: User,
   users: Users,
@@ -65,7 +67,6 @@ const icons = {
   bot: Bot,
   target: Target,
   percent: Percent,
-  "x-circle": XCircle,
   "trending-up": TrendingUp,
   map: Map,
   loader: Loader,
@@ -76,29 +77,42 @@ const icons = {
   play: Play,
   hourglass: Hourglass,
   "circle-dashed": CircleDashed,
-  "shield-alert": ShieldAlert,
   "map-pin": MapPin,
   flag: Flag,
   route: Route,
   clock: Clock,
   x: X,
+  "x-circle": XCircle,
 };
 
-export type VamoIconName = keyof typeof icons;
+// Aliases to map incorrect/alternative names to the correct key in the `icons` object.
+const ICON_ALIASES: { [key: string]: IconName } = {
+  "circle-alert": "alert-circle", // Common mistake: shape-concept vs concept-shape
+  "shield-alert": "alert-triangle", // Use triangle for a more "warning" feel
+};
 
-export type VamoIconProps = Omit<LucideProps, 'name'> & {
-  name: VamoIconName;
+export type IconName = keyof typeof icons;
+
+export type VamoIconProps = Omit<LucideProps, "name"> & {
+  name: IconName | string; // Allow any string to prevent build failure, handle error in component
 };
 
 export function VamoIcon({ name, ...props }: VamoIconProps) {
-  const Icon = icons[name];
+  // 1. Resolve alias: Try to find the provided name in the alias map.
+  // 2. Fallback to original name: If not found, use the name as is.
+  const resolvedName = ICON_ALIASES[name] || name;
+  
+  // Look up the component in the single source of truth.
+  const Icon = icons[resolvedName as IconName];
+
   if (!Icon) {
-    // Fallback o manejo de error si el ícono no se encuentra
+    // If the icon is still not found, warn the developer but don't crash the app.
+    console.warn(`VamoIcon: icon "${name}" (resolved to "${resolvedName}") not found.`);
     return null;
   }
+
   return <Icon {...props} />;
 }
-
 
 export const WhatsAppLogo = ({ className }: { className?: string }) => (
     <svg
