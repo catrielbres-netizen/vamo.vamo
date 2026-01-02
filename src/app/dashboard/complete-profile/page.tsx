@@ -97,7 +97,7 @@ export default function CompletePassengerProfilePage() {
             <Card className="w-full">
                 <CardHeader className="text-center">
                      <div className="flex justify-center items-center mb-2">
-                        <VamoIcon className="h-8 w-8 text-primary mr-2" />
+                        <VamoIcon name="User" className="h-8 w-8 text-primary mr-2" />
                         <CardTitle>Completá tu Perfil</CardTitle>
                     </div>
                     <CardDescription>¡Bienvenido a VamO! Solo necesitamos un par de datos más para empezar.</CardDescription>
