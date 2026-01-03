@@ -54,7 +54,7 @@ export default function DriverDetailPage() {
     const [inspectionResult, setInspectionResult] = useState<string | null>(null);
 
     const driverProfileRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
-    const { data: driver, isLoading: isDriverLoading, refetch: refetchDriver } = useDoc<UserProfile>(driverProfileRef);
+    const { data: driver, isLoading: isDriverLoading } = useDoc<UserProfile>(driverProfileRef);
     
     const today = new Date();
     const weekStartsOn = 1; // Monday
@@ -128,7 +128,6 @@ export default function DriverDetailPage() {
                 title: '¡Acción completada!',
                 description: `El conductor ha sido ${newStatus === 'approved' ? 'aprobado' : 'rechazado'}.`,
             });
-            refetchDriver();
         } catch (error) {
             console.error("Error updating driver status:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado del conductor.' });
@@ -195,7 +194,6 @@ export default function DriverDetailPage() {
                 title: '¡Acción completada!',
                 description: `La cuenta del conductor ha sido ${suspend ? 'suspendida' : 'reactivada'}.`,
             });
-            refetchDriver();
         } catch (error) {
             console.error("Error suspending/unsuspending account:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado de la cuenta.' });
