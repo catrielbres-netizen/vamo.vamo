@@ -1,5 +1,4 @@
-
-// src/components/RideStatus.tsx
+// @/components/RideStatus.tsx
 'use client';
 import { TripCard } from './TripCard';
 import { DriverInfo } from './DriverInfo';
@@ -17,10 +16,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
 import { WhatsAppLogo } from './VamoIcon';
 import RatingForm from './RatingForm';
-import { useFirestore, updateDocumentNonBlocking, useToast } from '@/firebase';
+import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile } from '@/lib/types';
 
