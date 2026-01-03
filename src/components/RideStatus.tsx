@@ -1,3 +1,4 @@
+
 // src/components/RideStatus.tsx
 'use client';
 import { TripCard } from './TripCard';
@@ -36,7 +37,7 @@ const formatDuration = (seconds: number) => {
     return `~${Math.round(seconds / 60)} min`;
 };
 
-export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
+export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, onNewRide: () => void }) {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
@@ -228,69 +229,70 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
   
   const finalPrice = ride.pricing.finalTotal || ride.pricing.estimatedTotal;
 
-  if (ride.status === 'finished') {
+  if (ride.status === 'finished' || ride.status === 'cancelled') {
+    const isCancelled = ride.status === 'cancelled';
     const waitingCostFinal = Math.ceil(totalAccumulatedWaitSeconds / 60) * WAITING_PER_MIN;
     return (
         <Card className="m-4">
             <CardHeader>
-                <CardTitle className="text-xl">¡Viaje Finalizado!</CardTitle>
+                <CardTitle className={`text-xl ${isCancelled ? 'text-destructive' : ''}`}>
+                    {isCancelled ? 'Viaje Cancelado' : '¡Viaje Finalizado!'}
+                </CardTitle>
                 <CardDescription>
-                    {ride.destination.address}
+                   {isCancelled ? 'Tu viaje fue cancelado.' : `Viaje a ${ride.destination.address}`}
                 </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="border-t border-b py-4 space-y-2">
-                    <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Tarifa base</span>
-                        <span>{formatCurrency(finalPrice - waitingCostFinal)}</span>
-                    </div>
-                    {ride.pricing.discountAmount && ride.pricing.discountAmount > 0 ? (
-                        <div className="flex justify-between items-center text-sm text-green-500">
-                             <span className="text-muted-foreground">Descuento VamO</span>
-                             <span>-{formatCurrency(ride.pricing.discountAmount)}</span>
-                        </div>
-                    ) : null}
-                    <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Costo por espera</span>
-                        <span>{formatCurrency(waitingCostFinal)}</span>
-                    </div>
-                </div>
-                 <div className="flex justify-between items-center font-bold text-lg">
-                    <span>Total Pagado</span>
-                    <span className="text-primary">{formatCurrency(finalPrice)}</span>
-                </div>
 
-                <p className="text-xs text-center text-muted-foreground pt-2">
-                    Conductor: {ride.driverName || 'No disponible'}
-                </p>
-            </CardContent>
-            <CardFooter>
-                 <Button onClick={handleSendWhatsAppReceipt} className="w-full" variant="outline">
-                    <WhatsAppLogo className="mr-2 h-5 w-5" />
-                    Enviar Comprobante
+            {!isCancelled && (
+              <>
+                <CardContent className="space-y-4">
+                    <div className="border-t border-b py-4 space-y-2">
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Tarifa base</span>
+                            <span>{formatCurrency(finalPrice - waitingCostFinal)}</span>
+                        </div>
+                        {ride.pricing.discountAmount && ride.pricing.discountAmount > 0 ? (
+                            <div className="flex justify-between items-center text-sm text-green-500">
+                                 <span className="text-muted-foreground">Descuento VamO</span>
+                                 <span>-{formatCurrency(ride.pricing.discountAmount)}</span>
+                            </div>
+                        ) : null}
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Costo por espera</span>
+                            <span>{formatCurrency(waitingCostFinal)}</span>
+                        </div>
+                    </div>
+                     <div className="flex justify-between items-center font-bold text-lg">
+                        <span>Total Pagado</span>
+                        <span className="text-primary">{formatCurrency(finalPrice)}</span>
+                    </div>
+
+                    <p className="text-xs text-center text-muted-foreground pt-2">
+                        Conductor: {ride.driverName || 'No disponible'}
+                    </p>
+                </CardContent>
+                <CardFooter>
+                     <Button onClick={handleSendWhatsAppReceipt} className="w-full" variant="outline">
+                        <WhatsAppLogo className="mr-2 h-5 w-5" />
+                        Enviar Comprobante
+                    </Button>
+                </CardFooter>
+                <RatingForm
+                  participantName={ride.driverName || 'Conductor'}
+                  participantRole="conductor"
+                  onSubmit={handleRatingSubmit}
+                  isSubmitted={!!ride.driverRating}
+                />
+              </>
+            )}
+
+             <CardFooter className="pt-6">
+                <Button onClick={onNewRide} className="w-full">
+                    Pedir Otro Viaje
                 </Button>
             </CardFooter>
-            <RatingForm
-              participantName={ride.driverName || 'Conductor'}
-              participantRole="conductor"
-              onSubmit={handleRatingSubmit}
-              isSubmitted={!!ride.driverRating}
-            />
         </Card>
     )
-  }
-
-  if (ride.status === 'cancelled') {
-    return (
-        <Card className="m-4">
-            <CardHeader>
-                <CardTitle className="text-xl text-destructive">Viaje Cancelado</CardTitle>
-                <CardDescription>
-                   El viaje a {ride.destination.address} fue cancelado.
-                </CardDescription>
-            </CardHeader>
-        </Card>
-    );
   }
 
   return (

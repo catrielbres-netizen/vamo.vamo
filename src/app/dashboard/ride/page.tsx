@@ -51,7 +51,7 @@ export default function RidePage() {
     return query(
       collection(firestore, 'rides'),
       where('passengerId', '==', user.uid),
-      where('status', 'in', ['searching_driver', 'driver_assigned', 'driver_arriving', 'arrived', 'in_progress', 'paused']),
+      where('status', 'in', ['searching_driver', 'driver_assigned', 'driver_arriving', 'arrived', 'in_progress', 'paused', 'finished', 'cancelled']),
       limit(1)
     );
   }, [firestore, user?.uid]);
@@ -256,10 +256,19 @@ export default function RidePage() {
   }
   
   const handleReset = () => {
-      // The listener will automatically clear the ride when it's cancelled or finished.
       // This reset is for the local form state.
+      // It allows the user to start a new ride request.
+      if (activeRideRef) {
+          updateDocumentNonBlocking(activeRideRef, {
+              status: 'cancelled', // Or another "archived" status
+              updatedAt: serverTimestamp(),
+          });
+      }
       setDestination(null);
       setOrigin(null);
+      setEstimatedFare(0);
+      setDistanceMeters(0);
+      setDurationSeconds(0);
   }
 
   const getAction = () => {
@@ -273,13 +282,14 @@ export default function RidePage() {
         case 'arrived':
         case 'in_progress':
         case 'paused':
-            // Una vez que el conductor llega, el pasajero no puede cancelar.
+            // Once the driver arrives, the passenger cannot cancel from the main button.
             return { handler: () => {}, label: 'Viaje en Curso...', variant: 'secondary' as const, disabled: true };
         case 'finished':
         case 'cancelled':
+             // The action is now handled inside RideStatus, this button will be hidden.
              return { handler: handleReset, label: 'Pedir Otro Viaje', variant: 'default' as const };
         default:
-             return { handler: () => {}, label: '...', variant: 'secondary' as const };
+             return { handler: () => {}, label: 'Cargando...', variant: 'secondary' as const };
     }
   }
 
@@ -299,8 +309,10 @@ export default function RidePage() {
 
   return (
     <>
-      {status !== 'idle' && ride ? (
-        <RideStatus ride={ride} />
+      {(status !== 'idle' && status !== 'finished' && status !== 'cancelled') && ride ? (
+        <RideStatus ride={ride} onNewRide={handleReset} />
+      ) : status === 'finished' || status === 'cancelled' ? (
+        <RideStatus ride={ride!} onNewRide={handleReset} />
       ) : (
         <>
           <TripCard 
@@ -318,13 +330,17 @@ export default function RidePage() {
           <PriceDisplay price={fareToDisplay} isNight={false} originalPrice={profile?.activeBonus ? estimatedFare : undefined} />
         </>
       )}
-      <MainActionButton 
-        status={status} 
-        onClick={currentAction.handler}
-        label={currentAction.label}
-        variant={currentAction.variant}
-        disabled={isRideLoading || (status==='idle' && (!destination || !origin || distanceMeters === 0)) || currentAction.disabled}
-      />
+
+      {status !== 'finished' && status !== 'cancelled' && (
+        <MainActionButton 
+            status={status} 
+            onClick={currentAction.handler}
+            label={currentAction.label}
+            variant={currentAction.variant}
+            disabled={isRideLoading || (status==='idle' && (!destination || !origin || distanceMeters === 0)) || currentAction.disabled}
+        />
+      )}
+
        <div className="mt-8">
         <Separator />
         <p className="text-center text-muted-foreground text-sm mt-4">No hay viajes anteriores.</p>
