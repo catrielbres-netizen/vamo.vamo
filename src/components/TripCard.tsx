@@ -12,6 +12,8 @@ export function TripCard({
   status,
   origin,
   destination,
+  onOriginChange,
+  onDestinationChange,
   onOriginSelect,
   onDestinationSelect,
   isInteractive,
@@ -21,6 +23,8 @@ export function TripCard({
   status: string;
   origin: Place | null;
   destination: Place | null;
+  onOriginChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onDestinationChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onOriginSelect?: (place: Place | null) => void;
   onDestinationSelect?: (place: Place | null) => void;
   isInteractive: boolean;
@@ -52,14 +56,16 @@ export function TripCard({
                 <PlaceAutocompleteInput 
                   onPlaceSelect={onOriginSelect!} 
                   placeholder="Ingresá un origen"
-                  value={origin?.address}
+                  value={origin?.address || ''}
+                  onChange={onOriginChange}
                   icon={<VamoIcon name="crosshair" className="w-4 h-4 text-muted-foreground" />}
                   onIconClick={onUseCurrentLocation}
                 />
                 <PlaceAutocompleteInput 
                   onPlaceSelect={onDestinationSelect!} 
                   placeholder="Ingresá un destino" 
-                  value={destination?.address}
+                  value={destination?.address || ''}
+                  onChange={onDestinationChange}
                   icon={<VamoIcon name="map-pin" className="w-4 h-4 text-muted-foreground" />}
                   onIconClick={onPickDestinationOnMap}
                 />

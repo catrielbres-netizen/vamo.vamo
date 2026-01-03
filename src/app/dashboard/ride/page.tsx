@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { TripCard } from '@/components/TripCard';
 import { ServiceSelector } from '@/components/ServiceSelector';
@@ -88,9 +88,28 @@ export default function RidePage() {
       }
   }
 
+  const handleOriginChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const newAddress = e.target.value;
+    if (origin) {
+      setOrigin({ ...origin, address: newAddress });
+    } else {
+      setOrigin({ address: newAddress, lat: 0, lng: 0 });
+    }
+  };
+
+  const handleDestinationChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const newAddress = e.target.value;
+    if (destination) {
+      setDestination({ ...destination, address: newAddress });
+    } else {
+      setDestination({ address: newAddress, lat: 0, lng: 0 });
+    }
+  };
+
+
   useEffect(() => {
     const calculateRoute = () => {
-      if (!destination || !origin) {
+      if (!destination || !origin || !destination.lat || !origin.lat) {
           setEstimatedFare(0);
           setDistanceMeters(0);
           setDurationSeconds(0);
@@ -142,7 +161,7 @@ export default function RidePage() {
       );
     }
     calculateRoute();
-  }, [destination, origin, serviceType, toast]);
+  }, [destination?.lat, destination?.lng, origin?.lat, origin?.lng, serviceType, toast]);
   
   useEffect(() => {
     const prevStatus = prevRideRef.current?.status;
@@ -172,7 +191,7 @@ export default function RidePage() {
 
 
   const handleRequestRide = async () => {
-    if (!firestore || !auth || !destination || !origin) {
+    if (!firestore || !auth || !destination || !origin || !destination.lat || !origin.lat) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -389,8 +408,10 @@ export default function RidePage() {
             status={'idle'} 
             origin={origin}
             onOriginSelect={setOrigin}
+            onOriginChange={handleOriginChange}
             destination={destination}
             onDestinationSelect={setDestination}
+            onDestinationChange={handleDestinationChange}
             isInteractive={true}
             onUseCurrentLocation={handleUseCurrentLocation}
             onPickDestinationOnMap={handlePickDestinationOnMap}
@@ -409,7 +430,7 @@ export default function RidePage() {
             onClick={currentAction.handler}
             label={currentAction.label}
             variant={currentAction.variant}
-            disabled={isRideLoading || (status==='idle' && (!destination || !origin || distanceMeters === 0)) || currentAction.disabled}
+            disabled={isRideLoading || (status==='idle' && (!destination || !origin || !destination.lat || !origin.lat || distanceMeters === 0)) || currentAction.disabled}
         />
       )}
 

@@ -12,6 +12,8 @@ interface Props {
   onPlaceSelect: (place: Place | null) => void;
   placeholder?: string;
   defaultValue?: string;
+  value?: string;
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
   className?: string;
   icon?: React.ReactNode;
   onIconClick?: () => void;
@@ -24,6 +26,8 @@ export default function PlaceAutocompleteInput({
   onPlaceSelect,
   placeholder,
   defaultValue,
+  value,
+  onChange,
   className,
   icon,
   onIconClick,
@@ -84,9 +88,13 @@ export default function PlaceAutocompleteInput({
 
   /** Inicializa el mapa con un pin si se pasó initialLatLng */
   useEffect(() => {
-    if (!initialLatLng || typeof google === 'undefined' || !document.getElementById('place-map')) return;
+    const mapElement = document.getElementById('place-map');
+    if (!initialLatLng || typeof google === 'undefined' || !mapElement) return;
 
-    const map = new google.maps.Map(document.getElementById('place-map')!, {
+    // Previene reinicialización
+    if (mapRef.current) return;
+
+    const map = new google.maps.Map(mapElement, {
       center: initialLatLng,
       zoom: 15,
     });
@@ -122,12 +130,14 @@ export default function PlaceAutocompleteInput({
       });
     });
   }, [initialLatLng, geocoder, marker, onPlaceSelect]);
-
+  
+  // Sincroniza el valor del input si viene controlado desde fuera
   useEffect(() => {
-    if (inputRef.current && defaultValue !== undefined) {
-      inputRef.current.value = defaultValue;
+    if (inputRef.current && value !== undefined && inputRef.current.value !== value) {
+      inputRef.current.value = value;
     }
-  }, [defaultValue]);
+  }, [value]);
+
 
   return (
     <div className="relative w-full flex flex-col gap-2">
@@ -140,6 +150,7 @@ export default function PlaceAutocompleteInput({
           ref={inputRef}
           placeholder={placeholder || 'Ingresá una dirección'}
           defaultValue={defaultValue}
+          onChange={onChange}
           className={className ? `${className} pl-9` : 'pl-9'}
         />
         {icon && onIconClick && (
