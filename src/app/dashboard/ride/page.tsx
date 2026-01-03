@@ -74,6 +74,16 @@ export default function RidePage() {
 
   const status = ride?.status || 'idle';
 
+  const handleReset = () => {
+      // This reset is ONLY for the local form state.
+      // It allows the user to start a new ride request.
+      setDestination(null);
+      setOrigin(null);
+      setEstimatedFare(0);
+      setDistanceMeters(0);
+      setDurationSeconds(0);
+  }
+
   useEffect(() => {
     if (!destination || !origin || !routesLibrary) {
         setEstimatedFare(0);
@@ -137,6 +147,9 @@ export default function RidePage() {
                 description: `${ride.driverName} está en camino.`,
             });
             speak(message);
+        } else if (currentStatus === 'finished' || currentStatus === 'cancelled') {
+            // When the ride ends, reset the form for the next one.
+            handleReset();
         }
     }
     prevRideRef.current = ride;
@@ -251,22 +264,6 @@ export default function RidePage() {
         description: "Tu viaje ha sido cancelado.",
     });
   }
-  
-  const handleReset = () => {
-      // This reset is for the local form state.
-      // It allows the user to start a new ride request.
-      if (activeRideRef) {
-          updateDocumentNonBlocking(activeRideRef, {
-              status: 'cancelled', // Or another "archived" status
-              updatedAt: serverTimestamp(),
-          });
-      }
-      setDestination(null);
-      setOrigin(null);
-      setEstimatedFare(0);
-      setDistanceMeters(0);
-      setDurationSeconds(0);
-  }
 
   const getAction = () => {
     switch (status) {
@@ -284,7 +281,7 @@ export default function RidePage() {
         case 'finished':
         case 'cancelled':
              // The action is now handled inside RideStatus, this button will be hidden.
-             return { handler: handleReset, label: 'Pedir Otro Viaje', variant: 'default' as const };
+             return null;
         default:
              return { handler: () => {}, label: 'Cargando...', variant: 'secondary' as const };
     }
@@ -306,10 +303,8 @@ export default function RidePage() {
 
   return (
     <>
-      {(status !== 'idle' && status !== 'finished' && status !== 'cancelled') && ride ? (
-        <RideStatus ride={ride} onNewRide={handleReset} />
-      ) : status === 'finished' || status === 'cancelled' ? (
-        <RideStatus ride={ride!} onNewRide={handleReset} />
+      {(status !== 'idle') ? (
+        <RideStatus ride={ride!} onNewRide={() => router.refresh()} />
       ) : (
         <>
           <TripCard 
@@ -328,7 +323,7 @@ export default function RidePage() {
         </>
       )}
 
-      {status !== 'finished' && status !== 'cancelled' && (
+      {currentAction && (
         <MainActionButton 
             status={status} 
             onClick={currentAction.handler}
@@ -345,5 +340,3 @@ export default function RidePage() {
     </>
   );
 }
-
-    

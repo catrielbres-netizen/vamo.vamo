@@ -1,3 +1,4 @@
+
 // @/components/RideStatus.tsx
 'use client';
 import { TripCard } from './TripCard';
