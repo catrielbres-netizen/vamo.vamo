@@ -14,6 +14,17 @@ interface Props {
   className?: string;
 }
 
+// Function to simplify the address
+const formatAddress = (fullAddress: string): string => {
+    const parts = fullAddress.split(',');
+    // Return the first part, which is typically the street and number.
+    // Handles cases like "Street 123, City, ..."
+    if (parts.length > 1) {
+        return parts[0];
+    }
+    return fullAddress; // Fallback to the full address if it's not comma-separated
+}
+
 export default function PlaceAutocompleteInput({ onPlaceSelect, placeholder, defaultValue, className }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const places = useMapsLibrary('places');
@@ -34,7 +45,7 @@ export default function PlaceAutocompleteInput({ onPlaceSelect, placeholder, def
       }
 
       onPlaceSelect({
-        address: place.formatted_address,
+        address: formatAddress(place.formatted_address),
         lat: place.geometry.location.lat(),
         lng: place.geometry.location.lng(),
       });
