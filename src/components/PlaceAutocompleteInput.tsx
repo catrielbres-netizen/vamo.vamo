@@ -1,18 +1,17 @@
-
 // @/components/PlaceAutocompleteInput.tsx
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { VamoIcon } from './VamoIcon';
 import { Place } from '@/lib/types';
 import { useMapsLibrary } from '@vis.gl/react-google-maps';
-import { Button } from './ui/button';
 
 interface Props {
   onPlaceSelect: (place: Place | null) => void;
   placeholder?: string;
-  value?: string; // Changed from defaultValue to value for controlled component
+  value?: string;
   className?: string;
   icon?: React.ReactNode;
   onIconClick?: () => void;
@@ -37,7 +36,14 @@ export default function PlaceAutocompleteInput({
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const places = useMapsLibrary('places');
+  const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
   
+  useEffect(() => {
+    if (places && !geocoder) {
+      setGeocoder(new places.Geocoder());
+    }
+  }, [places, geocoder]);
+
   useEffect(() => {
     if (!places || !inputRef.current) return;
 
@@ -61,14 +67,10 @@ export default function PlaceAutocompleteInput({
     });
 
     return () => {
-      if (listener) {
-          listener.remove();
-      }
+        listener.remove();
     }
   }, [places, onPlaceSelect]);
   
-  // This effect ensures the input field updates if the `value` prop changes
-  // (e.g., when a location is selected from the map).
   useEffect(() => {
     if (inputRef.current && value !== undefined) {
       inputRef.current.value = value;
@@ -85,9 +87,8 @@ export default function PlaceAutocompleteInput({
       <Input
         ref={inputRef}
         placeholder={placeholder || 'Ingresá una dirección'}
-        defaultValue={value} // Use defaultValue to set initial text
+        defaultValue={value}
         className={className ? `${className} pl-9` : "pl-9"}
-        // The `onChange` is handled by the Places API, so we don't need a React one
       />
       {icon && onIconClick && (
         <Button variant="ghost" size="icon" className="absolute right-1 h-8 w-8" onClick={onIconClick}>
@@ -97,4 +98,3 @@ export default function PlaceAutocompleteInput({
     </div>
   );
 }
-
