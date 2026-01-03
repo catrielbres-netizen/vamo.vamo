@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useFirestore, useUser } from '@/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, setDoc } from 'firebase/firestore';
 import { Ride, DriverSummary, UserProfile } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardFooter, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardFooter, CardDescription, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -321,5 +321,9 @@ Adjunto el comprobante.
         </div>
     );
 }
+
+    
+
+    
 
     
