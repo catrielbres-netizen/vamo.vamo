@@ -1,3 +1,4 @@
+
 'use client';
 
 import usePlacesAutocomplete, {
@@ -16,6 +17,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { VamoIcon } from './VamoIcon';
 import { Input } from './ui/input';
+import { GOOGLE_MAPS_API_KEY } from '@/lib/googleMaps';
 
 interface PlaceAutocompleteProps {
   onPlaceSelect: (place: Place | null) => void;
@@ -28,15 +30,7 @@ export function PlaceAutocomplete({
   defaultValue = '',
   className,
 }: PlaceAutocompleteProps) {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA";
-
-  const requestOptions = useMemo(() => {
-    if (typeof window === 'undefined' || !window.google) return undefined;
-
-    return {
-      componentRestrictions: { country: 'AR' },
-    };
-  }, []);
+  const apiKey = GOOGLE_MAPS_API_KEY;
 
   const {
     ready,
@@ -45,7 +39,15 @@ export function PlaceAutocomplete({
     setValue,
     clearSuggestions,
   } = usePlacesAutocomplete({
-    requestOptions,
+    requestOptions: typeof window !== 'undefined' && window.google
+      ? {
+          bounds: new window.google.maps.LatLngBounds(
+            new window.google.maps.LatLng(-46.0, -72.0),
+            new window.google.maps.LatLng(-42.0, -63.0)
+          ),
+          componentRestrictions: { country: 'AR' },
+        }
+      : undefined,
     debounce: 300,
     defaultValue,
     initOnMount: !!apiKey,
