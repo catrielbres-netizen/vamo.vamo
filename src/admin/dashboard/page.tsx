@@ -10,7 +10,7 @@ import { WithId } from '@/firebase/firestore/use-collection'
 import { useMemo } from 'react'
 import { getWeek, getYear, startOfWeek } from 'date-fns'
 import { VamoIcon } from '@/components/VamoIcon'
-import { useMemoFirebase } from '@/firebase/provider'
+import { useMemoFirebase } from '@/firebase/hooks'
 
 const formatCurrency = (value: number) => {
   if (typeof value !== 'number') return '$...';

@@ -1,13 +1,14 @@
 
 'use client';
 
-import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
+import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
 import { Firestore, doc } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
 import { useDoc } from './firestore/use-doc';
 import { UserProfile } from '@/lib/types';
+import { useMemoFirebase } from '@/firebase/hooks';
 
 
 interface FirebaseProviderProps {
@@ -37,18 +38,6 @@ export interface UserHookResult {
 
 // React Context
 export const FirebaseContext = createContext<FirebaseContextState | undefined>(undefined);
-
-type MemoFirebase <T> = T & {__memo?: boolean};
-
-export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T | (MemoFirebase<T>) {
-  const memoized = useMemo(factory, deps);
-  
-  if(typeof memoized !== 'object' || memoized === null) return memoized;
-  (memoized as MemoFirebase<T>).__memo = true;
-  
-  return memoized;
-}
-
 
 export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   children,
