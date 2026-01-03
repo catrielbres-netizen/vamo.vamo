@@ -1,4 +1,3 @@
-
 // @/components/ActiveDriverRide.tsx
 'use client';
 
@@ -21,6 +20,8 @@ import { useState, useEffect, useRef } from 'react';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
 import { speak } from '@/lib/speak';
+import { haversineDistance } from '@/lib/geo';
+import { useToast } from '@/hooks/use-toast';
 
 
 const statusActions: { [key: string]: { action: string, label: string } } = {
@@ -31,18 +32,20 @@ const statusActions: { [key: string]: { action: string, label: string } } = {
 };
 
 const formatDuration = (seconds: number) => {
+    if (seconds === 0) return 'Calculando...';
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
 const formatDistance = (meters: number) => {
-    if (meters < 1000) return `${meters} m`;
+    if (meters < 1000) return `${meters.toFixed(0)} m`;
     return `${(meters / 1000).toFixed(1)} km`;
 }
 
 export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<Ride>, onFinishRide: (ride: WithId<Ride>) => void }) {
   const firestore = useFirestore();
+  const { toast } = useToast();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
   const { profile } = useUser();
   const prevStatusRef = useRef<Ride['status'] | undefined>();
@@ -111,6 +114,17 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
         ];
     }
     
+    const fallbackPricingUpdate = () => {
+        const distance = haversineDistance(ride.origin, ride.destination);
+        const pricing = {
+            ...ride.pricing,
+            estimatedDistanceMeters: distance,
+            estimatedDurationSeconds: 0,
+        };
+        updateDocumentNonBlocking(rideRef, { ...payload, pricing });
+        toast({ title: 'Ruta recalculada', description: 'Se estimó la distancia en línea recta.' });
+    };
+
     if(newStatus === 'arrived' && profile?.currentLocation) {
         // When arriving, re-calculate route to destination
         const directionsService = new window.google.maps.DirectionsService();
@@ -130,10 +144,13 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                             estimatedDurationSeconds: route.legs[0].duration.value
                         };
                         updateDocumentNonBlocking(rideRef, { ...payload, pricing });
+                        return;
                     }
                 }
+                fallbackPricingUpdate();
             }
         );
+        return; // The update is handled inside the callback
     }
 
     if(newStatus === 'finished') {

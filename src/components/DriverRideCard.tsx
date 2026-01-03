@@ -1,4 +1,3 @@
-
 // @/components/DriverRideCard.tsx
 'use client';
 
@@ -19,6 +18,7 @@ import { Ride } from '@/lib/types';
 import ServiceBadge from './ServiceBadge';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { haversineDistance } from '@/lib/geo';
 
 const serviceCardStyles: Record<Ride['serviceType'], string> = {
     premium: "border-yellow-400/50",
@@ -57,7 +57,24 @@ export default function DriverRideCard({
     };
     const rideRef = doc(firestore, 'rides', ride.id);
     
-    // Calculate arrival info
+    const driverFullName = `${profile.name || ''} ${profile.lastName || ''}`.trim();
+
+    const fallbackUpdate = () => {
+        const distance = haversineDistance(profile.currentLocation!, ride.origin);
+        updateDocumentNonBlocking(rideRef, {
+            status: 'driver_assigned',
+            driverId: user.uid,
+            driverName: driverFullName || 'Conductor Anónimo',
+            driverArrivalInfo: {
+                distanceMeters: distance,
+                durationSeconds: 0 // No podemos estimar duración sin API
+            },
+            updatedAt: serverTimestamp(),
+        });
+        toast({ title: "¡Viaje Aceptado!", description: "La ruta se estimó en línea recta."});
+        onAccept();
+    }
+    
     if (window.google && window.google.maps && window.google.maps.DirectionsService) {
         const directionsService = new window.google.maps.DirectionsService();
         directionsService.route(
@@ -78,29 +95,25 @@ export default function DriverRideCard({
                     }
                 }
                 
-                const driverFullName = `${profile.name || ''} ${profile.lastName || ''}`.trim();
-
-                updateDocumentNonBlocking(rideRef, {
-                    status: 'driver_assigned',
-                    driverId: user.uid,
-                    driverName: driverFullName || 'Conductor Anónimo',
-                    driverArrivalInfo: arrivalInfo,
-                    updatedAt: serverTimestamp(),
-                });
+                if (arrivalInfo) {
+                    updateDocumentNonBlocking(rideRef, {
+                        status: 'driver_assigned',
+                        driverId: user.uid,
+                        driverName: driverFullName || 'Conductor Anónimo',
+                        driverArrivalInfo: arrivalInfo,
+                        updatedAt: serverTimestamp(),
+                    });
+                    toast({ title: "¡Viaje Aceptado!" });
+                    onAccept();
+                } else {
+                    fallbackUpdate();
+                }
             }
         );
     } else {
         // Fallback if google maps is not available
-         const driverFullName = `${profile.name || ''} ${profile.lastName || ''}`.trim();
-         updateDocumentNonBlocking(rideRef, {
-            status: 'driver_assigned',
-            driverId: user.uid,
-            driverName: driverFullName || 'Conductor Anónimo',
-            updatedAt: serverTimestamp(),
-        });
+         fallbackUpdate();
     }
-
-    onAccept();
   };
   
   const cardStyle = serviceCardStyles[ride.serviceType] || serviceCardStyles.express;

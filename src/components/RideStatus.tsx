@@ -1,4 +1,3 @@
-
 // src/components/RideStatus.tsx
 'use client';
 import { TripCard } from './TripCard';
@@ -20,7 +19,7 @@ import {
 import { Button } from './ui/button';
 import { WhatsAppLogo } from './VamoIcon';
 import RatingForm from './RatingForm';
-import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
+import { useFirestore, updateDocumentNonBlocking, useToast } from '@/firebase';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile } from '@/lib/types';
 
@@ -33,14 +32,13 @@ function formatCurrency(value: number) {
 }
 
 const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    if (mins < 1) return `~1 min`;
-    return `~${mins} min`;
+    if (seconds < 60) return `~1 min`;
+    return `~${Math.round(seconds / 60)} min`;
 };
 
 export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
   const firestore = useFirestore();
+  const { toast } = useToast();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
   const pointsAwardedRef = useRef(false);
 
@@ -132,11 +130,25 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
     const driverProfileRef = doc(firestore, 'users', ride.driverId);
 
     // 1. Update the ride document with the new rating
-    await updateDocumentNonBlocking(rideRef, {
-      driverRating: rating,
-      driverComments: comments,
-      updatedAt: Timestamp.now(),
-    });
+    try {
+        await updateDocumentNonBlocking(rideRef, {
+          driverRating: rating,
+          driverComments: comments,
+          updatedAt: Timestamp.now(),
+        });
+        toast({
+            title: '¡Calificación Enviada!',
+            description: 'Gracias por tu opinión.',
+        });
+    } catch (e) {
+        toast({
+            variant: 'destructive',
+            title: 'Error al Calificar',
+            description: 'No se pudo guardar tu calificación. Inténtalo de nuevo.',
+        });
+        return; // Don't proceed if this fails
+    }
+
 
     // 2. Recalculate driver's average rating
     try {
@@ -159,10 +171,13 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
                 }
             });
 
-            // If the current ride's rating isn't in the snapshot yet, add it
+            // If the current ride's rating wasn't in the snapshot for some reason, add it.
+            // This is a safeguard against race conditions.
             if (!driverRidesSnapshot.docs.some(d => d.id === ride.id)) {
-                 totalRating += rating;
-                 ratingCount++;
+                 if(rating > 0) {
+                    totalRating += rating;
+                    ratingCount++;
+                 }
             }
             
             const newAverage = ratingCount > 0 ? totalRating / ratingCount : null;
@@ -171,6 +186,7 @@ export default function RideStatus({ ride }: { ride: WithId<Ride> }) {
         });
     } catch(e) {
         console.error("Could not update driver average rating", e);
+        // This is a non-critical error, so we don't show a toast to the user
     }
   };
 
