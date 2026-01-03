@@ -76,7 +76,7 @@ export default function DriverRideCard({
         onAccept();
     }
     
-    if (!window.google || !window.google.maps.routes) {
+    if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) {
         fallbackUpdate();
         return;
     }
@@ -84,18 +84,18 @@ export default function DriverRideCard({
     const directionsService = new window.google.maps.DirectionsService();
     directionsService.route(
         {
-            origin: { lat: profile.currentLocation.lat, lng: profile.currentLocation.lng },
-            destination: { lat: ride.origin.lat, lng: ride.origin.lng },
-            travelMode: google.maps.TravelMode.DRIVING,
+            origin: new window.google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
+            destination: new window.google.maps.LatLng(ride.origin.lat, ride.origin.lng),
+            travelMode: window.google.maps.TravelMode.DRIVING,
         },
         (result, status) => {
              let arrivalInfo = null;
-             if (status === google.maps.DirectionsStatus.OK && result) {
-                const route = result.routes[0];
-                if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
+             if (status === window.google.maps.DirectionsStatus.OK && result?.routes?.[0]?.legs?.[0]) {
+                const leg = result.routes[0].legs[0];
+                if (leg.distance && leg.duration) {
                     arrivalInfo = {
-                        distanceMeters: route.legs[0].distance.value,
-                        durationSeconds: route.legs[0].duration.value,
+                        distanceMeters: leg.distance.value,
+                        durationSeconds: leg.duration.value,
                     };
                 }
             }

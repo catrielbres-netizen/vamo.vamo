@@ -127,7 +127,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
     };
 
     if(newStatus === 'arrived' && profile?.currentLocation) {
-        if (!window.google || !window.google.maps.routes) {
+        if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) {
             fallbackPricingUpdate();
             return;
         }
@@ -135,18 +135,18 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
         const directionsService = new window.google.maps.DirectionsService();
         directionsService.route(
             {
-                origin: { lat: profile.currentLocation.lat, lng: profile.currentLocation.lng },
-                destination: { lat: ride.destination.lat, lng: ride.destination.lng },
-                travelMode: google.maps.TravelMode.DRIVING,
+                origin: new window.google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
+                destination: new window.google.maps.LatLng(ride.destination.lat, ride.destination.lng),
+                travelMode: window.google.maps.TravelMode.DRIVING,
             },
             (result, status) => {
-                if (status === google.maps.DirectionsStatus.OK && result) {
-                    const route = result.routes[0];
-                    if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
+                if (status === window.google.maps.DirectionsStatus.OK && result?.routes?.[0]?.legs?.[0]) {
+                    const leg = result.routes[0].legs[0];
+                     if (leg.distance && leg.duration) {
                         const pricing = { 
                             ...ride.pricing, 
-                            estimatedDistanceMeters: route.legs[0].distance.value,
-                            estimatedDurationSeconds: route.legs[0].duration.value
+                            estimatedDistanceMeters: leg.distance.value,
+                            estimatedDurationSeconds: leg.duration.value
                         };
                         updateDocumentNonBlocking(rideRef, { ...payload, pricing });
                         return;

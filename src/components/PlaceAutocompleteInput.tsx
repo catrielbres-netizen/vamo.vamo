@@ -1,12 +1,11 @@
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { VamoIcon } from './VamoIcon';
 import { Place } from '@/lib/types';
 import { useMapsLibrary } from '@vis.gl/react-google-maps';
-
 
 interface Props {
   onPlaceSelect: (place: Place | null) => void;
@@ -18,25 +17,18 @@ interface Props {
 export default function PlaceAutocompleteInput({ onPlaceSelect, placeholder, defaultValue, className }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const places = useMapsLibrary('places');
-  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
-
+  
   useEffect(() => {
     if (!places || !inputRef.current) return;
 
-    const newAutocomplete = new places.Autocomplete(inputRef.current, {
+    const autocomplete = new places.Autocomplete(inputRef.current, {
         componentRestrictions: { country: 'AR' },
         fields: ['formatted_address', 'geometry'],
     });
 
-    setAutocomplete(newAutocomplete);
-  }, [places]);
-
-  useEffect(() => {
-    if (!autocomplete) return;
-
     const listener = autocomplete.addListener('place_changed', () => {
       const place = autocomplete.getPlace();
-      if (!place?.geometry?.location || !place.formatted_address) {
+      if (!place.geometry?.location || !place.formatted_address) {
         onPlaceSelect(null);
         return;
       }
@@ -49,11 +41,13 @@ export default function PlaceAutocompleteInput({ onPlaceSelect, placeholder, def
     });
 
     return () => {
-        if(listener) {
-            listener.remove();
-        }
+      // It's important to remove the listener when the component unmounts
+      // to avoid memory leaks.
+      if (listener) {
+          listener.remove();
+      }
     }
-  }, [autocomplete, onPlaceSelect]);
+  }, [places, onPlaceSelect]);
 
   return (
     <div className="relative">
@@ -65,7 +59,7 @@ export default function PlaceAutocompleteInput({ onPlaceSelect, placeholder, def
         ref={inputRef}
         placeholder={placeholder || 'Ingresá una dirección'}
         defaultValue={defaultValue}
-        className="pl-9"
+        className={className ? `${className} pl-9` : "pl-9"}
       />
     </div>
   );

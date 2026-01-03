@@ -28,10 +28,9 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { haversineDistance } from '@/lib/geo';
-import { MapsProvider } from '@/components/MapsProvider';
 
 
-function RidePageContent() {
+export default function RidePage() {
   const auth = useAuth();
   const firestore = useFirestore();
   const { user, profile, loading } = useUser();
@@ -108,7 +107,7 @@ function RidePageContent() {
         });
     }
     
-    if (!window.google || !window.google.maps.routes) {
+    if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) {
         fallbackEstimate();
         return;
     }
@@ -116,16 +115,16 @@ function RidePageContent() {
     const directionsService = new window.google.maps.DirectionsService();
     directionsService.route(
         {
-            origin: { lat: origin.lat, lng: origin.lng },
-            destination: { lat: destination.lat, lng: destination.lng },
-            travelMode: google.maps.TravelMode.DRIVING,
+            origin: new window.google.maps.LatLng(origin.lat, origin.lng),
+            destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+            travelMode: window.google.maps.TravelMode.DRIVING,
         },
         (result, status) => {
-            if (status === google.maps.DirectionsStatus.OK && result) {
-                const route = result.routes[0];
-                if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
-                    const dist = route.legs[0].distance.value;
-                    const duration = route.legs[0].duration.value;
+            if (status === window.google.maps.DirectionsStatus.OK && result?.routes?.[0]?.legs?.[0]) {
+                const leg = result.routes[0].legs[0];
+                if (leg.distance && leg.duration) {
+                    const dist = leg.distance.value;
+                    const duration = leg.duration.value;
                     setDistanceMeters(dist);
                     setDurationSeconds(duration);
                     const fare = calculateFare({ distanceMeters: dist, service: serviceType });
@@ -344,12 +343,4 @@ function RidePageContent() {
        </div>
     </>
   );
-}
-
-export default function RidePage() {
-    return (
-        <MapsProvider>
-            <RidePageContent />
-        </MapsProvider>
-    )
 }
