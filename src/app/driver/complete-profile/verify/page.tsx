@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase';
 
 export default function VerifyPage() {
-    const adminWhatsAppNumber = "2804967673";
+    const adminWhatsAppNumber = "5492804967673";
     const router = useRouter();
     const { profile, loading } = useUser();
 

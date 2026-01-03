@@ -172,7 +172,7 @@ export default function EarningsPage() {
             return;
         }
 
-        const adminWhatsAppNumber = "2804967673";
+        const adminWhatsAppNumber = "5492804967673";
         const driverName = `${profile.name || ''} ${profile.lastName || ''}`.trim();
         const amount = formatCurrency(Math.ceil(summary.commissionOwed));
 
