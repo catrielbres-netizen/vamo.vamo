@@ -2,9 +2,15 @@
 
 export type ServiceType = "premium" | "privado" | "express";
 
-const BASE_FARE = 1400;
-const PRICE_PER_100M = 120;
-export const WAITING_PER_MIN = 100;
+// --- Tarifas Diurnas (basadas en Premium) ---
+const DAY_BASE_FARE = 1483;
+const DAY_PRICE_PER_100M = 152;
+const DAY_WAITING_PER_MIN = 220;
+
+// --- Tarifas Nocturnas (basadas en Premium) ---
+const NIGHT_BASE_FARE = 1652;
+const NIGHT_PRICE_PER_100M = 189;
+const NIGHT_WAITING_PER_MIN = 277;
 
 export function calculateFare({
   distanceMeters,
@@ -17,14 +23,37 @@ export function calculateFare({
   service: ServiceType;
   isNight?: boolean;
 }) {
-  let distanceCost = Math.ceil(distanceMeters / 100) * PRICE_PER_100M;
-  let waitCost = waitingMinutes * WAITING_PER_MIN;
+  // Selecciona las tarifas base según si es de noche o no
+  const baseFare = isNight ? NIGHT_BASE_FARE : DAY_BASE_FARE;
+  const pricePer100m = isNight ? NIGHT_PRICE_PER_100M : DAY_PRICE_PER_100M;
+  const waitingPerMin = isNight ? NIGHT_WAITING_PER_MIN : DAY_WAITING_PER_MIN;
 
-  let total = BASE_FARE + distanceCost + waitCost;
+  // Calcula el costo por distancia y espera para la tarifa Premium
+  const distanceCost = Math.ceil(distanceMeters / 100) * pricePer100m;
+  const waitCost = waitingMinutes * waitingPerMin;
 
-  if (service === "privado") total *= 0.9;
-  if (service === "express") total *= 0.75;
-  if (isNight) total *= 1.05;
+  let totalPremium = baseFare + distanceCost + waitCost;
 
-  return Math.round(total);
+  let finalTotal;
+
+  // Aplica los descuentos para otros servicios
+  switch (service) {
+    case "privado":
+      finalTotal = totalPremium * 0.90; // 10% de descuento
+      break;
+    case "express":
+      finalTotal = totalPremium * 0.75; // 25% de descuento
+      break;
+    case "premium":
+    default:
+      finalTotal = totalPremium;
+      break;
+  }
+
+  return Math.round(finalTotal);
 }
+
+// Exportamos las constantes de espera para usarlas en otros componentes si es necesario
+export const WAITING_PER_MIN_DAY = DAY_WAITING_PER_MIN;
+export const WAITING_PER_MIN_NIGHT = NIGHT_WAITING_PER_MIN;
+export const WAITING_PER_MIN = DAY_WAITING_PER_MIN; // Mantenemos una exportación genérica para compatibilidad
