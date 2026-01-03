@@ -40,6 +40,7 @@ import {
   Clock,
   X,
   XCircle,
+  Crosshair
 } from "lucide-react";
 
 // The single source of truth for all available icons
@@ -83,6 +84,7 @@ const icons = {
   clock: Clock,
   x: X,
   "x-circle": XCircle,
+  crosshair: Crosshair,
 };
 
 // Aliases to map incorrect/alternative names to the correct key in the `icons` object.

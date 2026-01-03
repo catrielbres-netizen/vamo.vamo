@@ -15,6 +15,8 @@ export function TripCard({
   onOriginSelect,
   onDestinationSelect,
   isInteractive,
+  onUseCurrentLocation,
+  onPickDestinationOnMap
 }: {
   status: string;
   origin: Place | null;
@@ -22,6 +24,8 @@ export function TripCard({
   onOriginSelect: (place: Place | null) => void;
   onDestinationSelect: (place: Place | null) => void;
   isInteractive: boolean;
+  onUseCurrentLocation: () => void;
+  onPickDestinationOnMap: () => void;
 }) {
   const statusInfo = RideStatusInfo[status as keyof typeof RideStatusInfo] || {
     text: '¿A dónde vamos?',
@@ -45,8 +49,20 @@ export function TripCard({
       <div className="space-y-2 text-sm">
         {isInteractive ? (
             <>
-                <PlaceAutocompleteInput onPlaceSelect={onOriginSelect} placeholder="Ingresá un origen" />
-                <PlaceAutocompleteInput onPlaceSelect={onDestinationSelect} placeholder="Ingresá un destino" />
+                <PlaceAutocompleteInput 
+                  onPlaceSelect={onOriginSelect} 
+                  placeholder="Ingresá un origen"
+                  defaultValue={origin?.address}
+                  icon={<VamoIcon name="crosshair" className="w-4 h-4 text-muted-foreground" />}
+                  onIconClick={onUseCurrentLocation}
+                />
+                <PlaceAutocompleteInput 
+                  onPlaceSelect={onDestinationSelect} 
+                  placeholder="Ingresá un destino" 
+                  defaultValue={destination?.address}
+                  icon={<VamoIcon name="map-pin" className="w-4 h-4 text-muted-foreground" />}
+                  onIconClick={onPickDestinationOnMap}
+                />
             </>
           ) : (
             <>

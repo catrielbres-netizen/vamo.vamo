@@ -29,6 +29,9 @@ import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { haversineDistance } from '@/lib/geo';
 import { MapsProvider } from '@/components/MapsProvider';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import MapSelector from '@/components/MapSelector';
 
 
 export default function RidePage() {
@@ -46,6 +49,7 @@ export default function RidePage() {
   const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
   const [estimatedFare, setEstimatedFare] = useState(0);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
+  const [isMapSelectorOpen, setMapSelectorOpen] = useState(false);
   
   // This query now ONLY fetches TRULY active rides.
   const activeRideQuery = useMemoFirebase(() => {
@@ -270,6 +274,49 @@ export default function RidePage() {
     });
   }
 
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Tu navegador no soporta geolocalización.' });
+      return;
+    }
+    
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        if (!window.google || !window.google.maps.Geocoder) {
+          setOrigin({ lat: latitude, lng: longitude, address: 'Ubicación actual' });
+          return;
+        }
+
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
+          if (status === 'OK' && results?.[0]) {
+            setOrigin({
+              lat: latitude,
+              lng: longitude,
+              address: results[0].formatted_address.split(',')[0],
+            });
+          } else {
+            setOrigin({ lat: latitude, lng: longitude, address: 'Ubicación actual' });
+          }
+        });
+      },
+      () => {
+        toast({ variant: 'destructive', title: 'Error de ubicación', description: 'No se pudo obtener tu ubicación. Asegurate de tener los permisos activados.' });
+      }
+    );
+  };
+
+  const handlePickDestinationOnMap = () => {
+    setMapSelectorOpen(true);
+  }
+
+  const handleMapSelect = (place: Place) => {
+    setDestination(place);
+    setMapSelectorOpen(false);
+  }
+
   const getAction = () => {
     // If there's a finished ride summary, no main action button is shown.
     if (lastFinishedRide) return null;
@@ -308,6 +355,19 @@ export default function RidePage() {
 
   return (
     <MapsProvider>
+      <Dialog open={isMapSelectorOpen} onOpenChange={setMapSelectorOpen}>
+        <DialogContent className="max-w-3xl h-[80vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="p-4 border-b">
+            <DialogTitle>Seleccioná el destino</DialogTitle>
+            <DialogDescription>
+              Movete por el mapa y ubicá el pin en el punto exacto donde querés ir.
+            </DialogDescription>
+          </DialogHeader>
+          <MapSelector onLocationSelect={handleMapSelect} />
+        </DialogContent>
+      </Dialog>
+
+
       {(rideToShow) ? (
         <RideStatus ride={rideToShow} onNewRide={handleReset} />
       ) : (
@@ -319,6 +379,8 @@ export default function RidePage() {
             destination={destination}
             onDestinationSelect={setDestination}
             isInteractive={true}
+            onUseCurrentLocation={handleUseCurrentLocation}
+            onPickDestinationOnMap={handlePickDestinationOnMap}
           />
           <ServiceSelector 
             value={serviceType} 
@@ -345,4 +407,5 @@ export default function RidePage() {
     </MapsProvider>
   );
 }
+
 

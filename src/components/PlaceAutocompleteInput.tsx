@@ -1,4 +1,4 @@
-
+// @/components/PlaceAutocompleteInput.tsx
 'use client';
 
 import { useEffect, useRef } from 'react';
@@ -6,26 +6,34 @@ import { Input } from '@/components/ui/input';
 import { VamoIcon } from './VamoIcon';
 import { Place } from '@/lib/types';
 import { useMapsLibrary } from '@vis.gl/react-google-maps';
+import { Button } from './ui/button';
 
 interface Props {
   onPlaceSelect: (place: Place | null) => void;
   placeholder?: string;
   defaultValue?: string;
   className?: string;
+  icon?: React.ReactNode;
+  onIconClick?: () => void;
+  iconTooltip?: string;
 }
 
-// Function to simplify the address
 const formatAddress = (fullAddress: string): string => {
     const parts = fullAddress.split(',');
-    // Return the first part, which is typically the street and number.
-    // Handles cases like "Street 123, City, ..."
     if (parts.length > 1) {
         return parts[0];
     }
-    return fullAddress; // Fallback to the full address if it's not comma-separated
+    return fullAddress;
 }
 
-export default function PlaceAutocompleteInput({ onPlaceSelect, placeholder, defaultValue, className }: Props) {
+export default function PlaceAutocompleteInput({ 
+  onPlaceSelect, 
+  placeholder, 
+  defaultValue, 
+  className,
+  icon,
+  onIconClick
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const places = useMapsLibrary('places');
   
@@ -52,8 +60,6 @@ export default function PlaceAutocompleteInput({ onPlaceSelect, placeholder, def
     });
 
     return () => {
-      // It's important to remove the listener when the component unmounts
-      // to avoid memory leaks.
       if (listener) {
           listener.remove();
       }
@@ -61,9 +67,9 @@ export default function PlaceAutocompleteInput({ onPlaceSelect, placeholder, def
   }, [places, onPlaceSelect]);
 
   return (
-    <div className="relative">
+    <div className="relative flex items-center">
       <VamoIcon
-        name="map-pin"
+        name="search"
         className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
       />
       <Input
@@ -72,6 +78,11 @@ export default function PlaceAutocompleteInput({ onPlaceSelect, placeholder, def
         defaultValue={defaultValue}
         className={className ? `${className} pl-9` : "pl-9"}
       />
+      {icon && onIconClick && (
+        <Button variant="ghost" size="icon" className="absolute right-1 h-8 w-8" onClick={onIconClick}>
+          {icon}
+        </Button>
+      )}
     </div>
   );
 }
