@@ -1,16 +1,14 @@
 
 'use client'
 
-import { useCollection } from '@/firebase'
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { useFirestore } from '@/firebase'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { UserProfile } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { VamoIcon } from '@/components/VamoIcon'
-import { useMemoFirebase } from '@/firebase/provider'
 
 const verificationStatusBadge: Record<UserProfile['vehicleVerificationStatus'] & string, { text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
     unverified: { text: 'No Verificado', variant: 'destructive' },

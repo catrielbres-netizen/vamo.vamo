@@ -8,7 +8,7 @@ import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
 import { useDoc } from './firestore/use-doc';
 import { UserProfile } from '@/lib/types';
-import { useMemoFirebase } from '@/firebase/hooks';
+import { useMemoFirebase } from '@/firebase';
 
 
 interface FirebaseProviderProps {

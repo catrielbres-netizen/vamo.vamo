@@ -3,7 +3,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useFirestore, useUser, useCollection } from '@/firebase';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, onSnapshot, Unsubscribe, doc } from 'firebase/firestore';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import DriverRideCard from '@/components/DriverRideCard';
@@ -18,7 +18,6 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { useMemoFirebase } from '@/firebase/hooks';
 
 
 // Helper function to determine which services a driver can see based on their car model year

@@ -1,16 +1,13 @@
 
 'use client'
 
-import { StatCard } from '../components/StatCard'
-import { useCollection } from '@/firebase'
+import { StatCard } from '@/app/admin/components/StatCard'
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
-import { useFirestore } from '@/firebase'
 import { UserProfile, Ride, DriverSummary } from '@/lib/types'
-import { WithId } from '@/firebase/firestore/use-collection'
 import { useMemo } from 'react'
 import { getWeek, getYear, startOfWeek } from 'date-fns'
 import { VamoIcon } from '@/components/VamoIcon'
-import { useMemoFirebase } from '@/firebase/provider'
 
 const formatCurrency = (value: number) => {
   if (typeof value !== 'number') return '$...';
