@@ -22,14 +22,15 @@ export default function RatingForm({ participantName, participantRole, onSubmit,
   const [comments, setComments] = useState('');
 
   const handleSubmit = () => {
-    // Si ya se envió, llama a onSubmit con valores vacíos solo para disparar la acción de continuar.
-    // Si no se ha enviado, llama con los valores del estado.
-    if (isSubmitted) {
-        onSubmit(0, '');
-    } else {
-        onSubmit(rating, comments);
-    }
+    // This function is now just a pass-through. 
+    // The parent component will handle the logic of what to do.
+    onSubmit(rating, comments);
   };
+
+  if (isSubmitted) {
+    // Don't render the form at all if already submitted, parent will handle next step
+    return null;
+  }
 
   return (
     <Card className="mt-4 border-primary">
@@ -38,41 +39,32 @@ export default function RatingForm({ participantName, participantRole, onSubmit,
         <CardDescription>{participantName}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isSubmitted ? (
-            <div className="text-center p-4 bg-secondary/50 rounded-lg">
-                <p className="font-semibold text-primary">¡Gracias por tu calificación!</p>
-                <p className="text-sm text-muted-foreground">Tu opinión nos ayuda a mejorar.</p>
-            </div>
-        ) : (
-            <>
-                <div className="flex justify-center items-center space-x-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                    <VamoIcon
-                    name="star"
-                    key={star}
-                    className={cn(
-                        'w-8 h-8 cursor-pointer transition-colors',
-                        star <= (hoverRating || rating)
-                        ? 'text-yellow-400 fill-yellow-400'
-                        : 'text-muted-foreground/50'
-                    )}
-                    onClick={() => setRating(star)}
-                    onMouseEnter={() => setHoverRating(star)}
-                    onMouseLeave={() => setHoverRating(0)}
-                    />
-                ))}
-                </div>
-                <Textarea
-                placeholder="Dejá un comentario (opcional)..."
-                value={comments}
-                onChange={(e) => setComments(e.target.value)}
-                />
-            </>
-        )}
+        <div className="flex justify-center items-center space-x-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+            <VamoIcon
+            name="star"
+            key={star}
+            className={cn(
+                'w-8 h-8 cursor-pointer transition-colors',
+                star <= (hoverRating || rating)
+                ? 'text-yellow-400 fill-yellow-400'
+                : 'text-muted-foreground/50'
+            )}
+            onClick={() => setRating(star)}
+            onMouseEnter={() => setHoverRating(star)}
+            onMouseLeave={() => setHoverRating(0)}
+            />
+        ))}
+        </div>
+        <Textarea
+        placeholder="Dejá un comentario (opcional)..."
+        value={comments}
+        onChange={(e) => setComments(e.target.value)}
+        />
       </CardContent>
        <CardFooter>
             <Button onClick={handleSubmit} className="w-full">
-                {isSubmitted ? "Continuar" : submitButtonText}
+                {submitButtonText}
             </Button>
       </CardFooter>
     </Card>

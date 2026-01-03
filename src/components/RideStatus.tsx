@@ -115,8 +115,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
 
 
   const handleRatingAndContinue = async (rating: number, comments: string) => {
-    // If rating is 0, it means the user just clicked "Continuar" after already rating.
-    // In that case, we just proceed to the new ride.
+    // If rating is 0, user might skip rating. Just proceed to new ride.
     if (rating === 0) {
         onNewRide();
         return;
@@ -248,7 +247,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                   participantRole="conductor"
                   onSubmit={handleRatingAndContinue}
                   isSubmitted={!!ride.driverRating}
-                  submitButtonText="Pedir Otro Viaje"
+                  submitButtonText="Calificar y Pedir Otro Viaje"
                 />
               </>
             )}
