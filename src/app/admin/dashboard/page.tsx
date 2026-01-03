@@ -2,7 +2,7 @@
 'use client'
 
 import { StatCard } from '../components/StatCard'
-import { useCollection, useMemoFirebase } from '@/firebase'
+import { useCollection } from '@/firebase'
 import { collection, query, where } from 'firebase/firestore'
 import { useFirestore } from '@/firebase'
 import { UserProfile, Ride, DriverSummary } from '@/lib/types'
@@ -10,6 +10,7 @@ import { WithId } from '@/firebase/firestore/use-collection'
 import { useMemo } from 'react'
 import { getWeek, getYear, startOfWeek } from 'date-fns'
 import { VamoIcon } from '@/components/VamoIcon'
+import { useMemoFirebase } from '@/firebase/hooks'
 
 const formatCurrency = (value: number) => {
   if (typeof value !== 'number') return '$...';

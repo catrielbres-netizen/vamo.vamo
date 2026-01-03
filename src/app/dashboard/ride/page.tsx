@@ -12,7 +12,6 @@ import {
   useAuth,
   useFirestore,
   useDoc,
-  useMemoFirebase,
   addDocumentNonBlocking,
   updateDocumentNonBlocking,
   useCollection,
@@ -32,6 +31,7 @@ import { APIProvider } from '@vis.gl/react-google-maps';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import MapSelector from '@/components/MapSelector';
+import { useMemoFirebase } from '@/firebase/hooks';
 
 
 export default function RidePage() {
@@ -416,5 +416,3 @@ export default function RidePage() {
     </>
   );
 }
-
-    

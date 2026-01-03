@@ -1,6 +1,6 @@
 'use client'
 
-import { useCollection, useMemoFirebase } from '@/firebase'
+import { useCollection } from '@/firebase'
 import { collection } from 'firebase/firestore'
 import { useFirestore } from '@/firebase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { useMemo } from 'react'
 import { UserProfile } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
+import { useMemoFirebase } from '@/firebase/hooks'
 
 const UserListItem = ({ user }: { user: WithId<UserProfile> }) => (
     <li className="border p-4 rounded-lg flex justify-between items-center">

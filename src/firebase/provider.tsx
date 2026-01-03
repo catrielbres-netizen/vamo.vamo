@@ -7,6 +7,7 @@ import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
 import { useDoc } from './firestore/use-doc';
 import { UserProfile } from '@/lib/types';
+import { useMemoFirebase } from '@/firebase/hooks';
 
 
 interface FirebaseProviderProps {
@@ -121,14 +122,3 @@ export function useUser(): UserHookResult {
   const { user, profile, loading } = useFirebase();
   return { user, profile, loading };
 };
-
-type MemoFirebase <T> = T & {__memo?: boolean};
-
-export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T | (MemoFirebase<T>) {
-  const memoized = useMemo(factory, deps);
-  
-  if(typeof memoized !== 'object' || memoized === null) return memoized;
-  (memoized as MemoFirebase<T>).__memo = true;
-  
-  return memoized;
-}

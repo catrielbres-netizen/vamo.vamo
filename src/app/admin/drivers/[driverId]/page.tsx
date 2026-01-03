@@ -2,7 +2,7 @@
 // src/app/admin/drivers/[driverId]/page.tsx
 'use client';
 import { useState, useEffect, useMemo } from 'react';
-import { useFirestore, useDoc, useMemoFirebase, useUser } from '@/firebase';
+import { useFirestore, useDoc, useUser } from '@/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp, limit, writeBatch } from 'firebase/firestore';
 import { Ride, DriverSummary, UserProfile, AuditLog } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -18,6 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useParams } from 'next/navigation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { VamoIcon } from '@/components/VamoIcon';
+import { useMemoFirebase } from '@/firebase/hooks';
 
 function formatCurrency(value: number) {
     if (typeof value !== 'number') return '$...';

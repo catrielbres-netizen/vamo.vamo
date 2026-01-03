@@ -3,13 +3,13 @@
 import { VamoIcon } from '@/components/VamoIcon';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
-import { PassengerHeader } from '@/components/PassengerHeader';
-import { useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { useUser, useCollection } from '@/firebase';
 import { useEffect, useMemo } from 'react';
 import { collection, query, where, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Ride } from '@/lib/types';
 import { MapsProvider } from '@/components/MapsProvider';
+import { useMemoFirebase } from '@/firebase/hooks';
 
 export default function DashboardLayout({
   children,
