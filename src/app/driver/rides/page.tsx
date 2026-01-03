@@ -18,6 +18,8 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { useFCM } from '@/hooks/useFCM';
+import { Button } from '@/components/ui/button';
 
 
 // Helper function to determine which services a driver can see based on their car model year
@@ -68,6 +70,7 @@ export default function DriverRidesPage() {
   const firestore = useFirestore();
   const { user, profile, loading: isUserLoading } = useUser();
   const { toast } = useToast();
+  const { notificationPermission, requestPermission } = useFCM();
   
   const [activeRide, setActiveRide] = useState<WithId<Ride> | null>(null);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
@@ -208,19 +211,14 @@ export default function DriverRidesPage() {
     );
 
     if (newRides.length > 0) {
-          newRides.forEach(newRide => {
-            const message = `Nuevo viaje ${newRide.serviceType} disponible.`;
-            toast({
-                title: `¡Nuevo viaje ${newRide.serviceType}!`,
-                description: `Un pasajero solicita un viaje a ${newRide.destination.address}.`,
-            });
-            speak(message);
-          });
+          // We don't need to toast here anymore as FCM will handle it.
+          // We can still speak though.
+          speak("Nuevo viaje disponible.");
     }
     
     previousAvailableRides.current = availableRides;
 
-  }, [availableRides, areRidesLoading, toast, profile, isOnline]);
+  }, [availableRides, areRidesLoading, profile, isOnline]);
 
 
   const handleAcceptRide = () => {
@@ -275,6 +273,16 @@ export default function DriverRidesPage() {
                     aria-label="Toggle online status"
                 />
             </div>
+             {notificationPermission !== 'granted' && (
+                <Alert variant="destructive">
+                    <VamoIcon name="alert-triangle" className="h-4 w-4" />
+                    <AlertTitle>Activar Notificaciones</AlertTitle>
+                    <AlertDescription>
+                        Para recibir alertas de nuevos viajes, necesitás activar las notificaciones.
+                        <Button variant="link" className="p-0 h-auto ml-1" onClick={requestPermission}>Activar ahora</Button>
+                    </AlertDescription>
+                </Alert>
+            )}
 
             {isOnline && (
                 <>
