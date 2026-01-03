@@ -12,8 +12,8 @@ interface Props {
   onPlaceSelect: (place: Place | null) => void;
   placeholder?: string;
   defaultValue?: string;
-  value?: string;
-  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  value?: string; // 🔹 Nuevo, permite control externo
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void; // 🔹 Nuevo, para control externo
   className?: string;
   icon?: React.ReactNode;
   onIconClick?: () => void;
@@ -21,6 +21,11 @@ interface Props {
   /** Inicializa el mapa con un pin */
   initialLatLng?: { lat: number; lng: number };
 }
+
+const formatAddress = (fullAddress: string): string => {
+  const parts = fullAddress.split(',');
+  return parts.length > 1 ? parts[0] : fullAddress;
+};
 
 export default function PlaceAutocompleteInput({
   onPlaceSelect,
@@ -150,6 +155,7 @@ export default function PlaceAutocompleteInput({
           ref={inputRef}
           placeholder={placeholder || 'Ingresá una dirección'}
           defaultValue={defaultValue}
+          value={value}
           onChange={onChange}
           className={className ? `${className} pl-9` : 'pl-9'}
         />
