@@ -15,11 +15,12 @@ import {
   useMemoFirebase,
   addDocumentNonBlocking,
   updateDocumentNonBlocking,
+  useCollection,
 } from '@/firebase';
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/VamoIcon';
 import { calculateFare } from '@/lib/pricing';
-import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, query, where, limit } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
 import { Separator } from '@/components/ui/separator';
@@ -43,13 +44,23 @@ export default function RidePage() {
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
   const [estimatedFare, setEstimatedFare] = useState(0);
-  const [activeRideId, setActiveRideId] = useState<string | null>(null);
   
-  const activeRideRef = useMemoFirebase(
-    () => (firestore && activeRideId ? doc(firestore, 'rides', activeRideId) : null),
-    [firestore, activeRideId]
-  );
-  const { data: ride, isLoading: isRideLoading } = useDoc<Ride>(activeRideRef);
+  // This is the real-time source of truth for the active ride, coming from the layout.
+  const activeRideQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(
+      collection(firestore, 'rides'),
+      where('passengerId', '==', user.uid),
+      where('status', 'in', ['searching_driver', 'driver_assigned', 'driver_arriving', 'arrived', 'in_progress', 'paused']),
+      limit(1)
+    );
+  }, [firestore, user?.uid]);
+
+  const { data: activeRides, isLoading: isRideLoading } = useCollection<WithId<Ride>>(activeRideQuery);
+  const ride = useMemo(() => (activeRides && activeRides.length > 0 ? activeRides[0] : null), [activeRides]);
+  const activeRideId = ride?.id;
+  const activeRideRef = useMemoFirebase(() => (firestore && activeRideId ? doc(firestore, 'rides', activeRideId) : null), [firestore, activeRideId]);
+
 
   const userProfileRef = useMemoFirebase(
       () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -211,9 +222,9 @@ export default function RidePage() {
     };
 
     try {
+        // The listener in the layout will pick up the new ride and update the UI.
         const docRef = await addDocumentNonBlocking(ridesCollection, newRideData);
         if (docRef) {
-            setActiveRideId(docRef.id);
             toast({
                 title: '¡Buscando conductor!',
                 description: 'Tu pedido fue enviado. Esperá la confirmación.',
@@ -245,7 +256,8 @@ export default function RidePage() {
   }
   
   const handleReset = () => {
-      setActiveRideId(null);
+      // The listener will automatically clear the ride when it's cancelled or finished.
+      // This reset is for the local form state.
       setDestination(null);
       setOrigin(null);
   }
@@ -320,4 +332,3 @@ export default function RidePage() {
     </>
   );
 }
-
