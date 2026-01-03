@@ -28,7 +28,7 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { haversineDistance } from '@/lib/geo';
-import { MapsProvider } from '@/components/MapsProvider';
+import { APIProvider } from '@vis.gl/react-google-maps';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import MapSelector from '@/components/MapSelector';
@@ -352,9 +352,10 @@ export default function RidePage() {
   const fareToDisplay = profile?.activeBonus ? estimatedFare * 0.9 : estimatedFare;
 
   const rideToShow = lastFinishedRide || ride;
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   return (
-    <MapsProvider>
+    <>
       <Dialog open={isMapSelectorOpen} onOpenChange={setMapSelectorOpen}>
         <DialogContent className="max-w-3xl h-[80vh] flex flex-col p-0 gap-0">
           <DialogHeader className="p-4 border-b">
@@ -363,7 +364,15 @@ export default function RidePage() {
               Movete por el mapa y ubicá el pin en el punto exacto donde querés ir.
             </DialogDescription>
           </DialogHeader>
-          <MapSelector onLocationSelect={handleMapSelect} />
+          {apiKey ? (
+            <APIProvider apiKey={apiKey}>
+              <MapSelector onLocationSelect={handleMapSelect} />
+            </APIProvider>
+          ) : (
+             <div className="flex flex-col items-center justify-center h-full">
+                <p className="text-destructive">La clave de API de Google Maps no está configurada.</p>
+             </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -404,8 +413,8 @@ export default function RidePage() {
         <Separator />
         <p className="text-center text-muted-foreground text-sm mt-4">No hay viajes anteriores.</p>
        </div>
-    </MapsProvider>
+    </>
   );
 }
 
-
+    
