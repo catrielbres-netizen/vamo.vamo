@@ -5,6 +5,7 @@ import React, { createContext, useContext, ReactNode, useMemo, useState, useEffe
 import { FirebaseApp } from 'firebase/app';
 import { Firestore, doc } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged } from 'firebase/auth';
+import { Messaging } from 'firebase/messaging';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
 import { useDoc } from './firestore/use-doc';
 import { UserProfile } from '@/lib/types';
@@ -16,6 +17,7 @@ interface FirebaseProviderProps {
   firebaseApp: FirebaseApp;
   firestore: Firestore;
   auth: Auth;
+  messaging: Messaging | null;
 }
 
 // Combined state for the Firebase context
@@ -23,6 +25,7 @@ export interface FirebaseContextState {
   firebaseApp: FirebaseApp | null;
   firestore: Firestore | null;
   auth: Auth | null;
+  messaging: Messaging | null;
   user: User | null;
   profile: UserProfile | null;
   loading: boolean; // Consolidated loading state
@@ -44,6 +47,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   firebaseApp,
   firestore,
   auth,
+  messaging,
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -77,11 +81,12 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       firebaseApp,
       firestore,
       auth,
+      messaging,
       user,
       profile: profile || null, // Ensure profile is null if not loaded
       loading,
     };
-  }, [firebaseApp, firestore, auth, user, profile, isAuthLoading, isProfileLoading]);
+  }, [firebaseApp, firestore, auth, messaging, user, profile, isAuthLoading, isProfileLoading]);
 
   return (
     <FirebaseContext.Provider value={contextValue}>
@@ -122,3 +127,8 @@ export function useUser(): UserHookResult {
   const { user, profile, loading } = useFirebase();
   return { user, profile, loading };
 };
+
+export const useMessaging = (): Messaging | null => {
+    const { messaging } = useFirebase();
+    return messaging;
+}

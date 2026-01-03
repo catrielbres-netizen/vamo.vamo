@@ -1,12 +1,15 @@
+
 'use client';
 
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'
+import { getMessaging } from 'firebase/messaging';
+
 
 // This function ensures that we have a single instance of the Firebase app.
-export function initializeFirebase(): { firebaseApp: FirebaseApp; auth: any; firestore: any; } {
+export function initializeFirebase(): { firebaseApp: FirebaseApp; auth: any; firestore: any; messaging: any; } {
   if (getApps().length) {
     const app = getApp();
     return getSdks(app);
@@ -18,10 +21,21 @@ export function initializeFirebase(): { firebaseApp: FirebaseApp; auth: any; fir
 
 
 export function getSdks(firebaseApp: FirebaseApp) {
+  let messaging;
+  if (typeof window !== 'undefined') {
+    try {
+        messaging = getMessaging(firebaseApp);
+    } catch (e) {
+        console.error("Could not initialize messaging", e);
+        messaging = null;
+    }
+  }
+
   return {
     firebaseApp,
     auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp)
+    firestore: getFirestore(firebaseApp),
+    messaging: messaging
   };
 }
 

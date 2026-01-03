@@ -1,3 +1,4 @@
+
 // src/lib/types.ts
 
 import { type Timestamp } from "firebase/firestore";
@@ -91,6 +92,7 @@ export type UserProfile = {
     // Common fields
     phone?: string | null;
     photoURL?: string | null;
+    fcmToken?: string | null; // For Push Notifications
     averageRating?: number | null;
     ridesCompleted?: number;
     isSuspended?: boolean;

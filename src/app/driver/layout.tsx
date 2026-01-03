@@ -8,6 +8,8 @@ import { useEffect, useMemo } from 'react';
 import { collection, query, where, limit } from 'firebase/firestore';
 import { Ride } from '@/lib/types';
 import { MapsProvider } from '@/components/MapsProvider';
+import { useFCM } from '@/hooks/useFCM';
+
 
 export default function DriverLayout({
   children,
@@ -18,6 +20,7 @@ export default function DriverLayout({
   const pathname = usePathname();
   const { profile, user, loading: userLoading } = useUser();
   const firestore = useFirestore();
+  useFCM(); // Initialize Firebase Cloud Messaging
 
   // Query to find any active ride for the current driver
   const activeRideQuery = useMemoFirebase(() => {
