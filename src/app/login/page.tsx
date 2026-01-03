@@ -145,7 +145,7 @@ export default function LoginPage() {
 
                     <Separator className="my-6" />
                     <div className="text-center space-y-2">
-                        <p className="text-sm text-muted-foreground">¿No tienes cuenta? Registrate como:</p>
+                        <p className="text-sm text-muted-foreground">Si sos nuevo, colocá un email y una contraseña y seleccioná si sos pasajero o querés conducir con VamO.</p>
                         <div className="flex gap-4 justify-center">
                             <Button variant="link" onClick={() => handleSignUp('passenger')} disabled={isSubmitting}>
                                 Pasajero
