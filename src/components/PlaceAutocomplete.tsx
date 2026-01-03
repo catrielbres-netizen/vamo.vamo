@@ -1,137 +1,64 @@
-
 'use client';
 
-import usePlacesAutocomplete, {
-  getGeocode,
-  getLatLng,
-} from 'use-places-autocomplete';
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandItem,
-  CommandEmpty,
-} from '@/components/ui/command';
-import { Place } from '@/lib/types';
-import { useState, useRef, useEffect, useMemo } from 'react';
-import { cn } from '@/lib/utils';
+import { useEffect, useRef } from 'react';
+import { Input } from '@/components/ui/input';
 import { VamoIcon } from './VamoIcon';
-import { Input } from './ui/input';
-import { GOOGLE_MAPS_API_KEY } from '@/lib/googleMaps';
+import { Place } from '@/lib/types';
 
-interface PlaceAutocompleteProps {
+interface Props {
   onPlaceSelect: (place: Place | null) => void;
-  defaultValue?: string;
+  placeholder?: string;
   className?: string;
 }
 
-export function PlaceAutocomplete({
-  onPlaceSelect,
-  defaultValue = '',
-  className,
-}: PlaceAutocompleteProps) {
-  const apiKey = GOOGLE_MAPS_API_KEY;
-
-  const {
-    ready,
-    value,
-    suggestions: { status, data },
-    setValue,
-    clearSuggestions,
-  } = usePlacesAutocomplete({
-    requestOptions: typeof window !== 'undefined' && window.google
-      ? {
-          bounds: new window.google.maps.LatLngBounds(
-            new window.google.maps.LatLng(-46.0, -72.0),
-            new window.google.maps.LatLng(-42.0, -63.0)
-          ),
-          componentRestrictions: { country: 'AR' },
-        }
-      : undefined,
-    debounce: 300,
-    defaultValue,
-    initOnMount: !!apiKey,
-  });
-
-  const [isFocused, setIsFocused] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  const handleSelect = async (address: string) => {
-    setValue(address, false);
-    clearSuggestions();
-
-    try {
-      const results = await getGeocode({ address });
-      const { lat, lng } = await getLatLng(results[0]);
-      onPlaceSelect({ address, lat, lng });
-    } catch (error) {
-      console.error(error);
-      onPlaceSelect(null);
-    }
-  };
+export function PlaceAutocomplete({ onPlaceSelect, placeholder, className }: Props) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(event.target as Node)
-      ) {
-        setIsFocused(false);
-        clearSuggestions();
+    if (!window.google || !inputRef.current) return;
+
+    autocompleteRef.current = new google.maps.places.Autocomplete(
+      inputRef.current,
+      {
+        componentRestrictions: { country: 'AR' },
+        fields: ['formatted_address', 'geometry'],
+      }
+    );
+
+    autocompleteRef.current.addListener('place_changed', () => {
+      const place = autocompleteRef.current?.getPlace();
+      if (!place?.geometry?.location || !place.formatted_address) {
+        onPlaceSelect(null);
+        return;
+      }
+
+      onPlaceSelect({
+        address: place.formatted_address,
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng(),
+      });
+    });
+
+    // Cleanup listener on unmount
+    return () => {
+      if (autocompleteRef.current) {
+        google.maps.event.clearInstanceListeners(autocompleteRef.current);
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () =>
-      document.removeEventListener('mousedown', handleClickOutside);
-  }, [clearSuggestions]);
-
-  if (!apiKey) {
-    return (
-      <div className="relative w-full">
-        <VamoIcon
-          name="map-pin"
-          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-        />
-        <Input
-          disabled
-          placeholder="Buscador no disponible"
-          className="pl-9"
-        />
-      </div>
-    );
-  }
+  }, [onPlaceSelect]);
 
   return (
-    <div ref={wrapperRef} className={cn('relative w-full', className)}>
-      <Command shouldFilter={false} className="h-auto rounded-lg border border-input bg-transparent">
-        <div className="flex items-center" cmdk-input-wrapper="">
-           <VamoIcon name="map-pin" className="mr-2 ml-3 h-4 w-4 shrink-0 opacity-50" />
-           <CommandInput
-            value={value}
-            onValueChange={setValue}
-            disabled={!ready}
-            placeholder={
-              !ready ? 'Cargando Google Maps…' : 'Ingresá una dirección…'
-            }
-             className="h-8 border-none focus:ring-0"
-            onFocus={() => setIsFocused(true)}
-          />
-        </div>
-
-        {isFocused && status === 'OK' && (
-          <CommandList className="absolute top-full left-0 z-10 w-full mt-1 bg-card border rounded-lg shadow-md">
-            {data.map(({ place_id, description }) => (
-              <CommandItem
-                key={place_id}
-                onSelect={() => handleSelect(description)}
-              >
-                {description}
-              </CommandItem>
-            ))}
-            <CommandEmpty>No se encontraron resultados</CommandEmpty>
-          </CommandList>
-        )}
-      </Command>
+    <div className="relative w-full">
+      <VamoIcon
+        name="map-pin"
+        className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+      />
+      <Input
+        ref={inputRef}
+        placeholder={placeholder || 'Ingresá una dirección'}
+        className={`pl-9 ${className}`}
+      />
     </div>
   );
 }

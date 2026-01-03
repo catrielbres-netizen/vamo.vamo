@@ -1,6 +1,4 @@
-
 'use client';
-
 import { APIProvider } from '@vis.gl/react-google-maps';
 import { GOOGLE_MAPS_API_KEY } from '@/lib/googleMaps';
 import { createContext, useContext } from 'react';
