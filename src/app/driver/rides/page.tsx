@@ -20,9 +20,24 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
 
-// Helper function to determine which services a driver can see
-const getAllowedServices = (): ServiceType[] => {
-    return ['premium', 'privado', 'express'];
+// Helper function to determine which services a driver can see based on their car model year
+const getAllowedServices = (profile: UserProfile | null): ServiceType[] => {
+    if (!profile || !profile.carModelYear) {
+        return [];
+    }
+
+    const year = profile.carModelYear;
+
+    if (year >= 2018) {
+        // Premium drivers can take any ride
+        return ['premium', 'privado', 'express'];
+    }
+    if (year >= 2012) {
+        // Privado drivers can take Privado and Express
+        return ['privado', 'express'];
+    }
+    // Older cars can only take Express
+    return ['express'];
 }
 
 const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, {title: string, description: string, icon: string}> = {
@@ -184,7 +199,7 @@ export default function DriverRidesPage() {
   useEffect(() => {
     if (areRidesLoading || !availableRides || !profile?.approved || !isOnline) return;
 
-    const allowedServices = getAllowedServices();
+    const allowedServices = getAllowedServices(profile);
     const filteredRides = availableRides.filter(ride => allowedServices.includes(ride.serviceType));
 
     const newRides = filteredRides.filter(
@@ -204,7 +219,7 @@ export default function DriverRidesPage() {
     
     previousAvailableRides.current = filteredRides;
 
-  }, [availableRides, areRidesLoading, toast, profile?.approved, isOnline]);
+  }, [availableRides, areRidesLoading, toast, profile, isOnline]);
 
 
   const handleAcceptRide = () => {
@@ -223,7 +238,7 @@ export default function DriverRidesPage() {
     setLastFinishedRide(null);
   }
 
-  const allowedServices = getAllowedServices();
+  const allowedServices = getAllowedServices(profile);
   const filteredAvailableRides = availableRides?.filter(ride => allowedServices.includes(ride.serviceType)) ?? [];
   
   const renderAvailableRides = () => {
