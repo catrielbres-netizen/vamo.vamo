@@ -18,7 +18,7 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { useMemoFirebase } from '@/firebase/hooks';
+import { useMemoFirebase } from '@/firebase/provider';
 
 
 // Helper function to determine which services a driver can see based on their car model year

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Query,
   onSnapshot,
@@ -107,8 +107,17 @@ export function useCollection<T = any>(
 
     return () => unsubscribe();
   }, [memoizedTargetRefOrQuery]); // Re-run if the target query/reference changes.
-  if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
+  
+  const isMemoized = useMemo(() => {
+    if (memoizedTargetRefOrQuery) {
+      return (memoizedTargetRefOrQuery as any).__memo;
+    }
+    return true; // if it's null, we don't care.
+  }, [memoizedTargetRefOrQuery]);
+
+  if(!isMemoized) {
     throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
   }
+
   return { data, isLoading, error };
 }

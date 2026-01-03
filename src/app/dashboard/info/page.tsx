@@ -41,7 +41,7 @@ export default function InfoPage() {
                 title="Premium"
                 iconName="car"
                 description="Nuestro mejor servicio. Vehículos modernos y conductores con la mejor calificación."
-                models="Modelos 2018 en adelante, 4 puertas, con aire acondicionado y en excelente estado."
+                models="Modelos 2022 en adelante, 4 puertas, con aire acondicionado y en excelente estado."
             >
                 <p><strong>Tarifa Diurna:</strong> Base $1.483 + $152 cada 100m.</p>
                 <p><strong>Tarifa Nocturna:</strong> Base $1.652 + $189 cada 100m.</p>
@@ -52,7 +52,7 @@ export default function InfoPage() {
                 title="Privado"
                 iconName="user"
                 description="Autos particulares en buen estado a un precio competitivo. ¡Un 10% más barato!"
-                models="Modelos 2012 en adelante, 4 puertas, en buen estado de mantenimiento."
+                models="Modelos 2016 a 2021, 4 puertas, en buen estado de mantenimiento."
             >
                 <p>Aplica un <strong>10% de descuento</strong> sobre la tarifa Premium correspondiente (diurna o nocturna).</p>
             </ServiceInfoCard>
@@ -61,7 +61,7 @@ export default function InfoPage() {
                 title="Express"
                 iconName="route"
                 description="La opción más económica para moverte por la ciudad. ¡Un 25% más barato!"
-                models="Vehículos funcionales y seguros. La opción ideal para viajes cortos y económicos."
+                models="Modelos 2015 o anteriores. Vehículos funcionales y seguros para viajes cortos."
             >
                  <p>Aplica un <strong>25% de descuento</strong> sobre la tarifa Premium correspondiente (diurna o nocturna).</p>
             </ServiceInfoCard>
