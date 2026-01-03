@@ -14,7 +14,7 @@ import { Button } from './ui/button';
 import { WhatsAppLogo } from './VamoIcon';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
-import { Timestamp, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { Timestamp, doc, serverTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
@@ -59,7 +59,7 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
     if (!firestore) return;
     const rideRef = doc(firestore, 'rides', ride.id);
     try {
-        await updateDoc(rideRef, {
+        await updateDocumentNonBlocking(rideRef, {
             passengerRating: rating,
             passengerComments: comments,
             updatedAt: serverTimestamp(),
