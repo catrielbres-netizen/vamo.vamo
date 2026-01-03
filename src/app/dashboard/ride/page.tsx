@@ -26,23 +26,7 @@ import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
-
-// Haversine distance calculation
-function haversineDistance(coords1: { lat: number, lng: number }, coords2: { lat: number, lng: number }): number {
-    const toRad = (x: number) => x * Math.PI / 180;
-    const R = 6371e3; // Earth radius in metres
-
-    const dLat = toRad(coords2.lat - coords1.lat);
-    const dLon = toRad(coords2.lng - coords1.lng);
-    const lat1 = toRad(coords1.lat);
-    const lat2 = toRad(coords2.lat);
-
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c;
-}
+import { haversineDistance } from '@/lib/geo';
 
 
 export default function RidePage() {
@@ -83,7 +67,19 @@ export default function RidePage() {
         setDurationSeconds(0);
         return;
     }
-    
+
+    const fallbackEstimate = () => {
+        const dist = haversineDistance(origin, destination);
+        setDistanceMeters(dist);
+        setDurationSeconds(0); // Cannot estimate duration with this method
+        setEstimatedFare(calculateFare({ distanceMeters: dist, service: serviceType }));
+        toast({
+            variant: 'destructive',
+            title: 'No se pudo calcular la ruta exacta',
+            description: 'La tarifa se estimó en línea recta. Puede variar.'
+        });
+    }
+
     // Use Directions API to get real distance if available
     if (window.google && window.google.maps && window.google.maps.DirectionsService) {
         const directionsService = new window.google.maps.DirectionsService();
@@ -107,25 +103,12 @@ export default function RidePage() {
                     }
                 }
                 // If API fails, calculate Haversine distance as a fallback
-                const fallbackDistance = haversineDistance(origin, destination);
-                setDistanceMeters(fallbackDistance);
-                setDurationSeconds(0); // Cannot estimate duration
-                const fare = calculateFare({ distanceMeters: fallbackDistance, service: serviceType });
-                setEstimatedFare(fare);
-                toast({
-                    variant: 'destructive',
-                    title: 'No se pudo calcular la ruta',
-                    description: 'La tarifa se estimó en línea recta. Puede variar.'
-                });
+                fallbackEstimate();
             }
         );
     } else {
         // Fallback for when Google Maps script is not ready
-        const fallbackDistance = haversineDistance(origin, destination);
-        setDistanceMeters(fallbackDistance);
-        setDurationSeconds(0);
-        const fare = calculateFare({ distanceMeters: fallbackDistance, service: serviceType });
-        setEstimatedFare(fare);
+        fallbackEstimate();
     }
   }, [destination, origin, serviceType, toast]);
   
@@ -224,6 +207,7 @@ export default function RidePage() {
       driverId: null,
       pauseStartedAt: null,
       pauseHistory: [],
+      audited: false,
     };
 
     try {
@@ -336,3 +320,4 @@ export default function RidePage() {
     </>
   );
 }
+
