@@ -89,55 +89,59 @@ export default function RidePage() {
   }
 
   useEffect(() => {
-    if (!destination || !origin) {
-        setEstimatedFare(0);
-        setDistanceMeters(0);
-        setDurationSeconds(0);
-        return;
-    }
+    const calculateRoute = () => {
+      if (!destination || !origin) {
+          setEstimatedFare(0);
+          setDistanceMeters(0);
+          setDurationSeconds(0);
+          return;
+      }
 
-    const fallbackEstimate = () => {
-        const dist = haversineDistance(origin, destination);
-        setDistanceMeters(dist);
-        setDurationSeconds(0); // Cannot estimate duration with this method
-        const fare = calculateFare({ distanceMeters: dist, service: serviceType });
-        setEstimatedFare(fare);
-        toast({
-            variant: 'destructive',
-            title: 'No se pudo calcular la ruta exacta',
-            description: 'La tarifa se estimó en línea recta. Puede variar.'
-        });
-    }
-    
-    if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) {
-        fallbackEstimate();
-        return;
-    }
+      // Fallback for when Google Maps API is not ready
+      const fallbackEstimate = () => {
+          const dist = haversineDistance(origin, destination);
+          setDistanceMeters(dist);
+          setDurationSeconds(0);
+          const fare = calculateFare({ distanceMeters: dist, service: serviceType });
+          setEstimatedFare(fare);
+          if (window.google) { // Only toast if google is available but directions failed
+            toast({
+                variant: 'destructive',
+                title: 'No se pudo calcular la ruta exacta',
+                description: 'La tarifa se estimó en línea recta. Puede variar.'
+            });
+          }
+      }
+      
+      if (typeof window.google === 'undefined' || !window.google.maps || !window.google.maps.DirectionsService) {
+          fallbackEstimate();
+          return;
+      }
 
-    const directionsService = new window.google.maps.DirectionsService();
-    directionsService.route(
-        {
-            origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-            destination: new window.google.maps.LatLng(destination.lat, destination.lng),
-            travelMode: window.google.maps.TravelMode.DRIVING,
-        },
-        (result, status) => {
-            if (status === window.google.maps.DirectionsStatus.OK && result?.routes?.[0]?.legs?.[0]) {
-                const leg = result.routes[0].legs[0];
-                if (leg.distance && leg.duration) {
-                    const dist = leg.distance.value;
-                    const duration = leg.duration.value;
-                    const fare = calculateFare({ distanceMeters: dist, service: serviceType });
-                    setEstimatedFare(fare);
-                    setDistanceMeters(dist);
-                    setDurationSeconds(duration);
-                    return;
-                }
-            }
-            // If API fails, calculate Haversine distance as a fallback
-            fallbackEstimate();
-        }
-    );
+      const directionsService = new window.google.maps.DirectionsService();
+      directionsService.route(
+          {
+              origin: new window.google.maps.LatLng(origin.lat, origin.lng),
+              destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+              travelMode: window.google.maps.TravelMode.DRIVING,
+          },
+          (result, status) => {
+              if (status === window.google.maps.DirectionsStatus.OK && result?.routes?.[0]?.legs?.[0]) {
+                  const leg = result.routes[0].legs[0];
+                  const dist = leg.distance?.value ?? 0;
+                  const duration = leg.duration?.value ?? 0;
+                  const fare = calculateFare({ distanceMeters: dist, service: serviceType });
+                  setEstimatedFare(fare);
+                  setDistanceMeters(dist);
+                  setDurationSeconds(duration);
+              } else {
+                  // If API fails, calculate Haversine distance as a fallback
+                  fallbackEstimate();
+              }
+          }
+      );
+    }
+    calculateRoute();
   }, [destination, origin, serviceType, toast]);
   
   useEffect(() => {
