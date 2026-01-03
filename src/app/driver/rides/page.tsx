@@ -214,7 +214,7 @@ export default function DriverRidesPage() {
                 title: `¡Nuevo viaje ${newRide.serviceType}!`,
                 description: `Un pasajero solicita un viaje a ${destinationText}.`,
             });
-            speak(`Nuevo viaje ${newRide.serviceType} disponible hacia ${destinationText}.`);
+            speak(`Nuevo viaje ${newRide.serviceType} disponible.`);
           });
     }
     

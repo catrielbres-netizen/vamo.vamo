@@ -21,7 +21,6 @@ import { useState, useEffect, useRef } from 'react';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
 import { speak } from '@/lib/speak';
-import { haversineDistance } from '@/lib/geo';
 import { useToast } from '@/hooks/use-toast';
 
 
@@ -114,21 +113,10 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
             { started: pausedAt, ended: now, duration: diffSeconds }
         ];
     }
-    
-    const fallbackPricingUpdate = () => {
-        const distance = haversineDistance(ride.origin, ride.destination);
-        const pricing = {
-            ...ride.pricing,
-            estimatedDistanceMeters: distance,
-            estimatedDurationSeconds: 0,
-        };
-        updateDocumentNonBlocking(rideRef, { ...payload, pricing });
-        toast({ title: 'Ruta recalculada', description: 'Se estimó la distancia en línea recta.' });
-    };
 
     if(newStatus === 'arrived' && profile?.currentLocation) {
         if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) {
-            fallbackPricingUpdate();
+            toast({ variant: "destructive", title: "Error", description: "La API de Google Maps no está disponible." });
             return;
         }
         // When arriving, re-calculate route to destination
@@ -152,7 +140,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                         return;
                     }
                 }
-                fallbackPricingUpdate();
+                toast({ variant: "destructive", title: "Error de Ruta", description: "No se pudo calcular la ruta al destino." });
             }
         );
         return; // The update is handled inside the callback
@@ -194,9 +182,8 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
   };
 
   const openNavigationToDestination = () => {
-    if (ride?.destination?.address) {
-        const destinationQuery = encodeURIComponent(ride.destination.address);
-        const url = `https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`;
+    if (ride?.destination?.lat && ride?.destination?.lng) {
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${ride.destination.lat},${ride.destination.lng}`;
         window.open(url, '_blank');
     }
   };

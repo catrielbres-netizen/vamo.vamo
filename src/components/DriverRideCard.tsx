@@ -19,7 +19,6 @@ import { Ride } from '@/lib/types';
 import ServiceBadge from './ServiceBadge';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { haversineDistance } from '@/lib/geo';
 
 const serviceCardStyles: Record<Ride['serviceType'], string> = {
     premium: "border-yellow-400/50",
@@ -60,24 +59,8 @@ export default function DriverRideCard({
     
     const driverFullName = `${profile.name || ''} ${profile.lastName || ''}`.trim();
 
-    const fallbackUpdate = () => {
-        const distance = haversineDistance(profile.currentLocation!, ride.origin);
-        updateDocumentNonBlocking(rideRef, {
-            status: 'driver_assigned',
-            driverId: user.uid,
-            driverName: driverFullName || 'Conductor Anónimo',
-            driverArrivalInfo: {
-                distanceMeters: distance,
-                durationSeconds: 0 // No podemos estimar duración sin API
-            },
-            updatedAt: serverTimestamp(),
-        });
-        toast({ title: "¡Viaje Aceptado!", description: "La ruta se estimó en línea recta."});
-        onAccept();
-    }
-    
     if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) {
-        fallbackUpdate();
+        toast({ variant: "destructive", title: "Error", description: "La API de Google Maps no está disponible." });
         return;
     }
 
@@ -111,7 +94,7 @@ export default function DriverRideCard({
                 toast({ title: "¡Viaje Aceptado!" });
                 onAccept();
             } else {
-                fallbackUpdate();
+                toast({ variant: "destructive", title: "Error de Ruta", description: "No se pudo calcular la ruta al origen." });
             }
         }
     );
