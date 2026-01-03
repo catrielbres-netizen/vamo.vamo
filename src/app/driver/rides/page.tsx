@@ -16,6 +16,7 @@ import { Ride, ServiceType, UserProfile } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { MapsProvider } from '@/components/MapsProvider';
 
 
 // Helper function to determine which services a driver can see
@@ -47,7 +48,7 @@ const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, 
 }
 
 
-export default function DriverRidesPage() {
+function DriverRidesPageContent() {
   const firestore = useFirestore();
   const { user, profile, loading: isUserLoading } = useUser();
   const { toast } = useToast();
@@ -290,4 +291,12 @@ export default function DriverRidesPage() {
       )}
     </>
   );
+}
+
+export default function DriverRidesPage() {
+    return (
+        <MapsProvider>
+            <DriverRidesPageContent />
+        </MapsProvider>
+    )
 }

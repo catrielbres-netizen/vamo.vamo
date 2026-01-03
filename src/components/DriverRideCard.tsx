@@ -20,7 +20,6 @@ import ServiceBadge from './ServiceBadge';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { haversineDistance } from '@/lib/geo';
-import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 const serviceCardStyles: Record<Ride['serviceType'], string> = {
     premium: "border-yellow-400/50",
@@ -47,7 +46,6 @@ export default function DriverRideCard({
   const firestore = useFirestore();
   const { user, profile } = useUser();
   const { toast } = useToast();
-  const routesLibrary = useMapsLibrary('routes');
 
   const handleAcceptRide = async () => {
     if (!firestore || !user || !profile?.currentLocation) {
@@ -78,12 +76,12 @@ export default function DriverRideCard({
         onAccept();
     }
     
-    if (!routesLibrary) {
+    if (!window.google || !window.google.maps.routes) {
         fallbackUpdate();
         return;
     }
 
-    const directionsService = new routesLibrary.DirectionsService();
+    const directionsService = new window.google.maps.DirectionsService();
     directionsService.route(
         {
             origin: { lat: profile.currentLocation.lat, lng: profile.currentLocation.lng },

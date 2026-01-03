@@ -28,17 +28,15 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { haversineDistance } from '@/lib/geo';
-import { useMapsLibrary } from '@vis.gl/react-google-maps';
+import { MapsProvider } from '@/components/MapsProvider';
 
 
-export default function RidePage() {
+function RidePageContent() {
   const auth = useAuth();
   const firestore = useFirestore();
   const { user, profile, loading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
-
-  const routesLibrary = useMapsLibrary('routes');
 
 
   const [origin, setOrigin] = useState<Place | null>(null);
@@ -91,7 +89,7 @@ export default function RidePage() {
   }, [ride]);
 
   useEffect(() => {
-    if (!destination || !origin || !routesLibrary) {
+    if (!destination || !origin) {
         setEstimatedFare(0);
         setDistanceMeters(0);
         setDurationSeconds(0);
@@ -109,8 +107,13 @@ export default function RidePage() {
             description: 'La tarifa se estimó en línea recta. Puede variar.'
         });
     }
+    
+    if (!window.google || !window.google.maps.routes) {
+        fallbackEstimate();
+        return;
+    }
 
-    const directionsService = new routesLibrary.DirectionsService();
+    const directionsService = new window.google.maps.DirectionsService();
     directionsService.route(
         {
             origin: { lat: origin.lat, lng: origin.lng },
@@ -134,7 +137,7 @@ export default function RidePage() {
             fallbackEstimate();
         }
     );
-  }, [destination, origin, serviceType, toast, routesLibrary]);
+  }, [destination, origin, serviceType, toast]);
   
   useEffect(() => {
     if (!ride) {
@@ -256,8 +259,7 @@ export default function RidePage() {
   
   const handleCancelRide = () => {
     if (!activeRideRef) return;
-     // This action is now separated. We just cancel.
-    updateDocumentNonBlocking(activeRideRef, {
+     updateDocumentNonBlocking(activeRideRef, {
       status: 'cancelled',
       updatedAt: serverTimestamp(),
     });
@@ -342,4 +344,12 @@ export default function RidePage() {
        </div>
     </>
   );
+}
+
+export default function RidePage() {
+    return (
+        <MapsProvider>
+            <RidePageContent />
+        </MapsProvider>
+    )
 }

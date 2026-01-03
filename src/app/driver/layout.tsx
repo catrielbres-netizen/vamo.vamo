@@ -8,7 +8,6 @@ import { useEffect, useMemo } from 'react';
 import { collection, query, where, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Ride } from '@/lib/types';
-import { MapsProvider } from '@/components/MapsProvider';
 
 export default function DriverLayout({
   children,
@@ -70,7 +69,6 @@ export default function DriverLayout({
   };
 
   return (
-    <MapsProvider>
       <div className="container mx-auto max-w-md p-4">
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-2">
@@ -101,6 +99,5 @@ export default function DriverLayout({
         
         <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
       </div>
-    </MapsProvider>
   );
 }

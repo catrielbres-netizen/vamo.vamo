@@ -71,28 +71,26 @@ export default function DashboardLayout({
   const userName = profile?.name || (user?.isAnonymous ? "Invitado" : user?.displayName || "Usuario");
 
   return (
-    <MapsProvider>
-        <div className="container mx-auto max-w-md p-4">
-            <PassengerHeader 
-                userName={userName}
-                location="Rawson, Chubut" 
-            />
+    <div className="container mx-auto max-w-md p-4">
+        <PassengerHeader 
+            userName={userName}
+            location="Rawson, Chubut" 
+        />
 
-          {!hasActiveRide && (
-              <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="ride" className="gap-2">
-                    <VamoIcon name="car" className="w-4 h-4" /> Viaje
-                  </TabsTrigger>
-                  <TabsTrigger value="profile" className="gap-2">
-                    <VamoIcon name="user" className="w-4 h-4" /> Perfil
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-          )}
-          
-          <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
-        </div>
-    </MapsProvider>
+      {!hasActiveRide && (
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="ride" className="gap-2">
+                <VamoIcon name="car" className="w-4 h-4" /> Viaje
+              </TabsTrigger>
+              <TabsTrigger value="profile" className="gap-2">
+                <VamoIcon name="user" className="w-4 h-4" /> Perfil
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+      )}
+      
+      <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
+    </div>
   );
 }
