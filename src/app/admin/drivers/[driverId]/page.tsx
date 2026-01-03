@@ -18,7 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useParams } from 'next/navigation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { VamoIcon } from '@/components/VamoIcon';
-import { useMemoFirebase } from '@/firebase/hooks';
+import { useMemoFirebase } from '@/firebase/provider';
 
 function formatCurrency(value: number) {
     if (typeof value !== 'number') return '$...';

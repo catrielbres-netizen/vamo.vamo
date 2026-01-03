@@ -9,7 +9,7 @@ import { collection, query, where, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Ride } from '@/lib/types';
 import { MapsProvider } from '@/components/MapsProvider';
-import { useMemoFirebase } from '@/firebase/hooks';
+import { useMemoFirebase } from '@/firebase/provider';
 import { PassengerHeader } from '@/components/PassengerHeader';
 
 export default function DashboardLayout({

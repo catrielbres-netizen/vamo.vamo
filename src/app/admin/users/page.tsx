@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useCollection } from '@/firebase'
@@ -8,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { useMemo } from 'react'
 import { UserProfile } from '@/lib/types'
 import { WithId } from '@/firebase/firestore/use-collection'
-import { useMemoFirebase } from '@/firebase/hooks'
+import { useMemoFirebase } from '@/firebase/provider'
 
 const UserListItem = ({ user }: { user: WithId<UserProfile> }) => (
     <li className="border p-4 rounded-lg flex justify-between items-center">

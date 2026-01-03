@@ -18,7 +18,7 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { useMemoFirebase } from '@/firebase/hooks';
+import { useMemoFirebase } from '@/firebase/provider';
 
 
 // Helper function to determine which services a driver can see based on their car model year
@@ -209,12 +209,12 @@ export default function DriverRidesPage() {
 
     if (newRides.length > 0) {
           newRides.forEach(newRide => {
-            const destinationText = newRide.destination.address;
+            const message = `Nuevo viaje ${newRide.serviceType} disponible.`;
             toast({
                 title: `¡Nuevo viaje ${newRide.serviceType}!`,
-                description: `Un pasajero solicita un viaje a ${destinationText}.`,
+                description: `Un pasajero solicita un viaje a ${newRide.destination.address}.`,
             });
-            speak(`Nuevo viaje ${newRide.serviceType} disponible.`);
+            speak(message);
           });
     }
     
