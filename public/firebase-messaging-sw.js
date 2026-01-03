@@ -1,56 +1,58 @@
 // public/firebase-messaging-sw.js
+// This file needs to be in the public directory
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
 
-// ⚡ Configuración de Firebase (debe coincidir con la de la app)
+// ⚡ This configuration will be replaced by the build process with the actual Firebase config
 const firebaseConfig = {
   "projectId": "studio-6697160840-7c67f",
   "appId": "1:68554242118:web:93c2b08fdb55d657167247",
   "apiKey": "AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA",
   "authDomain": "studio-6697160840-7c67f.firebaseapp.com",
+  "measurementId": "",
   "storageBucket": "studio-6697160840-7c67f.appspot.com",
   "messagingSenderId": "68554242118"
 };
 
 firebase.initializeApp(firebaseConfig);
 
-
-// Inicializamos Firebase Messaging
+// Initialize Firebase Messaging
 const messaging = firebase.messaging();
 
-// 📩 Manejar notificaciones en background
+// Handle background notifications
 messaging.onBackgroundMessage(function(payload) {
-  console.log('[firebase-messaging-sw.js] Notificación recibida en background:', payload);
+  console.log('[firebase-messaging-sw.js] Background notification received:', payload);
 
-  const notificationTitle = payload.notification?.title || 'Nuevo viaje disponible';
+  const notificationTitle = payload.notification?.title || 'Nuevo Viaje Disponible';
   const notificationOptions = {
-    body: payload.notification?.body || 'Tenés un viaje pendiente para aceptar',
-    icon: payload.notification?.icon || '/favicon.ico',
+    body: payload.notification?.body || 'Un nuevo viaje está esperando ser aceptado.',
+    icon: '/favicon.ico', // You can customize this
     data: {
-      url: '/driver/rides', // A dónde redirigir al hacer clic
+      url: payload.data?.url || '/driver/rides', // Default redirect URL
     },
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// 🖱️ Manejar clic en notificación
+// Handle notification click
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
 
-  const url = event.notification.data?.url || '/driver/rides';
-  
+  const targetUrl = event.notification.data?.url || '/driver/rides';
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-      // Si hay ventana abierta, la enfocamos
+      // Check if there is already a window/tab open with the target URL
       for (let client of windowClients) {
-        if (client.url.includes(url) && 'focus' in client) {
+        // Use includes() for flexibility, in case of query params
+        if (client.url.includes(targetUrl) && 'focus' in client) {
           return client.focus();
         }
       }
-      // Si no hay ventana abierta, abrimos una nueva
+      // If no window is open, open a new one
       if (clients.openWindow) {
-        return clients.openWindow(url);
+        return clients.openWindow(targetUrl);
       }
     })
   );
