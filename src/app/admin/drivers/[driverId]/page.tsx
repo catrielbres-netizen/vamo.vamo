@@ -1,11 +1,11 @@
 
 // src/app/admin/drivers/[driverId]/page.tsx
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useFirestore, useDoc, useMemoFirebase, useUser } from '@/firebase';
-import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp, limit, writeBatch } from 'firebase/firestore';
 import { Ride, DriverSummary, UserProfile, AuditLog } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Progress } from '@/components/ui/progress';
@@ -48,18 +48,57 @@ export default function DriverDetailPage() {
     const { toast } = useToast();
 
     const [weeklyRides, setWeeklyRides] = useState<WithId<Ride>[]>([]);
-    const [summary, setSummary] = useState<DriverSummary | null>(null);
+    const [summary, setSummary] = useState<WithId<DriverSummary> | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isInspecting, setIsInspecting] = useState(false);
     const [inspectionResult, setInspectionResult] = useState<string | null>(null);
 
     const driverProfileRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
-    const { data: driver, isLoading: isDriverLoading } = useDoc<UserProfile>(driverProfileRef);
+    const { data: driver, isLoading: isDriverLoading, refetch: refetchDriver } = useDoc<UserProfile>(driverProfileRef);
     
     const today = new Date();
     const weekStartsOn = 1; // Monday
     const firstDayOfWeek = startOfWeek(today, { weekStartsOn });
     const weekId = `${getYear(firstDayOfWeek)}-W${getWeek(firstDayOfWeek, { weekStartsOn })}`;
+
+    const fetchWeeklyData = async () => {
+        if (!firestore || !driverId) return;
+        setIsLoading(true);
+        const beginningOfWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
+        const beginningOfWeekTimestamp = Timestamp.fromDate(beginningOfWeek);
+
+        const summaryQuery = query(
+            collection(firestore, 'driver_summaries'),
+            where('driverId', '==', driverId),
+            where('weekId', '==', weekId)
+        );
+        
+        const ridesQuery = query(
+            collection(firestore, 'rides'),
+            where('driverId', '==', driverId),
+            where('status', '==', 'finished'),
+            where('finishedAt', '>=', beginningOfWeekTimestamp)
+        );
+
+        try {
+            const [summarySnapshot, ridesSnapshot] = await Promise.all([
+                getDocs(summaryQuery),
+                getDocs(ridesQuery)
+            ]);
+
+            const existingSummary = summarySnapshot.empty ? null : { ...summarySnapshot.docs[0].data() as DriverSummary, id: summarySnapshot.docs[0].id };
+            setSummary(existingSummary);
+
+            const rides = ridesSnapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
+            setWeeklyRides(rides);
+
+        } catch (error) {
+            console.error("Error fetching weekly data for driver:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
 
     const handleVerification = async (newStatus: 'approved' | 'rejected') => {
         if (!firestore || !driverProfileRef || !adminProfile?.name || !user?.uid) {
@@ -89,6 +128,7 @@ export default function DriverDetailPage() {
                 title: '¡Acción completada!',
                 description: `El conductor ha sido ${newStatus === 'approved' ? 'aprobado' : 'rechazado'}.`,
             });
+            refetchDriver();
         } catch (error) {
             console.error("Error updating driver status:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado del conductor.' });
@@ -106,49 +146,65 @@ export default function DriverDetailPage() {
         setIsInspecting(false);
     };
 
+    const handleMarkAsPaid = async () => {
+        if (!firestore || !summary?.id) {
+             toast({ variant: 'destructive', title: 'Error', description: 'No se encontró el resumen semanal para marcar como pagado.' });
+            return;
+        }
+        const summaryRef = doc(firestore, 'driver_summaries', summary.id);
+        try {
+            await updateDoc(summaryRef, {
+                status: 'paid',
+                updatedAt: serverTimestamp(),
+            });
+            toast({ title: '¡Éxito!', description: 'La comisión semanal fue marcada como pagada.'});
+            fetchWeeklyData(); // Refresh data
+        } catch (error) {
+            console.error("Error marking as paid:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado del pago.' });
+        }
+    }
+
+    const handleSuspendAccount = async (suspend: boolean) => {
+        if (!firestore || !driverProfileRef || !adminProfile?.name || !user?.uid) return;
+        
+        try {
+            const batch = writeBatch(firestore);
+
+            batch.update(driverProfileRef, {
+                isSuspended: suspend,
+                driverStatus: 'inactive', // Force status to inactive
+                updatedAt: serverTimestamp(),
+            });
+
+            const auditLogRef = collection(firestore, 'auditLogs');
+            const logEntry = {
+                adminId: user.uid,
+                adminName: adminProfile.name,
+                action: suspend ? 'driver_suspended' : 'driver_unsuspended',
+                entityId: driverId,
+                timestamp: serverTimestamp(),
+                details: `El administrador ${adminProfile.name} ${suspend ? 'suspendió' : 'reactivó'} la cuenta del conductor.`
+            };
+            const newLogRef = doc(auditLogRef);
+            batch.set(newLogRef, logEntry);
+
+            await batch.commit();
+
+            toast({
+                title: '¡Acción completada!',
+                description: `La cuenta del conductor ha sido ${suspend ? 'suspendida' : 'reactivada'}.`,
+            });
+            refetchDriver();
+        } catch (error) {
+            console.error("Error suspending/unsuspending account:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado de la cuenta.' });
+        }
+    }
+
 
     useEffect(() => {
-        if (!firestore || !driverId) return;
-
-        const fetchWeeklyData = async () => {
-            setIsLoading(true);
-            const beginningOfWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
-            const beginningOfWeekTimestamp = Timestamp.fromDate(beginningOfWeek);
-
-            const summaryQuery = query(
-                collection(firestore, 'driver_summaries'),
-                where('driverId', '==', driverId),
-                where('weekId', '==', weekId)
-            );
-            
-            const ridesQuery = query(
-                collection(firestore, 'rides'),
-                where('driverId', '==', driverId),
-                where('status', '==', 'finished'),
-                where('finishedAt', '>=', beginningOfWeekTimestamp)
-            );
-
-            try {
-                const [summarySnapshot, ridesSnapshot] = await Promise.all([
-                    getDocs(summaryQuery),
-                    getDocs(ridesQuery)
-                ]);
-
-                const existingSummary = summarySnapshot.empty ? null : summarySnapshot.docs[0].data() as DriverSummary;
-                setSummary(existingSummary);
-
-                const rides = ridesSnapshot.docs.map(doc => ({ ...doc.data() as Ride, id: doc.id }));
-                setWeeklyRides(rides);
-
-            } catch (error) {
-                console.error("Error fetching weekly data for driver:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
         fetchWeeklyData();
-
     }, [firestore, driverId, weekId]);
 
     if (isLoading || isDriverLoading) {
@@ -167,6 +223,7 @@ export default function DriverDetailPage() {
     const bonusesApplied = summary?.bonusesApplied ?? 0;
     const netToReceive = totalEarnings - commissionOwed + bonusesApplied;
     const verificationInfo = verificationStatusBadge[driver.vehicleVerificationStatus || 'unverified'];
+    const isSummaryPending = summary?.status === 'pending' && commissionOwed > 0;
 
     return (
         <div className="space-y-6">
@@ -175,6 +232,7 @@ export default function DriverDetailPage() {
                     <h1 className="text-3xl font-bold flex items-center gap-2">
                         {driver.name}
                         <Badge variant={verificationInfo.variant}>{verificationInfo.text}</Badge>
+                         {driver.isSuspended && <Badge variant="destructive">SUSPENDIDO</Badge>}
                     </h1>
                     <p className="text-muted-foreground">{driver.email} | {driver.phone}</p>
                     <p className="text-sm text-muted-foreground">Año del vehículo: {driver.carModelYear || 'N/A'}</p>
@@ -289,6 +347,73 @@ export default function DriverDetailPage() {
                             <span>{formatCurrency(netToReceive)}</span>
                         </div>
                     </CardContent>
+                    {isSummaryPending && (
+                        <CardFooter className="flex-col gap-2 border-t pt-4">
+                            <p className="text-sm text-center text-muted-foreground mb-2">Acciones de pago</p>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="default" className="w-full bg-green-600 hover:bg-green-700">
+                                        <VamoIcon name="check" className="mr-2"/> Marcar Semana como Pagada
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Confirmar Pago de Comisión?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Esta acción marcará la comisión de {formatCurrency(commissionOwed)} como pagada y reiniciará el conteo semanal del conductor. ¿Verificaste el comprobante?
+                                    </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleMarkAsPaid} className="bg-green-600 hover:bg-green-700">Sí, confirmar pago</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" className="w-full">
+                                        <VamoIcon name="x-circle" className="mr-2"/> Suspender Cuenta
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Suspender la cuenta de este conductor?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Esta acción bloqueará el acceso del conductor a la aplicación. No podrá iniciar sesión ni recibir viajes. Es una medida seria por falta de pago.
+                                    </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleSuspendAccount(true)} variant="destructive">Sí, suspender</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </CardFooter>
+                    )}
+                    {driver.isSuspended && (
+                         <CardFooter className="border-t pt-4">
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                     <Button variant="outline" className="w-full">
+                                        <VamoIcon name="user-check" className="mr-2"/> Reactivar Cuenta
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Reactivar la cuenta de este conductor?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Esta acción permitirá que el conductor vuelva a iniciar sesión y recibir viajes. Hacelo solo si la situación de pago fue regularizada.
+                                    </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleSuspendAccount(false)}>Sí, reactivar cuenta</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                         </CardFooter>
+                    )}
                 </Card>
             </div>
             

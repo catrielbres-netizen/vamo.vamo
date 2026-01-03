@@ -93,6 +93,7 @@ export type UserProfile = {
     photoURL?: string | null;
     averageRating?: number | null;
     ridesCompleted?: number;
+    isSuspended?: boolean;
     // Passenger fields
     vamoPoints?: number;
     activeBonus?: boolean;
