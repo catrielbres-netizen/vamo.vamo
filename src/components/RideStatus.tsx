@@ -77,27 +77,16 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                 await runTransaction(firestore, async (transaction) => {
                     const userProfileDoc = await transaction.get(userProfileRef);
                     
-                    let currentPoints = 0;
-                    let ridesCompleted = 0;
-
-                    if (userProfileDoc.exists()) {
-                        const profileData = userProfileDoc.data() as UserProfile;
-                        currentPoints = profileData.vamoPoints || 0;
-                        ridesCompleted = profileData.ridesCompleted || 0;
-                    } else {
-                        // Create profile if it doesn't exist
-                        const newProfile: Partial<UserProfile> = {
-                            name: ride.passengerName || 'Pasajero Anónimo',
-                            email: '', // Should be filled from auth, but not available here
-                            role: 'passenger',
-                            createdAt: Timestamp.now(),
-                            profileCompleted: true,
-                            vamoPoints: 0,
-                            ridesCompleted: 0,
-                            activeBonus: false,
-                        };
-                        transaction.set(userProfileRef, newProfile);
+                    if (!userProfileDoc.exists()) {
+                        console.error(`Profile for passenger ${ride.passengerId} not found. Cannot award points.`);
+                        // Don't throw an error, just log it, so we can still mark the ride as "points processed"
+                        transaction.update(rideRef, { vamoPointsAwarded: 0 }); // Mark as processed with 0 points
+                        return;
                     }
+                    
+                    const profileData = userProfileDoc.data() as UserProfile;
+                    const currentPoints = profileData.vamoPoints || 0;
+                    const ridesCompleted = profileData.ridesCompleted || 0;
                     
                     const newTotalPoints = currentPoints + VAMO_POINTS_PER_RIDE;
                     const newRidesCompleted = ridesCompleted + 1;
