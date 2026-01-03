@@ -28,7 +28,7 @@ export function PlaceAutocomplete({
   defaultValue = '',
   className,
 }: PlaceAutocompleteProps) {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA";
 
   const requestOptions = useMemo(() => {
     if (typeof window === 'undefined' || !window.google) return undefined;

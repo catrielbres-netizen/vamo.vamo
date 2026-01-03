@@ -8,7 +8,7 @@ const MapsContext = createContext<{ ready: boolean }>({ ready: false });
 export const useMapsReady = () => useContext(MapsContext);
 
 export function MapsProvider({ children }: { children: React.ReactNode }) {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA";
 
   if (!apiKey) {
     console.error('Google Maps API Key is not configured.');
