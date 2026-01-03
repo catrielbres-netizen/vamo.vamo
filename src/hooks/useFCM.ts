@@ -1,21 +1,20 @@
 // src/hooks/useFCM.ts
 'use client';
 import { useState, useEffect } from 'react';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { getMessaging, getToken, onMessage, MessagePayload } from 'firebase/messaging';
 import { useFirebaseApp, useUser, useFirestore } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 
 export function useFCM() {
   const firebaseApp = useFirebaseApp();
   const { profile, user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const router = useRouter();
 
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | null>(null);
+  const [latestNotification, setLatestNotification] = useState<MessagePayload | null>(null);
+
 
   useEffect(() => {
     // This effect runs only on the client
@@ -64,22 +63,13 @@ export function useFCM() {
     // 2. Handle foreground messages
     const unsubscribe = onMessage(messaging, (payload) => {
       console.log('Foreground message received. ', payload);
-      toast({
-        title: payload.notification?.title || "¡Nuevo Viaje!",
-        description: payload.notification?.body || "Un pasajero ha solicitado un viaje.",
-        action: (
-            <Button onClick={() => router.push('/driver/rides')} size="sm">
-                Ver Viajes
-            </Button>
-        ),
-        duration: 10000, // Keep toast longer
-      });
+      setLatestNotification(payload); // Set the payload in state
     });
 
     return () => {
       unsubscribe(); // Unsubscribe from the message listener on cleanup
     };
-  }, [firebaseApp, firestore, user, profile, notificationPermission, toast, router]);
+  }, [firebaseApp, firestore, user, profile, notificationPermission, toast]);
 
 
   const requestPermission = async () => {
@@ -106,5 +96,5 @@ export function useFCM() {
   }
 
 
-  return { notificationPermission, requestPermission };
+  return { notificationPermission, requestPermission, latestNotification };
 }

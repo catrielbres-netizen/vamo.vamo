@@ -1,4 +1,3 @@
-
 // /app/driver/rides/page.tsx
 'use client';
 
@@ -20,6 +19,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useFCM } from '@/hooks/useFCM';
 import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 
 
 // Helper function to determine which services a driver can see based on their car model year
@@ -70,7 +70,8 @@ export default function DriverRidesPage() {
   const firestore = useFirestore();
   const { user, profile, loading: isUserLoading } = useUser();
   const { toast } = useToast();
-  const { notificationPermission, requestPermission } = useFCM();
+  const router = useRouter();
+  const { notificationPermission, requestPermission, latestNotification } = useFCM();
   
   const [activeRide, setActiveRide] = useState<WithId<Ride> | null>(null);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
@@ -100,6 +101,22 @@ export default function DriverRidesPage() {
   useEffect(() => {
     activeRideStateRef.current = activeRide;
   }, [activeRide]);
+
+  // Effect to show toast when a new notification arrives from the hook
+  useEffect(() => {
+    if (latestNotification) {
+      toast({
+        title: latestNotification.notification?.title || "¡Nuevo Viaje!",
+        description: latestNotification.notification?.body || "Un pasajero ha solicitado un viaje.",
+        action: (
+            <Button onClick={() => router.push('/driver/rides')} size="sm">
+                Ver Viajes
+            </Button>
+        ),
+        duration: 10000, // Keep toast longer
+      });
+    }
+  }, [latestNotification, toast, router]);
 
 
   const handleToggleOnline = (checked: boolean) => {
