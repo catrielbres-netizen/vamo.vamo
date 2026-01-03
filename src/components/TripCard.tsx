@@ -43,22 +43,23 @@ export function TripCard({
       </div>
 
       <div className="space-y-2 text-sm">
-        <div className="flex items-center">
-          <span className="w-16 text-muted-foreground">Origen:</span>
-          {isInteractive ? (
-             <PlaceAutocomplete onPlaceSelect={onOriginSelect} />
+        {isInteractive ? (
+            <>
+                <PlaceAutocomplete onPlaceSelect={onOriginSelect} placeholder="Ingresá un origen" />
+                <PlaceAutocomplete onPlaceSelect={onDestinationSelect} placeholder="Ingresá un destino" />
+            </>
           ) : (
-            <p className="font-medium">{origin?.address || 'No especificado'}</p>
+            <>
+                <div className="flex items-center">
+                    <span className="w-16 text-muted-foreground">Origen:</span>
+                    <p className="font-medium">{origin?.address || 'No especificado'}</p>
+                </div>
+                <div className="flex items-center">
+                    <span className="w-16 text-muted-foreground">Destino:</span>
+                    <p className="font-medium">{destination?.address || '—'}</p>
+                </div>
+            </>
           )}
-        </div>
-        <div className="flex items-center">
-          <span className="w-16 text-muted-foreground">Destino:</span>
-          {isInteractive ? (
-             <PlaceAutocomplete onPlaceSelect={onDestinationSelect} />
-          ) : (
-            <p className="font-medium">{destination?.address || '—'}</p>
-          )}
-        </div>
       </div>
       {status !== 'idle' && status !== 'finished' && status !== 'cancelled' && (
          <Progress value={statusInfo.progress} className="w-full h-2 mt-4" />

@@ -27,6 +27,24 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
 
+// Haversine distance calculation
+function haversineDistance(coords1: { lat: number, lng: number }, coords2: { lat: number, lng: number }): number {
+    const toRad = (x: number) => x * Math.PI / 180;
+    const R = 6371e3; // Earth radius in metres
+
+    const dLat = toRad(coords2.lat - coords1.lat);
+    const dLon = toRad(coords2.lng - coords1.lng);
+    const lat1 = toRad(coords1.lat);
+    const lat2 = toRad(coords2.lat);
+
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+}
+
+
 export default function RidePage() {
   const auth = useAuth();
   const firestore = useFirestore();
@@ -88,19 +106,28 @@ export default function RidePage() {
                         return;
                     }
                 }
-                // If API fails, reset to 0
-                setDistanceMeters(0);
-                setDurationSeconds(0);
-                setEstimatedFare(0);
+                // If API fails, calculate Haversine distance as a fallback
+                const fallbackDistance = haversineDistance(origin, destination);
+                setDistanceMeters(fallbackDistance);
+                setDurationSeconds(0); // Cannot estimate duration
+                const fare = calculateFare({ distanceMeters: fallbackDistance, service: serviceType });
+                setEstimatedFare(fare);
+                toast({
+                    variant: 'destructive',
+                    title: 'No se pudo calcular la ruta',
+                    description: 'La tarifa se estimó en línea recta. Puede variar.'
+                });
             }
         );
     } else {
         // Fallback for when Google Maps script is not ready
-        setDistanceMeters(0);
+        const fallbackDistance = haversineDistance(origin, destination);
+        setDistanceMeters(fallbackDistance);
         setDurationSeconds(0);
-        setEstimatedFare(0);
+        const fare = calculateFare({ distanceMeters: fallbackDistance, service: serviceType });
+        setEstimatedFare(fare);
     }
-  }, [destination, origin, serviceType]);
+  }, [destination, origin, serviceType, toast]);
   
   useEffect(() => {
     if (!ride) {

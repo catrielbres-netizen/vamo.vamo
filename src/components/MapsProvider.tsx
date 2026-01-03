@@ -1,29 +1,19 @@
 'use client';
 import { APIProvider } from '@vis.gl/react-google-maps';
-import { GOOGLE_MAPS_API_KEY } from '@/lib/googleMaps';
-import { createContext, useContext } from 'react';
-
-const MapsContext = createContext<{ ready: boolean }>({ ready: false });
-
-export const useMapsReady = () => useContext(MapsContext);
 
 export function MapsProvider({ children }: { children: React.ReactNode }) {
-  if (!GOOGLE_MAPS_API_KEY) {
-    console.error('Google Maps API Key missing');
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  if (!apiKey) {
+    console.error("Google Maps API Key is not configured. Some components may not work.");
+    // Return children without the provider if the key is missing.
+    // Components inside will need to handle the lack of the provider gracefully.
     return <>{children}</>;
   }
 
   return (
-    <APIProvider
-      apiKey={GOOGLE_MAPS_API_KEY}
-      libraries={['places']}
-      onLoad={() => {
-        console.log('✅ Google Maps loaded');
-      }}
-    >
-      <MapsContext.Provider value={{ ready: true }}>
-        {children}
-      </MapsContext.Provider>
+    <APIProvider apiKey={apiKey} libraries={['places']}>
+      {children}
     </APIProvider>
   );
 }
