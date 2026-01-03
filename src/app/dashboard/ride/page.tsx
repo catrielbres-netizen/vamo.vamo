@@ -306,8 +306,8 @@ export default function RidePage() {
 
   return (
     <>
-      {(status !== 'idle') ? (
-        <RideStatus ride={ride!} onNewRide={() => router.refresh()} />
+      {(status !== 'idle' && ride) ? (
+        <RideStatus ride={ride!} onNewRide={handleReset} />
       ) : (
         <>
           <TripCard 
@@ -343,5 +343,3 @@ export default function RidePage() {
     </>
   );
 }
-
-    

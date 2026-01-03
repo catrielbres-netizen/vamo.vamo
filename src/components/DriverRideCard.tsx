@@ -1,3 +1,4 @@
+
 // @/components/DriverRideCard.tsx
 'use client';
 
@@ -85,13 +86,13 @@ export default function DriverRideCard({
     const directionsService = new routesLibrary.DirectionsService();
     directionsService.route(
         {
-            origin: new window.google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
-            destination: new window.google.maps.LatLng(ride.origin.lat, ride.origin.lng),
-            travelMode: window.google.maps.TravelMode.DRIVING,
+            origin: { lat: profile.currentLocation.lat, lng: profile.currentLocation.lng },
+            destination: { lat: ride.origin.lat, lng: ride.origin.lng },
+            travelMode: google.maps.TravelMode.DRIVING,
         },
         (result, status) => {
              let arrivalInfo = null;
-             if (status === window.google.maps.DirectionsStatus.OK && result) {
+             if (status === google.maps.DirectionsStatus.OK && result) {
                 const route = result.routes[0];
                 if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
                     arrivalInfo = {
@@ -173,5 +174,3 @@ export default function DriverRideCard({
     </Card>
   );
 }
-
-    

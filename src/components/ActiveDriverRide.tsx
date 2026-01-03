@@ -1,3 +1,4 @@
+
 // @/components/ActiveDriverRide.tsx
 'use client';
 
@@ -136,12 +137,12 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
         const directionsService = new routesLibrary.DirectionsService();
         directionsService.route(
             {
-                origin: new window.google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
-                destination: new window.google.maps.LatLng(ride.destination.lat, ride.destination.lng),
-                travelMode: window.google.maps.TravelMode.DRIVING,
+                origin: { lat: profile.currentLocation.lat, lng: profile.currentLocation.lng },
+                destination: { lat: ride.destination.lat, lng: ride.destination.lng },
+                travelMode: google.maps.TravelMode.DRIVING,
             },
             (result, status) => {
-                if (status === window.google.maps.DirectionsStatus.OK && result) {
+                if (status === google.maps.DirectionsStatus.OK && result) {
                     const route = result.routes[0];
                     if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
                         const pricing = { 
@@ -321,5 +322,3 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
     </Card>
   );
 }
-
-    

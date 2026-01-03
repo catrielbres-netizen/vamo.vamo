@@ -313,5 +313,3 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
     </div>
   );
 }
-
-    

@@ -1,8 +1,10 @@
+
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { VamoIcon } from './VamoIcon';
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 interface Place {
   address: string;
@@ -19,15 +21,15 @@ interface Props {
 
 export function PlaceAutocomplete({ onPlaceSelect, placeholder, defaultValue, className }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const placesLibrary = useMapsLibrary('places');
+  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
 
   useEffect(() => {
-    if (!window.google || !inputRef.current) {
-        console.warn("Google Maps not ready for Autocomplete");
+    if (!placesLibrary || !inputRef.current) {
         return;
     }
 
-    autocompleteRef.current = new google.maps.places.Autocomplete(
+    const newAutocomplete = new placesLibrary.Autocomplete(
       inputRef.current,
       {
         componentRestrictions: { country: 'AR' },
@@ -35,8 +37,21 @@ export function PlaceAutocomplete({ onPlaceSelect, placeholder, defaultValue, cl
       }
     );
 
-    autocompleteRef.current.addListener('place_changed', () => {
-      const place = autocompleteRef.current?.getPlace();
+    setAutocomplete(newAutocomplete);
+
+    return () => {
+        // Cleanup listener on unmount
+        if (newAutocomplete) {
+            google.maps.event.clearInstanceListeners(newAutocomplete);
+        }
+    }
+  }, [placesLibrary]);
+
+  useEffect(() => {
+    if (!autocomplete) return;
+
+    const listener = autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace();
       if (!place?.geometry?.location || !place.formatted_address) {
         onPlaceSelect(null);
         return;
@@ -48,14 +63,14 @@ export function PlaceAutocomplete({ onPlaceSelect, placeholder, defaultValue, cl
         lng: place.geometry.location.lng(),
       });
     });
-    
-    // Cleanup listener on unmount
+
     return () => {
-      if (autocompleteRef.current) {
-        window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
-      }
+        if(listener) {
+            listener.remove();
+        }
     }
-  }, [onPlaceSelect]);
+  }, [autocomplete, onPlaceSelect]);
+
 
   return (
     <div className="relative">
