@@ -78,15 +78,19 @@ export default function DriverRidesPage() {
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
 
   const isOnline = profile?.driverStatus === 'online';
+  const allowedServices = useMemoFirebase(() => getAllowedServices(profile), [profile]);
 
-  // Only query for rides if the driver is approved AND online
+  // Only query for rides if the driver is approved, online, and has services they can fulfill
   const availableRidesQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid || activeRide || !profile?.approved || !isOnline) return null;
+    if (!firestore || !user?.uid || activeRide || !profile?.approved || !isOnline || allowedServices.length === 0) {
+        return null;
+    }
     return query(
         collection(firestore, 'rides'),
-        where('status', '==', 'searching_driver')
+        where('status', '==', 'searching_driver'),
+        where('serviceType', 'in', allowedServices)
     );
-  }, [firestore, user?.uid, activeRide, profile?.approved, isOnline]);
+  }, [firestore, user?.uid, activeRide, profile?.approved, isOnline, allowedServices]);
 
   const { data: availableRides, isLoading: areRidesLoading } = useCollection<Ride>(availableRidesQuery);
 
@@ -199,10 +203,7 @@ export default function DriverRidesPage() {
   useEffect(() => {
     if (areRidesLoading || !availableRides || !profile?.approved || !isOnline) return;
 
-    const allowedServices = getAllowedServices(profile);
-    const filteredRides = availableRides.filter(ride => allowedServices.includes(ride.serviceType));
-
-    const newRides = filteredRides.filter(
+    const newRides = availableRides.filter(
         (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
     );
 
@@ -217,7 +218,7 @@ export default function DriverRidesPage() {
           });
     }
     
-    previousAvailableRides.current = filteredRides;
+    previousAvailableRides.current = availableRides;
 
   }, [availableRides, areRidesLoading, toast, profile, isOnline]);
 
@@ -238,9 +239,6 @@ export default function DriverRidesPage() {
     setLastFinishedRide(null);
   }
 
-  const allowedServices = getAllowedServices(profile);
-  const filteredAvailableRides = availableRides?.filter(ride => allowedServices.includes(ride.serviceType)) ?? [];
-  
   const renderAvailableRides = () => {
     if (isUserLoading) {
       return <p className="text-center">Cargando perfil...</p>;
@@ -300,8 +298,8 @@ export default function DriverRidesPage() {
                     <h2 className="text-xl font-semibold text-center pt-4">Viajes Disponibles</h2>
                     {areRidesLoading ? (
                          <p className="text-center text-muted-foreground pt-8">Buscando viajes...</p>
-                    ) : filteredAvailableRides.length > 0 ? (
-                        filteredAvailableRides.map((ride) => (
+                    ) : availableRides && availableRides.length > 0 ? (
+                        availableRides.map((ride) => (
                         <DriverRideCard
                             key={ride.id}
                             ride={ride}
