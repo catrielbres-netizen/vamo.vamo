@@ -80,13 +80,16 @@ export default function DashboardLayout({
 
         {!hasActiveRide && (
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
-                <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="ride" className="gap-2">
-                    <VamoIcon name="car" className="w-4 h-4" /> Viaje
-                </TabsTrigger>
-                <TabsTrigger value="profile" className="gap-2">
-                    <VamoIcon name="user" className="w-4 h-4" /> Perfil
-                </TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="ride" className="gap-2">
+                        <VamoIcon name="car" className="w-4 h-4" /> Viaje
+                    </TabsTrigger>
+                    <TabsTrigger value="info" className="gap-2">
+                        <VamoIcon name="info" className="w-4 h-4" /> Info
+                    </TabsTrigger>
+                    <TabsTrigger value="profile" className="gap-2">
+                        <VamoIcon name="user" className="w-4 h-4" /> Perfil
+                    </TabsTrigger>
                 </TabsList>
             </Tabs>
         )}
