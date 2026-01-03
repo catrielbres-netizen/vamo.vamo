@@ -37,7 +37,7 @@ const formatDuration = (seconds: number) => {
     return `~${Math.round(seconds / 60)} min`;
 };
 
-export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, onNewRide: (forceNew: boolean) => void }) {
+export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, onNewRide: (isFinished: boolean) => void }) {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
@@ -79,8 +79,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                     
                     if (!userProfileDoc.exists()) {
                         console.error(`Profile for passenger ${ride.passengerId} not found. Cannot award points.`);
-                        // Don't throw an error, just log it, so we can still mark the ride as "points processed"
-                        transaction.update(rideRef, { vamoPointsAwarded: 0 }); // Mark as processed with 0 points
+                        transaction.update(rideRef, { vamoPointsAwarded: 0 }); 
                         return;
                     }
                     
@@ -115,10 +114,6 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
 
 
   const handleRatingAndContinue = async (rating: number, comments: string) => {
-    // This now serves as the single action to proceed.
-    // It will attempt to submit a rating if one was given, but will always
-    // call onNewRide to unblock the UI.
-    
     if (rating > 0 && firestore && ride.driverId && !ride.driverRating) {
         const rideRef = doc(firestore, 'rides', ride.id);
         const driverProfileRef = doc(firestore, 'users', ride.driverId);
@@ -160,14 +155,12 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
         }
     }
     
-    // Crucially, call this regardless of rating success to unblock the UI.
-    // Pass true to signal that the main page should force a new ride form.
     onNewRide(true);
   };
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
   const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
-  const currentTotal = ride.pricing.estimatedTotal + waitingCost;
+  const currentTotal = (ride.pricing.finalTotal || ride.pricing.estimatedTotal) + waitingCost;
   
   const finalPrice = ride.pricing.finalTotal || ride.pricing.estimatedTotal;
 
@@ -192,7 +185,6 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
             {!isCancelled && (
               <>
                 <CardContent className="space-y-4">
-                    {/* Ride Details */}
                     <div className="text-sm space-y-2 p-3 bg-secondary/50 rounded-lg">
                         <div className="flex items-start">
                             <VamoIcon name="map-pin" className="w-4 h-4 mr-2 mt-1 text-muted-foreground"/>
@@ -210,7 +202,6 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                         </div>
                     </div>
 
-                    {/* Pricing Details */}
                     <div className="border-t border-b py-4 space-y-2">
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">Tarifa base del viaje</span>

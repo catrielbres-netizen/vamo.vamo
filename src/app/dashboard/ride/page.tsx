@@ -45,15 +45,15 @@ export default function RidePage() {
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
   const [estimatedFare, setEstimatedFare] = useState(0);
-  const [forceNewRide, setForceNewRide] = useState(false);
+  const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
   
-  // This is the real-time source of truth for the active ride, coming from the layout.
+  // This query now ONLY fetches TRULY active rides.
   const activeRideQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
       collection(firestore, 'rides'),
       where('passengerId', '==', user.uid),
-      where('status', 'in', ['searching_driver', 'driver_assigned', 'driver_arriving', 'arrived', 'in_progress', 'paused', 'finished', 'cancelled']),
+      where('status', 'in', ['searching_driver', 'driver_assigned', 'driver_arriving', 'arrived', 'in_progress', 'paused']),
       limit(1)
     );
   }, [firestore, user?.uid]);
@@ -71,28 +71,18 @@ export default function RidePage() {
   
   const prevRideRef = useRef<WithId<Ride> | null | undefined>(null);
 
-  const status = forceNewRide ? 'idle' : ride?.status || 'idle';
+  const status = lastFinishedRide ? lastFinishedRide.status : (ride?.status || 'idle');
 
-  const handleReset = (shouldForceNew: boolean = false) => {
-      // This reset is ONLY for the local form state.
-      // It allows the user to start a new ride request.
+  const handleReset = (isFinished: boolean = false) => {
       setDestination(null);
       setOrigin(null);
       setEstimatedFare(0);
       setDistanceMeters(0);
       setDurationSeconds(0);
-      if (shouldForceNew) {
-        setForceNewRide(true);
+      if (isFinished) {
+        setLastFinishedRide(null); // Clear the finished ride to show the form
       }
   }
-
-  useEffect(() => {
-    // If a new ride comes in, reset the force flag
-    if (ride && ride.status !== 'finished' && ride.status !== 'cancelled') {
-        setForceNewRide(false);
-    }
-}, [ride]);
-
 
   useEffect(() => {
     if (!destination || !origin) {
@@ -135,6 +125,8 @@ export default function RidePage() {
                     const duration = leg.duration.value;
                     const fare = calculateFare({ distanceMeters: dist, service: serviceType });
                     setEstimatedFare(fare);
+                    setDistanceMeters(dist);
+                    setDurationSeconds(duration);
                     return;
                 }
             }
@@ -145,16 +137,20 @@ export default function RidePage() {
   }, [destination, origin, serviceType, toast]);
   
   useEffect(() => {
-    if (!ride) {
-      prevRideRef.current = null;
-      return;
-    };
-
     const prevStatus = prevRideRef.current?.status;
-    const currentStatus = ride.status;
+    const currentStatus = ride?.status;
 
-    if (prevStatus !== currentStatus) {
-        if (currentStatus === 'driver_assigned' && ride.driverName) {
+    // A ride has just finished or been cancelled
+    if (prevRideRef.current && !ride) {
+      if (prevStatus === 'in_progress' || prevStatus === 'paused' || prevStatus === 'arrived') {
+          // The ride disappeared from the active query, so it must be finished/cancelled.
+          // We set it as the last finished ride to show the summary screen.
+          setLastFinishedRide({ ...prevRideRef.current, status: 'finished' });
+      } else if (prevStatus === 'searching_driver' || prevStatus === 'driver_assigned' || prevStatus === 'driver_arriving') {
+          setLastFinishedRide({ ...prevRideRef.current, status: 'cancelled' });
+      }
+    } else if (prevStatus !== currentStatus) {
+        if (currentStatus === 'driver_assigned' && ride?.driverName) {
             const message = "Tu viaje ya fue aceptado";
             toast({
                 title: '¡Conductor asignado!',
@@ -243,10 +239,8 @@ export default function RidePage() {
     };
 
     try {
-        // The listener in the layout will pick up the new ride and update the UI.
         const docRef = await addDocumentNonBlocking(ridesCollection, newRideData);
         if (docRef) {
-            setForceNewRide(false);
             toast({
                 title: '¡Buscando conductor!',
                 description: 'Tu pedido fue enviado. Esperá la confirmación.',
@@ -277,8 +271,11 @@ export default function RidePage() {
   }
 
   const getAction = () => {
-    switch (status) {
-        case 'idle':
+    // If there's a finished ride summary, no main action button is shown.
+    if (lastFinishedRide) return null;
+
+    switch (ride?.status) {
+        case undefined: // This is the 'idle' state
             return { handler: handleRequestRide, label: 'Pedir Viaje', variant: 'default' as const };
         case 'searching_driver':
         case 'driver_assigned':
@@ -287,14 +284,9 @@ export default function RidePage() {
         case 'arrived':
         case 'in_progress':
         case 'paused':
-            // Once the driver arrives, the passenger cannot cancel from the main button.
             return { handler: () => {}, label: 'Viaje en Curso...', variant: 'secondary' as const, disabled: true };
-        case 'finished':
-        case 'cancelled':
-             // The action is now handled inside RideStatus, this button will be hidden.
-             return null;
         default:
-             return { handler: () => {}, label: 'Cargando...', variant: 'secondary' as const };
+             return null; // Should not happen
     }
   }
 
@@ -312,14 +304,16 @@ export default function RidePage() {
   
   const fareToDisplay = profile?.activeBonus ? estimatedFare * 0.9 : estimatedFare;
 
+  const rideToShow = lastFinishedRide || ride;
+
   return (
     <MapsProvider>
-      {(status !== 'idle' && ride) ? (
-        <RideStatus ride={ride!} onNewRide={handleReset} />
+      {(rideToShow) ? (
+        <RideStatus ride={rideToShow} onNewRide={handleReset} />
       ) : (
         <>
           <TripCard 
-            status={status} 
+            status={'idle'} 
             origin={origin}
             onOriginSelect={setOrigin}
             destination={destination}
@@ -336,7 +330,7 @@ export default function RidePage() {
 
       {currentAction && (
         <MainActionButton 
-            status={status} 
+            status={ride?.status || 'idle'} 
             onClick={currentAction.handler}
             label={currentAction.label}
             variant={currentAction.variant}
@@ -351,3 +345,4 @@ export default function RidePage() {
     </MapsProvider>
   );
 }
+
