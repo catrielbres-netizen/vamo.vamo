@@ -16,7 +16,7 @@ export function PlaceAutocomplete({ onPlaceSelect, placeholder, className }: Pro
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   useEffect(() => {
-    if (!window.google || !inputRef.current) return;
+    if (!window.google || !window.google.maps || !window.google.maps.places || !inputRef.current) return;
 
     autocompleteRef.current = new google.maps.places.Autocomplete(
       inputRef.current,
@@ -43,7 +43,7 @@ export function PlaceAutocomplete({ onPlaceSelect, placeholder, className }: Pro
     // Cleanup listener on unmount
     return () => {
       if (autocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(autocompleteRef.current);
+        // google.maps.event.clearInstanceListeners(autocompleteRef.current);
       }
     }
   }, [onPlaceSelect]);

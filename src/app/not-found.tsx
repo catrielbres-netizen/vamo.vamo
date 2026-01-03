@@ -1,9 +1,9 @@
 // src/app/not-found.tsx
 export default function NotFound() {
   return (
-    <div style={{ padding: 40, textAlign: 'center' }}>
-      <h1>404</h1>
-      <p>Página no encontrada</p>
+    <div className="p-10 text-center">
+      <h1 className="text-2xl font-bold">404 - Página no encontrada</h1>
+      <p>La página que estás buscando no existe.</p>
     </div>
   );
 }
