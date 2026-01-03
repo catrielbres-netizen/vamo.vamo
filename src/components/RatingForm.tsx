@@ -1,4 +1,3 @@
-
 // @/components/RatingForm.tsx
 'use client';
 
@@ -23,9 +22,13 @@ export default function RatingForm({ participantName, participantRole, onSubmit,
   const [comments, setComments] = useState('');
 
   const handleSubmit = () => {
-    // We submit even if rating is 0, to trigger the next action.
-    // The parent handler will decide whether to save the rating.
-    onSubmit(rating, comments);
+    // Si ya se envió, llama a onSubmit con valores vacíos solo para disparar la acción de continuar.
+    // Si no se ha enviado, llama con los valores del estado.
+    if (isSubmitted) {
+        onSubmit(0, '');
+    } else {
+        onSubmit(rating, comments);
+    }
   };
 
   return (

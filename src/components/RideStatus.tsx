@@ -1,4 +1,3 @@
-
 // @/components/RideStatus.tsx
 'use client';
 import { TripCard } from './TripCard';
@@ -116,8 +115,14 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
 
 
   const handleRatingAndContinue = async (rating: number, comments: string) => {
+    // If rating is 0, it means the user just clicked "Continuar" after already rating.
+    // In that case, we just proceed to the new ride.
+    if (rating === 0) {
+        onNewRide();
+        return;
+    }
+
     if (!firestore || !ride.driverId) {
-        // If there's no driver or firestore, just continue to the new ride
         onNewRide();
         return;
     };
@@ -125,50 +130,45 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
     const rideRef = doc(firestore, 'rides', ride.id);
     const driverProfileRef = doc(firestore, 'users', ride.driverId);
 
-    // If a rating was given, update the ride document and driver's average
-    if (rating > 0) {
-        try {
-            await updateDocumentNonBlocking(rideRef, {
-              driverRating: rating,
-              driverComments: comments,
-              updatedAt: Timestamp.now(),
-            });
-            toast({
-                title: '¡Calificación Enviada!',
-                description: 'Gracias por tu opinión.',
+    try {
+        await updateDocumentNonBlocking(rideRef, {
+            driverRating: rating,
+            driverComments: comments,
+            updatedAt: Timestamp.now(),
+        });
+        toast({
+            title: '¡Calificación Enviada!',
+            description: 'Gracias por tu opinión.',
+        });
+        
+        await runTransaction(firestore, async (transaction) => {
+            const ridesQuery = query(
+                collection(firestore, 'rides'),
+                where('driverId', '==', ride.driverId),
+                where('status', '==', 'finished')
+            );
+            const driverRidesSnapshot = await getDocs(ridesQuery);
+
+            let totalRating = 0;
+            let ratingCount = 0;
+            driverRidesSnapshot.forEach(doc => {
+                const rideData = doc.data() as Ride;
+                if (rideData.driverRating && rideData.driverRating > 0) {
+                    totalRating += rideData.driverRating;
+                    ratingCount++;
+                }
             });
             
-            // Recalculate driver's average rating in a transaction
-            await runTransaction(firestore, async (transaction) => {
-                const ridesQuery = query(
-                    collection(firestore, 'rides'),
-                    where('driverId', '==', ride.driverId),
-                    where('status', '==', 'finished')
-                );
-                const driverRidesSnapshot = await getDocs(ridesQuery);
+            const newAverage = ratingCount > 0 ? totalRating / ratingCount : null;
+            transaction.update(driverProfileRef, { averageRating: newAverage });
+        });
 
-                let totalRating = 0;
-                let ratingCount = 0;
-                driverRidesSnapshot.forEach(doc => {
-                    const rideData = doc.data() as Ride;
-                    if (rideData.driverRating && rideData.driverRating > 0) {
-                        totalRating += rideData.driverRating;
-                        ratingCount++;
-                    }
-                });
-                
-                const newAverage = ratingCount > 0 ? totalRating / ratingCount : null;
-                transaction.update(driverProfileRef, { averageRating: newAverage });
-            });
-
-        } catch (e) {
-            console.error("Could not update rating or average", e);
-            // We still proceed to the next step even if rating fails
-        }
+    } catch (e) {
+        console.error("Could not update rating or average", e);
+    } finally {
+        // Proceed to new ride regardless of rating success
+        onNewRide();
     }
-    
-    // Finally, proceed to request a new ride.
-    onNewRide();
   };
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
