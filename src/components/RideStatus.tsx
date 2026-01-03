@@ -37,7 +37,7 @@ const formatDuration = (seconds: number) => {
     return `~${Math.round(seconds / 60)} min`;
 };
 
-export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, onNewRide: () => void }) {
+export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, onNewRide: (forceNew: boolean) => void }) {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
@@ -115,59 +115,54 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
 
 
   const handleRatingAndContinue = async (rating: number, comments: string) => {
-    // If rating is 0, user might skip rating. Just proceed to new ride.
-    if (rating === 0) {
-        onNewRide();
-        return;
-    }
-
-    if (!firestore || !ride.driverId) {
-        onNewRide();
-        return;
-    };
+    // This now serves as the single action to proceed.
+    // It will attempt to submit a rating if one was given, but will always
+    // call onNewRide to unblock the UI.
     
-    const rideRef = doc(firestore, 'rides', ride.id);
-    const driverProfileRef = doc(firestore, 'users', ride.driverId);
+    if (rating > 0 && firestore && ride.driverId && !ride.driverRating) {
+        const rideRef = doc(firestore, 'rides', ride.id);
+        const driverProfileRef = doc(firestore, 'users', ride.driverId);
 
-    try {
-        await updateDocumentNonBlocking(rideRef, {
-            driverRating: rating,
-            driverComments: comments,
-            updatedAt: Timestamp.now(),
-        });
-        toast({
-            title: '¡Calificación Enviada!',
-            description: 'Gracias por tu opinión.',
-        });
-        
-        await runTransaction(firestore, async (transaction) => {
-            const ridesQuery = query(
-                collection(firestore, 'rides'),
-                where('driverId', '==', ride.driverId),
-                where('status', '==', 'finished')
-            );
-            const driverRidesSnapshot = await getDocs(ridesQuery);
-
-            let totalRating = 0;
-            let ratingCount = 0;
-            driverRidesSnapshot.forEach(doc => {
-                const rideData = doc.data() as Ride;
-                if (rideData.driverRating && rideData.driverRating > 0) {
-                    totalRating += rideData.driverRating;
-                    ratingCount++;
-                }
+        try {
+            await updateDocumentNonBlocking(rideRef, {
+                driverRating: rating,
+                driverComments: comments,
+                updatedAt: Timestamp.now(),
+            });
+            toast({
+                title: '¡Calificación Enviada!',
+                description: 'Gracias por tu opinión.',
             });
             
-            const newAverage = ratingCount > 0 ? totalRating / ratingCount : null;
-            transaction.update(driverProfileRef, { averageRating: newAverage });
-        });
+            await runTransaction(firestore, async (transaction) => {
+                const ridesQuery = query(
+                    collection(firestore, 'rides'),
+                    where('driverId', '==', ride.driverId),
+                    where('status', '==', 'finished')
+                );
+                const driverRidesSnapshot = await getDocs(ridesQuery);
 
-    } catch (e) {
-        console.error("Could not update rating or average", e);
-    } finally {
-        // Proceed to new ride regardless of rating success
-        onNewRide();
+                let totalRating = 0;
+                let ratingCount = 0;
+                driverRidesSnapshot.forEach(doc => {
+                    const rideData = doc.data() as Ride;
+                    if (rideData.driverRating && rideData.driverRating > 0) {
+                        totalRating += rideData.driverRating;
+                        ratingCount++;
+                    }
+                });
+                
+                const newAverage = ratingCount > 0 ? totalRating / ratingCount : null;
+                transaction.update(driverProfileRef, { averageRating: newAverage });
+            });
+        } catch (e) {
+            console.error("Could not update rating or average", e);
+        }
     }
+    
+    // Crucially, call this regardless of rating success to unblock the UI.
+    // Pass true to signal that the main page should force a new ride form.
+    onNewRide(true);
   };
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
@@ -247,13 +242,13 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                   participantRole="conductor"
                   onSubmit={handleRatingAndContinue}
                   isSubmitted={!!ride.driverRating}
-                  submitButtonText="Calificar y Pedir Otro Viaje"
+                  submitButtonText="Pedir Otro Viaje"
                 />
               </>
             )}
              {isCancelled && (
                 <CardFooter>
-                    <Button onClick={onNewRide} className="w-full">
+                    <Button onClick={() => onNewRide(true)} className="w-full">
                         Pedir Otro Viaje
                     </Button>
                 </CardFooter>

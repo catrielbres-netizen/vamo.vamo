@@ -28,6 +28,7 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { haversineDistance } from '@/lib/geo';
+import { MapsProvider } from '@/components/MapsProvider';
 
 
 export default function RidePage() {
@@ -44,6 +45,7 @@ export default function RidePage() {
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [serviceType, setServiceType] = useState<"premium" | "privado" | "express">('premium');
   const [estimatedFare, setEstimatedFare] = useState(0);
+  const [forceNewRide, setForceNewRide] = useState(false);
   
   // This is the real-time source of truth for the active ride, coming from the layout.
   const activeRideQuery = useMemoFirebase(() => {
@@ -69,9 +71,9 @@ export default function RidePage() {
   
   const prevRideRef = useRef<WithId<Ride> | null | undefined>(null);
 
-  const status = ride?.status || 'idle';
+  const status = forceNewRide ? 'idle' : ride?.status || 'idle';
 
-  const handleReset = () => {
+  const handleReset = (shouldForceNew: boolean = false) => {
       // This reset is ONLY for the local form state.
       // It allows the user to start a new ride request.
       setDestination(null);
@@ -79,13 +81,18 @@ export default function RidePage() {
       setEstimatedFare(0);
       setDistanceMeters(0);
       setDurationSeconds(0);
+      if (shouldForceNew) {
+        setForceNewRide(true);
+      }
   }
 
   useEffect(() => {
-      if (ride && (ride.status === 'finished' || ride.status === 'cancelled')) {
-          handleReset();
-      }
-  }, [ride]);
+    // If a new ride comes in, reset the force flag
+    if (ride && ride.status !== 'finished' && ride.status !== 'cancelled') {
+        setForceNewRide(false);
+    }
+}, [ride]);
+
 
   useEffect(() => {
     if (!destination || !origin) {
@@ -99,7 +106,8 @@ export default function RidePage() {
         const dist = haversineDistance(origin, destination);
         setDistanceMeters(dist);
         setDurationSeconds(0); // Cannot estimate duration with this method
-        setEstimatedFare(calculateFare({ distanceMeters: dist, service: serviceType }));
+        const fare = calculateFare({ distanceMeters: dist, service: serviceType });
+        setEstimatedFare(fare);
         toast({
             variant: 'destructive',
             title: 'No se pudo calcular la ruta exacta',
@@ -125,8 +133,6 @@ export default function RidePage() {
                 if (leg.distance && leg.duration) {
                     const dist = leg.distance.value;
                     const duration = leg.duration.value;
-                    setDistanceMeters(dist);
-                    setDurationSeconds(duration);
                     const fare = calculateFare({ distanceMeters: dist, service: serviceType });
                     setEstimatedFare(fare);
                     return;
@@ -240,6 +246,7 @@ export default function RidePage() {
         // The listener in the layout will pick up the new ride and update the UI.
         const docRef = await addDocumentNonBlocking(ridesCollection, newRideData);
         if (docRef) {
+            setForceNewRide(false);
             toast({
                 title: '¡Buscando conductor!',
                 description: 'Tu pedido fue enviado. Esperá la confirmación.',
@@ -306,7 +313,7 @@ export default function RidePage() {
   const fareToDisplay = profile?.activeBonus ? estimatedFare * 0.9 : estimatedFare;
 
   return (
-    <>
+    <MapsProvider>
       {(status !== 'idle' && ride) ? (
         <RideStatus ride={ride!} onNewRide={handleReset} />
       ) : (
@@ -341,6 +348,6 @@ export default function RidePage() {
         <Separator />
         <p className="text-center text-muted-foreground text-sm mt-4">No hay viajes anteriores.</p>
        </div>
-    </>
+    </MapsProvider>
   );
 }
