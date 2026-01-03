@@ -1,4 +1,3 @@
-
 // @/components/DriverRideCard.tsx
 'use client';
 
@@ -81,21 +80,20 @@ export default function DriverRideCard({
                         durationSeconds: leg.duration.value,
                     };
                 }
+            } else {
+                 toast({ variant: "destructive", title: "Error de Ruta", description: "No se pudo calcular la ruta al origen, pero el viaje fue aceptado." });
             }
             
-            if (arrivalInfo) {
-                updateDocumentNonBlocking(rideRef, {
-                    status: 'driver_assigned',
-                    driverId: user.uid,
-                    driverName: driverFullName || 'Conductor Anónimo',
-                    driverArrivalInfo: arrivalInfo,
-                    updatedAt: serverTimestamp(),
-                });
-                toast({ title: "¡Viaje Aceptado!" });
-                onAccept();
-            } else {
-                toast({ variant: "destructive", title: "Error de Ruta", description: "No se pudo calcular la ruta al origen." });
-            }
+            // Accept the ride anyway, even if arrivalInfo is null
+            updateDocumentNonBlocking(rideRef, {
+                status: 'driver_assigned',
+                driverId: user.uid,
+                driverName: driverFullName || 'Conductor Anónimo',
+                driverArrivalInfo: arrivalInfo, // This can be null
+                updatedAt: serverTimestamp(),
+            });
+            toast({ title: "¡Viaje Aceptado!" });
+            onAccept();
         }
     );
   };
