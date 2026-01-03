@@ -1,31 +1,60 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // A user can read and write their own profile data.
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    
+    function isDriver(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.role == 'driver';
+    }
+    
+    function isApprovedDriver(userId) {
+      let user = get(/databases/$(database)/documents/users/$(userId)).data;
+      return user.role == 'driver' && user.approved == true && user.isSuspended != true;
     }
 
-    match /rides/{rideId} {
-      // ANY authenticated user can create a ride document (passengers).
-      allow create: if request.auth != null && request.resource.data.passengerId == request.auth.uid;
-      
-      // A ride is only readable by the passenger who created it, or the driver assigned to it.
-      allow read: if request.auth != null && (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid);
-      
-      // A ride can only be updated by the passenger or the assigned driver.
-      // Drivers can accept a ride by updating it.
-      allow update: if request.auth != null && (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid || request.resource.data.driverId == request.auth.uid);
+    function isAdmin(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.role == 'admin';
+    }
+
+    // Perfiles de usuario
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId || isAdmin(request.auth.uid);
     }
     
-    // Drivers can list rides that are currently searching for a driver.
-    match /rides/{rideId} {
-        allow list: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver';
+    // Resúmenes semanales de conductores
+    match /driver_summaries/{summaryId} {
+      allow read, write: if isAdmin(request.auth.uid);
+      allow read: if request.auth.uid == resource.data.driverId;
+      allow create, update: if request.auth.uid == request.resource.data.driverId;
     }
     
-    // Admin Override: An admin can read/write any document in the database.
-    match /{document=**} {
-      allow read, write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    // Logs de Auditoría (solo admins)
+    match /auditLogs/{logId} {
+      allow read, write: if isAdmin(request.auth.uid);
+    }
+
+    // Viajes
+    match /rides/{rideId} {
+      // 1. Un pasajero puede crear un viaje para sí mismo.
+      allow create: if request.auth.uid == request.resource.data.passengerId;
+
+      // 2. Un viaje puede ser leído por:
+      //    - El pasajero o el conductor asignado.
+      //    - Un conductor aprobado si el viaje está buscando conductor (ESTA ES LA REGLA CLAVE)
+      allow read: if request.auth != null && (
+          (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid) ||
+          (isApprovedDriver(request.auth.uid) && resource.data.status == 'searching_driver')
+      );
+      
+      // 3. Un viaje puede ser actualizado por:
+      //    - El pasajero (para cancelar).
+      //    - Un conductor aprobado (para aceptar el viaje).
+      //    - El conductor ya asignado (para cambiar el estado a 'llegó', 'en curso', etc.).
+      allow update: if request.auth != null && (
+        resource.data.passengerId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        (isApprovedDriver(request.auth.uid) && request.resource.data.driverId == request.auth.uid)
+      );
     }
   }
 }
