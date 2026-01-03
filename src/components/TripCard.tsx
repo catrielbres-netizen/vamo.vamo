@@ -4,8 +4,8 @@
 import { RideStatusInfo } from '@/lib/ride-status';
 import { Progress } from './ui/progress';
 import { Place } from '@/lib/types';
-import { PlaceAutocomplete } from './PlaceAutocomplete';
 import { VamoIcon } from './VamoIcon';
+import PlaceAutocompleteInput from './PlaceAutocompleteInput';
 
 
 export function TripCard({
@@ -45,8 +45,8 @@ export function TripCard({
       <div className="space-y-2 text-sm">
         {isInteractive ? (
             <>
-                <PlaceAutocomplete onPlaceSelect={onOriginSelect} placeholder="Ingresá un origen" />
-                <PlaceAutocomplete onPlaceSelect={onDestinationSelect} placeholder="Ingresá un destino" />
+                <PlaceAutocompleteInput onPlaceSelect={onOriginSelect} placeholder="Ingresá un origen" />
+                <PlaceAutocompleteInput onPlaceSelect={onDestinationSelect} placeholder="Ingresá un destino" />
             </>
           ) : (
             <>

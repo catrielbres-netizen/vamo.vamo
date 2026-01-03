@@ -363,7 +363,9 @@ export default function DriverDetailPage() {
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={handleMarkAsPaid} className="bg-green-600 hover:bg-green-700">Sí, confirmar pago</AlertDialogAction>
+                                    <AlertDialogAction asChild>
+                                        <Button onClick={handleMarkAsPaid} className="bg-green-600 hover:bg-green-700">Sí, confirmar pago</Button>
+                                    </AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
@@ -383,7 +385,9 @@ export default function DriverDetailPage() {
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleSuspendAccount(true)} variant="destructive">Sí, suspender</AlertDialogAction>
+                                    <AlertDialogAction asChild>
+                                        <Button onClick={() => handleSuspendAccount(true)} variant="destructive">Sí, suspender</Button>
+                                    </AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
@@ -483,3 +487,5 @@ export default function DriverDetailPage() {
         </div>
     );
 }
+
+    
