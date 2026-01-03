@@ -16,6 +16,8 @@ import { Ride, ServiceType, UserProfile } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 
 // Helper function to determine which services a driver can see
@@ -60,14 +62,16 @@ export default function DriverRidesPage() {
   const activeRideStateRef = useRef<WithId<Ride> | null>(null);
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
 
-  // Only query for rides if the driver is approved
+  const isOnline = profile?.driverStatus === 'online';
+
+  // Only query for rides if the driver is approved AND online
   const availableRidesQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid || activeRide || !profile?.approved) return null;
+    if (!firestore || !user?.uid || activeRide || !profile?.approved || !isOnline) return null;
     return query(
         collection(firestore, 'rides'),
         where('status', '==', 'searching_driver')
     );
-  }, [firestore, user?.uid, activeRide, profile?.approved]);
+  }, [firestore, user?.uid, activeRide, profile?.approved, isOnline]);
 
   const { data: availableRides, isLoading: areRidesLoading } = useCollection<Ride>(availableRidesQuery);
 
@@ -76,30 +80,43 @@ export default function DriverRidesPage() {
   }, [activeRide]);
 
 
+  const handleToggleOnline = (checked: boolean) => {
+    if (!firestore || !user?.uid) return;
+    const userProfileRef = doc(firestore, 'users', user.uid);
+    if (checked) {
+        updateDocumentNonBlocking(userProfileRef, { driverStatus: 'online' });
+    } else {
+        updateDocumentNonBlocking(userProfileRef, { driverStatus: 'inactive', currentLocation: null });
+    }
+  }
+
+
   useEffect(() => {
     if (!firestore || !user?.uid) return;
 
     // ---- START: Location Tracking Logic ----
     const startLocationTracking = () => {
+        if (locationWatchId.current !== null) return; // Already tracking
         const userProfileRef = doc(firestore, 'users', user.uid);
         
-        // Set status to online
-        updateDocumentNonBlocking(userProfileRef, { driverStatus: 'online' });
-
         locationWatchId.current = navigator.geolocation.watchPosition(
             (position) => {
                 const { latitude, longitude } = position.coords;
-                // Update Firestore with the new location non-blockingly
                 updateDocumentNonBlocking(userProfileRef, {
                     currentLocation: { lat: latitude, lng: longitude }
                 });
             },
             (error) => {
                 console.error("Error getting driver location:", error);
-                // If location fails, set status to inactive
-                updateDocumentNonBlocking(userProfileRef, { driverStatus: 'inactive', currentLocation: null });
+                // If location fails, force offline
+                handleToggleOnline(false);
+                toast({
+                    variant: 'destructive',
+                    title: 'Error de Ubicación',
+                    description: 'No pudimos acceder a tu GPS. Te hemos desconectado.'
+                })
             },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
         );
     };
 
@@ -108,26 +125,22 @@ export default function DriverRidesPage() {
             navigator.geolocation.clearWatch(locationWatchId.current);
             locationWatchId.current = null;
         }
-        // Set status to inactive when tracking stops
-        if(user?.uid) {
-            const userProfileRef = doc(firestore, 'users', user.uid);
-            updateDocumentNonBlocking(userProfileRef, { driverStatus: 'inactive', currentLocation: null });
-        }
     };
     
-    if (profile?.approved && !activeRide) {
+    // Manage tracking based on online status and active ride
+    if (profile?.approved && isOnline && !activeRide) {
         startLocationTracking();
     } else {
         stopLocationTracking();
     }
 
-    // Cleanup function: stop tracking when component unmounts or dependencies change
+    // Cleanup function: stop tracking when component unmounts
     return () => {
         stopLocationTracking();
     };
     // ---- END: Location Tracking Logic ----
 
-  }, [firestore, user?.uid, profile?.approved, activeRide]);
+  }, [firestore, user?.uid, profile?.approved, activeRide, isOnline, toast]);
 
 
   useEffect(() => {
@@ -160,7 +173,6 @@ export default function DriverRidesPage() {
       }
     }, (error) => {
       console.error("Error fetching active ride:", error);
-      // El error de permisos es manejado por el FirebaseErrorListener global.
     });
 
     return () => {
@@ -170,7 +182,7 @@ export default function DriverRidesPage() {
 
 
   useEffect(() => {
-    if (areRidesLoading || !availableRides || !profile?.approved) return;
+    if (areRidesLoading || !availableRides || !profile?.approved || !isOnline) return;
 
     const allowedServices = getAllowedServices();
     const filteredRides = availableRides.filter(ride => allowedServices.includes(ride.serviceType));
@@ -192,7 +204,7 @@ export default function DriverRidesPage() {
     
     previousAvailableRides.current = filteredRides;
 
-  }, [availableRides, areRidesLoading, toast, profile?.approved]);
+  }, [availableRides, areRidesLoading, toast, profile?.approved, isOnline]);
 
 
   const handleAcceptRide = () => {
@@ -215,8 +227,8 @@ export default function DriverRidesPage() {
   const filteredAvailableRides = availableRides?.filter(ride => allowedServices.includes(ride.serviceType)) ?? [];
   
   const renderAvailableRides = () => {
-    if (areRidesLoading || isUserLoading) {
-      return <p className="text-center">Buscando viajes...</p>;
+    if (isUserLoading) {
+      return <p className="text-center">Cargando perfil...</p>;
     }
     
     // Si el conductor no está aprobado, mostrarle un mensaje de estado
@@ -234,46 +246,57 @@ export default function DriverRidesPage() {
         );
     }
 
-    // Si el conductor está aprobado, mostrar la lista de viajes
-    const statusInfo = statusMessages['approved'];
+    // Si el conductor está aprobado, mostrar el interruptor y la lista de viajes
     return (
         <div className="space-y-4">
-            <Alert variant="default" className="bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400">
-                 <VamoIcon name={statusInfo.icon} className="h-4 w-4 text-green-500"/>
-                <AlertTitle>{statusInfo.title}</AlertTitle>
-                <AlertDescription className="text-green-600 dark:text-green-500">
-                    {statusInfo.description}
-                </AlertDescription>
-            </Alert>
-
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="item-1">
-                <AccordionTrigger>
-                    <div className="flex items-center gap-2">
-                        <VamoIcon name="info" className="w-4 h-4"/> ¿Cómo funciona un viaje?
-                    </div>
-                </AccordionTrigger>
-                <AccordionContent className="text-xs text-muted-foreground space-y-2">
-                  <p><strong>1. Aceptar Viaje:</strong> Cuando un viaje esté disponible, aparecerá una tarjeta. Acéptala para que sea tuya.</p>
-                  <p><strong>2. Recoger al Pasajero:</strong> Dirígete al punto de origen. Al llegar, presiona <strong>"Llegué al origen"</strong>. Esto le avisa al pasajero.</p>
-                  <p><strong>3. Iniciar Viaje:</strong> Una vez que el pasajero esté en el vehículo, presiona <strong>"Iniciar Viaje"</strong> para comenzar la ruta hacia el destino.</p>
-                  <p><strong>4. Pausas (Espera):</strong> Usa el botón <strong>"Pausar Viaje"</strong> SOLO si el pasajero pide detenerse (ej: kiosco). Esto activa el cobro por minuto de espera. Cuando el pasajero vuelva, presiona <strong>"Reanudar Viaje"</strong>.</p>
-                   <p><strong>5. Finalizar Viaje:</strong> Al llegar al destino, presiona <strong>"Finalizar Viaje"</strong>. La app calculará la tarifa final, incluyendo las esperas, y te mostrará el resumen para cobrarle al pasajero.</p>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-            
-            <h2 className="text-xl font-semibold text-center pt-4">Viajes Disponibles</h2>
-            {filteredAvailableRides.length > 0 ? (
-                filteredAvailableRides.map((ride) => (
-                <DriverRideCard
-                    key={ride.id}
-                    ride={ride}
-                    onAccept={handleAcceptRide}
+            <div className="flex items-center justify-between p-4 rounded-lg bg-card border">
+                <Label htmlFor="online-switch" className="flex flex-col">
+                    <span className="font-semibold">{isOnline ? "Estás En Línea" : "Estás Desconectado"}</span>
+                    <span className="text-xs text-muted-foreground">{isOnline ? "Listo para recibir viajes." : "Activá para buscar viajes."}</span>
+                </Label>
+                <Switch
+                    id="online-switch"
+                    checked={isOnline}
+                    onCheckedChange={handleToggleOnline}
+                    disabled={!!activeRide}
+                    aria-label="Toggle online status"
                 />
-                ))
-            ) : (
-                <p className="text-center text-muted-foreground pt-8">No hay viajes buscando conductor en este momento.</p>
+            </div>
+
+            {isOnline && (
+                <>
+                    <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="item-1">
+                        <AccordionTrigger>
+                            <div className="flex items-center gap-2">
+                                <VamoIcon name="info" className="w-4 h-4"/> ¿Cómo funciona un viaje?
+                            </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="text-xs text-muted-foreground space-y-2">
+                        <p><strong>1. Aceptar Viaje:</strong> Cuando un viaje esté disponible, aparecerá una tarjeta. Acéptala para que sea tuya.</p>
+                        <p><strong>2. Recoger al Pasajero:</strong> Dirígete al punto de origen. Al llegar, presiona <strong>"Llegué al origen"</strong>. Esto le avisa al pasajero.</p>
+                        <p><strong>3. Iniciar Viaje:</strong> Una vez que el pasajero esté en el vehículo, presiona <strong>"Iniciar Viaje"</strong> para comenzar la ruta hacia el destino.</p>
+                        <p><strong>4. Pausas (Espera):</strong> Usa el botón <strong>"Pausar Viaje"</strong> SOLO si el pasajero pide detenerse (ej: kiosco). Esto activa el cobro por minuto de espera. Cuando el pasajero vuelva, presiona <strong>"Reanudar Viaje"</strong>.</p>
+                        <p><strong>5. Finalizar Viaje:</strong> Al llegar al destino, presiona <strong>"Finalizar Viaje"</strong>. La app calculará la tarifa final, incluyendo las esperas, y te mostrará el resumen para cobrarle al pasajero.</p>
+                        </AccordionContent>
+                    </AccordionItem>
+                    </Accordion>
+                    
+                    <h2 className="text-xl font-semibold text-center pt-4">Viajes Disponibles</h2>
+                    {areRidesLoading ? (
+                         <p className="text-center text-muted-foreground pt-8">Buscando viajes...</p>
+                    ) : filteredAvailableRides.length > 0 ? (
+                        filteredAvailableRides.map((ride) => (
+                        <DriverRideCard
+                            key={ride.id}
+                            ride={ride}
+                            onAccept={handleAcceptRide}
+                        />
+                        ))
+                    ) : (
+                        <p className="text-center text-muted-foreground pt-8">No hay viajes buscando conductor en este momento.</p>
+                    )}
+                </>
             )}
         </div>
     );
