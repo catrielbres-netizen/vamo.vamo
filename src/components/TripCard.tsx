@@ -52,14 +52,14 @@ export function TripCard({
                 <PlaceAutocompleteInput 
                   onPlaceSelect={onOriginSelect!} 
                   placeholder="Ingresá un origen"
-                  defaultValue={origin?.address}
+                  value={origin?.address}
                   icon={<VamoIcon name="crosshair" className="w-4 h-4 text-muted-foreground" />}
                   onIconClick={onUseCurrentLocation}
                 />
                 <PlaceAutocompleteInput 
                   onPlaceSelect={onDestinationSelect!} 
                   placeholder="Ingresá un destino" 
-                  defaultValue={destination?.address}
+                  value={destination?.address}
                   icon={<VamoIcon name="map-pin" className="w-4 h-4 text-muted-foreground" />}
                   onIconClick={onPickDestinationOnMap}
                 />

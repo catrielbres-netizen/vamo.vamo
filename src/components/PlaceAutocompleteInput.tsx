@@ -1,3 +1,4 @@
+
 // @/components/PlaceAutocompleteInput.tsx
 'use client';
 
@@ -11,7 +12,7 @@ import { Button } from './ui/button';
 interface Props {
   onPlaceSelect: (place: Place | null) => void;
   placeholder?: string;
-  defaultValue?: string;
+  value?: string; // Changed from defaultValue to value for controlled component
   className?: string;
   icon?: React.ReactNode;
   onIconClick?: () => void;
@@ -29,7 +30,7 @@ const formatAddress = (fullAddress: string): string => {
 export default function PlaceAutocompleteInput({ 
   onPlaceSelect, 
   placeholder, 
-  defaultValue, 
+  value, 
   className,
   icon,
   onIconClick
@@ -65,6 +66,15 @@ export default function PlaceAutocompleteInput({
       }
     }
   }, [places, onPlaceSelect]);
+  
+  // This effect ensures the input field updates if the `value` prop changes
+  // (e.g., when a location is selected from the map).
+  useEffect(() => {
+    if (inputRef.current && value !== undefined) {
+      inputRef.current.value = value;
+    }
+  }, [value]);
+
 
   return (
     <div className="relative flex items-center">
@@ -75,8 +85,9 @@ export default function PlaceAutocompleteInput({
       <Input
         ref={inputRef}
         placeholder={placeholder || 'Ingresá una dirección'}
-        defaultValue={defaultValue}
+        defaultValue={value} // Use defaultValue to set initial text
         className={className ? `${className} pl-9` : "pl-9"}
+        // The `onChange` is handled by the Places API, so we don't need a React one
       />
       {icon && onIconClick && (
         <Button variant="ghost" size="icon" className="absolute right-1 h-8 w-8" onClick={onIconClick}>
@@ -86,3 +97,4 @@ export default function PlaceAutocompleteInput({
     </div>
   );
 }
+

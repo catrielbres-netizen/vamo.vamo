@@ -1,11 +1,12 @@
 
 // @/components/MapSelector.tsx
 'use client';
-import { useState, useMemo } from 'react';
-import { Map, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Map, useMap } from '@vis.gl/react-google-maps';
 import { Button } from './ui/button';
 import { VamoIcon } from './VamoIcon';
 import { Place } from '@/lib/types';
+import { useDebounce } from '@/hooks/use-debounce';
 
 interface MapSelectorProps {
     onLocationSelect: (place: Place) => void;
@@ -13,24 +14,18 @@ interface MapSelectorProps {
 
 const formatAddress = (fullAddress: string): string => {
     const parts = fullAddress.split(',');
-    if (parts.length > 1) {
-        return parts[0];
-    }
-    return fullAddress;
+    return parts.length > 1 ? parts[0] : fullAddress;
 }
 
 export default function MapSelector({ onLocationSelect }: MapSelectorProps) {
-    // Default center to Rawson, Chubut
     const defaultCenter = { lat: -43.3001, lng: -65.1023 }; 
-    const [center, setCenter] = useState(defaultCenter);
-    const [address, setAddress] = useState('Mové el mapa para seleccionar');
+    const [pinLocation, setPinLocation] = useState(defaultCenter);
+    const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
 
     const handleConfirm = () => {
-        onLocationSelect({
-            address,
-            lat: center.lat,
-            lng: center.lng,
-        });
+        if (selectedPlace) {
+            onLocationSelect(selectedPlace);
+        }
     };
     
     return (
@@ -42,24 +37,22 @@ export default function MapSelector({ onLocationSelect }: MapSelectorProps) {
                     gestureHandling={'greedy'}
                     disableDefaultUI={true}
                     mapId="map-selector-map"
-                    onCenterChanged={(e) => setCenter({ lat: e.detail.center.lat, lng: e.detail.center.lng })}
+                    onCenterChanged={(e) => setPinLocation({ lat: e.detail.center.lat, lng: e.detail.center.lng })}
                 >
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                         <div className="relative">
-                            <VamoIcon name="map-pin" className="h-10 w-10 text-primary drop-shadow-lg" />
-                         </div>
+                        <VamoIcon name="map-pin" className="h-10 w-10 text-primary drop-shadow-lg" />
                     </div>
                 </Map>
 
-                <AddressDisplay center={center} onAddressFound={setAddress} />
+                <ReverseGeocoder center={pinLocation} onPlaceFound={setSelectedPlace} />
             </div>
 
             <div className="p-4 border-t bg-background">
-                <div className="text-center mb-4">
+                <div className="text-center mb-4 min-h-[3rem]">
                     <p className="text-sm text-muted-foreground">Dirección seleccionada:</p>
-                    <p className="font-semibold">{address}</p>
+                    <p className="font-semibold">{selectedPlace?.address || 'Moviendo el mapa...'}</p>
                 </div>
-                <Button onClick={handleConfirm} className="w-full" size="lg">
+                <Button onClick={handleConfirm} className="w-full" size="lg" disabled={!selectedPlace}>
                     Confirmar Destino
                 </Button>
             </div>
@@ -67,28 +60,37 @@ export default function MapSelector({ onLocationSelect }: MapSelectorProps) {
     );
 }
 
-
-function AddressDisplay({ center, onAddressFound }: { center: {lat: number, lng: number}, onAddressFound: (address: string) => void }) {
+function ReverseGeocoder({ center, onPlaceFound }: { center: {lat: number, lng: number}, onPlaceFound: (place: Place) => void }) {
     const map = useMap();
     const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
+    const debouncedCenter = useDebounce(center, 500); // Debounce to avoid excessive API calls
 
-    useState(() => {
+    useEffect(() => {
         if (map && !geocoder) {
             setGeocoder(new google.maps.Geocoder());
         }
-    });
+    }, [map, geocoder]);
 
-    useMemo(() => {
-        if (geocoder && center) {
-            geocoder.geocode({ location: center }, (results, status) => {
+    const performGeocode = useCallback(() => {
+        if (geocoder && debouncedCenter) {
+            geocoder.geocode({ location: debouncedCenter }, (results, status) => {
                 if (status === 'OK' && results?.[0]) {
-                    onAddressFound(formatAddress(results[0].formatted_address));
+                    onPlaceFound({
+                        address: formatAddress(results[0].formatted_address),
+                        lat: debouncedCenter.lat,
+                        lng: debouncedCenter.lng
+                    });
                 } else {
-                    onAddressFound('No se pudo encontrar la dirección');
+                    console.error('Geocode was not successful for the following reason: ' + status);
                 }
             });
         }
-    }, [geocoder, center, onAddressFound]);
+    }, [geocoder, debouncedCenter, onPlaceFound]);
+
+    useEffect(() => {
+        performGeocode();
+    }, [performGeocode]);
 
     return null; // This component does not render anything itself
 }
+
