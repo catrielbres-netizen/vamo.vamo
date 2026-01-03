@@ -18,7 +18,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { WhatsAppLogo } from './VamoIcon';
+import { VamoIcon, WhatsAppLogo } from './VamoIcon';
 import RatingForm from './RatingForm';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -222,23 +222,46 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
   if (ride.status === 'finished' || ride.status === 'cancelled') {
     const isCancelled = ride.status === 'cancelled';
     const waitingCostFinal = Math.ceil(totalAccumulatedWaitSeconds / 60) * WAITING_PER_MIN;
+    const rideDate = ride.finishedAt instanceof Timestamp 
+        ? format((ride.finishedAt as Timestamp).toDate(), "d 'de' MMMM, HH:mm'hs'", { locale: es })
+        : 'Fecha no disponible';
+
     return (
         <Card className="m-4">
             <CardHeader>
-                <CardTitle className={`text-xl ${isCancelled ? 'text-destructive' : ''}`}>
+                <CardTitle className={`text-xl ${isCancelled ? 'text-destructive' : 'text-primary'}`}>
                     {isCancelled ? 'Viaje Cancelado' : '¡Viaje Finalizado!'}
                 </CardTitle>
                 <CardDescription>
-                   {isCancelled ? 'Tu viaje fue cancelado.' : `Viaje a ${ride.destination.address}`}
+                   {isCancelled ? 'Tu viaje fue cancelado.' : `Recibo de tu viaje del ${rideDate}`}
                 </CardDescription>
             </CardHeader>
 
             {!isCancelled && (
               <>
                 <CardContent className="space-y-4">
+                    {/* Ride Details */}
+                    <div className="text-sm space-y-2 p-3 bg-secondary/50 rounded-lg">
+                        <div className="flex items-start">
+                            <VamoIcon name="map-pin" className="w-4 h-4 mr-2 mt-1 text-muted-foreground"/>
+                            <div>
+                                <p className="text-muted-foreground text-xs">Desde</p>
+                                <p className="font-medium">{ride.origin.address}</p>
+                            </div>
+                        </div>
+                         <div className="flex items-start">
+                            <VamoIcon name="flag" className="w-4 h-4 mr-2 mt-1 text-muted-foreground"/>
+                            <div>
+                                <p className="text-muted-foreground text-xs">Hasta</p>
+                                <p className="font-medium">{ride.destination.address}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Pricing Details */}
                     <div className="border-t border-b py-4 space-y-2">
                         <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">Tarifa base</span>
+                            <span className="text-muted-foreground">Tarifa base del viaje</span>
                             <span>{formatCurrency(finalPrice - waitingCostFinal)}</span>
                         </div>
                         {ride.pricing.discountAmount && ride.pricing.discountAmount > 0 ? (
@@ -264,7 +287,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                 <CardFooter>
                      <Button onClick={handleSendWhatsAppReceipt} className="w-full" variant="outline">
                         <WhatsAppLogo className="mr-2 h-5 w-5" />
-                        Enviar Comprobante
+                        Enviar Recibo
                     </Button>
                 </CardFooter>
                 <RatingForm

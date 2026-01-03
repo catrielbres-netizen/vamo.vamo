@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from './ui/button';
-import { WhatsAppLogo } from './VamoIcon';
+import { VamoIcon, WhatsAppLogo } from './VamoIcon';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride } from '@/lib/types';
 import { Timestamp, doc, serverTimestamp } from 'firebase/firestore';
@@ -43,8 +43,9 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
 
   const totalWaitSeconds = (ride.pauseHistory || []).reduce((acc, p) => acc + p.duration, 0);
   const waitingCost = Math.ceil(totalWaitSeconds / 60) * WAITING_PER_MIN;
-  const baseDistancePrice = calculateFare({ distanceMeters: ride.pricing.estimatedDistanceMeters, service: ride.serviceType }) - calculateFare({ distanceMeters: 0, service: 'premium' });
   const baseFare = calculateFare({ distanceMeters: 0, service: 'premium' });
+  const baseDistancePrice = (finalPrice - waitingCost - baseFare) / (1 + (ride.pricing.discountAmount || 0));
+
 
   // Mock driver fiscal data
   const driverFiscalData = {
@@ -125,24 +126,30 @@ ${stopsDetail}
   return (
     <Card>
         <CardHeader>
-            <CardTitle className="text-xl">Resumen del Viaje</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-primary text-xl"><VamoIcon name="check-circle" /> Viaje Finalizado</CardTitle>
             <CardDescription>
-                Viaje a {ride.destination.address} completado.
+                Resumen del viaje a {ride.destination.address}.
             </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
             <div className="border-t border-b py-4 space-y-2">
                 <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Tarifa base</span>
+                    <span className="text-muted-foreground">Tarifa base + distancia</span>
                     <span>{formatCurrency(baseFare + baseDistancePrice)}</span>
                 </div>
+                 {ride.pricing.discountAmount && ride.pricing.discountAmount > 0 ? (
+                    <div className="flex justify-between items-center text-sm text-blue-500">
+                        <span className="flex items-center gap-1"><VamoIcon name="percent" className="w-3 h-3"/> VamO te cubre bono</span>
+                        <span>{formatCurrency(ride.pricing.discountAmount)}</span>
+                    </div>
+                ) : null}
                 <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground">Costo por espera</span>
                     <span>{formatCurrency(waitingCost)}</span>
                 </div>
             </div>
              <div className="flex justify-between items-center font-bold text-lg">
-                <span>Total Cobrado</span>
+                <span>Total a Cobrar al Pasajero</span>
                 <span className="text-primary">{formatCurrency(finalPrice)}</span>
             </div>
         </CardContent>
@@ -158,7 +165,7 @@ ${stopsDetail}
                 Enviar Resumen por WhatsApp
             </Button>
             <Button onClick={onClose} className="w-full">
-                Cerrar
+                Buscar Nuevos Viajes
             </Button>
         </CardFooter>
     </Card>
