@@ -7,24 +7,25 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from './ui/card';
 
 interface RatingFormProps {
   participantName: string;
   participantRole: 'conductor' | 'pasajero';
   onSubmit: (rating: number, comments: string) => void;
   isSubmitted: boolean;
+  submitButtonText?: string;
 }
 
-export default function RatingForm({ participantName, participantRole, onSubmit, isSubmitted }: RatingFormProps) {
+export default function RatingForm({ participantName, participantRole, onSubmit, isSubmitted, submitButtonText = "Enviar Calificación" }: RatingFormProps) {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comments, setComments] = useState('');
 
   const handleSubmit = () => {
-    if (rating > 0) {
-      onSubmit(rating, comments);
-    }
+    // We submit even if rating is 0, to trigger the next action.
+    // The parent handler will decide whether to save the rating.
+    onSubmit(rating, comments);
   };
 
   return (
@@ -63,12 +64,14 @@ export default function RatingForm({ participantName, participantRole, onSubmit,
                 value={comments}
                 onChange={(e) => setComments(e.target.value)}
                 />
-                <Button onClick={handleSubmit} disabled={rating === 0} className="w-full">
-                Enviar Calificación
-                </Button>
             </>
         )}
       </CardContent>
+       <CardFooter>
+            <Button onClick={handleSubmit} className="w-full">
+                {isSubmitted ? "Continuar" : submitButtonText}
+            </Button>
+      </CardFooter>
     </Card>
   );
 }

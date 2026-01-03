@@ -115,102 +115,60 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
   }, [ride.status, ride.id, ride.passengerId, firestore, ride.vamoPointsAwarded, ride.passengerName]);
 
 
-  const handleRatingSubmit = async (rating: number, comments: string) => {
-    if (!firestore || !ride.driverId) return;
+  const handleRatingAndContinue = async (rating: number, comments: string) => {
+    if (!firestore || !ride.driverId) {
+        // If there's no driver or firestore, just continue to the new ride
+        onNewRide();
+        return;
+    };
+    
     const rideRef = doc(firestore, 'rides', ride.id);
     const driverProfileRef = doc(firestore, 'users', ride.driverId);
 
-    // 1. Update the ride document with the new rating
-    try {
-        await updateDocumentNonBlocking(rideRef, {
-          driverRating: rating,
-          driverComments: comments,
-          updatedAt: Timestamp.now(),
-        });
-        toast({
-            title: '¡Calificación Enviada!',
-            description: 'Gracias por tu opinión.',
-        });
-    } catch (e) {
-        toast({
-            variant: 'destructive',
-            title: 'Error al Calificar',
-            description: 'No se pudo guardar tu calificación. Inténtalo de nuevo.',
-        });
-        return; // Don't proceed if this fails
-    }
+    // If a rating was given, update the ride document and driver's average
+    if (rating > 0) {
+        try {
+            await updateDocumentNonBlocking(rideRef, {
+              driverRating: rating,
+              driverComments: comments,
+              updatedAt: Timestamp.now(),
+            });
+            toast({
+                title: '¡Calificación Enviada!',
+                description: 'Gracias por tu opinión.',
+            });
+            
+            // Recalculate driver's average rating in a transaction
+            await runTransaction(firestore, async (transaction) => {
+                const ridesQuery = query(
+                    collection(firestore, 'rides'),
+                    where('driverId', '==', ride.driverId),
+                    where('status', '==', 'finished')
+                );
+                const driverRidesSnapshot = await getDocs(ridesQuery);
 
-
-    // 2. Recalculate driver's average rating
-    try {
-        await runTransaction(firestore, async (transaction) => {
-            // Get all finished rides for this driver
-            const ridesQuery = query(
-                collection(firestore, 'rides'),
-                where('driverId', '==', ride.driverId),
-                where('status', '==', 'finished')
-            );
-            const driverRidesSnapshot = await getDocs(ridesQuery);
-
-            let totalRating = 0;
-            let ratingCount = 0;
-            driverRidesSnapshot.forEach(doc => {
-                const rideData = doc.data() as Ride;
-                if (rideData.driverRating && rideData.driverRating > 0) {
-                    totalRating += rideData.driverRating;
-                    ratingCount++;
-                }
+                let totalRating = 0;
+                let ratingCount = 0;
+                driverRidesSnapshot.forEach(doc => {
+                    const rideData = doc.data() as Ride;
+                    if (rideData.driverRating && rideData.driverRating > 0) {
+                        totalRating += rideData.driverRating;
+                        ratingCount++;
+                    }
+                });
+                
+                const newAverage = ratingCount > 0 ? totalRating / ratingCount : null;
+                transaction.update(driverProfileRef, { averageRating: newAverage });
             });
 
-            // If the current ride's rating wasn't in the snapshot for some reason, add it.
-            // This is a safeguard against race conditions.
-            if (!driverRidesSnapshot.docs.some(d => d.id === ride.id)) {
-                 if(rating > 0) {
-                    totalRating += rating;
-                    ratingCount++;
-                 }
-            }
-            
-            const newAverage = ratingCount > 0 ? totalRating / ratingCount : null;
-
-            transaction.update(driverProfileRef, { averageRating: newAverage });
-        });
-    } catch(e) {
-        console.error("Could not update driver average rating", e);
-        // This is a non-critical error, so we don't show a toast to the user
+        } catch (e) {
+            console.error("Could not update rating or average", e);
+            // We still proceed to the next step even if rating fails
+        }
     }
-  };
-
-  const handleSendWhatsAppReceipt = () => {
-    const rideDate = ride.finishedAt instanceof Timestamp 
-        ? format((ride.finishedAt as Timestamp).toDate(), "d 'de' MMMM 'de' yyyy 'a las' HH:mm'hs'", { locale: es })
-        : 'Fecha no disponible';
     
-    const finalPrice = ride.pricing.finalTotal || ride.pricing.estimatedTotal;
-    const discount = ride.pricing.discountAmount || 0;
-    const priceBeforeDiscount = finalPrice + discount;
-
-    const message = `
-*Comprobante de Viaje - VamO* 🚕
------------------------------------
-*Datos del Viaje*
-*Fecha:* ${rideDate}
-*Conductor:* ${ride.driverName || 'No especificado'}
-*Origen:* ${ride.origin.address}
-*Destino:* ${ride.destination.address}
-*Servicio:* ${ride.serviceType.charAt(0).toUpperCase() + ride.serviceType.slice(1)}
-
-*Detalle de Costos*
-  - Tarifa del viaje: ${formatCurrency(priceBeforeDiscount)}
-  ${discount > 0 ? `- Descuento VamO: -${formatCurrency(discount)}` : ''}
------------------------------------
-*TOTAL PAGADO:* *${formatCurrency(finalPrice)}*
------------------------------------
-¡Gracias por viajar con VamO!
-    `.trim().replace(/\n/g, '%0A').replace(/ /g, '%20');
-
-    const url = `https://wa.me/?text=${message}`;
-    window.open(url, '_blank');
+    // Finally, proceed to request a new ride.
+    onNewRide();
   };
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
@@ -284,26 +242,23 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                         Conductor: {ride.driverName || 'No disponible'}
                     </p>
                 </CardContent>
-                <CardFooter>
-                     <Button onClick={handleSendWhatsAppReceipt} className="w-full" variant="outline">
-                        <WhatsAppLogo className="mr-2 h-5 w-5" />
-                        Enviar Recibo
-                    </Button>
-                </CardFooter>
+
                 <RatingForm
                   participantName={ride.driverName || 'Conductor'}
                   participantRole="conductor"
-                  onSubmit={handleRatingSubmit}
+                  onSubmit={handleRatingAndContinue}
                   isSubmitted={!!ride.driverRating}
+                  submitButtonText="Pedir Otro Viaje"
                 />
               </>
             )}
-
-             <CardFooter className="pt-6">
-                <Button onClick={onNewRide} className="w-full">
-                    Pedir Otro Viaje
-                </Button>
-            </CardFooter>
+             {isCancelled && (
+                <CardFooter>
+                    <Button onClick={onNewRide} className="w-full">
+                        Pedir Otro Viaje
+                    </Button>
+                </CardFooter>
+             )}
         </Card>
     )
   }
