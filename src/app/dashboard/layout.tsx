@@ -10,6 +10,7 @@ import { useFirestore } from '@/firebase';
 import { Ride } from '@/lib/types';
 import { MapsProvider } from '@/components/MapsProvider';
 import { useMemoFirebase } from '@/firebase/hooks';
+import { PassengerHeader } from '@/components/PassengerHeader';
 
 export default function DashboardLayout({
   children,
