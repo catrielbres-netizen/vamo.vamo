@@ -3,6 +3,8 @@ runtime: nodejs20
 env:
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     value: AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA
+  - variable: NEXT_PUBLIC_FCM_VAPID_KEY
+    value: BNpGYieUtpKbKIzhPBmSXfhJwENZfI3okRNqHpJV5owMoPuHPOIuJIWCwZ9PFcMBSI9niAxl3T33QVLVtNWK0tw
 
 build:
   command: npm install && npm run build
