@@ -12,7 +12,7 @@ export function MapsProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <APIProvider apiKey={apiKey} libraries={['places']}>
+    <APIProvider apiKey={apiKey} libraries={['places', 'routes']}>
       {children}
     </APIProvider>
   );

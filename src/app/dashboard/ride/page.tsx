@@ -85,6 +85,12 @@ export default function RidePage() {
   }
 
   useEffect(() => {
+      if (ride && (ride.status === 'finished' || ride.status === 'cancelled')) {
+          handleReset();
+      }
+  }, [ride]);
+
+  useEffect(() => {
     if (!destination || !origin || !routesLibrary) {
         setEstimatedFare(0);
         setDistanceMeters(0);
@@ -107,12 +113,12 @@ export default function RidePage() {
     const directionsService = new routesLibrary.DirectionsService();
     directionsService.route(
         {
-            origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-            destination: new window.google.maps.LatLng(destination.lat, destination.lng),
-            travelMode: window.google.maps.TravelMode.DRIVING,
+            origin: { lat: origin.lat, lng: origin.lng },
+            destination: { lat: destination.lat, lng: destination.lng },
+            travelMode: google.maps.TravelMode.DRIVING,
         },
         (result, status) => {
-            if (status === window.google.maps.DirectionsStatus.OK && result) {
+            if (status === google.maps.DirectionsStatus.OK && result) {
                 const route = result.routes[0];
                 if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
                     const dist = route.legs[0].distance.value;
@@ -147,9 +153,6 @@ export default function RidePage() {
                 description: `${ride.driverName} está en camino.`,
             });
             speak(message);
-        } else if (currentStatus === 'finished' || currentStatus === 'cancelled') {
-            // When the ride ends, reset the form for the next one.
-            handleReset();
         }
     }
     prevRideRef.current = ride;
@@ -253,7 +256,7 @@ export default function RidePage() {
   
   const handleCancelRide = () => {
     if (!activeRideRef) return;
-
+     // This action is now separated. We just cancel.
     updateDocumentNonBlocking(activeRideRef, {
       status: 'cancelled',
       updatedAt: serverTimestamp(),
@@ -340,3 +343,5 @@ export default function RidePage() {
     </>
   );
 }
+
+    
