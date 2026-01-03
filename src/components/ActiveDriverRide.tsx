@@ -22,6 +22,7 @@ import { Ride } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { haversineDistance } from '@/lib/geo';
 import { useToast } from '@/hooks/use-toast';
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 
 const statusActions: { [key: string]: { action: string, label: string } } = {
@@ -46,6 +47,7 @@ const formatDistance = (meters: number) => {
 export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<Ride>, onFinishRide: (ride: WithId<Ride>) => void }) {
   const firestore = useFirestore();
   const { toast } = useToast();
+  const routesLibrary = useMapsLibrary('routes');
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
   const { profile } = useUser();
   const prevStatusRef = useRef<Ride['status'] | undefined>();
@@ -126,8 +128,12 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
     };
 
     if(newStatus === 'arrived' && profile?.currentLocation) {
+        if (!routesLibrary) {
+            fallbackPricingUpdate();
+            return;
+        }
         // When arriving, re-calculate route to destination
-        const directionsService = new window.google.maps.DirectionsService();
+        const directionsService = new routesLibrary.DirectionsService();
         directionsService.route(
             {
                 origin: new window.google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
@@ -315,3 +321,5 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
     </Card>
   );
 }
+
+    

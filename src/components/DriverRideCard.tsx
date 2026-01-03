@@ -19,6 +19,7 @@ import ServiceBadge from './ServiceBadge';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { haversineDistance } from '@/lib/geo';
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 const serviceCardStyles: Record<Ride['serviceType'], string> = {
     premium: "border-yellow-400/50",
@@ -45,6 +46,7 @@ export default function DriverRideCard({
   const firestore = useFirestore();
   const { user, profile } = useUser();
   const { toast } = useToast();
+  const routesLibrary = useMapsLibrary('routes');
 
   const handleAcceptRide = async () => {
     if (!firestore || !user || !profile?.currentLocation) {
@@ -75,45 +77,45 @@ export default function DriverRideCard({
         onAccept();
     }
     
-    if (window.google && window.google.maps && window.google.maps.DirectionsService) {
-        const directionsService = new window.google.maps.DirectionsService();
-        directionsService.route(
-            {
-                origin: new window.google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
-                destination: new window.google.maps.LatLng(ride.origin.lat, ride.origin.lng),
-                travelMode: window.google.maps.TravelMode.DRIVING,
-            },
-            (result, status) => {
-                 let arrivalInfo = null;
-                 if (status === window.google.maps.DirectionsStatus.OK && result) {
-                    const route = result.routes[0];
-                    if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
-                        arrivalInfo = {
-                            distanceMeters: route.legs[0].distance.value,
-                            durationSeconds: route.legs[0].duration.value,
-                        };
-                    }
-                }
-                
-                if (arrivalInfo) {
-                    updateDocumentNonBlocking(rideRef, {
-                        status: 'driver_assigned',
-                        driverId: user.uid,
-                        driverName: driverFullName || 'Conductor Anónimo',
-                        driverArrivalInfo: arrivalInfo,
-                        updatedAt: serverTimestamp(),
-                    });
-                    toast({ title: "¡Viaje Aceptado!" });
-                    onAccept();
-                } else {
-                    fallbackUpdate();
+    if (!routesLibrary) {
+        fallbackUpdate();
+        return;
+    }
+
+    const directionsService = new routesLibrary.DirectionsService();
+    directionsService.route(
+        {
+            origin: new window.google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
+            destination: new window.google.maps.LatLng(ride.origin.lat, ride.origin.lng),
+            travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+             let arrivalInfo = null;
+             if (status === window.google.maps.DirectionsStatus.OK && result) {
+                const route = result.routes[0];
+                if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
+                    arrivalInfo = {
+                        distanceMeters: route.legs[0].distance.value,
+                        durationSeconds: route.legs[0].duration.value,
+                    };
                 }
             }
-        );
-    } else {
-        // Fallback if google maps is not available
-         fallbackUpdate();
-    }
+            
+            if (arrivalInfo) {
+                updateDocumentNonBlocking(rideRef, {
+                    status: 'driver_assigned',
+                    driverId: user.uid,
+                    driverName: driverFullName || 'Conductor Anónimo',
+                    driverArrivalInfo: arrivalInfo,
+                    updatedAt: serverTimestamp(),
+                });
+                toast({ title: "¡Viaje Aceptado!" });
+                onAccept();
+            } else {
+                fallbackUpdate();
+            }
+        }
+    );
   };
   
   const cardStyle = serviceCardStyles[ride.serviceType] || serviceCardStyles.express;
@@ -171,3 +173,5 @@ export default function DriverRideCard({
     </Card>
   );
 }
+
+    

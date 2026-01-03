@@ -28,6 +28,7 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { haversineDistance } from '@/lib/geo';
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 
 export default function RidePage() {
@@ -36,6 +37,8 @@ export default function RidePage() {
   const { user, profile, loading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
+
+  const routesLibrary = useMapsLibrary('routes');
 
 
   const [origin, setOrigin] = useState<Place | null>(null);
@@ -72,7 +75,7 @@ export default function RidePage() {
   const status = ride?.status || 'idle';
 
   useEffect(() => {
-    if (!destination || !origin) {
+    if (!destination || !origin || !routesLibrary) {
         setEstimatedFare(0);
         setDistanceMeters(0);
         setDurationSeconds(0);
@@ -91,37 +94,31 @@ export default function RidePage() {
         });
     }
 
-    // Use Directions API to get real distance if available
-    if (window.google && window.google.maps && window.google.maps.DirectionsService) {
-        const directionsService = new window.google.maps.DirectionsService();
-        directionsService.route(
-            {
-                origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-                destination: new window.google.maps.LatLng(destination.lat, destination.lng),
-                travelMode: window.google.maps.TravelMode.DRIVING,
-            },
-            (result, status) => {
-                if (status === window.google.maps.DirectionsStatus.OK && result) {
-                    const route = result.routes[0];
-                    if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
-                        const dist = route.legs[0].distance.value;
-                        const duration = route.legs[0].duration.value;
-                        setDistanceMeters(dist);
-                        setDurationSeconds(duration);
-                        const fare = calculateFare({ distanceMeters: dist, service: serviceType });
-                        setEstimatedFare(fare);
-                        return;
-                    }
+    const directionsService = new routesLibrary.DirectionsService();
+    directionsService.route(
+        {
+            origin: new window.google.maps.LatLng(origin.lat, origin.lng),
+            destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+            travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+            if (status === window.google.maps.DirectionsStatus.OK && result) {
+                const route = result.routes[0];
+                if (route && route.legs[0] && route.legs[0].distance && route.legs[0].duration) {
+                    const dist = route.legs[0].distance.value;
+                    const duration = route.legs[0].duration.value;
+                    setDistanceMeters(dist);
+                    setDurationSeconds(duration);
+                    const fare = calculateFare({ distanceMeters: dist, service: serviceType });
+                    setEstimatedFare(fare);
+                    return;
                 }
-                // If API fails, calculate Haversine distance as a fallback
-                fallbackEstimate();
             }
-        );
-    } else {
-        // Fallback for when Google Maps script is not ready
-        fallbackEstimate();
-    }
-  }, [destination, origin, serviceType, toast]);
+            // If API fails, calculate Haversine distance as a fallback
+            fallbackEstimate();
+        }
+    );
+  }, [destination, origin, serviceType, toast, routesLibrary]);
   
   useEffect(() => {
     if (!ride) {
@@ -348,3 +345,5 @@ export default function RidePage() {
     </>
   );
 }
+
+    
