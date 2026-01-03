@@ -4,13 +4,13 @@
 import { useState, useEffect } from 'react';
 import { useFirestore, useUser } from '@/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, setDoc } from 'firebase/firestore';
-import { Ride, DriverSummary } from '@/lib/types';
+import { Ride, DriverSummary, UserProfile } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { VamoIcon } from '@/components/VamoIcon';
+import { VamoIcon, WhatsAppLogo } from '@/components/VamoIcon';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 
@@ -35,7 +35,7 @@ const getCommissionInfo = (rideCount: number): { rate: number, nextTier: number 
 
 export default function EarningsPage() {
     const firestore = useFirestore();
-    const { user } = useUser();
+    const { user, profile } = useUser();
     const { toast } = useToast();
 
     const [weeklyRides, setWeeklyRides] = useState<Ride[]>([]);
@@ -154,8 +154,6 @@ export default function EarningsPage() {
         const amount = Math.ceil(summary.commissionOwed); // Ensure it's an integer
         const description = `Pago comision VamO sem ${weekId}`;
 
-        // This URL format opens the Mercado Pago app/website to send money to an alias
-        // Note: This is a user-to-user transfer link, not a formal payment checkout.
         const mpLink = `https://www.mercadopago.com.ar/money-transfer/checkout?identifier=1&alias=${alias}&amount=${amount}&description=${encodeURIComponent(description)}`;
 
         window.open(mpLink, '_blank');
@@ -167,14 +165,37 @@ export default function EarningsPage() {
         
         setIsPaying(false);
     };
+
+    const handleNotifyPayment = () => {
+        if (!summary || summary.commissionOwed <= 0 || !user || !profile) {
+            toast({ variant: 'destructive', title: 'Error', description: 'No hay datos de pago para notificar.' });
+            return;
+        }
+
+        const adminWhatsAppNumber = "2804967673";
+        const driverName = `${profile.name || ''} ${profile.lastName || ''}`.trim();
+        const amount = formatCurrency(Math.ceil(summary.commissionOwed));
+
+        const message = `
+Hola, soy ${driverName} (ID: ${user.uid}).
+Acabo de realizar el pago de la comisión semanal.
+-----------------------------------
+*Resumen de Pago:*
+*Semana:* ${weekId}
+*Monto Pagado:* ${amount}
+-----------------------------------
+Adjunto el comprobante.
+        `.trim().replace(/\n/g, '%0A').replace(/ /g, '%20');
+
+        const url = `https://wa.me/${adminWhatsAppNumber}?text=${message}`;
+        window.open(url, '_blank');
+    };
     
     const isPaymentWindow = () => {
-        // Lógica real: Habilitado los domingos de 18:00 a 19:59 hs.
         const now = new Date();
-        const day = now.getDay(); // 0 = Sunday
+        const day = now.getDay();
         const hour = now.getHours();
-        // return day === 0 && hour >= 18 && hour < 20;
-        return false; // Revert to original logic, now we use Mercado Pago
+        return false;
     }
 
     if (isLoading) {
@@ -264,13 +285,16 @@ export default function EarningsPage() {
                      </p>
                 </CardContent>
                 {summary.status === 'pending' && commissionOwed > 0 && (
-                    <CardFooter>
+                    <CardFooter className="flex-col gap-2">
                         <Button className="w-full" onClick={handleMercadoPagoPayment} disabled={isPaying}>
                             {isPaying ? 'Procesando...' : (
                                 <>
                                     <VamoIcon name="credit-card" className="mr-2 h-4 w-4" /> Pagar con Mercado Pago
                                 </>
                             )}
+                        </Button>
+                        <Button className="w-full" variant="outline" onClick={handleNotifyPayment}>
+                           <WhatsAppLogo className="mr-2 h-4 w-4" /> Ya pagué, notificar por WhatsApp
                         </Button>
                     </CardFooter>
                 )}
@@ -289,7 +313,7 @@ export default function EarningsPage() {
                     <VamoIcon name="info" className="h-4 w-4" />
                     <AlertTitle>Pago de Comisiones</AlertTitle>
                     <AlertDescription>
-                        Podés pagar tu comisión semanal usando Mercado Pago en cualquier momento. El pago se acredita y la cuenta se reinicia al instante.
+                        Podés pagar tu comisión semanal usando Mercado Pago y luego notificarnos por WhatsApp para que acreditemos el pago.
                     </AlertDescription>
                 </Alert>
              )}
@@ -297,3 +321,5 @@ export default function EarningsPage() {
         </div>
     );
 }
+
+    
