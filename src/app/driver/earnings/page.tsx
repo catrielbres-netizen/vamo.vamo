@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useFirestore, useUser } from '@/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, setDoc } from 'firebase/firestore';
 import { Ride, DriverSummary } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -149,11 +149,22 @@ export default function EarningsPage() {
         }
 
         setIsPaying(true);
+        
+        const alias = 'vamo.app';
+        const amount = Math.ceil(summary.commissionOwed); // Ensure it's an integer
+        const description = `Pago comision VamO sem ${weekId}`;
+
+        // This URL format opens the Mercado Pago app/website to send money to an alias
+        // Note: This is a user-to-user transfer link, not a formal payment checkout.
+        const mpLink = `https://www.mercadopago.com.ar/money-transfer/checkout?identifier=1&alias=${alias}&amount=${amount}&description=${encodeURIComponent(description)}`;
+
+        window.open(mpLink, '_blank');
+
         toast({
-            variant: 'destructive',
-            title: 'Función Deshabilitada',
-            description: 'El pago con Mercado Pago se ha deshabilitado temporalmente.'
+            title: 'Redirigiendo a Mercado Pago',
+            description: 'Se abrió una nueva pestaña para completar el pago. Recordá marcarlo como pagado si es necesario.',
         });
+        
         setIsPaying(false);
     };
     
