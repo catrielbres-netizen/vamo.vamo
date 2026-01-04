@@ -38,8 +38,8 @@ import MapSelector from '@/components/MapSelector';
 // ¡PONER EN FALSE ANTES DE IR A PRODUCCIÓN!
 const TEST_MODE = true;
 const FAKE_PASSENGER_LOCATION = { 
-    lat: -43.311, // Playa Unión, Rawson
-    lng: -65.037,
+    lat: -43.308, // Cercano a Playa Unión
+    lng: -65.040,
     address: 'Ubicación de Prueba (Pasajero)'
 };
 // --------------------
@@ -223,7 +223,13 @@ export default function RidePage() {
 
     // A ride has just finished or been cancelled
     if (prevRideRef.current && !ride) {
-      if (prevStatus === 'in_progress' || prevStatus === 'paused' || prevStatus === 'arrived') {
+      if (prevRideRef.current.passengerId !== user?.uid) {
+            toast({
+                variant: 'destructive',
+                title: 'Sesión de usuario cambiada',
+                description: 'Iniciaste sesión como otro usuario. El viaje activo no se muestra.',
+            });
+      } else if (prevStatus === 'in_progress' || prevStatus === 'paused' || prevStatus === 'arrived') {
           // The ride disappeared from the active query, so it must be finished/cancelled.
           // We set it as the last finished ride to show the summary screen.
           setLastFinishedRide({ ...prevRideRef.current, status: 'finished' });
@@ -246,7 +252,7 @@ export default function RidePage() {
         }
     }
     prevRideRef.current = ride;
-  }, [ride, toast]);
+  }, [ride, toast, user?.uid]);
 
 
   const handleRequestRide = async () => {
