@@ -320,12 +320,12 @@ export default function DriverRidesPage() {
                 />
             </div>
 
-            {isOnline && (
+            {isOnline && fcmStatus !== 'enabled' && (
               <Alert variant="default" className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700">
                 <VamoIcon name="bell" className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <AlertTitle className="text-blue-800 dark:text-blue-300">Estado de Notificaciones</AlertTitle>
+                <AlertTitle className="text-blue-800 dark:text-blue-300">Notificaciones para Viajes</AlertTitle>
                 <AlertDescription className="text-blue-700 dark:text-blue-500">
-                  {fcmStatus !== 'enabled' && "Para recibir viajes con la app cerrada, es recomendable activar las notificaciones."}
+                  Para recibir viajes con la app cerrada, es recomendable activar las notificaciones.
                 </AlertDescription>
                 <div className="mt-4">
                   <PushActivationUI />
@@ -382,3 +382,5 @@ export default function DriverRidesPage() {
     </>
   );
 }
+
+    
