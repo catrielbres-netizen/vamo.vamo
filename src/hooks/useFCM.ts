@@ -24,41 +24,9 @@ export function useFCM() {
   }, []);
 
   useEffect(() => {
-    if (!firebaseApp || !firestore || !user || !profile || profile.role !== 'driver') {
-      return;
-    }
+    if (notificationPermission !== 'granted' || !firebaseApp) return;
 
     const messaging = getMessaging(firebaseApp);
-
-    // 1. Request permission and get token
-    const requestPermissionAndGetToken = async () => {
-      // Check if permission is already granted
-      if (notificationPermission === 'granted') {
-          // Get token
-          try {
-            const currentToken = await getToken(messaging, {
-              vapidKey: process.env.NEXT_PUBLIC_FCM_VAPID_KEY,
-            });
-
-            if (currentToken) {
-              // Check if token is new or different from the one in Firestore
-              if (profile.fcmToken !== currentToken) {
-                const userProfileRef = doc(firestore, 'users', user.uid);
-                await updateDoc(userProfileRef, {
-                  fcmToken: currentToken,
-                });
-                console.log('FCM token updated in Firestore.');
-              }
-            } else {
-              console.log('No registration token available. Request permission to generate one.');
-            }
-          } catch (err) {
-            console.error('An error occurred while retrieving token. ', err);
-          }
-      }
-    };
-
-    requestPermissionAndGetToken();
 
     // 2. Handle foreground messages
     const unsubscribe = onMessage(messaging, (payload) => {
@@ -69,29 +37,49 @@ export function useFCM() {
     return () => {
       unsubscribe(); // Unsubscribe from the message listener on cleanup
     };
-  }, [firebaseApp, firestore, user, profile, notificationPermission, toast]);
+  }, [firebaseApp, notificationPermission]);
 
 
   const requestPermission = async () => {
-    if (notificationPermission !== 'granted') {
+    if (typeof window === 'undefined' || !('Notification' in window) || !firebaseApp || !firestore || !user) {
+        toast({ variant: 'destructive', title: 'Error', description: 'El entorno no es compatible con notificaciones.' });
+        return;
+    }
+    
+    // 1. Request Permission
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+
+    if (permission === 'granted') {
+        console.log('Notification permission granted.');
+        // 2. Get Token and Save to Firestore
         try {
-            const permission = await Notification.requestPermission();
-            setNotificationPermission(permission);
-            if (permission === 'granted') {
-                console.log('Notification permission granted.');
-                // Re-trigger the main effect to get the token
-                // This is a bit of a hack, but works for this case.
-                window.location.reload();
-            } else {
-                toast({
-                    variant: 'destructive',
-                    title: 'Notificaciones Bloqueadas',
-                    description: 'No recibirás avisos de nuevos viajes. Habilítalas en la configuración de tu navegador.',
+            const messaging = getMessaging(firebaseApp);
+            const currentToken = await getToken(messaging, {
+                vapidKey: process.env.NEXT_PUBLIC_FCM_VAPID_KEY,
+            });
+
+            if (currentToken) {
+                // Save token to Firestore
+                const userProfileRef = doc(firestore, 'users', user.uid);
+                await updateDoc(userProfileRef, {
+                    fcmToken: currentToken,
                 });
+                toast({ title: '¡Notificaciones activadas!', description: 'Estás listo para recibir alertas de viaje.' });
+            } else {
+                console.log('No registration token available. Request permission to generate one.');
+                toast({ variant: 'destructive', title: 'No se pudo obtener el token', description: 'Por favor, intentá de nuevo.' });
             }
-        } catch(e) {
-            console.error("Error requesting notification permission:", e);
+        } catch (err) {
+            console.error('An error occurred while retrieving token or saving it.', err);
+            toast({ variant: 'destructive', title: 'Error al registrar token', description: 'No se pudo completar el registro para las notificaciones.' });
         }
+    } else {
+        toast({
+            variant: 'destructive',
+            title: 'Notificaciones Bloqueadas',
+            description: 'Para recibir alertas de viaje, por favor habilitá las notificaciones para este sitio en la configuración de tu navegador.',
+        });
     }
   }
 

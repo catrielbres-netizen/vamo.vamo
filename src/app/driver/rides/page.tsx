@@ -109,7 +109,7 @@ export default function DriverRidesPage() {
         title: latestNotification.notification?.title || "¡Nuevo Viaje!",
         description: latestNotification.notification?.body || "Un pasajero ha solicitado un viaje.",
         action: (
-            <Button onClick={() => router.push('/driver/rides')} size="sm">
+             <Button onClick={() => router.push('/driver/rides')} size="sm">
                 Ver Viajes
             </Button>
         ),
@@ -297,7 +297,7 @@ export default function DriverRidesPage() {
                     <VamoIcon name="alert-triangle" className="h-4 w-4" />
                     <AlertTitle>Activar Notificaciones</AlertTitle>
                     <AlertDescription>
-                        Para recibir alertas de nuevos viajes, necesitás activar las notificaciones.
+                        Para no perderte ningún viaje, necesitás activar las notificaciones.
                         <Button variant="link" className="p-0 h-auto ml-1" onClick={requestPermission}>Activar ahora</Button>
                     </AlertDescription>
                 </Alert>
