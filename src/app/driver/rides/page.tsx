@@ -146,13 +146,15 @@ export default function DriverRidesPage() {
                 });
             },
             (error) => {
-                console.error("Error getting driver location:", error);
-                // If location fails, force offline
-                handleToggleOnline(false);
+                console.warn("Error getting driver location:", error.message, "Using default location for testing.");
+                const defaultLocation = { lat: -43.3001, lng: -65.1023 }; // Rawson, Chubut
+                updateDocumentNonBlocking(userProfileRef, {
+                    currentLocation: defaultLocation
+                });
                 toast({
-                    variant: 'destructive',
-                    title: 'Error de Ubicación',
-                    description: 'No pudimos acceder a tu GPS. Te hemos desconectado.'
+                    variant: 'default',
+                    title: 'Ubicación por Defecto',
+                    description: 'No se pudo acceder a tu GPS. Usando una ubicación predeterminada en Rawson.'
                 })
             },
             { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
