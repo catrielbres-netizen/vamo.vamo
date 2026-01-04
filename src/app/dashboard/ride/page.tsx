@@ -38,8 +38,8 @@ import MapSelector from '@/components/MapSelector';
 // ¡PONER EN FALSE ANTES DE IR A PRODUCCIÓN!
 const TEST_MODE = true;
 const FAKE_PASSENGER_LOCATION = { 
-    lat: -43.308, // Cercano a Playa Unión
-    lng: -65.040,
+    lat: -43.2965, // Cercano a Musters 2890
+    lng: -65.038,
     address: 'Ubicación de Prueba (Pasajero)'
 };
 // --------------------
@@ -221,22 +221,23 @@ export default function RidePage() {
     const prevStatus = prevRideRef.current?.status;
     const currentStatus = ride?.status;
 
-    // A ride has just finished or been cancelled
-    if (prevRideRef.current && !ride) {
-      if (prevRideRef.current.passengerId !== user?.uid) {
-            toast({
-                variant: 'destructive',
-                title: 'Sesión de usuario cambiada',
-                description: 'Iniciaste sesión como otro usuario. El viaje activo no se muestra.',
-            });
-      } else if (prevStatus === 'in_progress' || prevStatus === 'paused' || prevStatus === 'arrived') {
-          // The ride disappeared from the active query, so it must be finished/cancelled.
-          // We set it as the last finished ride to show the summary screen.
-          setLastFinishedRide({ ...prevRideRef.current, status: 'finished' });
-      } else if (prevStatus === 'searching_driver' || prevStatus === 'driver_assigned' || prevStatus === 'driver_arriving') {
-          setLastFinishedRide({ ...prevRideRef.current, status: 'cancelled' });
-      }
+    // A ride exists, but it doesn't belong to the currently logged-in user.
+    // This happens during development when switching between passenger/driver accounts.
+    if (ride && user && ride.passengerId !== user.uid) {
+        toast({
+            variant: 'destructive',
+            title: 'Sesión de usuario cambiada',
+            description: 'Iniciaste sesión como otro usuario. El viaje activo anterior no se mostrará.',
+        });
+        // We do NOT set the ride to finished or cancelled here.
+        // We just inform the user and let the UI show the new state (no active ride for this user).
+    } else if (prevRideRef.current && !ride) {
+        // This block now only triggers if a ride truly disappears, e.g., cancelled by admin.
+        // Or if it just finished and its new state ('finished') is not in the activeRideQuery.
+        const finishedRide = { ...prevRideRef.current, status: prevRideRef.current.status === 'in_progress' ? 'finished' : 'cancelled' } as WithId<Ride>;
+        setLastFinishedRide(finishedRide);
     } else if (prevStatus !== currentStatus) {
+        // Handle normal status transitions
         if (currentStatus === 'driver_assigned' && ride?.driverName) {
             const message = "Tu viaje ya fue aceptado";
             toast({
@@ -309,17 +310,15 @@ export default function RidePage() {
         .filter(driver => {
             if (driver.isSuspended) return false;
             
-            const isEligible = canDriverTakeRide(driver, serviceType);
-            if (!isEligible && !TEST_MODE) {
-                 console.log(
-                    `❌ Driver ${driver.id} descartado: año ${driver.carModelYear} no es compatible para servicio ${serviceType}`
-                );
+            const isEligibleForService = canDriverTakeRide(driver, serviceType);
+            if (!isEligibleForService) {
+                console.log(`❌ Driver ${driver.id} descartado: año ${driver.carModelYear} no es compatible para servicio ${serviceType}`);
             }
 
             // In TEST_MODE, we ignore the currentLocation check for filtering, but use it for sorting
-            if (TEST_MODE) return isEligible;
+            if (TEST_MODE) return isEligibleForService;
 
-            return driver.currentLocation && isEligible;
+            return driver.currentLocation && isEligibleForService;
         })
         .map(driver => {
             const location = TEST_MODE && !driver.currentLocation 
