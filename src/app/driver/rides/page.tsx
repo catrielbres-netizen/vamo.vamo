@@ -71,10 +71,11 @@ export default function DriverRidesPage() {
   const { user, profile, loading: isUserLoading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
-  const { notificationPermission, requestPermission, checkNotificationStatus } = useFCM();
+  const { notificationPermission, requestPermission, checkNotificationStatus, isSupported } = useFCM();
   
   const [activeRide, setActiveRide] = useState<WithId<Ride> | null>(null);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
+  const [debugInfo, setDebugInfo] = useState<object | null>(null);
   
   const activeRideUnsubscribe = useRef<Unsubscribe | null>(null);
   const locationWatchId = useRef<number | null>(null);
@@ -97,6 +98,18 @@ export default function DriverRidesPage() {
   }, [firestore, user?.uid, activeRide, profile?.approved, isOnline, allowedServices]);
 
   const { data: availableRides, isLoading: areRidesLoading } = useCollection<Ride>(availableRidesQuery);
+
+  useEffect(() => {
+      if (typeof window !== 'undefined') {
+          setDebugInfo({
+              serviceWorker: 'serviceWorker' in navigator,
+              pushManager: 'PushManager' in window,
+              notification: 'Notification' in window,
+              permission: Notification.permission,
+              secureContext: window.isSecureContext,
+          });
+      }
+  }, []);
 
   useEffect(() => {
     activeRideStateRef.current = activeRide;
@@ -219,12 +232,6 @@ export default function DriverRidesPage() {
     const newRides = availableRides.filter(
         (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
     );
-
-    if (newRides.length > 0) {
-          // We don't need to toast here anymore as FCM will handle it.
-          // We can still speak though.
-          speak("Nuevo viaje disponible.");
-    }
     
     previousAvailableRides.current = availableRides;
 
@@ -280,6 +287,12 @@ export default function DriverRidesPage() {
     // Si el conductor está aprobado, mostrar el interruptor y la lista de viajes
     return (
         <div className="space-y-4">
+            {debugInfo && (
+                <pre className="text-xs bg-black text-green-400 p-2 rounded-md font-mono">
+                    {JSON.stringify(debugInfo, null, 2)}
+                </pre>
+            )}
+
             <div className="flex items-center justify-between p-4 rounded-lg bg-card border">
                 <Label htmlFor="online-switch" className="flex flex-col">
                     <span className="font-semibold">{isOnline ? "Estás En Línea" : "Estás Desconectado"}</span>
@@ -293,7 +306,15 @@ export default function DriverRidesPage() {
                     aria-label="Toggle online status"
                 />
             </div>
-             {notificationPermission !== 'granted' && (
+             {!isSupported ? (
+                <Alert variant="destructive">
+                    <VamoIcon name="alert-triangle" className="h-4 w-4" />
+                    <AlertTitle>Navegador no Compatible</AlertTitle>
+                    <AlertDescription>
+                        Tu navegador actual no soporta notificaciones push. Para recibir alertas de viaje, por favor usá Chrome, Edge o Firefox en una computadora o un celular Android.
+                    </AlertDescription>
+                </Alert>
+            ) : notificationPermission !== 'granted' && (
                 <Alert variant="destructive">
                     <VamoIcon name="alert-triangle" className="h-4 w-4" />
                     <AlertTitle>Acción Requerida: Habilitar Notificaciones</AlertTitle>

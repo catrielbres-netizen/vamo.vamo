@@ -1,6 +1,6 @@
 // src/hooks/useFCM.ts
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { getMessaging, getToken, onMessage, MessagePayload } from 'firebase/messaging';
 import { useFirebaseApp, useUser, useFirestore } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -14,6 +14,13 @@ export function useFCM() {
 
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | null>(null);
   const [latestNotification, setLatestNotification] = useState<MessagePayload | null>(null);
+
+  const isSupported = useMemo(() => {
+    if (typeof navigator !== 'undefined') {
+        return 'serviceWorker' in navigator && 'PushManager' in window && Notification.permission !== 'denied'
+    }
+    return false;
+  }, []);
 
 
   useEffect(() => {
@@ -106,5 +113,5 @@ export function useFCM() {
   }
 
 
-  return { notificationPermission, requestPermission, latestNotification, checkNotificationStatus };
+  return { notificationPermission, requestPermission, latestNotification, checkNotificationStatus, isSupported };
 }
