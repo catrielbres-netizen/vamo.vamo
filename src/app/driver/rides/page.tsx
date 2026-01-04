@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button';
 // Si es true, usa una ubicación fija en Rawson para simular el GPS.
 // ¡PONER EN FALSE ANTES DE IR A PRODUCCIÓN!
 const TEST_MODE = true;
-const FAKE_DRIVER_LOCATION = { lat: -43.2975, lng: -65.1050 }; // Cerca de Rawson
+const FAKE_DRIVER_LOCATION = { lat: -43.309, lng: -65.039 }; // Musters 2890, Playa Unión
 // --------------------
 
 
@@ -382,5 +382,3 @@ export default function DriverRidesPage() {
     </>
   );
 }
-
-    

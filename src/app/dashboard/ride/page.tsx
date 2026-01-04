@@ -38,8 +38,8 @@ import MapSelector from '@/components/MapSelector';
 // ¡PONER EN FALSE ANTES DE IR A PRODUCCIÓN!
 const TEST_MODE = true;
 const FAKE_PASSENGER_LOCATION = { 
-    lat: -43.3001, // Rawson, Chubut
-    lng: -65.1023,
+    lat: -43.311, // Playa Unión, Rawson
+    lng: -65.037,
     address: 'Ubicación de Prueba (Pasajero)'
 };
 // --------------------
@@ -553,7 +553,3 @@ export default function RidePage() {
     </>
   );
 }
-
-    
-
-    
