@@ -17,20 +17,24 @@ export function useFCM() {
 
   const isSupported = useMemo(() => {
     if (typeof navigator !== 'undefined') {
-        return 'serviceWorker' in navigator && 'PushManager' in window && Notification.permission !== 'denied'
+        // All these conditions must be true for push to be supported.
+        return 'serviceWorker' in navigator &&
+               'PushManager' in window &&
+               typeof Notification !== 'undefined';
     }
     return false;
   }, []);
 
-
+  // Effect to set the initial notification permission status
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
+    if (isSupported) {
       setNotificationPermission(Notification.permission);
     }
-  }, []);
+  }, [isSupported]);
 
+  // Effect to listen for incoming messages when the app is in the foreground
   useEffect(() => {
-    if (notificationPermission !== 'granted' || !firebaseApp) return;
+    if (!isSupported || notificationPermission !== 'granted' || !firebaseApp) return;
 
     const messaging = getMessaging(firebaseApp);
 
@@ -42,61 +46,38 @@ export function useFCM() {
     return () => {
       unsubscribe();
     };
-  }, [firebaseApp, notificationPermission]);
-
-  const checkNotificationStatus = async () => {
-    if (typeof window === 'undefined') {
-        return { success: false, message: 'Entorno no es un navegador.' };
-    }
-    if (!window.isSecureContext) {
-        return { success: false, message: 'La página no es segura (no es HTTPS). Las notificaciones requieren HTTPS o localhost.' };
-    }
-    if (!('Notification' in window)) {
-        return { success: false, message: 'Este navegador no soporta Notificaciones.' };
-    }
-    if (!process.env.NEXT_PUBLIC_FCM_VAPID_KEY) {
-        return { success: false, message: 'La VAPID Key de FCM no está configurada en las variables de entorno.' };
-    }
-     if (!firebaseApp || !firestore || !user) {
-        return { success: false, message: 'Firebase o el usuario no están listos.' };
-    }
-    
-    try {
-        const messaging = getMessaging(firebaseApp);
-        const token = await getToken(messaging, { vapidKey: process.env.NEXT_PUBLIC_FCM_VAPID_KEY });
-        if (token) {
-            return { success: true, message: `El sistema está listo. Tu token FCM es: ${token.substring(0, 15)}...` };
-        } else {
-             return { success: false, message: 'No se pudo obtener el token. El permiso puede estar bloqueado por el navegador.' };
-        }
-    } catch(err: any) {
-        return { success: false, message: `Error al obtener token: ${err.message}` };
-    }
-  }
+  }, [firebaseApp, notificationPermission, isSupported]);
 
 
-  const requestPermission = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window) || !firebaseApp || !firestore || !user) {
-        toast({ variant: 'destructive', title: 'Error', description: 'El entorno no es compatible con notificaciones.' });
+  /**
+   * Main function to request permission, get the token, and save it to Firestore.
+   * This is the single source of truth for enabling notifications.
+   */
+  const requestPermissionAndToken = async () => {
+    if (!isSupported || !firebaseApp || !firestore || !user) {
+        toast({ variant: 'destructive', title: 'Error', description: 'El entorno no es compatible o el usuario no está autenticado.' });
         return;
     }
     
+    // 1. Request Permission from the user
     const permission = await Notification.requestPermission();
-    setNotificationPermission(permission);
+    setNotificationPermission(permission); // Update state
 
     if (permission === 'granted') {
         try {
+            // 2. Get the FCM token
             const messaging = getMessaging(firebaseApp);
             const currentToken = await getToken(messaging, {
                 vapidKey: process.env.NEXT_PUBLIC_FCM_VAPID_KEY,
             });
 
             if (currentToken) {
+                // 3. Save the token to the user's profile in Firestore
                 const userProfileRef = doc(firestore, 'users', user.uid);
                 await updateDoc(userProfileRef, { fcmToken: currentToken });
                 toast({ title: '¡Notificaciones activadas!', description: 'Estás listo para recibir alertas de viaje.' });
             } else {
-                toast({ variant: 'destructive', title: 'No se pudo obtener el token', description: 'Por favor, intentá de nuevo.' });
+                 toast({ variant: 'destructive', title: 'No se pudo obtener el token', description: 'El proceso falló. Por favor, intentá de nuevo.' });
             }
         } catch (err) {
             console.error('An error occurred while retrieving token or saving it.', err);
@@ -106,12 +87,17 @@ export function useFCM() {
         toast({
             variant: 'destructive',
             title: 'Notificaciones Bloqueadas',
-            description: 'Para recibir alertas, habilitá las notificaciones para este sitio en la configuración de tu navegador.',
+            description: 'Para recibir alertas, habilitá las notificaciones para este sitio en la configuración de tu navegador (haciendo clic en el candado 🔒 en la barra de direcciones).',
             duration: 10000,
         });
     }
   }
 
 
-  return { notificationPermission, requestPermission, latestNotification, checkNotificationStatus, isSupported };
+  return { 
+      isSupported, 
+      notificationPermission, 
+      requestPermission: requestPermissionAndToken, // Expose the consolidated function
+      latestNotification 
+  };
 }

@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { useFCM } from '@/hooks/useFCM';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
 
 
 // Helper function to determine which services a driver can see based on their car model year
@@ -71,11 +72,10 @@ export default function DriverRidesPage() {
   const { user, profile, loading: isUserLoading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
-  const { notificationPermission, requestPermission, checkNotificationStatus, isSupported } = useFCM();
+  const { isSupported, requestPermission } = useFCM();
   
   const [activeRide, setActiveRide] = useState<WithId<Ride> | null>(null);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
-  const [debugInfo, setDebugInfo] = useState<object | null>(null);
   
   const activeRideUnsubscribe = useRef<Unsubscribe | null>(null);
   const locationWatchId = useRef<number | null>(null);
@@ -83,7 +83,10 @@ export default function DriverRidesPage() {
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
 
   const isOnline = profile?.driverStatus === 'online';
+  // Memoize allowedServices to prevent re-renders
   const allowedServices = useMemoFirebase(() => getAllowedServices(profile), [profile]);
+  const hasFCMToken = useMemo(() => !!profile?.fcmToken, [profile?.fcmToken]);
+
 
   // Only query for rides if the driver is approved, online, and has services they can fulfill
   const availableRidesQuery = useMemoFirebase(() => {
@@ -99,17 +102,6 @@ export default function DriverRidesPage() {
 
   const { data: availableRides, isLoading: areRidesLoading } = useCollection<Ride>(availableRidesQuery);
 
-  useEffect(() => {
-      if (typeof window !== 'undefined') {
-          setDebugInfo({
-              serviceWorker: 'serviceWorker' in navigator,
-              pushManager: 'PushManager' in window,
-              notification: 'Notification' in window,
-              permission: Notification.permission,
-              secureContext: window.isSecureContext,
-          });
-      }
-  }, []);
 
   useEffect(() => {
     activeRideStateRef.current = activeRide;
@@ -119,11 +111,12 @@ export default function DriverRidesPage() {
     if (!firestore || !user?.uid) return;
     const userProfileRef = doc(firestore, 'users', user.uid);
     if (checked) {
-        if (notificationPermission !== 'granted') {
+        // The check is now based on having a token, not just the permission.
+        if (!hasFCMToken) {
              toast({
                 variant: 'destructive',
-                title: 'Notificaciones Bloqueadas',
-                description: 'No podés ponerte en línea sin las notificaciones activadas. Hacé clic en "Activar Notificaciones" para habilitarlas.',
+                title: 'Notificaciones No Activadas',
+                description: 'No podés ponerte en línea sin las notificaciones activadas. Hacé clic en el botón "Activar Notificaciones" para habilitarlas.',
             });
             return;
         }
@@ -253,16 +246,6 @@ export default function DriverRidesPage() {
   const handleCloseSummary = () => {
     setLastFinishedRide(null);
   }
-  
-  const handleCheckStatus = async () => {
-      const status = await checkNotificationStatus();
-      toast({
-          variant: status.success ? 'default' : 'destructive',
-          title: status.success ? '¡Revisión Exitosa!' : 'Error de Configuración',
-          description: status.message,
-          duration: 10000,
-      });
-  }
 
   const renderAvailableRides = () => {
     if (isUserLoading) {
@@ -287,12 +270,6 @@ export default function DriverRidesPage() {
     // Si el conductor está aprobado, mostrar el interruptor y la lista de viajes
     return (
         <div className="space-y-4">
-            {debugInfo && (
-                <pre className="text-xs bg-black text-green-400 p-2 rounded-md font-mono">
-                    {JSON.stringify(debugInfo, null, 2)}
-                </pre>
-            )}
-
             <div className="flex items-center justify-between p-4 rounded-lg bg-card border">
                 <Label htmlFor="online-switch" className="flex flex-col">
                     <span className="font-semibold">{isOnline ? "Estás En Línea" : "Estás Desconectado"}</span>
@@ -306,7 +283,8 @@ export default function DriverRidesPage() {
                     aria-label="Toggle online status"
                 />
             </div>
-             {!isSupported ? (
+            
+            {!isSupported ? (
                 <Alert variant="destructive">
                     <VamoIcon name="alert-triangle" className="h-4 w-4" />
                     <AlertTitle>Navegador no Compatible</AlertTitle>
@@ -314,23 +292,25 @@ export default function DriverRidesPage() {
                         Tu navegador actual no soporta notificaciones push. Para recibir alertas de viaje, por favor usá Chrome, Edge o Firefox en una computadora o un celular Android.
                     </AlertDescription>
                 </Alert>
-            ) : notificationPermission !== 'granted' && (
+            ) : !hasFCMToken ? ( // The core logic change: check for the token, not the permission
                 <Alert variant="destructive">
                     <VamoIcon name="alert-triangle" className="h-4 w-4" />
                     <AlertTitle>Acción Requerida: Habilitar Notificaciones</AlertTitle>
                     <AlertDescription className="flex flex-col gap-3">
                         <p>Para no perderte ningún viaje con la app cerrada, las notificaciones son esenciales.</p>
-                        <p className="text-xs">Si el botón de abajo no funciona, hacé clic en el ícono del candado (🔒) en la barra de direcciones, buscá "Notificaciones" y cambialo a "Permitir".</p>
+                        <p className="text-xs">Si el botón no funciona, es posible que debas permitir las notificaciones manualmente haciendo clic en el ícono del candado (🔒) en la barra de direcciones.</p>
                         <div className='flex gap-2'>
                            <Button variant="destructive" size="sm" onClick={requestPermission}>
                              Activar Notificaciones
                            </Button>
-                           <Button variant="secondary" size="sm" onClick={handleCheckStatus}>
-                             Verificar Estado
-                           </Button>
                         </div>
                     </AlertDescription>
                 </Alert>
+            ) : (
+                 <div className="flex items-center justify-center gap-2 p-2 rounded-lg bg-green-500/10 text-green-500 border border-green-500/20">
+                    <VamoIcon name="bell" className="h-4 w-4"/>
+                    <p className="text-sm font-medium">Notificaciones activas</p>
+                </div>
             )}
 
             {isOnline && (
