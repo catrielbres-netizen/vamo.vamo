@@ -68,6 +68,7 @@ export default function RidePage() {
   const [estimatedFare, setEstimatedFare] = useState(0);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
   const [isMapSelectorOpen, setMapSelectorOpen] = useState(false);
+  const [mapsReady, setMapsReady] = useState(false);
   
   // This query now ONLY fetches TRULY active rides.
   const activeRideQuery = useMemoFirebase(() => {
@@ -124,6 +125,17 @@ export default function RidePage() {
     }
   };
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+        if (window.google?.maps?.DirectionsService) {
+            setMapsReady(true);
+            clearInterval(interval);
+        }
+    }, 300);
+
+    return () => clearInterval(interval);
+  }, []);
+
 
   useEffect(() => {
     const calculateRoute = () => {
@@ -136,12 +148,13 @@ export default function RidePage() {
 
       // Fallback for when Google Maps API is not ready
       const fallbackEstimate = () => {
+          console.log("Using fallback haversine distance calculation.");
           const dist = haversineDistance(origin, destination);
           setDistanceMeters(dist);
           setDurationSeconds(0); // Can't estimate duration from straight line
           const fare = calculateFare({ distanceMeters: dist, service: serviceType });
           setEstimatedFare(fare);
-          if (window.google) { // Only toast if google is available but directions failed
+          if (mapsReady) { // Only toast if Maps API was ready but directions still failed
             toast({
                 variant: 'destructive',
                 title: 'No se pudo calcular la ruta exacta',
@@ -150,7 +163,7 @@ export default function RidePage() {
           }
       }
       
-      if (typeof window.google === 'undefined' || !window.google.maps || !window.google.maps.DirectionsService) {
+      if (!mapsReady) {
           fallbackEstimate();
           return;
       }
@@ -164,6 +177,7 @@ export default function RidePage() {
           },
           (result, status) => {
               if (status === window.google.maps.DirectionsStatus.OK && result?.routes?.[0]?.legs?.[0]) {
+                  console.log("DirectionsService route calculated successfully.");
                   const leg = result.routes[0].legs[0];
                   const dist = leg.distance?.value ?? 0;
                   const duration = leg.duration?.value ?? 0;
@@ -172,14 +186,14 @@ export default function RidePage() {
                   setDistanceMeters(dist);
                   setDurationSeconds(duration);
               } else {
-                  // If API fails, calculate Haversine distance as a fallback
+                  console.error(`DirectionsService failed due to: ${status}`);
                   fallbackEstimate();
               }
           }
       );
     }
     calculateRoute();
-  }, [destination?.lat, destination?.lng, origin?.lat, origin?.lng, serviceType, toast]);
+  }, [destination?.lat, destination?.lng, origin?.lat, origin?.lng, serviceType, mapsReady, toast]);
   
   useEffect(() => {
     const prevStatus = prevRideRef.current?.status;
@@ -485,7 +499,16 @@ export default function RidePage() {
             onClick={currentAction.handler}
             label={currentAction.label}
             variant={currentAction.variant}
-            disabled={isRideLoading || (status==='idle' && (!destination || !origin || !destination.lat || !origin.lat || distanceMeters === 0)) || currentAction.disabled}
+            disabled={
+                isRideLoading ||
+                (status === 'idle' &&
+                    (!destination ||
+                    !origin ||
+                    !destination.lat ||
+                    !origin.lat ||
+                    estimatedFare === 0)) ||
+                currentAction.disabled
+            }
         />
       )}
 
