@@ -10,7 +10,6 @@ import DriverRideCard from '@/components/DriverRideCard';
 import ActiveDriverRide from '@/components/ActiveDriverRide';
 import FinishedRideSummary from '@/components/FinishedRideSummary';
 import { useToast } from "@/hooks/use-toast";
-import { speak } from '@/lib/speak';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, ServiceType, UserProfile } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -68,15 +67,15 @@ const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, 
 
 
 const PushActivationUI = () => {
-    const { status, enablePush, isSupported } = useFCM();
+    const { status, enablePush, supported } = useFCM();
 
-    if (!isSupported) {
+    if (!supported) {
         return (
             <Alert variant="destructive">
                 <VamoIcon name="alert-triangle" className="h-4 w-4" />
                 <AlertTitle>Navegador no Compatible</AlertTitle>
                 <AlertDescription>
-                    Tu navegador no soporta notificaciones push. Para recibir alertas de viaje, usá Chrome o Edge.
+                    Tu navegador no soporta notificaciones push. Para recibir alertas de viaje, usá Chrome, Edge o instalá la app en tu dispositivo.
                 </AlertDescription>
             </Alert>
         );
@@ -96,7 +95,7 @@ const PushActivationUI = () => {
                     <VamoIcon name="alert-triangle" className="h-4 w-4" />
                     <AlertTitle>Notificaciones Bloqueadas</AlertTitle>
                     <AlertDescription>
-                        Para recibir viajes, necesitás habilitar las notificaciones para este sitio en la configuración de tu navegador. Hacé clic en el ícono del candado (🔒) en la barra de direcciones.
+                       Para recibir viajes con la app cerrada, necesitás habilitar las notificaciones. Hacé clic en el ícono del candado (🔒) en la barra de direcciones y cambiá el permiso.
                     </AlertDescription>
                 </Alert>
             );
@@ -123,6 +122,7 @@ export default function DriverRidesPage() {
   const firestore = useFirestore();
   const { user, profile, loading: isUserLoading } = useUser();
   const { toast } = useToast();
+  const { status: fcmStatus } = useFCM();
   
   const [activeRide, setActiveRide] = useState<WithId<Ride> | null>(null);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
@@ -130,10 +130,9 @@ export default function DriverRidesPage() {
   const activeRideUnsubscribe = useRef<Unsubscribe | null>(null);
   const locationWatchId = useRef<number | null>(null);
   const activeRideStateRef = useRef<WithId<Ride> | null>(null);
-  const previousAvailableRides = useRef<WithId<Ride>[]>([]);
 
   const isOnline = profile?.driverStatus === 'online';
-  const allowedServices = useMemoFirebase(() => getAllowedServices(profile), [profile]);
+  const allowedServices = useMemo(() => getAllowedServices(profile), [profile]);
 
 
   // Only query for rides if the driver is approved, online, and has services they can fulfill
@@ -159,14 +158,6 @@ export default function DriverRidesPage() {
     if (!firestore || !user?.uid) return;
     const userProfileRef = doc(firestore, 'users', user.uid);
     if (checked) {
-        if (!profile?.fcmToken) {
-             toast({
-                variant: 'destructive',
-                title: 'Notificaciones No Activadas',
-                description: 'No podés ponerte en línea sin las notificaciones activadas. Hacé clic en el botón para habilitarlas.',
-            });
-            return;
-        }
         updateDocumentNonBlocking(userProfileRef, { driverStatus: 'online' });
     } else {
         updateDocumentNonBlocking(userProfileRef, { driverStatus: 'inactive', currentLocation: null });
@@ -266,18 +257,6 @@ export default function DriverRidesPage() {
   }, [firestore, user?.uid, toast]);
 
 
-  useEffect(() => {
-    if (areRidesLoading || !availableRides || !profile?.approved || !isOnline) return;
-
-    const newRides = availableRides.filter(
-        (ride) => !previousAvailableRides.current.some((prevRide) => prevRide.id === ride.id)
-    );
-    
-    previousAvailableRides.current = availableRides;
-
-  }, [availableRides, areRidesLoading, profile, isOnline]);
-
-
   const handleAcceptRide = () => {
     setLastFinishedRide(null);
   };
@@ -299,7 +278,6 @@ export default function DriverRidesPage() {
       return <p className="text-center">Cargando perfil...</p>;
     }
     
-    // Si el conductor no está aprobado, mostrarle un mensaje de estado
     if (!profile?.approved) {
         const statusKey = profile?.vehicleVerificationStatus || 'unverified';
         const message = statusMessages[statusKey];
@@ -314,7 +292,6 @@ export default function DriverRidesPage() {
         );
     }
 
-    // Si el conductor está aprobado, mostrar el interruptor y la lista de viajes
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between p-4 rounded-lg bg-card border">
@@ -330,8 +307,20 @@ export default function DriverRidesPage() {
                     aria-label="Toggle online status"
                 />
             </div>
+
+            {isOnline && fcmStatus !== 'enabled' && fcmStatus !== 'unsupported' && (
+              <Alert variant="destructive">
+                <VamoIcon name="alert-triangle" className="h-4 w-4" />
+                <AlertTitle>Notificaciones no activas</AlertTitle>
+                <AlertDescription>
+                    Para recibir viajes con la app cerrada o en segundo plano, necesitás activar las notificaciones.
+                </AlertDescription>
+                <div className="mt-4">
+                  <PushActivationUI />
+                </div>
+              </Alert>
+            )}
             
-            <PushActivationUI />
 
             {isOnline && (
                 <>
@@ -384,4 +373,3 @@ export default function DriverRidesPage() {
     </>
   );
 }
-

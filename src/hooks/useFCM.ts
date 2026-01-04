@@ -2,11 +2,12 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { getMessaging, getToken, onMessage, MessagePayload } from 'firebase/messaging';
+import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { doc, updateDoc } from 'firebase/firestore';
-import { useFirebaseApp, useUser, useFirestore } from '@/firebase';
+import { useFirestore, useFirebaseApp, useUser } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 
+const VAPID_KEY = process.env.NEXT_PUBLIC_FCM_VAPID_KEY!;
 
 type FCMStatus = 'unsupported' | 'blocked' | 'idle' | 'enabled' | 'loading';
 
@@ -14,8 +15,6 @@ export function useFCM() {
   const { user, profile } = useUser();
   const firestore = useFirestore();
   const firebaseApp = useFirebaseApp();
-  const { toast } = useToast();
-
   const [status, setStatus] = useState<FCMStatus>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -34,26 +33,21 @@ export function useFCM() {
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
         setStatus('blocked');
-        toast({
-            variant: 'destructive',
-            title: 'Notificaciones Bloqueadas',
-            description: 'Para recibir alertas, necesitás habilitar las notificaciones para este sitio en la configuración de tu navegador.',
-            duration: 10000,
-        });
         return;
       }
 
       const messaging = getMessaging(firebaseApp);
-      const vapidKey = process.env.NEXT_PUBLIC_FCM_VAPID_KEY;
 
-      if (!vapidKey) {
-        throw new Error('La clave VAPID de FCM no está configurada en las variables de entorno.');
+      if (!VAPID_KEY) {
+          throw new Error("VAPID key not configured for FCM.");
       }
 
-      const token = await getToken(messaging, { vapidKey });
+      const token = await getToken(messaging, {
+        vapidKey: VAPID_KEY,
+      });
 
       if (!token) {
-        throw new Error('No se pudo generar el token FCM. Reintentá por favor.');
+        throw new Error('No se pudo generar token FCM. Es posible que necesites limpiar los datos del sitio y volver a intentarlo.');
       }
 
       await updateDoc(doc(firestore, 'users', user.uid), {
@@ -62,37 +56,29 @@ export function useFCM() {
 
       setStatus('enabled');
       setError(null);
-      toast({
-        title: '¡Notificaciones activadas!',
-        description: 'Todo listo para recibir alertas de viaje.',
-      });
     } catch (err: any) {
       console.error('[FCM ERROR]', err);
       setError(err.message || 'Error al activar notificaciones');
       setStatus('idle');
-      toast({
-        variant: 'destructive',
-        title: 'Error de Notificaciones',
-        description: err.message || 'Ocurrió un error inesperado.',
-      });
     }
-  }, [user, isSupported, firestore, firebaseApp, toast]);
+  }, [user, isSupported, firestore, firebaseApp]);
 
   useEffect(() => {
     if (!isSupported) {
       setStatus('unsupported');
       return;
     }
-
+    
     if (Notification.permission === 'denied') {
       setStatus('blocked');
       return;
     }
 
+    // This is the key logic: even if permission is granted, we are 'idle' 
+    // if there's no token in our database. The UI will then show the button.
     if (Notification.permission === 'granted' && profile?.fcmToken) {
       setStatus('enabled');
     } else {
-      // Si el permiso está concedido pero no hay token, el estado es 'idle' para que pueda activarlo
       setStatus('idle');
     }
   }, [profile?.fcmToken, isSupported]);
@@ -100,24 +86,25 @@ export function useFCM() {
   useEffect(() => {
     if (!isSupported || !firebaseApp) return;
 
-    const messaging = getMessaging(firebaseApp);
-    const unsubscribe = onMessage(messaging, (payload) => {
-      console.log('Foreground message received. ', payload);
-      toast({
-        title: payload.notification?.title || "¡Nuevo Viaje!",
-        description: payload.notification?.body || "Un pasajero ha solicitado un viaje.",
-        duration: 10000,
+    try {
+      const messaging = getMessaging(firebaseApp);
+      const unsubscribe = onMessage(messaging, (payload) => {
+        console.log('Foreground message received. ', payload);
+        // We can show a toast here if we want, but the realtime listener handles the UI update.
+        // This is useful for debugging or for a sound effect.
       });
-    });
 
-    return () => unsubscribe();
-  }, [isSupported, firebaseApp, toast]);
+      return () => unsubscribe();
+    } catch (e) {
+      console.error("Could not initialize foreground message listener", e);
+    }
+  }, [isSupported, firebaseApp]);
 
 
   return {
     status,
     enablePush,
     error,
-    isSupported,
+    supported: isSupported,
   };
 }
