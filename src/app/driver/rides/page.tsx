@@ -1,4 +1,3 @@
-
 // /app/driver/rides/page.tsx
 'use client';
 
@@ -72,7 +71,7 @@ export default function DriverRidesPage() {
   const { user, profile, loading: isUserLoading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
-  const { notificationPermission, requestPermission } = useFCM();
+  const { notificationPermission, requestPermission, checkNotificationStatus } = useFCM();
   
   const [activeRide, setActiveRide] = useState<WithId<Ride> | null>(null);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
@@ -247,6 +246,16 @@ export default function DriverRidesPage() {
   const handleCloseSummary = () => {
     setLastFinishedRide(null);
   }
+  
+  const handleCheckStatus = async () => {
+      const status = await checkNotificationStatus();
+      toast({
+          variant: status.success ? 'default' : 'destructive',
+          title: status.success ? '¡Revisión Exitosa!' : 'Error de Configuración',
+          description: status.message,
+          duration: 10000,
+      });
+  }
 
   const renderAvailableRides = () => {
     if (isUserLoading) {
@@ -287,15 +296,18 @@ export default function DriverRidesPage() {
              {notificationPermission !== 'granted' && (
                 <Alert variant="destructive">
                     <VamoIcon name="alert-triangle" className="h-4 w-4" />
-                    <AlertTitle>Notificaciones Bloqueadas</AlertTitle>
-                    <AlertDescription>
-                        <p className="mb-2">Para recibir viajes con la app cerrada, necesitás habilitar las notificaciones.</p>
-                        <p className="mb-3">
-                            Si el botón de abajo no funciona, hacé clic en el ícono 🔒 junto a la URL en tu navegador, buscá "Notificaciones" y cambialo a "Permitir".
-                        </p>
-                        <Button variant="link" className="p-0 h-auto text-destructive-foreground font-bold" onClick={requestPermission}>
-                           Intentar activar de nuevo
-                        </Button>
+                    <AlertTitle>Acción Requerida: Habilitar Notificaciones</AlertTitle>
+                    <AlertDescription className="flex flex-col gap-3">
+                        <p>Para no perderte ningún viaje con la app cerrada, las notificaciones son esenciales.</p>
+                        <p className="text-xs">Si el botón de abajo no funciona, hacé clic en el ícono del candado (🔒) en la barra de direcciones, buscá "Notificaciones" y cambialo a "Permitir".</p>
+                        <div className='flex gap-2'>
+                           <Button variant="destructive" size="sm" onClick={requestPermission}>
+                             Activar Notificaciones
+                           </Button>
+                           <Button variant="secondary" size="sm" onClick={handleCheckStatus}>
+                             Verificar Estado
+                           </Button>
+                        </div>
                     </AlertDescription>
                 </Alert>
             )}

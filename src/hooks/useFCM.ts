@@ -17,7 +17,6 @@ export function useFCM() {
 
 
   useEffect(() => {
-    // This effect runs only on the client
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotificationPermission(Notification.permission);
     }
@@ -28,16 +27,45 @@ export function useFCM() {
 
     const messaging = getMessaging(firebaseApp);
 
-    // Handle foreground messages
     const unsubscribe = onMessage(messaging, (payload) => {
       console.log('Foreground message received. ', payload);
-      setLatestNotification(payload); // Set the payload in state
+      setLatestNotification(payload);
     });
 
     return () => {
-      unsubscribe(); // Unsubscribe from the message listener on cleanup
+      unsubscribe();
     };
   }, [firebaseApp, notificationPermission]);
+
+  const checkNotificationStatus = async () => {
+    if (typeof window === 'undefined') {
+        return { success: false, message: 'Entorno no es un navegador.' };
+    }
+    if (!window.isSecureContext) {
+        return { success: false, message: 'La página no es segura (no es HTTPS). Las notificaciones requieren HTTPS o localhost.' };
+    }
+    if (!('Notification' in window)) {
+        return { success: false, message: 'Este navegador no soporta Notificaciones.' };
+    }
+    if (!process.env.NEXT_PUBLIC_FCM_VAPID_KEY) {
+        return { success: false, message: 'La VAPID Key de FCM no está configurada en las variables de entorno.' };
+    }
+     if (!firebaseApp || !firestore || !user) {
+        return { success: false, message: 'Firebase o el usuario no están listos.' };
+    }
+    
+    try {
+        const messaging = getMessaging(firebaseApp);
+        const token = await getToken(messaging, { vapidKey: process.env.NEXT_PUBLIC_FCM_VAPID_KEY });
+        if (token) {
+            return { success: true, message: `El sistema está listo. Tu token FCM es: ${token.substring(0, 15)}...` };
+        } else {
+             return { success: false, message: 'No se pudo obtener el token. El permiso puede estar bloqueado por el navegador.' };
+        }
+    } catch(err: any) {
+        return { success: false, message: `Error al obtener token: ${err.message}` };
+    }
+  }
 
 
   const requestPermission = async () => {
@@ -46,13 +74,10 @@ export function useFCM() {
         return;
     }
     
-    // 1. Request Permission
     const permission = await Notification.requestPermission();
-    setNotificationPermission(permission); // Update state immediately
+    setNotificationPermission(permission);
 
     if (permission === 'granted') {
-        console.log('Notification permission granted.');
-        // 2. Get Token and Save to Firestore
         try {
             const messaging = getMessaging(firebaseApp);
             const currentToken = await getToken(messaging, {
@@ -60,14 +85,11 @@ export function useFCM() {
             });
 
             if (currentToken) {
-                // Save token to Firestore
                 const userProfileRef = doc(firestore, 'users', user.uid);
-                await updateDoc(userProfileRef, {
-                    fcmToken: currentToken,
-                });
+                await updateDoc(userProfileRef, { fcmToken: currentToken });
                 toast({ title: '¡Notificaciones activadas!', description: 'Estás listo para recibir alertas de viaje.' });
             } else {
-                toast({ variant: 'destructive', title: 'No se pudo obtener el token', description: 'Por favor, intentá de nuevo. Es posible que necesites recargar la página.' });
+                toast({ variant: 'destructive', title: 'No se pudo obtener el token', description: 'Por favor, intentá de nuevo.' });
             }
         } catch (err) {
             console.error('An error occurred while retrieving token or saving it.', err);
@@ -77,12 +99,12 @@ export function useFCM() {
         toast({
             variant: 'destructive',
             title: 'Notificaciones Bloqueadas',
-            description: 'Para recibir alertas, por favor habilitá las notificaciones para este sitio en la configuración de tu navegador y luego recargá la página.',
+            description: 'Para recibir alertas, habilitá las notificaciones para este sitio en la configuración de tu navegador.',
             duration: 10000,
         });
     }
   }
 
 
-  return { notificationPermission, requestPermission, latestNotification };
+  return { notificationPermission, requestPermission, latestNotification, checkNotificationStatus };
 }
