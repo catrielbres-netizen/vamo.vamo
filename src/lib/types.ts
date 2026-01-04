@@ -15,7 +15,8 @@ export type RideStatus =
   | "in_progress"
   | "paused"
   | "finished"
-  | "cancelled";
+  | "cancelled"
+  | "expired";
 
 export type VerificationStatus = "unverified" | "pending_review" | "approved" | "rejected";
 
@@ -78,6 +79,10 @@ export interface Ride {
   vamoPointsAwarded?: number | null;
   audited: boolean;
   auditComment?: string | null;
+  // --- New fields for dispatch queue ---
+  candidates?: string[]; // Array of driver UIDs
+  currentCandidateIndex?: number;
+  expiresAt?: Timestamp | null;
 }
 
 export type UserProfile = {
@@ -93,6 +98,7 @@ export type UserProfile = {
     phone?: string | null;
     photoURL?: string | null;
     fcmToken?: string | null; // For Push Notifications
+    fcmUpdatedAt?: any;
     averageRating?: number | null;
     ridesCompleted?: number;
     isSuspended?: boolean;

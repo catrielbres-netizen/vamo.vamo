@@ -1,3 +1,4 @@
+
 // /app/driver/rides/page.tsx
 'use client';
 
@@ -78,40 +79,33 @@ const PushActivationUI = () => {
         );
     }
     
-    switch (status) {
-        case 'enabled':
-            return (
-                <div className="flex items-center justify-center gap-2 p-2 rounded-lg bg-green-500/10 text-green-500 border border-green-500/20">
-                    <VamoIcon name="bell" className="h-4 w-4"/>
-                    <p className="text-sm font-medium">Notificaciones activas</p>
-                </div>
-            );
-        case 'blocked':
-             return (
-                <Alert variant="destructive">
-                    <VamoIcon name="alert-triangle" className="h-4 w-4" />
-                    <AlertTitle>Notificaciones Bloqueadas</AlertTitle>
-                    <AlertDescription>
-                       Para recibir viajes con la app cerrada, necesitás habilitar las notificaciones manualmente. Hacé clic en el ícono del candado (🔒) en la barra de direcciones del navegador y cambiá el permiso de Notificaciones a "Permitir".
-                    </AlertDescription>
-                </Alert>
-            );
-        case 'idle':
-            return (
-                <Button variant="default" size="sm" onClick={enablePush} className="w-full">
-                    Activar Notificaciones para Viajes
-                </Button>
-            );
-        case 'loading':
-            return (
-                <Button variant="secondary" size="sm" disabled className="w-full">
-                    <VamoIcon name="loader" className="animate-spin mr-2" />
-                    Activando...
-                </Button>
-            );
-        default:
-            return null;
+    if (status === 'enabled') {
+        return (
+            <div className="flex items-center justify-center gap-2 p-2 rounded-lg bg-green-500/10 text-green-500 border border-green-500/20">
+                <VamoIcon name="bell" className="h-4 w-4"/>
+                <p className="text-sm font-medium">Notificaciones activas</p>
+            </div>
+        );
     }
+    
+    if (status === 'blocked') {
+        return (
+           <Alert variant="destructive">
+               <VamoIcon name="alert-triangle" className="h-4 w-4" />
+               <AlertTitle>Notificaciones Bloqueadas</AlertTitle>
+               <AlertDescription>
+                  Para recibir viajes con la app cerrada, necesitás habilitar las notificaciones manualmente. Hacé clic en el ícono del candado (🔒) en la barra de direcciones del navegador y cambiá el permiso de Notificaciones a "Permitir".
+               </AlertDescription>
+           </Alert>
+       );
+    }
+
+    return (
+        <Button variant="default" size="sm" onClick={enablePush} disabled={status === 'loading'} className="w-full">
+            {status === 'loading' && <VamoIcon name="loader" className="animate-spin mr-2" />}
+            Activar Notificaciones para Viajes
+        </Button>
+    );
 }
 
 
@@ -129,22 +123,31 @@ export default function DriverRidesPage() {
   const activeRideStateRef = useRef<WithId<Ride> | null>(null);
 
   const isOnline = profile?.driverStatus === 'online';
-  const allowedServices = useMemoFirebase(() => getAllowedServices(profile), [profile]);
 
-
-  // Only query for rides if the driver is approved, online, and has services they can fulfill
+  // --- New Dispatch Logic ---
+  // A driver is now offered a ride if they are the current candidate.
   const availableRidesQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid || activeRide || !profile?.approved || !isOnline || allowedServices.length === 0) {
+    if (!firestore || !user?.uid || activeRide || !isOnline) {
         return null;
     }
     return query(
         collection(firestore, 'rides'),
         where('status', '==', 'searching_driver'),
-        where('serviceType', 'in', allowedServices)
+        where('candidates', 'array-contains', user.uid)
     );
-  }, [firestore, user?.uid, activeRide, profile?.approved, isOnline, allowedServices]);
+  }, [firestore, user?.uid, activeRide, isOnline]);
+  
+  const { data: potentialRides, isLoading: areRidesLoading } = useCollection<Ride>(availableRidesQuery);
 
-  const { data: availableRides, isLoading: areRidesLoading } = useCollection<Ride>(availableRidesQuery);
+  const offeredRide = useMemo(() => {
+    if (!potentialRides || !user?.uid) return null;
+    
+    return potentialRides.find(ride => {
+        const candidateIndex = ride.currentCandidateIndex ?? 0;
+        return ride.candidates?.[candidateIndex] === user.uid;
+    });
+  }, [potentialRides, user?.uid]);
+  // --- End of New Dispatch Logic ---
 
 
   useEffect(() => {
@@ -306,12 +309,12 @@ export default function DriverRidesPage() {
                 />
             </div>
 
-            {isOnline && fcmStatus !== 'enabled' && (
-              <Alert variant="destructive" className="bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-700">
-                <VamoIcon name="alert-triangle" className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                <AlertTitle className="text-yellow-800 dark:text-yellow-300">Notificaciones Desactivadas</AlertTitle>
-                <AlertDescription className="text-yellow-700 dark:text-yellow-500">
-                    Podés seguir en línea, pero solo verás los viajes si mantenés la app abierta y en primer plano. Para recibir viajes con la app cerrada, activá las notificaciones.
+            {isOnline && (
+              <Alert variant="default" className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700">
+                <VamoIcon name="bell" className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <AlertTitle className="text-blue-800 dark:text-blue-300">Estado de Notificaciones</AlertTitle>
+                <AlertDescription className="text-blue-700 dark:text-blue-500">
+                  {fcmStatus !== 'enabled' && "Para recibir viajes con la app cerrada, es recomendable activar las notificaciones."}
                 </AlertDescription>
                 <div className="mt-4">
                   <PushActivationUI />
@@ -319,7 +322,6 @@ export default function DriverRidesPage() {
               </Alert>
             )}
             
-
             {isOnline && (
                 <>
                     <Accordion type="single" collapsible className="w-full">
@@ -339,19 +341,17 @@ export default function DriverRidesPage() {
                     </AccordionItem>
                     </Accordion>
                     
-                    <h2 className="text-xl font-semibold text-center pt-4">Viajes Disponibles</h2>
+                    <h2 className="text-xl font-semibold text-center pt-4">Viaje Ofrecido</h2>
                     {areRidesLoading ? (
                          <p className="text-center text-muted-foreground pt-8">Buscando viajes...</p>
-                    ) : availableRides && availableRides.length > 0 ? (
-                        availableRides.map((ride) => (
+                    ) : offeredRide ? (
                         <DriverRideCard
-                            key={ride.id}
-                            ride={ride}
+                            key={offeredRide.id}
+                            ride={offeredRide}
                             onAccept={handleAcceptRide}
                         />
-                        ))
                     ) : (
-                        <p className="text-center text-muted-foreground pt-8">No hay viajes buscando conductor en este momento.</p>
+                        <p className="text-center text-muted-foreground pt-8">No hay viajes ofrecidos en este momento. Mantené la app abierta.</p>
                     )}
                 </>
             )}

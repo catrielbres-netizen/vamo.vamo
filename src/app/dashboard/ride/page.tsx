@@ -20,18 +20,36 @@ import {
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/VamoIcon';
 import { calculateFare } from '@/lib/pricing';
-import { collection, doc, serverTimestamp, query, where, limit } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, query, where, limit, getDocs } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
 import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride, UserProfile, Place } from '@/lib/types';
+import { Ride, UserProfile, Place, ServiceType } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { haversineDistance } from '@/lib/geo';
 import { APIProvider } from '@vis.gl/react-google-maps';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import MapSelector from '@/components/MapSelector';
+
+
+// Helper function to determine which services a driver can take
+const canDriverTakeRide = (driverProfile: UserProfile, rideService: ServiceType): boolean => {
+    if (!driverProfile.carModelYear) return false;
+    const year = driverProfile.carModelYear;
+
+    switch (rideService) {
+        case 'premium':
+            return year >= 2022;
+        case 'privado':
+            return year >= 2016;
+        case 'express':
+            return true; // Any approved driver can take express
+        default:
+            return false;
+    }
+};
 
 
 export default function RidePage() {
@@ -184,6 +202,11 @@ export default function RidePage() {
                 description: `${ride.driverName} está en camino.`,
             });
             speak(message);
+        } else if (currentStatus === 'searching_driver' && ride?.candidates && ride.candidates.length > 0 && ride.currentCandidateIndex && ride.currentCandidateIndex > 0) {
+            toast({
+                title: 'Buscando otro conductor...',
+                description: `El conductor anterior no aceptó. Estamos intentando con el siguiente.`,
+            });
         }
     }
     prevRideRef.current = ride;
@@ -229,6 +252,34 @@ export default function RidePage() {
         return;
     }
 
+    // --- Start of New Intelligent Dispatch Logic ---
+    const onlineDriversQuery = query(
+        collection(firestore, 'users'),
+        where('role', '==', 'driver'),
+        where('driverStatus', '==', 'online'),
+        where('approved', '==', true),
+        where('isSuspended', '!=', true)
+    );
+
+    const driversSnapshot = await getDocs(onlineDriversQuery);
+    
+    const eligibleDrivers = driversSnapshot.docs
+        .map(doc => ({ ...doc.data() as UserProfile, id: doc.id }))
+        .filter(driver => driver.currentLocation && canDriverTakeRide(driver, serviceType))
+        .map(driver => {
+            const distance = haversineDistance(origin, driver.currentLocation!);
+            return { ...driver, distance };
+        })
+        .sort((a, b) => a.distance - b.distance); // Sort by distance, closest first
+
+    const candidateIds = eligibleDrivers.map(d => d.id);
+
+    if (candidateIds.length === 0) {
+        toast({ variant: 'destructive', title: 'Sin Conductores', description: 'No hay conductores disponibles para este tipo de servicio en este momento.' });
+        return;
+    }
+    // --- End of New Intelligent Dispatch Logic ---
+
 
     let rideFare = estimatedFare;
     let discountAmount = 0;
@@ -238,7 +289,7 @@ export default function RidePage() {
     }
 
     const ridesCollection = collection(firestore, 'rides');
-    const newRideData = {
+    const newRideData: Ride = {
       passengerId: currentUser.uid,
       passengerName: profile?.name || 'Pasajero Anónimo',
       origin: { lat: origin.lat, lng: origin.lng, address: origin.address },
@@ -263,13 +314,17 @@ export default function RidePage() {
       pauseStartedAt: null,
       pauseHistory: [],
       audited: false,
+      // --- New dispatch fields ---
+      candidates: candidateIds,
+      currentCandidateIndex: 0,
+      expiresAt: null, // This could be set by a backend function
     };
 
     try {
         const docRef = await addDocumentNonBlocking(ridesCollection, newRideData);
         if (docRef) {
             toast({
-                title: '¡Buscando conductor!',
+                title: '¡Buscando al conductor más cercano!',
                 description: 'Tu pedido fue enviado. Esperá la confirmación.',
             });
             if (profile?.activeBonus && profile.vamoPoints) {
