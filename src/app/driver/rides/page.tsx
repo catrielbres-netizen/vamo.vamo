@@ -158,8 +158,6 @@ export default function DriverRidesPage() {
     if (!firestore || !user?.uid) return;
 
     // YA NO BLOQUEAMOS POR PUSH. El conductor siempre puede ponerse en línea.
-    // La UI mostrará una advertencia si el push no está activo.
-
     const userProfileRef = doc(firestore, 'users', user.uid);
     if (checked) {
         updateDocumentNonBlocking(userProfileRef, { driverStatus: 'online' });
@@ -315,9 +313,9 @@ export default function DriverRidesPage() {
             {isOnline && fcmStatus !== 'enabled' && (
               <Alert variant="destructive" className="bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-700">
                 <VamoIcon name="alert-triangle" className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                <AlertTitle className="text-yellow-800 dark:text-yellow-300">Notificaciones No Activas</AlertTitle>
+                <AlertTitle className="text-yellow-800 dark:text-yellow-300">Notificaciones Desactivadas</AlertTitle>
                 <AlertDescription className="text-yellow-700 dark:text-yellow-500">
-                    Para recibir viajes con la app cerrada, necesitás activar las notificaciones push.
+                    Para recibir viajes con la app cerrada, necesitás activar las notificaciones push. Podés seguir en línea, pero solo verás los viajes si mantenés la app abierta.
                 </AlertDescription>
                 <div className="mt-4">
                   <PushActivationUI />
