@@ -33,6 +33,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import MapSelector from '@/components/MapSelector';
 
+// --- MODO DE PRUEBA ---
+// Si es true, usa una ubicación fija en Rawson para simular el GPS.
+// ¡PONER EN FALSE ANTES DE IR A PRODUCCIÓN!
+const TEST_MODE = true;
+const FAKE_PASSENGER_LOCATION = { 
+    lat: -43.3001, // Rawson, Chubut
+    lng: -65.1023,
+    address: 'Ubicación de Prueba (Pasajero)'
+};
+// --------------------
+
 
 // Helper function to determine which services a driver can take
 const canDriverTakeRide = (driverProfile: UserProfile, rideService: ServiceType): boolean => {
@@ -156,7 +167,7 @@ export default function RidePage() {
 
       // Fallback for when Google Maps API is not ready
       const fallbackEstimate = () => {
-          console.log("Using fallback haversine distance calculation.");
+          console.log("Usando cálculo de distancia Haversine (línea recta).");
           const dist = haversineDistance(origin, destination);
           setDistanceMeters(dist);
           setDurationSeconds(0); // Can't estimate duration from straight line
@@ -185,7 +196,7 @@ export default function RidePage() {
           },
           (result, status) => {
               if (status === window.google.maps.DirectionsStatus.OK && result?.routes?.[0]?.legs?.[0]) {
-                  console.log("DirectionsService route calculated successfully.");
+                  console.log("Ruta calculada con DirectionsService.");
                   const leg = result.routes[0].legs[0];
                   const dist = leg.distance?.value ?? 0;
                   const duration = leg.duration?.value ?? 0;
@@ -194,7 +205,7 @@ export default function RidePage() {
                   setDistanceMeters(dist);
                   setDurationSeconds(duration);
               } else {
-                  console.error(`DirectionsService failed due to: ${status}`);
+                  console.error(`DirectionsService falló: ${status}`);
                   fallbackEstimate();
               }
           }
@@ -375,6 +386,12 @@ export default function RidePage() {
   }
 
   const handleUseCurrentLocation = () => {
+    if (TEST_MODE) {
+        setOrigin(FAKE_PASSENGER_LOCATION);
+        toast({ title: 'Modo de Prueba', description: 'Ubicación de origen fijada en Rawson.' });
+        return;
+    }
+
     if (!navigator.geolocation) {
       toast({ variant: 'destructive', title: 'Error', description: 'Tu navegador no soporta geolocalización.' });
       return;

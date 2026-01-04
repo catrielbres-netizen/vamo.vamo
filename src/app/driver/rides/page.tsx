@@ -20,6 +20,14 @@ import { Label } from '@/components/ui/label';
 import { useFCM } from '@/hooks/useFCM';
 import { Button } from '@/components/ui/button';
 
+// --- MODO DE PRUEBA ---
+// Si es true, usa una ubicación fija en Rawson para simular el GPS.
+// ¡PONER EN FALSE ANTES DE IR A PRODUCCIÓN!
+const TEST_MODE = true;
+const FAKE_DRIVER_LOCATION = { lat: -43.2975, lng: -65.1050 }; // Cerca de Rawson
+// --------------------
+
+
 // Helper function to determine which services a driver can see based on their car model year
 const getAllowedServices = (profile: UserProfile | null): ServiceType[] => {
     if (!profile || !profile.carModelYear) {
@@ -171,8 +179,15 @@ export default function DriverRidesPage() {
 
     // ---- START: Location Tracking Logic ----
     const startLocationTracking = () => {
-        if (locationWatchId.current !== null) return; // Already tracking
         const userProfileRef = doc(firestore, 'users', user.uid);
+
+        if (TEST_MODE) {
+            toast({ title: 'Modo de Prueba', description: 'Ubicación de conductor fijada en Rawson.' });
+            updateDocumentNonBlocking(userProfileRef, { currentLocation: FAKE_DRIVER_LOCATION });
+            return;
+        }
+
+        if (locationWatchId.current !== null) return; // Already tracking
         
         locationWatchId.current = navigator.geolocation.watchPosition(
             (position) => {
@@ -182,15 +197,11 @@ export default function DriverRidesPage() {
                 });
             },
             (error) => {
-                console.warn("Error getting driver location:", error.message, "Using default location for testing.");
-                const defaultLocation = { lat: -43.3001, lng: -65.1023 }; // Rawson, Chubut
-                updateDocumentNonBlocking(userProfileRef, {
-                    currentLocation: defaultLocation
-                });
+                console.warn("Error al obtener ubicación del conductor:", error.message);
                 toast({
-                    variant: 'default',
-                    title: 'Ubicación por Defecto',
-                    description: 'No se pudo acceder a tu GPS. Usando una ubicación predeterminada en Rawson.'
+                    variant: 'destructive',
+                    title: 'Error de Ubicación',
+                    description: 'No se pudo acceder a tu GPS. No podrás recibir viajes.'
                 })
             },
             { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
