@@ -2,6 +2,10 @@ export function haversineDistance(coords1: { lat: number, lng: number }, coords2
     const toRad = (x: number) => x * Math.PI / 180;
     const R = 6371e3; // Earth radius in metres
 
+    if (!coords1 || !coords2) {
+        return Infinity;
+    }
+
     const dLat = toRad(coords2.lat - coords1.lat);
     const dLon = toRad(coords2.lng - coords1.lng);
     const lat1 = toRad(coords1.lat);

@@ -202,7 +202,7 @@ export default function RidePage() {
                 description: `${ride.driverName} está en camino.`,
             });
             speak(message);
-        } else if (currentStatus === 'searching_driver' && ride?.candidates && ride.candidates.length > 0 && ride.currentCandidateIndex && ride.currentCandidateIndex > 0) {
+        } else if (currentStatus === 'searching_driver' && ride?.candidates && ride.currentCandidateIndex && ride.currentCandidateIndex > 0) {
             toast({
                 title: 'Buscando otro conductor...',
                 description: `El conductor anterior no aceptó. Estamos intentando con el siguiente.`,
@@ -289,7 +289,7 @@ export default function RidePage() {
     }
 
     const ridesCollection = collection(firestore, 'rides');
-    const newRideData: Ride = {
+    const newRideData: Omit<Ride, 'id'> = {
       passengerId: currentUser.uid,
       passengerName: profile?.name || 'Pasajero Anónimo',
       origin: { lat: origin.lat, lng: origin.lng, address: origin.address },
@@ -307,8 +307,8 @@ export default function RidePage() {
         discountAmount: discountAmount,
       },
       status: 'searching_driver' as const,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp() as Timestamp,
+      updatedAt: serverTimestamp() as Timestamp,
       finishedAt: null,
       driverId: null,
       pauseStartedAt: null,
@@ -317,7 +317,7 @@ export default function RidePage() {
       // --- New dispatch fields ---
       candidates: candidateIds,
       currentCandidateIndex: 0,
-      expiresAt: null, // This could be set by a backend function
+      expiresAt: null,
     };
 
     try {

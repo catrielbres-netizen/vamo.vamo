@@ -80,8 +80,8 @@ export interface Ride {
   audited: boolean;
   auditComment?: string | null;
   // --- New fields for dispatch queue ---
-  candidates?: string[]; // Array of driver UIDs
-  currentCandidateIndex?: number;
+  candidates: string[]; // Array of driver UIDs
+  currentCandidateIndex: number;
   expiresAt?: Timestamp | null;
 }
 
