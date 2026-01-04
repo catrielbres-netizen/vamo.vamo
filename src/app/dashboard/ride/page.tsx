@@ -47,7 +47,9 @@ const FAKE_PASSENGER_LOCATION = {
 
 // Helper function to determine which services a driver can take
 const canDriverTakeRide = (driverProfile: UserProfile, rideService: ServiceType): boolean => {
+    // EN TEST_MODE, CUALQUIER CONDUCTOR PUEDE TOMAR CUALQUIER VIAJE
     if (TEST_MODE) return true;
+
     if (!driverProfile.carModelYear) return false;
     const driverYear = driverProfile.carModelYear;
 
@@ -300,11 +302,24 @@ export default function RidePage() {
         .map(doc => ({ ...doc.data() as UserProfile, id: doc.id }))
         .filter(driver => {
             if (driver.isSuspended) return false;
-            if (TEST_MODE) return true; // In test mode, we don't care about location or service for now
-            return driver.currentLocation && canDriverTakeRide(driver, serviceType)
+            
+            const isEligible = canDriverTakeRide(driver, serviceType);
+            if (!isEligible && !TEST_MODE) {
+                 console.log(
+                    `❌ Driver ${driver.id} descartado: año ${driver.carModelYear} no es compatible para servicio ${serviceType}`
+                );
+            }
+
+            // In TEST_MODE, we ignore the currentLocation check for filtering, but use it for sorting
+            if (TEST_MODE) return isEligible;
+
+            return driver.currentLocation && isEligible;
         })
         .map(driver => {
-            const location = TEST_MODE ? FAKE_PASSENGER_LOCATION : driver.currentLocation!;
+            const location = TEST_MODE && !driver.currentLocation 
+              ? FAKE_PASSENGER_LOCATION // Assume driver is near passenger in test if no location
+              : driver.currentLocation!;
+
             const distance = haversineDistance(origin, location);
             return { ...driver, distance };
         })
