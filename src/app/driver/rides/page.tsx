@@ -286,10 +286,15 @@ export default function DriverRidesPage() {
              {notificationPermission !== 'granted' && (
                 <Alert variant="destructive">
                     <VamoIcon name="alert-triangle" className="h-4 w-4" />
-                    <AlertTitle>Activar Notificaciones es Obligatorio</AlertTitle>
+                    <AlertTitle>Notificaciones Bloqueadas</AlertTitle>
                     <AlertDescription>
-                        Para poder ponerte en línea y recibir viajes, necesitás habilitar las notificaciones. Hacé clic acá y aceptá el permiso en tu navegador.
-                        <Button variant="link" className="p-0 h-auto ml-1 text-destructive-foreground font-bold" onClick={requestPermission}>Activar ahora</Button>
+                        <p className="mb-2">Para recibir viajes con la app cerrada, necesitás habilitar las notificaciones.</p>
+                        <p className="mb-3">
+                            Si el botón de abajo no funciona, hacé clic en el ícono 🔒 junto a la URL en tu navegador, buscá "Notificaciones" y cambialo a "Permitir".
+                        </p>
+                        <Button variant="link" className="p-0 h-auto text-destructive-foreground font-bold" onClick={requestPermission}>
+                           Intentar activar de nuevo
+                        </Button>
                     </AlertDescription>
                 </Alert>
             )}
