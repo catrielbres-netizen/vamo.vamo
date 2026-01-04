@@ -138,7 +138,7 @@ export default function RidePage() {
       const fallbackEstimate = () => {
           const dist = haversineDistance(origin, destination);
           setDistanceMeters(dist);
-          setDurationSeconds(0);
+          setDurationSeconds(0); // Can't estimate duration from straight line
           const fare = calculateFare({ distanceMeters: dist, service: serviceType });
           setEstimatedFare(fare);
           if (window.google) { // Only toast if google is available but directions failed
