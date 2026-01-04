@@ -1,7 +1,7 @@
 // /app/driver/rides/page.tsx
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, onSnapshot, Unsubscribe, doc } from 'firebase/firestore';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
@@ -71,7 +71,7 @@ export default function DriverRidesPage() {
   const { user, profile, loading: isUserLoading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
-  const { notificationPermission, requestPermission, latestNotification } = useFCM();
+  const { notificationPermission, requestPermission } = useFCM();
   
   const [activeRide, setActiveRide] = useState<WithId<Ride> | null>(null);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
@@ -101,23 +101,6 @@ export default function DriverRidesPage() {
   useEffect(() => {
     activeRideStateRef.current = activeRide;
   }, [activeRide]);
-
-  // Effect to show toast when a new notification arrives from the hook
-  useEffect(() => {
-    if (latestNotification) {
-      toast({
-        title: latestNotification.notification?.title || "¡Nuevo Viaje!",
-        description: latestNotification.notification?.body || "Un pasajero ha solicitado un viaje.",
-        action: (
-             <Button onClick={() => router.push('/driver/rides')} size="sm">
-                Ver Viajes
-            </Button>
-        ),
-        duration: 10000, // Keep toast longer
-      });
-    }
-  }, [latestNotification, toast, router]);
-
 
   const handleToggleOnline = (checked: boolean) => {
     if (!firestore || !user?.uid) return;

@@ -9,6 +9,8 @@ import { collection, query, where, limit } from 'firebase/firestore';
 import { Ride } from '@/lib/types';
 import { MapsProvider } from '@/components/MapsProvider';
 import { useFCM } from '@/hooks/useFCM';
+import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
 
 
 export default function DriverLayout({
@@ -20,7 +22,24 @@ export default function DriverLayout({
   const pathname = usePathname();
   const { profile, user, loading: userLoading } = useUser();
   const firestore = useFirestore();
-  useFCM(); // Initialize Firebase Cloud Messaging
+  const { latestNotification } = useFCM(); // Initialize Firebase Cloud Messaging
+  const { toast } = useToast();
+
+  // This effect shows a toast when a new notification arrives.
+  useEffect(() => {
+    if (latestNotification) {
+      toast({
+        title: latestNotification.notification?.title || "¡Nuevo Viaje!",
+        description: latestNotification.notification?.body || "Un pasajero ha solicitado un viaje.",
+        action: (
+             <Button onClick={() => router.push('/driver/rides')} size="sm">
+                Ver Viajes
+            </Button>
+        ),
+        duration: 10000, // Keep toast longer
+      });
+    }
+  }, [latestNotification, toast, router]);
 
   // Query to find any active ride for the current driver
   const activeRideQuery = useMemoFirebase(() => {
