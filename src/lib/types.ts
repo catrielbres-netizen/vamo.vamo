@@ -1,7 +1,7 @@
 
 // src/lib/types.ts
 
-import { type Timestamp } from "firebase/firestore";
+import { type Timestamp, type FieldValue } from "firebase/firestore";
 
 export type ServiceType = "premium" | "privado" | "express";
 
@@ -57,16 +57,16 @@ export interface Ride {
     discountAmount?: number | null;
   };
   status: RideStatus;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  finishedAt?: Timestamp | null;
+  createdAt: Timestamp | FieldValue;
+  updatedAt: Timestamp | FieldValue;
+  finishedAt?: Timestamp | FieldValue | null;
   driverId?: string | null;
   driverName?: string | null;
   driverArrivalInfo?: {
     distanceMeters: number;
     durationSeconds: number;
   } | null;
-  pauseStartedAt?: Timestamp | null;
+  pauseStartedAt?: Timestamp | FieldValue | null;
   pauseHistory?: {
     started: Timestamp;
     ended: Timestamp;
@@ -82,7 +82,7 @@ export interface Ride {
   // --- New fields for dispatch queue ---
   candidates: string[]; // Array of driver UIDs
   currentCandidateIndex: number;
-  expiresAt?: Timestamp | null;
+  expiresAt?: Timestamp | FieldValue | null;
 }
 
 export type UserProfile = {

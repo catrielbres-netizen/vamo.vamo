@@ -20,7 +20,7 @@ import {
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { VamoIcon } from '@/components/VamoIcon';
 import { calculateFare } from '@/lib/pricing';
-import { collection, doc, serverTimestamp, query, where, limit, getDocs } from 'firebase/firestore';
+import { collection, doc, serverTimestamp, query, where, limit, getDocs, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
 import { Separator } from '@/components/ui/separator';
@@ -307,8 +307,8 @@ export default function RidePage() {
         discountAmount: discountAmount,
       },
       status: 'searching_driver' as const,
-      createdAt: serverTimestamp() as Timestamp,
-      updatedAt: serverTimestamp() as Timestamp,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
       finishedAt: null,
       driverId: null,
       pauseStartedAt: null,
