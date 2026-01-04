@@ -47,6 +47,7 @@ const FAKE_PASSENGER_LOCATION = {
 
 // Helper function to determine which services a driver can take
 const canDriverTakeRide = (driverProfile: UserProfile, rideService: ServiceType): boolean => {
+    if (TEST_MODE) return true;
     if (!driverProfile.carModelYear) return false;
     const driverYear = driverProfile.carModelYear;
 
@@ -297,15 +298,23 @@ export default function RidePage() {
     
     const eligibleDrivers = driversSnapshot.docs
         .map(doc => ({ ...doc.data() as UserProfile, id: doc.id }))
-        .filter(driver => driver.isSuspended !== true) // Filter out suspended drivers on the client
-        .filter(driver => driver.currentLocation && canDriverTakeRide(driver, serviceType))
+        .filter(driver => {
+            if (driver.isSuspended) return false;
+            if (TEST_MODE) return true; // In test mode, we don't care about location or service for now
+            return driver.currentLocation && canDriverTakeRide(driver, serviceType)
+        })
         .map(driver => {
-            const distance = haversineDistance(origin, driver.currentLocation!);
+            const location = TEST_MODE ? FAKE_PASSENGER_LOCATION : driver.currentLocation!;
+            const distance = haversineDistance(origin, location);
             return { ...driver, distance };
         })
         .sort((a, b) => a.distance - b.distance); // Sort by distance, closest first
 
     const candidateIds = eligibleDrivers.map(d => d.id);
+
+    console.log("🧪 DRIVERS SNAPSHOT:", driversSnapshot.docs.map(d => d.data()))
+    console.log("🧪 ELIGIBLE DRIVERS:", eligibleDrivers)
+
 
     if (candidateIds.length === 0) {
         toast({ variant: 'destructive', title: 'Sin Conductores', description: 'No hay conductores disponibles para este tipo de servicio en este momento.' });
@@ -544,5 +553,7 @@ export default function RidePage() {
     </>
   );
 }
+
+    
 
     
