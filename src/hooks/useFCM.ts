@@ -64,7 +64,12 @@ export function useFCM() {
       setError(null);
     } catch (err: any) {
       console.error('[FCM ERROR]', err);
-      setError(err.message || 'Error al activar notificaciones');
+      // Silently fail to 'idle' on 403 errors, as it's a platform issue
+      if (err.message?.includes('403')) {
+        setError('El servicio de registro de notificaciones está bloqueado por el proveedor.');
+      } else {
+        setError(err.message || 'Error al activar notificaciones');
+      }
       setStatus('idle');
     }
   }, [user, profile, isSupported, firestore, firebaseApp]);
@@ -80,11 +85,10 @@ export function useFCM() {
       return;
     }
 
-    // Lógica correcta: El push está "enabled" solo si tenemos permiso Y el token está en la base de datos.
     if (Notification.permission === 'granted' && profile?.fcmToken) {
       setStatus('enabled');
     } else {
-      setStatus('idle'); // Si no hay token, estamos 'idle', listos para pedirlo.
+      setStatus('idle'); 
     }
   }, [profile?.fcmToken, isSupported]);
   

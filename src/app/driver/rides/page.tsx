@@ -1,4 +1,3 @@
-
 // /app/driver/rides/page.tsx
 'use client';
 
@@ -19,8 +18,6 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useFCM } from '@/hooks/useFCM';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-
 
 // Helper function to determine which services a driver can see based on their car model year
 const getAllowedServices = (profile: UserProfile | null): ServiceType[] => {
@@ -157,7 +154,6 @@ export default function DriverRidesPage() {
   const handleToggleOnline = (checked: boolean) => {
     if (!firestore || !user?.uid) return;
 
-    // YA NO BLOQUEAMOS POR PUSH. El conductor siempre puede ponerse en línea.
     const userProfileRef = doc(firestore, 'users', user.uid);
     if (checked) {
         updateDocumentNonBlocking(userProfileRef, { driverStatus: 'online' });
@@ -315,7 +311,7 @@ export default function DriverRidesPage() {
                 <VamoIcon name="alert-triangle" className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                 <AlertTitle className="text-yellow-800 dark:text-yellow-300">Notificaciones Desactivadas</AlertTitle>
                 <AlertDescription className="text-yellow-700 dark:text-yellow-500">
-                    Para recibir viajes con la app cerrada, necesitás activar las notificaciones push. Podés seguir en línea, pero solo verás los viajes si mantenés la app abierta.
+                    Podés seguir en línea, pero solo verás los viajes si mantenés la app abierta y en primer plano. Para recibir viajes con la app cerrada, activá las notificaciones.
                 </AlertDescription>
                 <div className="mt-4">
                   <PushActivationUI />
