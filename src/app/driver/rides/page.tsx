@@ -106,6 +106,14 @@ export default function DriverRidesPage() {
     if (!firestore || !user?.uid) return;
     const userProfileRef = doc(firestore, 'users', user.uid);
     if (checked) {
+        if (notificationPermission !== 'granted') {
+             toast({
+                variant: 'destructive',
+                title: 'Notificaciones Bloqueadas',
+                description: 'No podés ponerte en línea sin las notificaciones activadas. Hacé clic en "Activar Notificaciones" para habilitarlas.',
+            });
+            return;
+        }
         updateDocumentNonBlocking(userProfileRef, { driverStatus: 'online' });
     } else {
         updateDocumentNonBlocking(userProfileRef, { driverStatus: 'inactive', currentLocation: null });
@@ -278,10 +286,10 @@ export default function DriverRidesPage() {
              {notificationPermission !== 'granted' && (
                 <Alert variant="destructive">
                     <VamoIcon name="alert-triangle" className="h-4 w-4" />
-                    <AlertTitle>Activar Notificaciones</AlertTitle>
+                    <AlertTitle>Activar Notificaciones es Obligatorio</AlertTitle>
                     <AlertDescription>
-                        Para no perderte ningún viaje, necesitás activar las notificaciones.
-                        <Button variant="link" className="p-0 h-auto ml-1" onClick={requestPermission}>Activar ahora</Button>
+                        Para poder ponerte en línea y recibir viajes, necesitás habilitar las notificaciones. Hacé clic acá y aceptá el permiso en tu navegador.
+                        <Button variant="link" className="p-0 h-auto ml-1 text-destructive-foreground font-bold" onClick={requestPermission}>Activar ahora</Button>
                     </AlertDescription>
                 </Alert>
             )}

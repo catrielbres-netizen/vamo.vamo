@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export function useFCM() {
   const firebaseApp = useFirebaseApp();
-  const { profile, user } = useUser();
+  const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
 
@@ -28,7 +28,7 @@ export function useFCM() {
 
     const messaging = getMessaging(firebaseApp);
 
-    // 2. Handle foreground messages
+    // Handle foreground messages
     const unsubscribe = onMessage(messaging, (payload) => {
       console.log('Foreground message received. ', payload);
       setLatestNotification(payload); // Set the payload in state
@@ -48,7 +48,7 @@ export function useFCM() {
     
     // 1. Request Permission
     const permission = await Notification.requestPermission();
-    setNotificationPermission(permission);
+    setNotificationPermission(permission); // Update state immediately
 
     if (permission === 'granted') {
         console.log('Notification permission granted.');
@@ -67,8 +67,7 @@ export function useFCM() {
                 });
                 toast({ title: '¡Notificaciones activadas!', description: 'Estás listo para recibir alertas de viaje.' });
             } else {
-                console.log('No registration token available. Request permission to generate one.');
-                toast({ variant: 'destructive', title: 'No se pudo obtener el token', description: 'Por favor, intentá de nuevo.' });
+                toast({ variant: 'destructive', title: 'No se pudo obtener el token', description: 'Por favor, intentá de nuevo. Es posible que necesites recargar la página.' });
             }
         } catch (err) {
             console.error('An error occurred while retrieving token or saving it.', err);
@@ -78,7 +77,8 @@ export function useFCM() {
         toast({
             variant: 'destructive',
             title: 'Notificaciones Bloqueadas',
-            description: 'Para recibir alertas de viaje, por favor habilitá las notificaciones para este sitio en la configuración de tu navegador.',
+            description: 'Para recibir alertas, por favor habilitá las notificaciones para este sitio en la configuración de tu navegador y luego recargá la página.',
+            duration: 10000,
         });
     }
   }
