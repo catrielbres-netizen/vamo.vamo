@@ -276,14 +276,14 @@ export default function RidePage() {
         return;
     }
     
-    let currentUser = user;
-    if (!currentUser) {
-        initiateAnonymousSignIn(auth);
+    // FIX: Do not initiate anonymous sign in. Wait for the user object to be ready.
+    if (!user) {
         toast({
-            title: 'Iniciando sesión...',
-            description: 'Un momento por favor. Vuelve a presionar "Pedir Viaje" en unos segundos.',
+            variant: 'destructive',
+            title: 'Sesión no lista',
+            description: 'Tu sesión se está cargando. Por favor, esperá un momento y volvé a intentarlo.',
         });
-        return; 
+        return;
     }
 
     if (!userProfileRef) {
@@ -352,7 +352,7 @@ export default function RidePage() {
 
     const ridesCollection = collection(firestore, 'rides');
     const newRideData: Omit<Ride, 'id'> = {
-      passengerId: currentUser.uid,
+      passengerId: user.uid,
       passengerName: profile?.name || 'Pasajero Anónimo',
       origin: { lat: origin.lat, lng: origin.lng, address: origin.address },
       destination: {
