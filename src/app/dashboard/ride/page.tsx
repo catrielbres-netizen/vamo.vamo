@@ -37,18 +37,26 @@ import MapSelector from '@/components/MapSelector';
 // Helper function to determine which services a driver can take
 const canDriverTakeRide = (driverProfile: UserProfile, rideService: ServiceType): boolean => {
     if (!driverProfile.carModelYear) return false;
-    const year = driverProfile.carModelYear;
+    const driverYear = driverProfile.carModelYear;
 
-    switch (rideService) {
-        case 'premium':
-            return year >= 2022;
-        case 'privado':
-            return year >= 2016;
-        case 'express':
-            return true; // Any approved driver can take express
-        default:
-            return false;
-    }
+    // Define the hierarchy of services
+    const serviceHierarchy: Record<ServiceType, number> = {
+        premium: 3,
+        privado: 2,
+        express: 1,
+    };
+
+    // Define the year requirements for each driver category
+    const driverCategoryLevel = (() => {
+        if (driverYear >= 2022) return serviceHierarchy.premium;
+        if (driverYear >= 2016) return serviceHierarchy.privado;
+        return serviceHierarchy.express;
+    })();
+    
+    const requestedServiceLevel = serviceHierarchy[rideService];
+
+    // A driver can take a ride if their category level is equal to or higher than the requested service level.
+    return driverCategoryLevel >= requestedServiceLevel;
 };
 
 
