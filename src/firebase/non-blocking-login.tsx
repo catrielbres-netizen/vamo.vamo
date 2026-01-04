@@ -63,6 +63,7 @@ export async function initiateDriverEmailSignUp(authInstance: Auth, firestore: F
         averageRating: 0,
         ridesCompleted: 0,
         vehicleVerificationStatus: 'unverified',
+        isSuspended: false,
     };
 
     await setDoc(userProfileRef, newDriverProfile, { merge: true });

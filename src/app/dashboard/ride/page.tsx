@@ -271,14 +271,14 @@ export default function RidePage() {
         collection(firestore, 'users'),
         where('role', '==', 'driver'),
         where('driverStatus', '==', 'online'),
-        where('approved', '==', true),
-        where('isSuspended', '!=', true)
+        where('approved', '==', true)
     );
 
     const driversSnapshot = await getDocs(onlineDriversQuery);
     
     const eligibleDrivers = driversSnapshot.docs
         .map(doc => ({ ...doc.data() as UserProfile, id: doc.id }))
+        .filter(driver => driver.isSuspended !== true) // Filter out suspended drivers on the client
         .filter(driver => driver.currentLocation && canDriverTakeRide(driver, serviceType))
         .map(driver => {
             const distance = haversineDistance(origin, driver.currentLocation!);
