@@ -1,3 +1,4 @@
+
 // /app/driver/rides/page.tsx
 'use client';
 
@@ -19,7 +20,6 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useFCM } from '@/hooks/useFCM';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 
 
@@ -67,12 +67,62 @@ const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, 
 }
 
 
+const PushActivationUI = () => {
+    const { status, enablePush, isSupported } = useFCM();
+
+    if (!isSupported) {
+        return (
+            <Alert variant="destructive">
+                <VamoIcon name="alert-triangle" className="h-4 w-4" />
+                <AlertTitle>Navegador no Compatible</AlertTitle>
+                <AlertDescription>
+                    Tu navegador no soporta notificaciones push. Para recibir alertas de viaje, usá Chrome o Edge.
+                </AlertDescription>
+            </Alert>
+        );
+    }
+    
+    switch (status) {
+        case 'enabled':
+            return (
+                <div className="flex items-center justify-center gap-2 p-2 rounded-lg bg-green-500/10 text-green-500 border border-green-500/20">
+                    <VamoIcon name="bell" className="h-4 w-4"/>
+                    <p className="text-sm font-medium">Notificaciones activas</p>
+                </div>
+            );
+        case 'blocked':
+             return (
+                <Alert variant="destructive">
+                    <VamoIcon name="alert-triangle" className="h-4 w-4" />
+                    <AlertTitle>Notificaciones Bloqueadas</AlertTitle>
+                    <AlertDescription>
+                        Para recibir viajes, necesitás habilitar las notificaciones para este sitio en la configuración de tu navegador. Hacé clic en el ícono del candado (🔒) en la barra de direcciones.
+                    </AlertDescription>
+                </Alert>
+            );
+        case 'idle':
+            return (
+                <Button variant="default" size="sm" onClick={enablePush} className="w-full">
+                    Activar Notificaciones para Viajes
+                </Button>
+            );
+        case 'loading':
+            return (
+                <Button variant="secondary" size="sm" disabled className="w-full">
+                    <VamoIcon name="loader" className="animate-spin mr-2" />
+                    Activando...
+                </Button>
+            );
+        default:
+            return null;
+    }
+}
+
+
 export default function DriverRidesPage() {
   const firestore = useFirestore();
   const { user, profile, loading: isUserLoading } = useUser();
   const { toast } = useToast();
-  const router = useRouter();
-  const { isSupported, requestPermission } = useFCM();
   
   const [activeRide, setActiveRide] = useState<WithId<Ride> | null>(null);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
@@ -83,9 +133,7 @@ export default function DriverRidesPage() {
   const previousAvailableRides = useRef<WithId<Ride>[]>([]);
 
   const isOnline = profile?.driverStatus === 'online';
-  // Memoize allowedServices to prevent re-renders
   const allowedServices = useMemoFirebase(() => getAllowedServices(profile), [profile]);
-  const hasFCMToken = useMemo(() => !!profile?.fcmToken, [profile?.fcmToken]);
 
 
   // Only query for rides if the driver is approved, online, and has services they can fulfill
@@ -111,12 +159,11 @@ export default function DriverRidesPage() {
     if (!firestore || !user?.uid) return;
     const userProfileRef = doc(firestore, 'users', user.uid);
     if (checked) {
-        // The check is now based on having a token, not just the permission.
-        if (!hasFCMToken) {
+        if (!profile?.fcmToken) {
              toast({
                 variant: 'destructive',
                 title: 'Notificaciones No Activadas',
-                description: 'No podés ponerte en línea sin las notificaciones activadas. Hacé clic en el botón "Activar Notificaciones" para habilitarlas.',
+                description: 'No podés ponerte en línea sin las notificaciones activadas. Hacé clic en el botón para habilitarlas.',
             });
             return;
         }
@@ -284,34 +331,7 @@ export default function DriverRidesPage() {
                 />
             </div>
             
-            {!isSupported ? (
-                <Alert variant="destructive">
-                    <VamoIcon name="alert-triangle" className="h-4 w-4" />
-                    <AlertTitle>Navegador no Compatible</AlertTitle>
-                    <AlertDescription>
-                        Tu navegador actual no soporta notificaciones push. Para recibir alertas de viaje, por favor usá Chrome, Edge o Firefox en una computadora o un celular Android.
-                    </AlertDescription>
-                </Alert>
-            ) : !hasFCMToken ? ( // The core logic change: check for the token, not the permission
-                <Alert variant="destructive">
-                    <VamoIcon name="alert-triangle" className="h-4 w-4" />
-                    <AlertTitle>Acción Requerida: Habilitar Notificaciones</AlertTitle>
-                    <AlertDescription className="flex flex-col gap-3">
-                        <p>Para no perderte ningún viaje con la app cerrada, las notificaciones son esenciales.</p>
-                        <p className="text-xs">Si el botón no funciona, es posible que debas permitir las notificaciones manualmente haciendo clic en el ícono del candado (🔒) en la barra de direcciones.</p>
-                        <div className='flex gap-2'>
-                           <Button variant="destructive" size="sm" onClick={requestPermission}>
-                             Activar Notificaciones
-                           </Button>
-                        </div>
-                    </AlertDescription>
-                </Alert>
-            ) : (
-                 <div className="flex items-center justify-center gap-2 p-2 rounded-lg bg-green-500/10 text-green-500 border border-green-500/20">
-                    <VamoIcon name="bell" className="h-4 w-4"/>
-                    <p className="text-sm font-medium">Notificaciones activas</p>
-                </div>
-            )}
+            <PushActivationUI />
 
             {isOnline && (
                 <>
@@ -364,3 +384,4 @@ export default function DriverRidesPage() {
     </>
   );
 }
+

@@ -22,24 +22,10 @@ export default function DriverLayout({
   const pathname = usePathname();
   const { profile, user, loading: userLoading } = useUser();
   const firestore = useFirestore();
-  const { latestNotification } = useFCM(); // Initialize Firebase Cloud Messaging
-  const { toast } = useToast();
+  
+  // Initialize FCM hook at the layout level to ensure it's always active
+  useFCM(); 
 
-  // This effect shows a toast when a new notification arrives.
-  useEffect(() => {
-    if (latestNotification) {
-      toast({
-        title: latestNotification.notification?.title || "¡Nuevo Viaje!",
-        description: latestNotification.notification?.body || "Un pasajero ha solicitado un viaje.",
-        action: (
-             <Button onClick={() => router.push('/driver/rides')} size="sm">
-                Ver Viajes
-            </Button>
-        ),
-        duration: 10000, // Keep toast longer
-      });
-    }
-  }, [latestNotification, toast, router]);
 
   // Query to find any active ride for the current driver
   const activeRideQuery = useMemoFirebase(() => {
