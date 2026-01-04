@@ -1,9 +1,8 @@
-
 'use client';
 
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'
 import { getMessaging } from 'firebase/messaging';
 
@@ -31,9 +30,13 @@ export function getSdks(firebaseApp: FirebaseApp) {
     }
   }
 
+  const auth = getAuth(firebaseApp);
+  // Set persistence to local to avoid session loss on tab close/reload
+  setPersistence(auth, browserLocalPersistence);
+
   return {
     firebaseApp,
-    auth: getAuth(firebaseApp),
+    auth: auth,
     firestore: getFirestore(firebaseApp),
     messaging: messaging
   };
