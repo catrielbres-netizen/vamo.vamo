@@ -1,3 +1,4 @@
+// src/app/dashboard/ride/page.tsx
 
 'use client';
 
@@ -38,8 +39,8 @@ import MapSelector from '@/components/MapSelector';
 // ¡PONER EN FALSE ANTES DE IR A PRODUCCIÓN!
 const TEST_MODE = true;
 const FAKE_PASSENGER_LOCATION = { 
-    lat: -43.2965, // Cercano a Musters 2890
-    lng: -65.038,
+    lat: -43.3005, // Cercano a la terminal de Rawson
+    lng: -65.1020,
     address: 'Ubicación de Prueba (Pasajero)'
 };
 // --------------------

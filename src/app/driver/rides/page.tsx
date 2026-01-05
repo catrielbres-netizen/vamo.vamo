@@ -1,4 +1,3 @@
-
 // /app/driver/rides/page.tsx
 'use client';
 
@@ -24,7 +23,7 @@ import { Button } from '@/components/ui/button';
 // Si es true, usa una ubicación fija en Rawson para simular el GPS.
 // ¡PONER EN FALSE ANTES DE IR A PRODUCCIÓN!
 const TEST_MODE = true;
-const FAKE_DRIVER_LOCATION = { lat: -43.309, lng: -65.039 }; // Musters 2890, Playa Unión
+const FAKE_DRIVER_LOCATION = { lat: -43.3009, lng: -65.1018 }; // Terminal de Rawson, Chubut
 // --------------------
 
 
@@ -182,7 +181,7 @@ export default function DriverRidesPage() {
         const userProfileRef = doc(firestore, 'users', user.uid);
 
         if (TEST_MODE) {
-            toast({ title: 'Modo de Prueba', description: 'Ubicación de conductor fijada en Rawson.' });
+            toast({ title: 'Modo de Prueba', description: 'Ubicación de conductor fijada en la Terminal de Rawson.' });
             updateDocumentNonBlocking(userProfileRef, { currentLocation: FAKE_DRIVER_LOCATION });
             return;
         }
