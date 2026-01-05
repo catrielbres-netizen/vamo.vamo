@@ -308,11 +308,22 @@ export default function RidePage() {
         .filter(driver => {
             if (driver.isSuspended) return false;
             
+            // --- "Middleware" de Asignación ---
+            // Regla 1: El crédito pagado del conductor debe ser >= 0
+            const paidCredit = driver.platformCreditPaid ?? 0;
+            if (paidCredit < 0) {
+                console.log(`❌ Driver ${driver.id} descartado: crédito insuficiente (${paidCredit})`);
+                return false;
+            }
+
+            // Regla 2: El vehículo del conductor debe ser compatible con el servicio solicitado
             const isEligibleForService = canDriverTakeRide(driver, serviceType);
             if (!isEligibleForService) {
                 console.log(`❌ Driver ${driver.id} descartado: año ${driver.carModelYear} no es compatible para servicio ${serviceType}`);
+                return false;
             }
-            return driver.currentLocation && isEligibleForService;
+            // Regla 3: Debe tener una ubicación válida
+            return !!driver.currentLocation;
         })
         .map(driver => {
             const location = driver.currentLocation!;
