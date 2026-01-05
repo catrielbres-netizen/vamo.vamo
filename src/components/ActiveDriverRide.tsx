@@ -1,4 +1,3 @@
-
 // @/components/ActiveDriverRide.tsx
 'use client';
 
@@ -114,16 +113,16 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
         ];
     }
 
-    if(newStatus === 'arrived' && profile?.currentLocation) {
+    if(newStatus === 'arrived') {
         if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) {
             toast({ variant: "destructive", title: "Error", description: "La API de Google Maps no está disponible." });
             return;
         }
-        // When arriving, re-calculate route to destination
+        // When arriving, re-calculate route to destination from the ride's origin point
         const directionsService = new window.google.maps.DirectionsService();
         directionsService.route(
             {
-                origin: new window.google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
+                origin: new window.google.maps.LatLng(ride.origin.lat, ride.origin.lng),
                 destination: new window.google.maps.LatLng(ride.destination.lat, ride.destination.lng),
                 travelMode: window.google.maps.TravelMode.DRIVING,
             },
