@@ -3,7 +3,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp, writeBatch, runTransaction } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp, writeBatch, runTransaction, FieldValue } from 'firebase/firestore';
 import { Ride, DriverSummary, UserProfile, AuditLog } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
@@ -159,7 +159,7 @@ export default function DriverDetailPage() {
         try {
             const batch = writeBatch(firestore);
             
-            const updatePayload: Partial<UserProfile> = {
+            const updatePayload: Partial<UserProfile> & { updatedAt: FieldValue } = {
                 vehicleVerificationStatus: newStatus,
                 approved: newStatus === 'approved',
                 updatedAt: serverTimestamp(),
