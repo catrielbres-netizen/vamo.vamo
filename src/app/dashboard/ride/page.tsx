@@ -34,21 +34,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import MapSelector from '@/components/MapSelector';
 
-// --- MODO DE PRUEBA ---
-// Si es true, usa una ubicación fija en Rawson para simular el GPS.
-// ¡PONER EN FALSE ANTES DE IR A PRODUCCIÓN!
-const TEST_MODE = true;
+
 const FAKE_PASSENGER_LOCATION = { 
-    lat: -43.3005, // Cercano a la terminal de Rawson
-    lng: -65.1020,
+    lat: -43.298, // Cercano a Playa Union
+    lng: -65.035,
     address: 'Ubicación de Prueba (Pasajero)'
 };
-// --------------------
 
 
 // Helper function to determine which services a driver can take
 const canDriverTakeRide = (driverProfile: UserProfile, rideService: ServiceType): boolean => {
     // EN TEST_MODE, CUALQUIER CONDUCTOR PUEDE TOMAR CUALQUIER VIAJE
+    const TEST_MODE = process.env.NODE_ENV !== 'production';
     if (TEST_MODE) return true;
 
     if (!driverProfile.carModelYear) return false;
@@ -315,17 +312,10 @@ export default function RidePage() {
             if (!isEligibleForService) {
                 console.log(`❌ Driver ${driver.id} descartado: año ${driver.carModelYear} no es compatible para servicio ${serviceType}`);
             }
-
-            // In TEST_MODE, we ignore the currentLocation check for filtering, but use it for sorting
-            if (TEST_MODE) return isEligibleForService;
-
             return driver.currentLocation && isEligibleForService;
         })
         .map(driver => {
-            const location = TEST_MODE && !driver.currentLocation 
-              ? FAKE_PASSENGER_LOCATION // Assume driver is near passenger in test if no location
-              : driver.currentLocation!;
-
+            const location = driver.currentLocation!;
             const distance = haversineDistance(origin, location);
             return { ...driver, distance };
         })
@@ -416,14 +406,9 @@ export default function RidePage() {
   }
 
   const handleUseCurrentLocation = () => {
-    if (TEST_MODE) {
-        setOrigin(FAKE_PASSENGER_LOCATION);
-        toast({ title: 'Modo de Prueba', description: 'Ubicación de origen fijada en Rawson.' });
-        return;
-    }
-
     if (!navigator.geolocation) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Tu navegador no soporta geolocalización.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Tu navegador no soporta geolocalización. Usando ubicación de respaldo.' });
+      setOrigin(FAKE_PASSENGER_LOCATION);
       return;
     }
     
@@ -450,7 +435,8 @@ export default function RidePage() {
         });
       },
       () => {
-        toast({ variant: 'destructive', title: 'Error de ubicación', description: 'No se pudo obtener tu ubicación. Asegurate de tener los permisos activados.' });
+        toast({ variant: 'destructive', title: 'Error de ubicación', description: 'No se pudo obtener tu ubicación. Usando ubicación de respaldo.' });
+        setOrigin(FAKE_PASSENGER_LOCATION);
       }
     );
   };

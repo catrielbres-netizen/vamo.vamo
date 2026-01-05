@@ -19,12 +19,8 @@ import { Label } from '@/components/ui/label';
 import { useFCM } from '@/hooks/useFCM';
 import { Button } from '@/components/ui/button';
 
-// --- MODO DE PRUEBA ---
-// Si es true, usa una ubicación fija en Rawson para simular el GPS.
-// ¡PONER EN FALSE ANTES DE IR A PRODUCCIÓN!
-const TEST_MODE = true;
-const FAKE_DRIVER_LOCATION = { lat: -43.3009, lng: -65.1018 }; // Terminal de Rawson, Chubut
-// --------------------
+// Ubicación de respaldo para cuando el GPS no está disponible (ej. en una computadora)
+const FALLBACK_DRIVER_LOCATION = { lat: -43.3009, lng: -65.1018 }; // Terminal de Rawson, Chubut
 
 
 // Helper function to determine which services a driver can see based on their car model year
@@ -180,12 +176,6 @@ export default function DriverRidesPage() {
     const startLocationTracking = () => {
         const userProfileRef = doc(firestore, 'users', user.uid);
 
-        if (TEST_MODE) {
-            toast({ title: 'Modo de Prueba', description: 'Ubicación de conductor fijada en la Terminal de Rawson.' });
-            updateDocumentNonBlocking(userProfileRef, { currentLocation: FAKE_DRIVER_LOCATION });
-            return;
-        }
-
         if (locationWatchId.current !== null) return; // Already tracking
         
         locationWatchId.current = navigator.geolocation.watchPosition(
@@ -199,9 +189,11 @@ export default function DriverRidesPage() {
                 console.warn("Error al obtener ubicación del conductor:", error.message);
                 toast({
                     variant: 'destructive',
-                    title: 'Error de Ubicación',
-                    description: 'No se pudo acceder a tu GPS. No podrás recibir viajes.'
-                })
+                    title: 'Error de GPS',
+                    description: 'No se pudo acceder a tu ubicación. Usando ubicación de respaldo en la Terminal de Rawson.'
+                });
+                // Si el GPS falla (ej. en desktop), usamos la ubicación de respaldo
+                updateDocumentNonBlocking(userProfileRef, { currentLocation: FALLBACK_DRIVER_LOCATION });
             },
             { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
         );
