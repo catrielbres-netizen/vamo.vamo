@@ -123,7 +123,8 @@ export type UserProfile = {
     driverStatus?: DriverStatus;
     carModelYear?: number | null;
     vehicleVerificationStatus?: VerificationStatus;
-    platformCredit?: number;
+    platformCreditPaid?: number; // Saldo que el conductor carga
+    platformCreditPromo?: number; // Saldo promocional de bienvenida
     promoCreditGranted?: boolean; // Flag to ensure promo is granted only once
     currentLocation?: {
       lat: number;

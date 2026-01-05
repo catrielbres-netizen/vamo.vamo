@@ -1,8 +1,9 @@
+
 // @/components/ActiveDriverRide.tsx
 'use client';
 
 import { useFirestore, useUser } from '@/firebase';
-import { doc, serverTimestamp, Timestamp, runTransaction } from 'firebase/firestore';
+import { doc, serverTimestamp, Timestamp, runTransaction, FieldValue } from 'firebase/firestore';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Button } from '@/components/ui/button';
 import {
@@ -134,7 +135,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 }
 
                 const driverData = driverDoc.data() as UserProfile;
-                const currentCredit = driverData.platformCredit || 0;
+                const ridesCompleted = driverData.ridesCompleted || 0;
                 
                 // Calculate final fare
                 const totalWaitTimeSeconds = totalAccumulatedWaitSeconds;
@@ -145,11 +146,13 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                     isNight: false,
                 });
 
-                // Calculate commission for THIS ride
-                const commissionRate = getCommissionRate(driverData.ridesCompleted || 0);
+                // Calculate commission for THIS ride based on completed rides BEFORE this one
+                const commissionRate = getCommissionRate(ridesCompleted);
                 const rideCommission = finalPrice * commissionRate;
 
-                const newCredit = currentCredit - rideCommission;
+                // Debit commission ONLY from the paid credit balance
+                const currentPaidCredit = driverData.platformCreditPaid || 0;
+                const newPaidCredit = currentPaidCredit - rideCommission;
                 
                 // --- Prepare Ride Update ---
                 const finalPricing = { ...ride.pricing, finalTotal: finalPrice, rideCommission: rideCommission };
@@ -170,7 +173,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
 
                 // --- Prepare Driver Profile Update ---
                 transaction.update(driverRef, { 
-                    platformCredit: newCredit,
+                    platformCreditPaid: newPaidCredit,
                     ridesCompleted: (driverData.ridesCompleted || 0) + 1,
                 });
 

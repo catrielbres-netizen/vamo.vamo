@@ -118,10 +118,10 @@ export default function DriverDetailPage() {
                     throw new Error("El conductor no existe.");
                 }
 
-                const currentCredit = driverDoc.data().platformCredit || 0;
+                const currentCredit = driverDoc.data().platformCreditPaid || 0;
                 const newCredit = currentCredit + amount;
                 
-                transaction.update(driverProfileRef, { platformCredit: newCredit });
+                transaction.update(driverProfileRef, { platformCreditPaid: newCredit });
 
                 const auditLogRef = doc(collection(firestore, 'auditLogs'));
                 const logEntry: Omit<AuditLog, 'timestamp' | 'details' | 'id'> & { timestamp: FieldValue; details: string; } = {
@@ -130,14 +130,14 @@ export default function DriverDetailPage() {
                     action: 'platform_credit_adjusted',
                     entityId: driverId,
                     timestamp: serverTimestamp(),
-                    details: `Crédito ajustado en ${formatCurrency(amount)}. Saldo anterior: ${formatCurrency(currentCredit)}. Saldo nuevo: ${formatCurrency(newCredit)}.`
+                    details: `Crédito pagado ajustado en ${formatCurrency(amount)}. Saldo anterior: ${formatCurrency(currentCredit)}. Saldo nuevo: ${formatCurrency(newCredit)}.`
                 };
                 transaction.set(auditLogRef, logEntry);
             });
 
             toast({
                 title: '¡Crédito ajustado!',
-                description: `El nuevo saldo del conductor es ${formatCurrency((driver?.platformCredit || 0) + amount)}.`
+                description: `El nuevo saldo pagado del conductor es ${formatCurrency((driver?.platformCreditPaid || 0) + amount)}.`
             });
             setCreditAdjustment('');
 
@@ -168,7 +168,7 @@ export default function DriverDetailPage() {
             // Grant promo credit on first approval
             const WELCOME_BONUS = 5000;
             if (newStatus === 'approved' && !driver.promoCreditGranted) {
-                updatePayload.platformCredit = (driver.platformCredit || 0) + WELCOME_BONUS;
+                updatePayload.platformCreditPromo = (driver.platformCreditPromo || 0) + WELCOME_BONUS;
                 updatePayload.promoCreditGranted = true;
             }
 
@@ -290,7 +290,9 @@ export default function DriverDetailPage() {
     const netToReceive = totalEarnings - commissionOwed + bonusesApplied;
     const verificationInfo = verificationStatusBadge[driver.vehicleVerificationStatus || 'unverified'];
     const isSummaryPending = summary?.status === 'pending' && commissionOwed > 0;
-    const platformCredit = driver.platformCredit ?? 0;
+    const platformCreditPaid = driver.platformCreditPaid ?? 0;
+    const platformCreditPromo = driver.platformCreditPromo ?? 0;
+    const totalCredit = platformCreditPaid + platformCreditPromo;
 
     return (
         <div className="space-y-6">
@@ -368,12 +370,18 @@ export default function DriverDetailPage() {
                             <VamoIcon name="wallet" /> Crédito de Plataforma
                         </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <p className="text-3xl font-bold">{formatCurrency(platformCredit)}</p>
-                        <p className="text-sm text-muted-foreground">Saldo actual del conductor.</p>
+                    <CardContent className="space-y-4">
+                        <div>
+                             <p className="text-3xl font-bold">{formatCurrency(totalCredit)}</p>
+                             <p className="text-sm text-muted-foreground">Saldo Total Disponible</p>
+                        </div>
+                        <div className="text-xs space-y-1 text-muted-foreground">
+                            <p>Pagado: <span className="font-medium">{formatCurrency(platformCreditPaid)}</span></p>
+                             <p>Promocional: <span className="font-medium">{formatCurrency(platformCreditPromo)}</span></p>
+                        </div>
                     </CardContent>
                     <CardFooter className="flex-col items-start gap-2">
-                         <Label htmlFor="credit-adjustment">Ajustar Crédito</Label>
+                         <Label htmlFor="credit-adjustment">Ajustar Crédito Pagado</Label>
                          <div className="flex w-full items-center gap-2">
                              <Input
                                 id="credit-adjustment"
@@ -387,7 +395,7 @@ export default function DriverDetailPage() {
                                 {isAdjustingCredit ? <VamoIcon name="loader" className="animate-spin" /> : <VamoIcon name="check" />}
                             </Button>
                          </div>
-                        <p className="text-xs text-muted-foreground">Usá valores positivos para agregar crédito (cargas) y negativos para debitar (ajustes).</p>
+                        <p className="text-xs text-muted-foreground">Ajusta el saldo que el conductor carga. El promocional no se toca.</p>
                     </CardFooter>
                 </Card>
 

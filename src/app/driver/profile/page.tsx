@@ -30,12 +30,13 @@ function formatCurrency(value: number) {
 }
 
 
-const ProfileInfoRow = ({ icon, label, value, valueClassName }: { icon: React.ReactNode, label: string, value: string | number | null | undefined, valueClassName?: string }) => (
-    <div className="flex items-center gap-4 text-sm">
-        <div className="text-muted-foreground w-6">{icon}</div>
+const ProfileInfoRow = ({ icon, label, value, valueClassName, children }: { icon: React.ReactNode, label: string, value?: string | number | null, valueClassName?: string, children?: React.ReactNode }) => (
+    <div className="flex items-start gap-4 text-sm">
+        <div className="text-muted-foreground w-6 pt-0.5">{icon}</div>
         <div className="flex-1">
             <p className="text-muted-foreground">{label}</p>
-            <p className={cn("font-medium", valueClassName)}>{value || 'No especificado'}</p>
+            {value && <p className={cn("font-medium", valueClassName)}>{value}</p>}
+            {children}
         </div>
     </div>
 );
@@ -79,7 +80,9 @@ export default function DriverProfilePage() {
   
   const verificationInfo = verificationStatusBadge[profile.vehicleVerificationStatus || 'unverified'];
   const averageRating = profile.averageRating?.toFixed(1) ?? 'N/A';
-  const platformCredit = profile.platformCredit ?? 0;
+  const platformCreditPaid = profile.platformCreditPaid ?? 0;
+  const platformCreditPromo = profile.platformCreditPromo ?? 0;
+  const totalCredit = platformCreditPaid + platformCreditPromo;
 
   return (
     <div className="space-y-6">
@@ -100,10 +103,14 @@ export default function DriverProfilePage() {
             <ProfileInfoRow icon={<VamoIcon name="star" />} label="Rating Promedio" value={averageRating} />
             <ProfileInfoRow 
               icon={<VamoIcon name="wallet" />} 
-              label="Crédito de Plataforma" 
-              value={formatCurrency(platformCredit)} 
-              valueClassName={cn("text-lg font-bold", platformCredit > 0 ? "text-green-500" : "text-destructive")}
-            />
+              label="Crédito de Plataforma"
+              valueClassName={cn("text-lg font-bold", totalCredit > 0 ? "text-green-500" : "text-destructive")}
+            >
+                <p className={cn("text-lg font-bold", totalCredit > 0 ? "text-green-500" : "text-destructive")}>{formatCurrency(totalCredit)}</p>
+                <p className="text-xs text-muted-foreground">
+                    (Pagado: {formatCurrency(platformCreditPaid)} + Promo: {formatCurrency(platformCreditPromo)})
+                </p>
+            </ProfileInfoRow>
         </CardContent>
         <CardContent>
              <Button variant="outline" size="sm" onClick={handleLogout} className="w-full">
