@@ -28,13 +28,21 @@ export default function RatingForm({ participantName, participantRole, onSubmit,
   };
 
   if (isSubmitted) {
-    // Don't render the form at all if already submitted, parent will handle next step
-    return null;
+    return (
+         <CardContent className="pt-4">
+            <div className="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-center">
+                <p className="font-semibold text-green-600 dark:text-green-400 flex items-center justify-center gap-2">
+                    <VamoIcon name="shield-check" className="w-5 h-5"/> ¡Calificación enviada!
+                </p>
+                <p className="text-xs text-green-500 dark:text-green-500">Gracias por tu feedback.</p>
+            </div>
+        </CardContent>
+    );
   }
 
   return (
-    <Card className="mt-4 border-primary">
-      <CardHeader>
+    <>
+      <CardHeader className="pt-6">
         <CardTitle className='text-base'>Calificá a tu {participantRole}</CardTitle>
         <CardDescription>{participantName}</CardDescription>
       </CardHeader>
@@ -63,10 +71,10 @@ export default function RatingForm({ participantName, participantRole, onSubmit,
         />
       </CardContent>
        <CardFooter>
-            <Button onClick={handleSubmit} className="w-full">
+            <Button onClick={handleSubmit} className="w-full" disabled={rating === 0}>
                 {submitButtonText}
             </Button>
       </CardFooter>
-    </Card>
+    </>
   );
 }

@@ -162,11 +162,9 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
   const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
   const currentTotal = (ride.pricing.finalTotal || ride.pricing.estimatedTotal) + waitingCost;
   
-  const finalPrice = ride.pricing.finalTotal || ride.pricing.estimatedTotal;
-
   if (ride.status === 'finished' || ride.status === 'cancelled') {
     const isCancelled = ride.status === 'cancelled';
-    const waitingCostFinal = Math.ceil(totalAccumulatedWaitSeconds / 60) * WAITING_PER_MIN;
+    
     const rideDate = ride.finishedAt instanceof Timestamp 
         ? format((ride.finishedAt as Timestamp).toDate(), "d 'de' MMMM, HH:mm'hs'", { locale: es })
         : 'Fecha no disponible';
@@ -182,7 +180,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                 </CardDescription>
             </CardHeader>
 
-            {!isCancelled && (
+            {!isCancelled && ride.completedRide ? (
               <>
                 <CardContent className="space-y-4">
                     <div className="text-sm space-y-2 p-3 bg-secondary/50 rounded-lg">
@@ -204,23 +202,29 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
 
                     <div className="border-t border-b py-4 space-y-2">
                         <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">Tarifa base del viaje</span>
-                            <span>{formatCurrency(finalPrice - waitingCostFinal)}</span>
+                            <span className="text-muted-foreground">Distancia</span>
+                            <span>{(ride.completedRide.distanceMeters / 1000).toFixed(1)} km</span>
                         </div>
-                        {ride.pricing.discountAmount && ride.pricing.discountAmount > 0 ? (
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground">Duración del viaje</span>
+                            <span>{formatDuration(ride.completedRide.durationSeconds)}</span>
+                        </div>
+                        {ride.completedRide.waitingSeconds > 0 && (
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">Tiempo de espera</span>
+                                <span>{formatDuration(ride.completedRide.waitingSeconds)}</span>
+                            </div>
+                        )}
+                         {ride.pricing.discountAmount && ride.pricing.discountAmount > 0 && (
                             <div className="flex justify-between items-center text-sm text-green-500">
                                  <span className="text-muted-foreground">Descuento VamO</span>
                                  <span>-{formatCurrency(ride.pricing.discountAmount)}</span>
                             </div>
-                        ) : null}
-                        <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">Costo por espera</span>
-                            <span>{formatCurrency(waitingCostFinal)}</span>
-                        </div>
+                        )}
                     </div>
                      <div className="flex justify-between items-center font-bold text-lg">
                         <span>Total Pagado</span>
-                        <span className="text-primary">{formatCurrency(finalPrice)}</span>
+                        <span className="text-primary">{formatCurrency(ride.completedRide.totalPrice)}</span>
                     </div>
 
                     <p className="text-xs text-center text-muted-foreground pt-2">
@@ -233,9 +237,20 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                   participantRole="conductor"
                   onSubmit={handleRatingAndContinue}
                   isSubmitted={!!ride.driverRating}
-                  submitButtonText="Pedir Otro Viaje"
+                  submitButtonText="Calificar y Pedir Otro Viaje"
                 />
+                 {!ride.driverRating && (
+                    <CardFooter>
+                         <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => onNewRide(true)}>
+                            Omitir calificación
+                        </Button>
+                    </CardFooter>
+                 )}
               </>
+            ) : !isCancelled && (
+                 <CardContent>
+                    <p className="text-center text-muted-foreground">No hay un resumen disponible para este viaje.</p>
+                 </CardContent>
             )}
              {isCancelled && (
                 <CardFooter>

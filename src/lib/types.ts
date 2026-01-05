@@ -1,4 +1,3 @@
-
 // src/lib/types.ts
 
 import { type Timestamp, type FieldValue } from "firebase/firestore";
@@ -33,6 +32,14 @@ export interface Place {
   address: string;
   lat: number;
   lng: number;
+}
+
+export interface CompletedRide {
+    distanceMeters: number;
+    durationSeconds: number;
+    waitingSeconds: number;
+    totalPrice: number;
+    finishedAt: Timestamp | FieldValue;
 }
 
 export interface Ride {
@@ -79,6 +86,7 @@ export interface Ride {
   vamoPointsAwarded?: number | null;
   audited: boolean;
   auditComment?: string | null;
+  completedRide?: CompletedRide | null;
   // --- New fields for dispatch queue ---
   candidates: string[]; // Array of driver UIDs
   currentCandidateIndex: number;

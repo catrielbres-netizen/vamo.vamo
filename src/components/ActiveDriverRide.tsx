@@ -130,15 +130,25 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
             isNight: false,
         });
         const finalPricing = { ...ride.pricing, finalTotal: finalPrice };
+        const finishedAtTimestamp = serverTimestamp();
+        
         payload.pricing = finalPricing;
-        payload.finishedAt = serverTimestamp();
+        payload.finishedAt = finishedAtTimestamp;
+        payload.completedRide = {
+            distanceMeters: ride.pricing.estimatedDistanceMeters,
+            durationSeconds: ride.pricing.estimatedDurationSeconds || 0,
+            waitingSeconds: totalWaitTimeSeconds,
+            totalPrice: finalPrice,
+            finishedAt: finishedAtTimestamp,
+        };
 
         // Prepare the data for the callback
         finalRideData = {
           ...ride,
           status: 'finished',
           pricing: finalPricing,
-          finishedAt: payload.finishedAt
+          finishedAt: payload.finishedAt,
+          completedRide: payload.completedRide,
         };
     }
 
