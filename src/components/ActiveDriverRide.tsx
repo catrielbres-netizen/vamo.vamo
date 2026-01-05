@@ -1,9 +1,8 @@
-
 // @/components/ActiveDriverRide.tsx
 'use client';
 
 import { useFirestore, useUser } from '@/firebase';
-import { doc, serverTimestamp, Timestamp, runTransaction, FieldValue } from 'firebase/firestore';
+import { doc, serverTimestamp, Timestamp, runTransaction, FieldValue, collection } from 'firebase/firestore';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,7 +18,7 @@ import { calculateFare, WAITING_PER_MIN, getCommissionRate } from '@/lib/pricing
 import { VamoIcon } from '@/components/VamoIcon';
 import { useState, useEffect, useRef } from 'react';
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride, UserProfile } from '@/lib/types';
+import { Ride, UserProfile, PlatformTransaction } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { useToast } from '@/hooks/use-toast';
 
@@ -133,10 +132,10 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 if (!driverDoc.exists()) {
                     throw new Error("No se encontró el perfil del conductor.");
                 }
-
                 const driverData = driverDoc.data() as UserProfile;
                 
-                // Calculate final fare
+                // --- Start of FASE 2 Logic ---
+                // 1. Calculate final fare
                 const totalWaitTimeSeconds = totalAccumulatedWaitSeconds;
                 const finalPrice = calculateFare({
                     distanceMeters: ride.pricing.estimatedDistanceMeters ?? 0,
@@ -145,18 +144,29 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                     isNight: false,
                 });
 
-                // 1. Calculate commission for THIS ride based on completed rides BEFORE this one
+                // 2. Calculate commission for THIS ride based on completed rides BEFORE this one
                 const ridesCompleted = driverData.ridesCompleted || 0;
                 const commissionRate = getCommissionRate(ridesCompleted);
                 const rideCommission = finalPrice * commissionRate;
 
-                // 2. Debit commission ONLY from the paid credit balance
+                // 3. Debit commission ONLY from the paid credit balance
                 const currentPaidCredit = driverData.platformCreditPaid || 0;
                 const newPaidCredit = currentPaidCredit - rideCommission;
                 
-                // --- Prepare Ride Update ---
-                const finalPricing = { ...ride.pricing, finalTotal: finalPrice, rideCommission: rideCommission };
+                // --- Prepare Driver Profile Update ---
+                transaction.update(driverRef, { 
+                    platformCreditPaid: newPaidCredit,
+                    ridesCompleted: (driverData.ridesCompleted || 0) + 1,
+                    updatedAt: serverTimestamp(),
+                });
+
+                // --- Prepare Ride Update (log commission) ---
                 const finishedAtTimestamp = serverTimestamp();
+                const finalPricing = { 
+                    ...ride.pricing, 
+                    finalTotal: finalPrice, 
+                    rideCommission: rideCommission 
+                };
                 const rideUpdatePayload: any = {
                     status: 'finished',
                     pricing: finalPricing,
@@ -167,18 +177,25 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                         durationSeconds: ride.pricing.estimatedDurationSeconds || 0,
                         waitingSeconds: totalWaitTimeSeconds,
                         totalPrice: finalPrice,
-                        finishedAt: finishedAtTimestamp, // Use placeholder, will be replaced by server
+                        finishedAt: finishedAtTimestamp,
                     }
                 };
                 transaction.update(rideRef, rideUpdatePayload);
+                
+                // --- Create Accounting Log (FASE 1) ---
+                const transactionLogRef = doc(collection(firestore, 'platform_transactions'));
+                const logEntry: PlatformTransaction = {
+                    driverId: user.uid,
+                    amount: -rideCommission, // It's a debit
+                    type: 'debit_commission',
+                    source: 'system',
+                    referenceId: ride.id,
+                    note: `Comisión (${(commissionRate * 100).toFixed(0)}%) del viaje a ${ride.destination.address}`,
+                    createdAt: serverTimestamp(),
+                };
+                transaction.set(transactionLogRef, logEntry);
 
-                // --- Prepare Driver Profile Update ---
-                // 3. Update driver's credit and completed rides count
-                transaction.update(driverRef, { 
-                    platformCreditPaid: newPaidCredit,
-                    ridesCompleted: (driverData.ridesCompleted || 0) + 1,
-                    updatedAt: finishedAtTimestamp,
-                });
+                // --- End of FASE 2 Logic ---
 
                 // Return the data needed for the UI callback
                 return {

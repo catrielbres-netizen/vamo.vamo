@@ -1,4 +1,3 @@
-
 // src/lib/types.ts
 
 import { type Timestamp, type FieldValue } from "firebase/firestore";
@@ -31,6 +30,24 @@ export type AuditLogAction =
   | "platform_credit_adjusted"
   | "driver_suspended"
   | "driver_unsuspended";
+
+export type PlatformTransactionType =
+  | "credit_promo"
+  | "credit_payment"
+  | "credit_manual"
+  | "debit_commission"
+  | "debit_adjustment";
+
+export interface PlatformTransaction {
+  driverId: string;
+  amount: number; // Positivo para crédito, negativo para débito
+  type: PlatformTransactionType;
+  createdAt: Timestamp | FieldValue;
+  source: "system" | "payment" | "admin";
+  referenceId?: string; // ID del viaje, pago, etc.
+  note?: string; // Motivo del ajuste manual, etc.
+}
+
 
 export interface Place {
   address: string;
