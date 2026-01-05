@@ -35,7 +35,7 @@ const getCommissionInfo = (rideCount: number): { rate: number, nextTier: number 
 
 export default function EarningsPage() {
     const firestore = useFirestore();
-    const { user } = useUser();
+    const { user, profile } = useUser();
     const { toast } = useToast();
 
     const [weeklyRides, setWeeklyRides] = useState<Ride[]>([]);
@@ -110,7 +110,7 @@ export default function EarningsPage() {
     }, [firestore, user?.uid, weekId, toast]);
     
 
-    if (isLoading) {
+    if (isLoading || !profile) {
         return <p className="text-center">Cargando panel financiero...</p>;
     }
 
@@ -125,6 +125,10 @@ export default function EarningsPage() {
     const commissionInfo = getCommissionInfo(ridesCount);
     const progressToNextTier = commissionInfo.nextTier ? (ridesCount / commissionInfo.nextTier) * 100 : 100;
     
+    // Check if platform credit covers the commission
+    const platformCredit = profile.platformCredit ?? 0;
+    const commissionCovered = platformCredit >= commissionOwed;
+
     return (
         <div className="space-y-6">
             <Card className="border-primary">
@@ -183,13 +187,21 @@ export default function EarningsPage() {
                             <span className="font-medium">Comisión de plataforma ({(commissionRate * 100).toFixed(0)}%)</span>
                             <span className="font-bold">{formatCurrency(commissionOwed)}</span>
                         </div>
-                        <div className="flex justify-between items-center text-green-500">
-                            <span className="font-medium">Tu ganancia neta</span>
-                            <span className="font-bold">{formatCurrency(netToReceive)}</span>
+                         <div className="flex justify-between items-center">
+                            <span className="font-medium">Estado de comisión</span>
+                            {commissionCovered ? (
+                                <span className="text-green-500 font-semibold text-sm">Liquidada automáticamente</span>
+                            ) : (
+                                <span className="text-yellow-500 font-semibold text-sm">Pendiente por saldo</span>
+                            )}
+                        </div>
+                        <div className="flex justify-between items-center text-green-500 font-bold border-t pt-2 mt-2">
+                            <span>Tu ganancia neta en mano</span>
+                            <span>{formatCurrency(totalEarnings)}</span>
                         </div>
                      </div>
                       <p className="text-xs text-muted-foreground text-center pt-2">
-                        Tu ganancia neta es el bruto facturado, menos la comisión, más los bonos de pasajero que la plataforma te cubre.
+                        Tu ganancia neta en mano es el total cobrado a los pasajeros. La comisión de plataforma se debita de tu crédito prepago.
                      </p>
                 </CardContent>
             </Card>
@@ -198,9 +210,12 @@ export default function EarningsPage() {
                 <VamoIcon name="info" className="h-4 w-4" />
                 <AlertTitle>¿Cómo funciona la comisión?</AlertTitle>
                 <AlertDescription>
-                    La comisión por el uso de la plataforma se descontará automáticamente de tu Crédito de Plataforma al finalizar cada viaje. Mantené tu saldo positivo para poder seguir recibiendo viajes.
+                   La comisión por el uso de la plataforma se descuenta automáticamente de tu Crédito de Plataforma al finalizar cada viaje.
+                   <br />
+                   <strong>Si tu saldo es insuficiente, no podrás recibir nuevos viajes hasta recargarlo.</strong>
                 </AlertDescription>
             </Alert>
         </div>
     );
 }
+
