@@ -126,8 +126,8 @@ export default function EarningsPage() {
     const progressToNextTier = commissionInfo.nextTier ? (ridesCount / commissionInfo.nextTier) * 100 : 100;
     
     // Check if platform credit covers the commission
-    const platformCredit = profile.platformCredit ?? 0;
-    const commissionCovered = platformCredit >= commissionOwed;
+    const platformCreditPaid = profile.platformCreditPaid ?? 0;
+    const commissionCovered = platformCreditPaid >= commissionOwed;
 
     return (
         <div className="space-y-6">
@@ -218,4 +218,3 @@ export default function EarningsPage() {
         </div>
     );
 }
-
