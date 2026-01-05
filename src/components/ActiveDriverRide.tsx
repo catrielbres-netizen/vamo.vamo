@@ -114,35 +114,11 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
     }
 
     if(newStatus === 'arrived') {
-        if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) {
-            toast({ variant: "destructive", title: "Error", description: "La API de Google Maps no está disponible." });
-            return;
-        }
-        // When arriving, re-calculate route to destination from the ride's origin point
-        const directionsService = new window.google.maps.DirectionsService();
-        directionsService.route(
-            {
-                origin: new window.google.maps.LatLng(ride.origin.lat, ride.origin.lng),
-                destination: new window.google.maps.LatLng(ride.destination.lat, ride.destination.lng),
-                travelMode: window.google.maps.TravelMode.DRIVING,
-            },
-            (result, status) => {
-                if (status === window.google.maps.DirectionsStatus.OK && result?.routes?.[0]?.legs?.[0]) {
-                    const leg = result.routes[0].legs[0];
-                     if (leg.distance && leg.duration) {
-                        const pricing = { 
-                            ...ride.pricing, 
-                            estimatedDistanceMeters: leg.distance.value,
-                            estimatedDurationSeconds: leg.duration.value
-                        };
-                        updateDocumentNonBlocking(rideRef, { ...payload, pricing });
-                        return;
-                    }
-                }
-                toast({ variant: "destructive", title: "Error de Ruta", description: "No se pudo calcular la ruta al destino." });
-            }
-        );
-        return; // The update is handled inside the callback
+        // The button's only responsibility is to update the status.
+        // The map component will be responsible for observing this state change
+        // and deciding which route to calculate and display.
+        updateDocumentNonBlocking(rideRef, payload);
+        return; // Early return to prevent other logic from running
     }
 
     if(newStatus === 'finished') {
