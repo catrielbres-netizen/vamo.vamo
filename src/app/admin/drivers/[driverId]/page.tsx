@@ -124,7 +124,7 @@ export default function DriverDetailPage() {
                 transaction.update(driverProfileRef, { platformCredit: newCredit });
 
                 const auditLogRef = doc(collection(firestore, 'auditLogs'));
-                const logEntry = {
+                const logEntry: Omit<AuditLog, 'timestamp' | 'details' | 'id'> & { timestamp: FieldValue; details: string; } = {
                     adminId: user.uid,
                     adminName: adminProfile.name,
                     action: 'platform_credit_adjusted',
@@ -151,32 +151,50 @@ export default function DriverDetailPage() {
 
 
     const handleVerification = async (newStatus: 'approved' | 'rejected') => {
-        if (!firestore || !driverProfileRef || !adminProfile?.name || !user?.uid) {
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo completar la acción. Faltan datos del administrador.' });
+        if (!firestore || !driverProfileRef || !adminProfile?.name || !user?.uid || !driver) {
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo completar la acción. Faltan datos del administrador o conductor.' });
             return;
         }
 
         try {
-            await updateDoc(driverProfileRef, {
+            const batch = writeBatch(firestore);
+            
+            const updatePayload: Partial<UserProfile> = {
                 vehicleVerificationStatus: newStatus,
-                approved: newStatus === 'approved', // Only approve if status is approved
+                approved: newStatus === 'approved',
                 updatedAt: serverTimestamp(),
-            });
+            };
+
+            // Grant promo credit on first approval
+            const WELCOME_BONUS = 5000;
+            if (newStatus === 'approved' && !driver.promoCreditGranted) {
+                updatePayload.platformCredit = (driver.platformCredit || 0) + WELCOME_BONUS;
+                updatePayload.promoCreditGranted = true;
+            }
+
+            batch.update(driverProfileRef, updatePayload);
 
             // Create audit log
-            const auditLogRef = collection(firestore, 'auditLogs');
-            const logEntry: Omit<AuditLog, 'timestamp' | 'details'> = {
+            const auditLogRef = doc(collection(firestore, 'auditLogs'));
+            const details = newStatus === 'approved' 
+                ? `El administrador ${adminProfile.name} aprobó al conductor. ${!driver.promoCreditGranted ? `Se otorgó un bono de bienvenida de ${formatCurrency(WELCOME_BONUS)}.` : ''}`
+                : `El administrador ${adminProfile.name} rechazó al conductor.`;
+
+            const logEntry: Omit<AuditLog, 'timestamp' | 'details' | 'id'> & { timestamp: FieldValue; details: string; } = {
                 adminId: user.uid,
                 adminName: adminProfile.name,
                 action: newStatus === 'approved' ? 'driver_approved' : 'driver_rejected',
                 entityId: driverId,
+                timestamp: serverTimestamp(),
+                details: details
             };
-            await addDoc(auditLogRef, { ...logEntry, timestamp: serverTimestamp(), details: `El administrador ${adminProfile.name} ${newStatus === 'approved' ? 'aprobó' : 'rechazó'} al conductor.` });
+            batch.set(auditLogRef, logEntry);
 
+            await batch.commit();
 
             toast({
                 title: '¡Acción completada!',
-                description: `El conductor ha sido ${newStatus === 'approved' ? 'aprobado' : 'rechazado'}.`,
+                description: `El conductor ha sido ${newStatus === 'approved' ? 'aprobado' : 'rechazado'}.` + (newStatus === 'approved' && !driver.promoCreditGranted ? ' Se añadió el bono de bienvenida.' : ''),
             });
         } catch (error) {
             console.error("Error updating driver status:", error);
@@ -226,8 +244,8 @@ export default function DriverDetailPage() {
                 updatedAt: serverTimestamp(),
             });
 
-            const auditLogRef = collection(firestore, 'auditLogs');
-            const logEntry = {
+            const auditLogRef = doc(collection(firestore, 'auditLogs'));
+            const logEntry: Omit<AuditLog, 'timestamp' | 'details'| 'id'> & { timestamp: FieldValue; details: string; } = {
                 adminId: user.uid,
                 adminName: adminProfile.name,
                 action: suspend ? 'driver_suspended' : 'driver_unsuspended',
@@ -235,8 +253,8 @@ export default function DriverDetailPage() {
                 timestamp: serverTimestamp(),
                 details: `El administrador ${adminProfile.name} ${suspend ? 'suspendió' : 'reactivó'} la cuenta del conductor.`
             };
-            const newLogRef = doc(auditLogRef);
-            batch.set(newLogRef, logEntry);
+            
+            batch.set(auditLogRef, logEntry);
 
             await batch.commit();
 
@@ -308,7 +326,7 @@ export default function DriverDetailPage() {
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>¿Estás seguro que querés aprobar a este conductor?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Esta acción activará la cuenta del conductor y le permitirá empezar a recibir viajes. Asegurate de haber verificado toda su documentación.
+                                    Esta acción activará la cuenta del conductor, le permitirá empezar a recibir viajes y le otorgará el bono de bienvenida si corresponde.
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>

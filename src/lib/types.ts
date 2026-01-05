@@ -120,6 +120,7 @@ export type UserProfile = {
     carModelYear?: number | null;
     vehicleVerificationStatus?: VerificationStatus;
     platformCredit?: number;
+    promoCreditGranted?: boolean; // Flag to ensure promo is granted only once
     currentLocation?: {
       lat: number;
       lng: number;
