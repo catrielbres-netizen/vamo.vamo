@@ -3,12 +3,13 @@
 export type ServiceType = "premium" | "privado" | "express";
 
 // --- Tarifas Diurnas (basadas en Premium) ---
-const DAY_BASE_FARE = 1483;
+const DAY_BASE_FARE = 1400; // Bajada de bandera para Premium
 const DAY_PRICE_PER_100M = 152;
 const DAY_WAITING_PER_MIN = 220;
 
 // --- Tarifas Nocturnas (basadas en Premium) ---
-const NIGHT_BASE_FARE = 1652;
+// Se mantiene la proporción para la tarifa nocturna
+const NIGHT_BASE_FARE = 1652; 
 const NIGHT_PRICE_PER_100M = 189;
 const NIGHT_WAITING_PER_MIN = 277;
 
@@ -32,6 +33,7 @@ export function calculateFare({
   const distanceCost = Math.ceil(distanceMeters / 100) * pricePer100m;
   const waitCost = waitingMinutes * waitingPerMin;
 
+  // El total para un viaje premium es la suma de la bajada de bandera, distancia y espera
   let totalPremium = baseFare + distanceCost + waitCost;
 
   let finalTotal;
