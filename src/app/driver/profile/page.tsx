@@ -1,4 +1,5 @@
 
+
 // src/app/driver/profile/page.tsx
 'use client';
 
@@ -81,8 +82,6 @@ export default function DriverProfilePage() {
   const verificationInfo = verificationStatusBadge[profile.vehicleVerificationStatus || 'unverified'];
   const averageRating = profile.averageRating?.toFixed(1) ?? 'N/A';
   const platformCreditPaid = profile.platformCreditPaid ?? 0;
-  const platformCreditPromo = profile.platformCreditPromo ?? 0;
-  const totalCredit = platformCreditPaid + platformCreditPromo;
 
   return (
     <div className="space-y-6">
@@ -104,12 +103,9 @@ export default function DriverProfilePage() {
             <ProfileInfoRow 
               icon={<VamoIcon name="wallet" />} 
               label="Crédito de Plataforma"
-              valueClassName={cn("text-lg font-bold", totalCredit > 0 ? "text-green-500" : "text-destructive")}
             >
-                <p className={cn("text-lg font-bold", totalCredit > 0 ? "text-green-500" : "text-destructive")}>{formatCurrency(totalCredit)}</p>
-                <p className="text-xs text-muted-foreground">
-                    (Pagado: {formatCurrency(platformCreditPaid)} + Promo: {formatCurrency(platformCreditPromo)})
-                </p>
+                <p className={cn("text-lg font-bold", platformCreditPaid >= 0 ? "text-green-500" : "text-destructive")}>{formatCurrency(platformCreditPaid)}</p>
+                {profile.promoCreditGranted && <p className="text-xs text-muted-foreground">Incluye tu bono de bienvenida.</p>}
             </ProfileInfoRow>
         </CardContent>
         <CardContent>
@@ -121,3 +117,4 @@ export default function DriverProfilePage() {
     </div>
   );
 }
+

@@ -1,3 +1,4 @@
+
 // src/lib/types.ts
 
 import { type Timestamp, type FieldValue } from "firebase/firestore";
@@ -140,8 +141,7 @@ export type UserProfile = {
     driverStatus?: DriverStatus;
     carModelYear?: number | null;
     vehicleVerificationStatus?: VerificationStatus;
-    platformCreditPaid?: number; // Saldo que el conductor carga
-    platformCreditPromo?: number; // Saldo promocional de bienvenida
+    platformCreditPaid?: number; // Saldo que el conductor carga + bonos
     promoCreditGranted?: boolean; // Flag to ensure promo is granted only once
     currentLocation?: {
       lat: number;
@@ -168,3 +168,4 @@ export interface AuditLog {
     timestamp: Timestamp;
     details?: string | null;
 }
+

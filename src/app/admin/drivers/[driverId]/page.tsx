@@ -56,9 +56,7 @@ export default function DriverDetailPage() {
     const [isInspecting, setIsInspecting] = useState(false);
     const [inspectionResult, setInspectionResult] = useState<string | null>(null);
     const [creditAdjustment, setCreditAdjustment] = useState('');
-    const [promoCreditAdjustment, setPromoCreditAdjustment] = useState('');
     const [isAdjustingCredit, setIsAdjustingCredit] = useState(false);
-    const [isAdjustingPromoCredit, setIsAdjustingPromoCredit] = useState(false);
 
 
     const driverProfileRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
@@ -152,53 +150,6 @@ export default function DriverDetailPage() {
             setIsAdjustingCredit(false);
         }
     };
-    
-    const handleAdjustPromoCredit = async () => {
-        const amount = parseFloat(promoCreditAdjustment);
-        if (isNaN(amount) || !driverProfileRef || !firestore || !user?.uid || !adminProfile?.name) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Monto inválido o datos de sesión faltantes.' });
-            return;
-        }
-
-        setIsAdjustingPromoCredit(true);
-        try {
-            await runTransaction(firestore, async (transaction) => {
-                const driverDoc = await transaction.get(driverProfileRef);
-                if (!driverDoc.exists()) {
-                    throw new Error("El conductor no existe.");
-                }
-
-                const currentCredit = driverDoc.data().platformCreditPromo || 0;
-                const newCredit = currentCredit + amount;
-                
-                transaction.update(driverProfileRef, { platformCreditPromo: newCredit });
-
-                const auditLogRef = doc(collection(firestore, 'auditLogs'));
-                const logEntry: Omit<AuditLog, 'timestamp' | 'details' | 'id'> & { timestamp: FieldValue; details: string; } = {
-                    adminId: user.uid,
-                    adminName: adminProfile.name,
-                    action: 'platform_credit_adjusted',
-                    entityId: driverId,
-                    timestamp: serverTimestamp(),
-                    details: `Crédito PROMOCIONAL ajustado en ${formatCurrency(amount)}. Saldo anterior: ${formatCurrency(currentCredit)}. Saldo nuevo: ${formatCurrency(newCredit)}.`
-                };
-                transaction.set(auditLogRef, logEntry);
-            });
-
-            toast({
-                title: '¡Crédito Promocional ajustado!',
-                description: `El nuevo saldo promocional del conductor es ${formatCurrency((driver?.platformCreditPromo || 0) + amount)}.`
-            });
-            setPromoCreditAdjustment('');
-
-        } catch (error) {
-            console.error("Error adjusting promo credit:", error);
-            toast({ variant: 'destructive', title: 'Error en la transacción', description: 'No se pudo ajustar el crédito promocional.' });
-        } finally {
-            setIsAdjustingPromoCredit(false);
-        }
-    };
-
 
     const handleVerification = async (newStatus: 'approved' | 'rejected') => {
         if (!firestore || !driverProfileRef || !adminProfile?.name || !user?.uid || !driver) {
@@ -206,58 +157,67 @@ export default function DriverDetailPage() {
             return;
         }
 
+        const WELCOME_BONUS = 5000;
+
         try {
-            const batch = writeBatch(firestore);
-            
-            const updatePayload: Partial<UserProfile> = {
-                vehicleVerificationStatus: newStatus,
-                approved: newStatus === 'approved',
-                updatedAt: serverTimestamp(),
-            };
+            await runTransaction(firestore, async (transaction) => {
+                const driverDoc = await transaction.get(driverProfileRef);
+                if (!driverDoc.exists()) {
+                    throw new Error("Driver not found.");
+                }
+                const driverData = driverDoc.data() as UserProfile;
 
-            const WELCOME_BONUS = 5000;
-            // Grant promo credit on first approval, if not already granted.
-            if (newStatus === 'approved' && !driver.promoCreditGranted) {
-                updatePayload.platformCreditPromo = increment(WELCOME_BONUS);
-                updatePayload.promoCreditGranted = true;
-            }
-
-            batch.update(driverProfileRef, updatePayload);
-
-            // Create audit log for the verification action.
-            const auditLogRef = doc(collection(firestore, 'auditLogs'));
-            const verificationDetails = newStatus === 'approved' 
-                ? `El administrador ${adminProfile.name} aprobó al conductor.`
-                : `El administrador ${adminProfile.name} rechazó al conductor.`;
-
-            batch.set(auditLogRef, {
-                adminId: user.uid,
-                adminName: adminProfile.name,
-                action: newStatus === 'approved' ? 'driver_approved' : 'driver_rejected',
-                entityId: driverId,
-                timestamp: serverTimestamp(),
-                details: verificationDetails
-            });
-
-            // Create a separate audit log for the bonus if it was granted.
-            if (newStatus === 'approved' && !driver.promoCreditGranted) {
-                const bonusAuditLogRef = doc(collection(firestore, 'auditLogs'));
-                batch.set(bonusAuditLogRef, {
+                // Create audit log for the verification action first.
+                const auditLogRef = doc(collection(firestore, 'auditLogs'));
+                const verificationDetails = newStatus === 'approved' 
+                    ? `El administrador ${adminProfile.name} aprobó al conductor.`
+                    : `El administrador ${adminProfile.name} rechazó al conductor.`;
+                
+                transaction.set(auditLogRef, {
                     adminId: user.uid,
                     adminName: adminProfile.name,
-                    action: 'platform_credit_adjusted',
+                    action: newStatus === 'approved' ? 'driver_approved' : 'driver_rejected',
                     entityId: driverId,
                     timestamp: serverTimestamp(),
-                    details: `Bono de bienvenida de ${formatCurrency(WELCOME_BONUS)} otorgado automáticamente por aprobación.`
+                    details: verificationDetails
                 });
-            }
 
-            await batch.commit();
+                // Prepare driver profile update
+                const updatePayload: Partial<UserProfile> = {
+                    vehicleVerificationStatus: newStatus,
+                    approved: newStatus === 'approved',
+                    updatedAt: serverTimestamp(),
+                };
 
+                let bonusGranted = false;
+                // Grant promo credit on first approval, if not already granted.
+                if (newStatus === 'approved' && !driverData.promoCreditGranted) {
+                    updatePayload.platformCreditPaid = increment(WELCOME_BONUS);
+                    updatePayload.promoCreditGranted = true;
+                    bonusGranted = true;
+
+                    // Create a separate audit log for the bonus.
+                    const bonusAuditLogRef = doc(collection(firestore, 'auditLogs'));
+                    transaction.set(bonusAuditLogRef, {
+                        adminId: user.uid,
+                        adminName: adminProfile.name,
+                        action: 'platform_credit_adjusted',
+                        entityId: driverId,
+                        timestamp: serverTimestamp(),
+                        details: `Bono de bienvenida de ${formatCurrency(WELCOME_BONUS)} otorgado automáticamente por aprobación.`
+                    });
+                }
+                
+                transaction.update(driverProfileRef, updatePayload);
+                return bonusGranted;
+            });
+
+            // This part runs after the transaction is successful
             toast({
                 title: '¡Acción completada!',
                 description: `El conductor ha sido ${newStatus === 'approved' ? 'aprobado' : 'rechazado'}.` + (newStatus === 'approved' && !driver.promoCreditGranted ? ' Se añadió el bono de bienvenida.' : ''),
             });
+
         } catch (error) {
             console.error("Error updating driver status:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado del conductor.' });
@@ -354,8 +314,6 @@ export default function DriverDetailPage() {
     const verificationInfo = verificationStatusBadge[driver.vehicleVerificationStatus || 'unverified'];
     const isSummaryPending = summary?.status === 'pending' && commissionOwed > 0;
     const platformCreditPaid = driver.platformCreditPaid ?? 0;
-    const platformCreditPromo = driver.platformCreditPromo ?? 0;
-    const totalCredit = platformCreditPaid + platformCreditPromo;
 
     return (
         <div className="space-y-6">
@@ -435,17 +393,13 @@ export default function DriverDetailPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div>
-                             <p className="text-3xl font-bold">{formatCurrency(totalCredit)}</p>
+                             <p className="text-3xl font-bold">{formatCurrency(platformCreditPaid)}</p>
                              <p className="text-sm text-muted-foreground">Saldo Total Disponible</p>
-                        </div>
-                        <div className="text-xs space-y-1 text-muted-foreground border-t pt-2">
-                            <p>Pagado: <span className="font-medium">{formatCurrency(platformCreditPaid)}</span></p>
-                             <p>Promocional: <span className="font-medium">{formatCurrency(platformCreditPromo)}</span></p>
                         </div>
                     </CardContent>
                     <CardFooter className="flex-col items-start gap-4 border-t pt-4">
                          <div className="w-full space-y-2">
-                             <Label htmlFor="credit-adjustment">Ajustar Crédito Pagado</Label>
+                             <Label htmlFor="credit-adjustment">Ajustar Crédito (Manual)</Label>
                              <div className="flex w-full items-center gap-2">
                                  <Input
                                     id="credit-adjustment"
@@ -459,24 +413,7 @@ export default function DriverDetailPage() {
                                     {isAdjustingCredit ? <VamoIcon name="loader" className="animate-spin" /> : <VamoIcon name="check" />}
                                 </Button>
                              </div>
-                             <p className="text-xs text-muted-foreground">Ajusta el saldo que el conductor carga.</p>
-                         </div>
-                         <div className="w-full space-y-2 pt-2">
-                             <Label htmlFor="promo-credit-adjustment">Ajustar Crédito Promocional</Label>
-                             <div className="flex w-full items-center gap-2">
-                                 <Input
-                                    id="promo-credit-adjustment"
-                                    type="number"
-                                    placeholder="Ej: 5000 (bono)"
-                                    value={promoCreditAdjustment}
-                                    onChange={(e) => setPromoCreditAdjustment(e.target.value)}
-                                    disabled={isAdjustingPromoCredit}
-                                />
-                                <Button onClick={handleAdjustPromoCredit} disabled={isAdjustingPromoCredit || !promoCreditAdjustment}>
-                                    {isAdjustingPromoCredit ? <VamoIcon name="loader" className="animate-spin" /> : <VamoIcon name="check" />}
-                                </Button>
-                             </div>
-                             <p className="text-xs text-muted-foreground">Otorga o quita bonos y crédito de regalo.</p>
+                             <p className="text-xs text-muted-foreground">Carga saldo o aplica débitos manuales. Usar con cuidado.</p>
                          </div>
                     </CardFooter>
                 </Card>
