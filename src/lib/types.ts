@@ -43,7 +43,7 @@ export interface PlatformTransaction {
   amount: number; // Positivo para crédito, negativo para débito
   type: PlatformTransactionType;
   createdAt: Timestamp | FieldValue;
-  source: "system" | "payment" | "admin";
+  source: "system" | "payment" | "admin" | "ride_finish";
   referenceId?: string; // ID del viaje, pago, etc.
   note?: string; // Motivo del ajuste manual, etc.
 }
