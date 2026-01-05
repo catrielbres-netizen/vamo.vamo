@@ -38,7 +38,7 @@ import MapSelector from '@/components/MapSelector';
 const FAKE_PASSENGER_LOCATION = { 
     lat: -43.298, // Cercano a Playa Union
     lng: -65.035,
-    address: 'Ubicación de Prueba (Pasajero)'
+    address: 'Av. Guillermo Rawson 500, Rawson'
 };
 
 
