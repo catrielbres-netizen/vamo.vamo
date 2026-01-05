@@ -1,4 +1,3 @@
-
 // @/components/ActiveDriverRide.tsx
 'use client';
 
@@ -150,12 +149,6 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 const commissionRate = getCommissionRate(driverData.ridesCompleted || 0);
                 const rideCommission = finalPrice * commissionRate;
 
-                // Check if driver has enough credit
-                if (currentCredit < rideCommission) {
-                    // Even if credit is insufficient, we finish the ride but flag it somehow
-                    // For now, we allow it to go negative. The system will block them from new rides.
-                }
-
                 const newCredit = currentCredit - rideCommission;
                 
                 // --- Prepare Ride Update ---
@@ -176,7 +169,10 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 transaction.update(rideRef, rideUpdatePayload);
 
                 // --- Prepare Driver Profile Update ---
-                transaction.update(driverRef, { platformCredit: newCredit });
+                transaction.update(driverRef, { 
+                    platformCredit: newCredit,
+                    ridesCompleted: (driverData.ridesCompleted || 0) + 1,
+                });
 
                 // Return the data needed for the UI callback
                 return {
