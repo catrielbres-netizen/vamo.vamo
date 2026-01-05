@@ -1,4 +1,5 @@
 
+
 // src/app/admin/drivers/[driverId]/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
@@ -55,7 +56,10 @@ export default function DriverDetailPage() {
     const [isInspecting, setIsInspecting] = useState(false);
     const [inspectionResult, setInspectionResult] = useState<string | null>(null);
     const [creditAdjustment, setCreditAdjustment] = useState('');
+    const [promoCreditAdjustment, setPromoCreditAdjustment] = useState('');
     const [isAdjustingCredit, setIsAdjustingCredit] = useState(false);
+    const [isAdjustingPromoCredit, setIsAdjustingPromoCredit] = useState(false);
+
 
     const driverProfileRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
     const { data: driver, isLoading: isDriverLoading } = useDoc<UserProfile>(driverProfileRef);
@@ -130,13 +134,13 @@ export default function DriverDetailPage() {
                     action: 'platform_credit_adjusted',
                     entityId: driverId,
                     timestamp: serverTimestamp(),
-                    details: `Crédito pagado ajustado en ${formatCurrency(amount)}. Saldo anterior: ${formatCurrency(currentCredit)}. Saldo nuevo: ${formatCurrency(newCredit)}.`
+                    details: `Crédito PAGADO ajustado en ${formatCurrency(amount)}. Saldo anterior: ${formatCurrency(currentCredit)}. Saldo nuevo: ${formatCurrency(newCredit)}.`
                 };
                 transaction.set(auditLogRef, logEntry);
             });
 
             toast({
-                title: '¡Crédito ajustado!',
+                title: '¡Crédito Pagado ajustado!',
                 description: `El nuevo saldo pagado del conductor es ${formatCurrency((driver?.platformCreditPaid || 0) + amount)}.`
             });
             setCreditAdjustment('');
@@ -146,6 +150,52 @@ export default function DriverDetailPage() {
             toast({ variant: 'destructive', title: 'Error en la transacción', description: 'No se pudo ajustar el crédito.' });
         } finally {
             setIsAdjustingCredit(false);
+        }
+    };
+    
+    const handleAdjustPromoCredit = async () => {
+        const amount = parseFloat(promoCreditAdjustment);
+        if (isNaN(amount) || !driverProfileRef || !firestore || !user?.uid || !adminProfile?.name) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Monto inválido o datos de sesión faltantes.' });
+            return;
+        }
+
+        setIsAdjustingPromoCredit(true);
+        try {
+            await runTransaction(firestore, async (transaction) => {
+                const driverDoc = await transaction.get(driverProfileRef);
+                if (!driverDoc.exists()) {
+                    throw new Error("El conductor no existe.");
+                }
+
+                const currentCredit = driverDoc.data().platformCreditPromo || 0;
+                const newCredit = currentCredit + amount;
+                
+                transaction.update(driverProfileRef, { platformCreditPromo: newCredit });
+
+                const auditLogRef = doc(collection(firestore, 'auditLogs'));
+                const logEntry: Omit<AuditLog, 'timestamp' | 'details' | 'id'> & { timestamp: FieldValue; details: string; } = {
+                    adminId: user.uid,
+                    adminName: adminProfile.name,
+                    action: 'platform_credit_adjusted',
+                    entityId: driverId,
+                    timestamp: serverTimestamp(),
+                    details: `Crédito PROMOCIONAL ajustado en ${formatCurrency(amount)}. Saldo anterior: ${formatCurrency(currentCredit)}. Saldo nuevo: ${formatCurrency(newCredit)}.`
+                };
+                transaction.set(auditLogRef, logEntry);
+            });
+
+            toast({
+                title: '¡Crédito Promocional ajustado!',
+                description: `El nuevo saldo promocional del conductor es ${formatCurrency((driver?.platformCreditPromo || 0) + amount)}.`
+            });
+            setPromoCreditAdjustment('');
+
+        } catch (error) {
+            console.error("Error adjusting promo credit:", error);
+            toast({ variant: 'destructive', title: 'Error en la transacción', description: 'No se pudo ajustar el crédito promocional.' });
+        } finally {
+            setIsAdjustingPromoCredit(false);
         }
     };
 
@@ -375,27 +425,46 @@ export default function DriverDetailPage() {
                              <p className="text-3xl font-bold">{formatCurrency(totalCredit)}</p>
                              <p className="text-sm text-muted-foreground">Saldo Total Disponible</p>
                         </div>
-                        <div className="text-xs space-y-1 text-muted-foreground">
+                        <div className="text-xs space-y-1 text-muted-foreground border-t pt-2">
                             <p>Pagado: <span className="font-medium">{formatCurrency(platformCreditPaid)}</span></p>
                              <p>Promocional: <span className="font-medium">{formatCurrency(platformCreditPromo)}</span></p>
                         </div>
                     </CardContent>
-                    <CardFooter className="flex-col items-start gap-2">
-                         <Label htmlFor="credit-adjustment">Ajustar Crédito Pagado</Label>
-                         <div className="flex w-full items-center gap-2">
-                             <Input
-                                id="credit-adjustment"
-                                type="number"
-                                placeholder="Ej: 5000 o -500"
-                                value={creditAdjustment}
-                                onChange={(e) => setCreditAdjustment(e.target.value)}
-                                disabled={isAdjustingCredit}
-                            />
-                            <Button onClick={handleAdjustCredit} disabled={isAdjustingCredit || !creditAdjustment}>
-                                {isAdjustingCredit ? <VamoIcon name="loader" className="animate-spin" /> : <VamoIcon name="check" />}
-                            </Button>
+                    <CardFooter className="flex-col items-start gap-4 border-t pt-4">
+                         <div className="w-full space-y-2">
+                             <Label htmlFor="credit-adjustment">Ajustar Crédito Pagado</Label>
+                             <div className="flex w-full items-center gap-2">
+                                 <Input
+                                    id="credit-adjustment"
+                                    type="number"
+                                    placeholder="Ej: 5000 o -500"
+                                    value={creditAdjustment}
+                                    onChange={(e) => setCreditAdjustment(e.target.value)}
+                                    disabled={isAdjustingCredit}
+                                />
+                                <Button onClick={handleAdjustCredit} disabled={isAdjustingCredit || !creditAdjustment}>
+                                    {isAdjustingCredit ? <VamoIcon name="loader" className="animate-spin" /> : <VamoIcon name="check" />}
+                                </Button>
+                             </div>
+                             <p className="text-xs text-muted-foreground">Ajusta el saldo que el conductor carga.</p>
                          </div>
-                        <p className="text-xs text-muted-foreground">Ajusta el saldo que el conductor carga. El promocional no se toca.</p>
+                         <div className="w-full space-y-2 pt-2">
+                             <Label htmlFor="promo-credit-adjustment">Ajustar Crédito Promocional</Label>
+                             <div className="flex w-full items-center gap-2">
+                                 <Input
+                                    id="promo-credit-adjustment"
+                                    type="number"
+                                    placeholder="Ej: 5000 (bono)"
+                                    value={promoCreditAdjustment}
+                                    onChange={(e) => setPromoCreditAdjustment(e.target.value)}
+                                    disabled={isAdjustingPromoCredit}
+                                />
+                                <Button onClick={handleAdjustPromoCredit} disabled={isAdjustingPromoCredit || !promoCreditAdjustment}>
+                                    {isAdjustingPromoCredit ? <VamoIcon name="loader" className="animate-spin" /> : <VamoIcon name="check" />}
+                                </Button>
+                             </div>
+                             <p className="text-xs text-muted-foreground">Otorga o quita bonos y crédito de regalo.</p>
+                         </div>
                     </CardFooter>
                 </Card>
 
@@ -599,3 +668,4 @@ export default function DriverDetailPage() {
         </div>
     );
 }
+
