@@ -1,8 +1,9 @@
+
 // @/components/ActiveDriverRide.tsx
 'use client';
 
 import { useFirestore, useUser } from '@/firebase';
-import { doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, serverTimestamp, Timestamp, runTransaction } from 'firebase/firestore';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,11 +15,11 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RideStatusInfo } from '@/lib/ride-status';
-import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
+import { calculateFare, WAITING_PER_MIN, getCommissionRate } from '@/lib/pricing';
 import { VamoIcon } from '@/components/VamoIcon';
 import { useState, useEffect, useRef } from 'react';
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride } from '@/lib/types';
+import { Ride, UserProfile } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { useToast } from '@/hooks/use-toast';
 
@@ -45,8 +46,9 @@ const formatDistance = (meters: number) => {
 export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<Ride>, onFinishRide: (ride: WithId<Ride>) => void }) {
   const firestore = useFirestore();
   const { toast } = useToast();
+  const [isFinishing, setIsFinishing] = useState(false);
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
-  const { profile } = useUser();
+  const { user, profile } = useUser();
   const prevStatusRef = useRef<Ride['status'] | undefined>();
 
   const totalAccumulatedWaitSeconds = (ride.pauseHistory || []).reduce((acc: number, p: any) => acc + p.duration, 0);
@@ -87,77 +89,125 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
     }
   }, [ride.status]);
 
-  const updateStatus = (newStatus: string) => {
-    if (!firestore) return;
+  const updateStatus = async (newStatus: string) => {
+    if (!firestore || !user) return;
     const rideRef = doc(firestore, 'rides', ride.id);
     
     let payload:any = {
         status: newStatus,
         updatedAt: serverTimestamp(),
     }
-    let finalRideData = { ...ride };
 
-    if(newStatus === 'paused') {
+    if (newStatus === 'paused') {
         payload.pauseStartedAt = serverTimestamp();
+        updateDocumentNonBlocking(rideRef, payload);
+        return;
     }
     
-    if(newStatus === 'in_progress' && ride.status === 'paused' && ride.pauseStartedAt) {
+    if (newStatus === 'in_progress' && ride.status === 'paused' && ride.pauseStartedAt) {
         const now = Timestamp.now();
-        const pausedAt = ride.pauseStartedAt as Timestamp; // Is already a Timestamp
+        const pausedAt = ride.pauseStartedAt as Timestamp;
         const diffSeconds = now.seconds - pausedAt.seconds;
         
-        payload.pauseStartedAt = null; // Clear the start time
+        payload.pauseStartedAt = null;
         payload.pauseHistory = [
             ...(ride.pauseHistory || []),
             { started: pausedAt, ended: now, duration: diffSeconds }
         ];
-    }
-
-    if(newStatus === 'arrived') {
-        // The button's only responsibility is to update the status.
-        // The map component will be responsible for observing this state change
-        // and deciding which route to calculate and display.
         updateDocumentNonBlocking(rideRef, payload);
-        return; // Early return to prevent other logic from running
+        return;
     }
 
-    if(newStatus === 'finished') {
-        const totalWaitTimeSeconds = totalAccumulatedWaitSeconds;
-        const finalPrice = calculateFare({
-            distanceMeters: ride.pricing.estimatedDistanceMeters ?? 4200,
-            waitingMinutes: Math.ceil(totalWaitTimeSeconds / 60),
-            service: ride.serviceType,
-            isNight: false,
-        });
-        const finalPricing = { ...ride.pricing, finalTotal: finalPrice };
-        const finishedAtTimestamp = serverTimestamp();
-        
-        payload.pricing = finalPricing;
-        payload.finishedAt = finishedAtTimestamp;
-        payload.completedRide = {
-            distanceMeters: ride.pricing.estimatedDistanceMeters,
-            durationSeconds: ride.pricing.estimatedDurationSeconds || 0,
-            waitingSeconds: totalWaitTimeSeconds,
-            totalPrice: finalPrice,
-            finishedAt: finishedAtTimestamp,
-        };
-
-        // Prepare the data for the callback
-        finalRideData = {
-          ...ride,
-          status: 'finished',
-          pricing: finalPricing,
-          finishedAt: payload.finishedAt,
-          completedRide: payload.completedRide,
-        };
+    if (newStatus === 'arrived') {
+        updateDocumentNonBlocking(rideRef, payload);
+        return;
     }
-
-    updateDocumentNonBlocking(rideRef, payload);
 
     if (newStatus === 'finished') {
-        onFinishRide(finalRideData);
+        setIsFinishing(true);
+        try {
+            const finalRideData = await runTransaction(firestore, async (transaction) => {
+                const driverRef = doc(firestore, 'users', user.uid);
+                const driverDoc = await transaction.get(driverRef);
+
+                if (!driverDoc.exists()) {
+                    throw new Error("No se encontró el perfil del conductor.");
+                }
+
+                const driverData = driverDoc.data() as UserProfile;
+                const currentCredit = driverData.platformCredit || 0;
+                
+                // Calculate final fare
+                const totalWaitTimeSeconds = totalAccumulatedWaitSeconds;
+                const finalPrice = calculateFare({
+                    distanceMeters: ride.pricing.estimatedDistanceMeters ?? 0,
+                    waitingMinutes: Math.ceil(totalWaitTimeSeconds / 60),
+                    service: ride.serviceType,
+                    isNight: false,
+                });
+
+                // Calculate commission for THIS ride
+                const commissionRate = getCommissionRate(driverData.ridesCompleted || 0);
+                const rideCommission = finalPrice * commissionRate;
+
+                // Check if driver has enough credit
+                if (currentCredit < rideCommission) {
+                    // Even if credit is insufficient, we finish the ride but flag it somehow
+                    // For now, we allow it to go negative. The system will block them from new rides.
+                }
+
+                const newCredit = currentCredit - rideCommission;
+                
+                // --- Prepare Ride Update ---
+                const finalPricing = { ...ride.pricing, finalTotal: finalPrice, rideCommission: rideCommission };
+                const finishedAtTimestamp = serverTimestamp();
+                const rideUpdatePayload: any = {
+                    status: 'finished',
+                    pricing: finalPricing,
+                    finishedAt: finishedAtTimestamp,
+                    completedRide: {
+                        distanceMeters: ride.pricing.estimatedDistanceMeters,
+                        durationSeconds: ride.pricing.estimatedDurationSeconds || 0,
+                        waitingSeconds: totalWaitTimeSeconds,
+                        totalPrice: finalPrice,
+                        finishedAt: finishedAtTimestamp, // Use placeholder, will be replaced by server
+                    }
+                };
+                transaction.update(rideRef, rideUpdatePayload);
+
+                // --- Prepare Driver Profile Update ---
+                transaction.update(driverRef, { platformCredit: newCredit });
+
+                // Return the data needed for the UI callback
+                return {
+                    ...ride,
+                    status: 'finished' as const,
+                    pricing: finalPricing,
+                    finishedAt: Timestamp.now(), // Use local time for immediate UI update
+                    completedRide: rideUpdatePayload.completedRide,
+                };
+            });
+            
+            // If transaction is successful
+            onFinishRide(finalRideData);
+
+        } catch (error: any) {
+            console.error("Error al finalizar el viaje:", error);
+            toast({
+                variant: "destructive",
+                title: "Error en la transacción",
+                description: error.message || "No se pudo finalizar el viaje. Contactá a soporte.",
+            });
+        } finally {
+            setIsFinishing(false);
+        }
+        return; // Important: Stop execution here for 'finished' status
     }
+
+    // For other simple status updates that don't need a transaction
+    updateDocumentNonBlocking(rideRef, payload);
   };
+
 
   const openNavigationToOrigin = () => {
     if (ride?.origin?.lat && ride?.origin?.lng) {
@@ -272,9 +322,11 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 className="w-full"
                 size="lg"
                 variant={nextAction.action === 'finished' ? 'destructive' : 'default'}
+                disabled={isFinishing}
             >
+                {isFinishing && <VamoIcon name="loader" className="animate-spin mr-2"/>}
                 {nextAction.action === 'in_progress' && ride.status === 'paused' && <VamoIcon name="play" className="mr-2 h-4 w-4" />}
-                {nextAction.label}
+                {isFinishing ? 'Finalizando...' : nextAction.label}
             </Button>
             )}
             {ride.status === 'in_progress' && (
@@ -282,6 +334,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                     onClick={() => updateStatus('paused')}
                     className="w-full"
                     variant="outline"
+                    disabled={isFinishing}
                 >
                     <VamoIcon name="hourglass" className="mr-2 h-4 w-4" />
                     Pausar Viaje

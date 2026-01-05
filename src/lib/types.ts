@@ -1,3 +1,4 @@
+
 // src/lib/types.ts
 
 import { type Timestamp, type FieldValue } from "firebase/firestore";
@@ -65,6 +66,7 @@ export interface Ride {
     estimatedDistanceMeters: number;
     estimatedDurationSeconds?: number | null;
     discountAmount?: number | null;
+    rideCommission?: number | null; // Commission for this specific ride
   };
   status: RideStatus;
   createdAt: Timestamp | FieldValue;

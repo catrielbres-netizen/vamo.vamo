@@ -1,3 +1,4 @@
+
 // lib/pricing.ts
 
 export type ServiceType = "premium" | "privado" | "express";
@@ -54,6 +55,14 @@ export function calculateFare({
 
   return Math.round(finalTotal);
 }
+
+// Devuelve la tasa de comisión basada en la cantidad de viajes completados
+export const getCommissionRate = (rideCount: number): number => {
+    if (rideCount < 30) return 0.08; // 8%
+    if (rideCount < 50) return 0.06; // 6%
+    return 0.04; // 4%
+};
+
 
 // Exportamos las constantes de espera para usarlas en otros componentes si es necesario
 export const WAITING_PER_MIN_DAY = DAY_WAITING_PER_MIN;
