@@ -27,7 +27,9 @@ export type AuditLogAction =
   | "ride_cancelled_by_admin"
   | "ride_marked_as_audited"
   | "ride_flagged_by_ai"
-  | "platform_credit_adjusted";
+  | "platform_credit_adjusted"
+  | "driver_suspended"
+  | "driver_unsuspended";
 
 export interface Place {
   address: string;
