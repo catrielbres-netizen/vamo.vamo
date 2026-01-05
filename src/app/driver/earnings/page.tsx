@@ -4,18 +4,18 @@
 import { useState, useEffect } from 'react';
 import { useFirestore, useUser } from '@/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, setDoc } from 'firebase/firestore';
-import { Ride, DriverSummary, UserProfile } from '@/lib/types';
+import { Ride, DriverSummary } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardFooter, CardDescription, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { VamoIcon, WhatsAppLogo } from '@/components/VamoIcon';
+import { VamoIcon } from '@/components/VamoIcon';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 
 
 function formatCurrency(value: number) {
+    if (typeof value !== 'number' || isNaN(value)) return '$...';
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency: 'ARS',
@@ -35,13 +35,12 @@ const getCommissionInfo = (rideCount: number): { rate: number, nextTier: number 
 
 export default function EarningsPage() {
     const firestore = useFirestore();
-    const { user, profile } = useUser();
+    const { user } = useUser();
     const { toast } = useToast();
 
     const [weeklyRides, setWeeklyRides] = useState<Ride[]>([]);
     const [summary, setSummary] = useState<DriverSummary | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [isPaying, setIsPaying] = useState(false);
 
     const today = new Date();
     const weekStartsOn = 1; // Monday
@@ -76,60 +75,28 @@ export default function EarningsPage() {
                 const ridesSnapshot = await getDocs(ridesQuery);
 
                 const rides = ridesSnapshot.docs.map(doc => doc.data() as Ride);
-                if (existingSummary?.status !== 'paid') {
-                  setWeeklyRides(rides);
-                } else {
-                  setWeeklyRides([]);
-                }
+                setWeeklyRides(rides);
                 
                 const commissionInfo = getCommissionInfo(rides.length);
                 const totalEarnings = rides.reduce((acc, ride) => acc + (ride.pricing.finalTotal || ride.pricing.estimatedTotal || 0), 0);
                 const bonusesCovered = rides.reduce((acc, ride) => acc + (ride.pricing.discountAmount || 0), 0);
                 const commissionOwed = totalEarnings * commissionInfo.rate;
                 
-                if (!existingSummary) {
-                    const newSummary: DriverSummary = {
-                        driverId: user.uid,
-                        weekId: weekId,
-                        totalEarnings: totalEarnings,
-                        commissionOwed: commissionOwed,
-                        commissionRate: commissionInfo.rate,
-                        bonusesApplied: bonusesCovered,
-                        status: 'pending',
-                        updatedAt: Timestamp.now(),
-                    };
-                    const summaryRef = doc(firestore, 'driver_summaries', `${user.uid}_${weekId}`);
-                    await setDoc(summaryRef, newSummary, { merge: true });
-                    setSummary(newSummary);
-                } else {
-                    const summaryRef = doc(firestore, 'driver_summaries', existingSummary.id as string);
-                    
-                    const needsUpdate = existingSummary.totalEarnings !== totalEarnings || 
-                                       existingSummary.commissionOwed !== commissionOwed || 
-                                       existingSummary.bonusesApplied !== bonusesCovered || 
-                                       existingSummary.commissionRate !== commissionInfo.rate;
+                const summaryData: DriverSummary = {
+                    driverId: user.uid,
+                    weekId: weekId,
+                    totalEarnings: totalEarnings,
+                    commissionOwed: commissionOwed,
+                    commissionRate: commissionInfo.rate,
+                    bonusesApplied: bonusesCovered,
+                    status: existingSummary?.status || 'pending', // Preserve paid status if already set
+                    updatedAt: Timestamp.now(),
+                };
 
-                    if(needsUpdate && existingSummary.status !== 'paid') {
-                        const updatedData = { 
-                            totalEarnings: totalEarnings,
-                            commissionOwed: commissionOwed,
-                            bonusesApplied: bonusesCovered,
-                            commissionRate: commissionInfo.rate,
-                            updatedAt: Timestamp.now()
-                        };
-                        await setDoc(summaryRef, updatedData, { merge: true });
-                        setSummary({...existingSummary, ...updatedData});
-                    } else if (existingSummary.status === 'pending' && totalEarnings === 0 && existingSummary.totalEarnings > 0) {
-                        // This case happens when a payment was just made, but a re-render happens.
-                        // We reset the local state to match the "paid" status.
-                        setSummary({...existingSummary, totalEarnings: 0, commissionOwed: 0, bonusesApplied: 0});
-                        setWeeklyRides([]);
-                    }
-                    else {
-                      setSummary(existingSummary);
-                    }
-                }
-
+                const summaryRef = doc(firestore, 'driver_summaries', existingSummary?.id || `${user.uid}_${weekId}`);
+                await setDoc(summaryRef, summaryData, { merge: true });
+                setSummary(summaryData);
+                
             } catch (error) {
                 console.error("Error fetching weekly data:", error);
                 toast({ variant: 'destructive', title: 'Error al cargar las ganancias.' });
@@ -141,77 +108,18 @@ export default function EarningsPage() {
         fetchWeeklyData();
 
     }, [firestore, user?.uid, weekId, toast]);
-
-    const handleMercadoPagoPayment = async () => {
-        if (!summary || summary.commissionOwed <= 0) {
-            toast({ variant: 'destructive', title: 'No hay comisión para pagar.' });
-            return;
-        }
-
-        setIsPaying(true);
-        
-        const alias = 'vamo.app';
-        const amount = Math.ceil(summary.commissionOwed); // Ensure it's an integer
-        const description = `Pago comision VamO sem ${weekId}`;
-
-        const mpLink = `https://www.mercadopago.com.ar/money-transfer/checkout?identifier=1&alias=${alias}&amount=${amount}&description=${encodeURIComponent(description)}`;
-
-        window.open(mpLink, '_blank');
-
-        toast({
-            title: 'Redirigiendo a Mercado Pago',
-            description: 'Se abrió una nueva pestaña para completar el pago. Recordá marcarlo como pagado si es necesario.',
-        });
-        
-        setIsPaying(false);
-    };
-
-    const handleNotifyPayment = () => {
-        if (!summary || summary.commissionOwed <= 0 || !user || !profile) {
-            toast({ variant: 'destructive', title: 'Error', description: 'No hay datos de pago para notificar.' });
-            return;
-        }
-
-        const adminWhatsAppNumber = "5492804967673";
-        const driverName = `${profile.name || ''} ${profile.lastName || ''}`.trim();
-        const amount = formatCurrency(Math.ceil(summary.commissionOwed));
-
-        const message = `
-Hola, soy ${driverName} (ID: ${user.uid}).
-Acabo de realizar el pago de la comisión semanal.
------------------------------------
-*Resumen de Pago:*
-*Semana:* ${weekId}
-*Monto Pagado:* ${amount}
------------------------------------
-Adjunto el comprobante.
-        `.trim().replace(/\n/g, '%0A').replace(/ /g, '%20');
-
-        const url = `https://wa.me/${adminWhatsAppNumber}?text=${message}`;
-        window.open(url, '_blank');
-    };
     
-    const isPaymentWindow = () => {
-        const now = new Date();
-        const day = now.getDay();
-        const hour = now.getHours();
-        return false;
-    }
 
     if (isLoading) {
-        return <p className="text-center">Cargando ganancias de la semana...</p>;
+        return <p className="text-center">Cargando panel financiero...</p>;
     }
 
     if (!summary) {
         return <p className="text-center text-muted-foreground">No hay datos de ganancias para esta semana.</p>;
     }
-    const isPaid = summary.status === 'paid';
     
-    const ridesCount = isPaid ? 0 : weeklyRides.length;
-    const totalEarnings = isPaid ? 0 : summary.totalEarnings;
-    const commissionOwed = isPaid ? 0 : summary.commissionOwed;
-    const bonusesApplied = isPaid ? 0 : summary.bonusesApplied;
-    const commissionRate = isPaid ? 0 : summary.commissionRate;
+    const ridesCount = weeklyRides.length;
+    const { totalEarnings, commissionOwed, bonusesApplied, commissionRate } = summary;
     
     const netToReceive = totalEarnings - commissionOwed + bonusesApplied;
     const commissionInfo = getCommissionInfo(ridesCount);
@@ -222,35 +130,35 @@ Adjunto el comprobante.
             <Card className="border-primary">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2"><VamoIcon name="trending-up"/> Metas Semanales</CardTitle>
-                    <CardDescription>Completá más viajes para reducir tu comisión.</CardDescription>
+                    <CardDescription>Completá más viajes para reducir la comisión de la plataforma.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                     <div className="flex justify-between items-baseline">
-                        <p className="text-sm font-medium">Comisión actual</p>
-                        <p className="text-2xl font-bold text-primary">{isPaid ? '0' : (commissionInfo.rate * 100)}%</p>
+                        <p className="text-sm font-medium">Tasa de comisión actual</p>
+                        <p className="text-2xl font-bold text-primary">{(commissionInfo.rate * 100)}%</p>
                     </div>
                      <div className="space-y-2">
                         <div className="flex justify-between text-xs text-muted-foreground">
                             <span>Viajes completados: {ridesCount}</span>
                             {commissionInfo.nextTier && <span>Meta: {commissionInfo.nextTier}</span>}
                         </div>
-                        <Progress value={isPaid ? 0 : progressToNextTier} />
-                        {!isPaid && commissionInfo.ridesToNext !== null ? (
+                        <Progress value={progressToNextTier} />
+                        {commissionInfo.ridesToNext !== null ? (
                              <p className="text-center text-sm text-muted-foreground">
                                 ¡Te faltan <strong>{commissionInfo.ridesToNext} {commissionInfo.ridesToNext === 1 ? 'viaje' : 'viajes'}</strong> para bajar tu comisión al <strong>{(getCommissionInfo(ridesCount + commissionInfo.ridesToNext).rate * 100)}%</strong>!
                              </p>
-                        ) : !isPaid && commissionInfo.nextTier === null ? (
+                        ) : (
                             <p className="text-center text-sm font-semibold text-green-500 flex items-center justify-center gap-2">
                                 <VamoIcon name="target"/> ¡Alcanzaste la comisión más baja!
                             </p>
-                        ) : null}
+                        )}
                      </div>
                 </CardContent>
             </Card>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Resumen Semanal</CardTitle>
+                    <CardTitle>Resumen Financiero Semanal</CardTitle>
                     <CardDescription>Tus ganancias desde el {startOfWeek(today, { locale: es, weekStartsOn }).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' })}.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -260,70 +168,39 @@ Adjunto el comprobante.
                             <span className="font-medium">{ridesCount}</span>
                         </div>
                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Total bruto facturado</span>
+                            <span className="text-muted-foreground">Total bruto (cobrado a pasajeros)</span>
                             <span className="font-medium">{formatCurrency(totalEarnings)}</span>
                         </div>
                         {bonusesApplied > 0 && (
                             <div className="flex justify-between text-blue-500">
-                                <span className="flex items-center gap-1"><VamoIcon name="percent" className="w-3 h-3" /> Reembolso por bonos</span>
+                                <span className="flex items-center gap-1"><VamoIcon name="percent" className="w-3 h-3" /> Reembolso por bonos de VamO</span>
                                 <span className="font-medium">{formatCurrency(bonusesApplied)}</span>
                             </div>
                         )}
                      </div>
                      <div className="border-t pt-4 space-y-2 text-base">
                         <div className="flex justify-between items-center text-red-500">
-                            <span className="font-medium">Comisión VamO ({(commissionRate * 100).toFixed(0)}%)</span>
+                            <span className="font-medium">Comisión de plataforma ({(commissionRate * 100).toFixed(0)}%)</span>
                             <span className="font-bold">{formatCurrency(commissionOwed)}</span>
                         </div>
                         <div className="flex justify-between items-center text-green-500">
-                            <span className="font-medium">Total a recibir</span>
+                            <span className="font-medium">Tu ganancia neta</span>
                             <span className="font-bold">{formatCurrency(netToReceive)}</span>
                         </div>
                      </div>
                       <p className="text-xs text-muted-foreground text-center pt-2">
-                        El total a recibir es el bruto facturado, menos la comisión, más los bonos de pasajero que VamO te cubre.
+                        Tu ganancia neta es el bruto facturado, menos la comisión, más los bonos de pasajero que la plataforma te cubre.
                      </p>
                 </CardContent>
-                {summary.status === 'pending' && commissionOwed > 0 && (
-                    <CardFooter className="flex-col gap-2">
-                        <Button className="w-full" onClick={handleMercadoPagoPayment} disabled={isPaying}>
-                            {isPaying ? 'Procesando...' : (
-                                <>
-                                    <VamoIcon name="credit-card" className="mr-2 h-4 w-4" /> Pagar con Mercado Pago
-                                </>
-                            )}
-                        </Button>
-                        <Button className="w-full" variant="outline" onClick={handleNotifyPayment}>
-                           <WhatsAppLogo className="mr-2 h-4 w-4" /> Ya pagué, notificar por WhatsApp
-                        </Button>
-                    </CardFooter>
-                )}
             </Card>
-
-             {isPaid ? (
-                <Alert variant="default" className="bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800">
-                    <VamoIcon name="check-circle" className="h-4 w-4 text-green-500" />
-                    <AlertTitle className="text-green-700 dark:text-green-400">Comisión Pagada</AlertTitle>
-                    <AlertDescription className="text-green-600 dark:text-green-500">
-                        ¡Gracias! La comisión de esta semana ya fue registrada.
-                    </AlertDescription>
-                </Alert>
-             ) : !isPaymentWindow() && summary.commissionOwed > 0 && (
-                <Alert>
-                    <VamoIcon name="info" className="h-4 w-4" />
-                    <AlertTitle>Pago de Comisiones</AlertTitle>
-                    <AlertDescription>
-                        Podés pagar tu comisión semanal usando Mercado Pago y luego notificarnos por WhatsApp para que acreditemos el pago.
-                    </AlertDescription>
-                </Alert>
-             )}
-
+            
+            <Alert>
+                <VamoIcon name="info" className="h-4 w-4" />
+                <AlertTitle>¿Cómo funciona la comisión?</AlertTitle>
+                <AlertDescription>
+                    La comisión por el uso de la plataforma se descontará automáticamente de tu Crédito de Plataforma al finalizar cada viaje. Mantené tu saldo positivo para poder seguir recibiendo viajes.
+                </AlertDescription>
+            </Alert>
         </div>
     );
 }
-
-    
-
-    
-
-    
