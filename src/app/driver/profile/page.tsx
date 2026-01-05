@@ -20,12 +20,21 @@ const verificationStatusBadge: Record<UserProfile['vehicleVerificationStatus'] &
     rejected: { text: 'Rechazado', variant: 'destructive' },
 }
 
-const ProfileInfoRow = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string | number | null | undefined }) => (
+function formatCurrency(value: number) {
+    if (typeof value !== 'number') return '$...';
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+    }).format(value);
+}
+
+
+const ProfileInfoRow = ({ icon, label, value, valueClassName }: { icon: React.ReactNode, label: string, value: string | number | null | undefined, valueClassName?: string }) => (
     <div className="flex items-center gap-4 text-sm">
         <div className="text-muted-foreground w-6">{icon}</div>
-        <div>
+        <div className="flex-1">
             <p className="text-muted-foreground">{label}</p>
-            <p className="font-medium">{value || 'No especificado'}</p>
+            <p className={cn("font-medium", valueClassName)}>{value || 'No especificado'}</p>
         </div>
     </div>
 );
@@ -69,6 +78,7 @@ export default function DriverProfilePage() {
   
   const verificationInfo = verificationStatusBadge[profile.vehicleVerificationStatus || 'unverified'];
   const averageRating = profile.averageRating?.toFixed(1) ?? 'N/A';
+  const platformCredit = profile.platformCredit ?? 0;
 
   return (
     <div className="space-y-6">
@@ -87,6 +97,12 @@ export default function DriverProfilePage() {
             <ProfileInfoRow icon={<VamoIcon name="phone" />} label="Teléfono" value={profile.phone} />
             <ProfileInfoRow icon={<VamoIcon name="car" />} label="Año del Vehículo" value={profile.carModelYear} />
             <ProfileInfoRow icon={<VamoIcon name="star" />} label="Rating Promedio" value={averageRating} />
+            <ProfileInfoRow 
+              icon={<VamoIcon name="wallet" />} 
+              label="Crédito de Plataforma" 
+              value={formatCurrency(platformCredit)} 
+              valueClassName={cn("text-lg font-bold", platformCredit > 0 ? "text-green-500" : "text-destructive")}
+            />
         </CardContent>
         <CardContent>
              <Button variant="outline" size="sm" onClick={handleLogout} className="w-full">

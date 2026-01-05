@@ -26,7 +26,8 @@ export type AuditLogAction =
   | "driver_rejected"
   | "ride_cancelled_by_admin"
   | "ride_marked_as_audited"
-  | "ride_flagged_by_ai";
+  | "ride_flagged_by_ai"
+  | "platform_credit_adjusted";
 
 export interface Place {
   address: string;
@@ -118,6 +119,7 @@ export type UserProfile = {
     driverStatus?: DriverStatus;
     carModelYear?: number | null;
     vehicleVerificationStatus?: VerificationStatus;
+    platformCredit?: number;
     currentLocation?: {
       lat: number;
       lng: number;

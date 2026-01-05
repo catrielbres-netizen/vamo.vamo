@@ -3,7 +3,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp, writeBatch, runTransaction } from 'firebase/firestore';
 import { Ride, DriverSummary, UserProfile, AuditLog } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
@@ -18,6 +18,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useParams } from 'next/navigation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { VamoIcon } from '@/components/VamoIcon';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 function formatCurrency(value: number) {
     if (typeof value !== 'number') return '$...';
@@ -52,6 +54,8 @@ export default function DriverDetailPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isInspecting, setIsInspecting] = useState(false);
     const [inspectionResult, setInspectionResult] = useState<string | null>(null);
+    const [creditAdjustment, setCreditAdjustment] = useState('');
+    const [isAdjustingCredit, setIsAdjustingCredit] = useState(false);
 
     const driverProfileRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
     const { data: driver, isLoading: isDriverLoading } = useDoc<UserProfile>(driverProfileRef);
@@ -96,6 +100,52 @@ export default function DriverDetailPage() {
             console.error("Error fetching weekly data for driver:", error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleAdjustCredit = async () => {
+        const amount = parseFloat(creditAdjustment);
+        if (isNaN(amount) || !driverProfileRef || !firestore || !user?.uid || !adminProfile?.name) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Monto inválido o datos de sesión faltantes.' });
+            return;
+        }
+
+        setIsAdjustingCredit(true);
+        try {
+            await runTransaction(firestore, async (transaction) => {
+                const driverDoc = await transaction.get(driverProfileRef);
+                if (!driverDoc.exists()) {
+                    throw new Error("El conductor no existe.");
+                }
+
+                const currentCredit = driverDoc.data().platformCredit || 0;
+                const newCredit = currentCredit + amount;
+                
+                transaction.update(driverProfileRef, { platformCredit: newCredit });
+
+                const auditLogRef = doc(collection(firestore, 'auditLogs'));
+                const logEntry = {
+                    adminId: user.uid,
+                    adminName: adminProfile.name,
+                    action: 'platform_credit_adjusted',
+                    entityId: driverId,
+                    timestamp: serverTimestamp(),
+                    details: `Crédito ajustado en ${formatCurrency(amount)}. Saldo anterior: ${formatCurrency(currentCredit)}. Saldo nuevo: ${formatCurrency(newCredit)}.`
+                };
+                transaction.set(auditLogRef, logEntry);
+            });
+
+            toast({
+                title: '¡Crédito ajustado!',
+                description: `El nuevo saldo del conductor es ${formatCurrency((driver?.platformCredit || 0) + amount)}.`
+            });
+            setCreditAdjustment('');
+
+        } catch (error) {
+            console.error("Error adjusting credit:", error);
+            toast({ variant: 'destructive', title: 'Error en la transacción', description: 'No se pudo ajustar el crédito.' });
+        } finally {
+            setIsAdjustingCredit(false);
         }
     };
 
@@ -222,6 +272,7 @@ export default function DriverDetailPage() {
     const netToReceive = totalEarnings - commissionOwed + bonusesApplied;
     const verificationInfo = verificationStatusBadge[driver.vehicleVerificationStatus || 'unverified'];
     const isSummaryPending = summary?.status === 'pending' && commissionOwed > 0;
+    const platformCredit = driver.platformCredit ?? 0;
 
     return (
         <div className="space-y-6">
@@ -292,6 +343,86 @@ export default function DriverDetailPage() {
                 </Card>
             )}
 
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <VamoIcon name="wallet" /> Crédito de Plataforma
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-3xl font-bold">{formatCurrency(platformCredit)}</p>
+                        <p className="text-sm text-muted-foreground">Saldo actual del conductor.</p>
+                    </CardContent>
+                    <CardFooter className="flex-col items-start gap-2">
+                         <Label htmlFor="credit-adjustment">Ajustar Crédito</Label>
+                         <div className="flex w-full items-center gap-2">
+                             <Input
+                                id="credit-adjustment"
+                                type="number"
+                                placeholder="Ej: 5000 o -500"
+                                value={creditAdjustment}
+                                onChange={(e) => setCreditAdjustment(e.target.value)}
+                                disabled={isAdjustingCredit}
+                            />
+                            <Button onClick={handleAdjustCredit} disabled={isAdjustingCredit || !creditAdjustment}>
+                                {isAdjustingCredit ? <VamoIcon name="loader" className="animate-spin" /> : <VamoIcon name="check" />}
+                            </Button>
+                         </div>
+                        <p className="text-xs text-muted-foreground">Usá valores positivos para agregar crédito (cargas) y negativos para debitar (ajustes).</p>
+                    </CardFooter>
+                </Card>
+
+                <Card className="lg:col-span-2">
+                     <CardHeader>
+                        <CardTitle>Resumen Semanal (Sistema Anterior)</CardTitle>
+                         <CardDescription>Desde el {startOfWeek(today, { locale: es, weekStartsOn }).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' })}.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Total bruto facturado</span>
+                            <span className="font-medium">{formatCurrency(totalEarnings)}</span>
+                        </div>
+                        <div className="flex justify-between text-blue-500">
+                                <span className="flex items-center gap-1"><VamoIcon name="percent" className="w-3 h-3" /> Reembolso por bonos</span>
+                                <span className="font-medium">{formatCurrency(bonusesApplied)}</span>
+                            </div>
+                        <div className="flex justify-between items-center text-red-500">
+                            <span className="font-medium">Comisión VamO ({(summary?.commissionRate ?? commissionInfo.rate * 100).toFixed(0)}%)</span>
+                            <span className="font-bold">{formatCurrency(commissionOwed)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-green-500 font-bold border-t pt-2 mt-2">
+                            <span>Total a recibir por el conductor</span>
+                            <span>{formatCurrency(netToReceive)}</span>
+                        </div>
+                    </CardContent>
+                      {isSummaryPending && (
+                        <CardFooter className="border-t pt-4">
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="default" className="w-full bg-green-600 hover:bg-green-700">
+                                        <VamoIcon name="check" className="mr-2"/> Marcar Semana como Pagada
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Confirmar Pago de Comisión?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Esta acción marcará la comisión de {formatCurrency(commissionOwed)} como pagada.
+                                    </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction asChild>
+                                        <Button onClick={handleMarkAsPaid} className="bg-green-600 hover:bg-green-700">Sí, confirmar pago</Button>
+                                    </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </CardFooter>
+                    )}
+                </Card>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                  <Card className="border-primary">
@@ -324,53 +455,31 @@ export default function DriverDetailPage() {
 
                  <Card>
                     <CardHeader>
-                        <CardTitle>Resumen Semanal</CardTitle>
-                         <CardDescription>Desde el {startOfWeek(today, { locale: es, weekStartsOn }).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' })}.</CardDescription>
+                        <CardTitle>Acciones de Cuenta</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                            <span className="text-muted-foreground">Total bruto facturado</span>
-                            <span className="font-medium">{formatCurrency(totalEarnings)}</span>
-                        </div>
-                        <div className="flex justify-between text-blue-500">
-                                <span className="flex items-center gap-1"><VamoIcon name="percent" className="w-3 h-3" /> Reembolso por bonos</span>
-                                <span className="font-medium">{formatCurrency(bonusesApplied)}</span>
-                            </div>
-                        <div className="flex justify-between items-center text-red-500">
-                            <span className="font-medium">Comisión VamO ({(summary?.commissionRate ?? commissionInfo.rate * 100).toFixed(0)}%)</span>
-                            <span className="font-bold">{formatCurrency(commissionOwed)}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-green-500 font-bold border-t pt-2 mt-2">
-                            <span>Total a recibir por el conductor</span>
-                            <span>{formatCurrency(netToReceive)}</span>
-                        </div>
-                    </CardContent>
-                    {isSummaryPending && (
-                        <CardFooter className="flex-col gap-2 border-t pt-4">
-                            <p className="text-sm text-center text-muted-foreground mb-2">Acciones de pago</p>
-                            <AlertDialog>
+                    <CardContent className="flex flex-col gap-2">
+                        {driver.isSuspended ? (
+                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                    <Button variant="default" className="w-full bg-green-600 hover:bg-green-700">
-                                        <VamoIcon name="check" className="mr-2"/> Marcar Semana como Pagada
+                                     <Button variant="outline" className="w-full">
+                                        <VamoIcon name="user-check" className="mr-2"/> Reactivar Cuenta
                                     </Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                     <AlertDialogHeader>
-                                    <AlertDialogTitle>¿Confirmar Pago de Comisión?</AlertDialogTitle>
+                                    <AlertDialogTitle>¿Reactivar la cuenta de este conductor?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Esta acción marcará la comisión de {formatCurrency(commissionOwed)} como pagada y reiniciará el conteo semanal del conductor. ¿Verificaste el comprobante?
+                                        Esta acción permitirá que el conductor vuelva a iniciar sesión y recibir viajes. Hacelo solo si la situación fue regularizada.
                                     </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction asChild>
-                                        <Button onClick={handleMarkAsPaid} className="bg-green-600 hover:bg-green-700">Sí, confirmar pago</Button>
-                                    </AlertDialogAction>
+                                    <AlertDialogAction onClick={() => handleSuspendAccount(false)}>Sí, reactivar cuenta</AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
-
-                            <AlertDialog>
+                        ) : (
+                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                     <Button variant="destructive" className="w-full">
                                         <VamoIcon name="x-circle" className="mr-2"/> Suspender Cuenta
@@ -380,7 +489,7 @@ export default function DriverDetailPage() {
                                     <AlertDialogHeader>
                                     <AlertDialogTitle>¿Suspender la cuenta de este conductor?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Esta acción bloqueará el acceso del conductor a la aplicación. No podrá iniciar sesión ni recibir viajes. Es una medida seria por falta de pago.
+                                        Esta acción bloqueará el acceso del conductor a la aplicación. No podrá iniciar sesión ni recibir viajes. Es una medida seria.
                                     </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
@@ -391,31 +500,8 @@ export default function DriverDetailPage() {
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
-                        </CardFooter>
-                    )}
-                    {driver.isSuspended && (
-                         <CardFooter className="border-t pt-4">
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                     <Button variant="outline" className="w-full">
-                                        <VamoIcon name="user-check" className="mr-2"/> Reactivar Cuenta
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                    <AlertDialogTitle>¿Reactivar la cuenta de este conductor?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        Esta acción permitirá que el conductor vuelva a iniciar sesión y recibir viajes. Hacelo solo si la situación de pago fue regularizada.
-                                    </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleSuspendAccount(false)}>Sí, reactivar cuenta</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                         </CardFooter>
-                    )}
+                        )}
+                    </CardContent>
                 </Card>
             </div>
             
