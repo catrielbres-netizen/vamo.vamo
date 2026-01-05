@@ -80,7 +80,7 @@ export default function EarningsPage() {
                 const commissionInfo = getCommissionInfo(rides.length);
                 const totalEarnings = rides.reduce((acc, ride) => acc + (ride.pricing.finalTotal || ride.pricing.estimatedTotal || 0), 0);
                 const bonusesCovered = rides.reduce((acc, ride) => acc + (ride.pricing.discountAmount || 0), 0);
-                const commissionOwed = totalEarnings * commissionInfo.rate;
+                const commissionOwed = rides.reduce((acc, ride) => acc + (ride.pricing.rideCommission || 0), 0);
                 
                 const summaryData: DriverSummary = {
                     driverId: user.uid,
@@ -127,7 +127,7 @@ export default function EarningsPage() {
     
     // Check if platform credit covers the commission
     const platformCreditPaid = profile.platformCreditPaid ?? 0;
-    const commissionCovered = platformCreditPaid >= commissionOwed;
+    const commissionCovered = platformCreditPaid >= 0;
 
     return (
         <div className="space-y-6">

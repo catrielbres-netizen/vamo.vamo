@@ -135,7 +135,6 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 }
 
                 const driverData = driverDoc.data() as UserProfile;
-                const ridesCompleted = driverData.ridesCompleted || 0;
                 
                 // Calculate final fare
                 const totalWaitTimeSeconds = totalAccumulatedWaitSeconds;
@@ -146,11 +145,12 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                     isNight: false,
                 });
 
-                // Calculate commission for THIS ride based on completed rides BEFORE this one
+                // 1. Calculate commission for THIS ride based on completed rides BEFORE this one
+                const ridesCompleted = driverData.ridesCompleted || 0;
                 const commissionRate = getCommissionRate(ridesCompleted);
                 const rideCommission = finalPrice * commissionRate;
 
-                // Debit commission ONLY from the paid credit balance
+                // 2. Debit commission ONLY from the paid credit balance
                 const currentPaidCredit = driverData.platformCreditPaid || 0;
                 const newPaidCredit = currentPaidCredit - rideCommission;
                 
@@ -161,6 +161,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                     status: 'finished',
                     pricing: finalPricing,
                     finishedAt: finishedAtTimestamp,
+                    updatedAt: finishedAtTimestamp,
                     completedRide: {
                         distanceMeters: ride.pricing.estimatedDistanceMeters,
                         durationSeconds: ride.pricing.estimatedDurationSeconds || 0,
@@ -172,9 +173,11 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 transaction.update(rideRef, rideUpdatePayload);
 
                 // --- Prepare Driver Profile Update ---
+                // 3. Update driver's credit and completed rides count
                 transaction.update(driverRef, { 
                     platformCreditPaid: newPaidCredit,
                     ridesCompleted: (driverData.ridesCompleted || 0) + 1,
+                    updatedAt: finishedAtTimestamp,
                 });
 
                 // Return the data needed for the UI callback
