@@ -4,7 +4,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp, writeBatch, runTransaction, FieldValue } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp, writeBatch, runTransaction, FieldValue, increment } from 'firebase/firestore';
 import { Ride, DriverSummary, UserProfile, AuditLog } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
@@ -209,36 +209,48 @@ export default function DriverDetailPage() {
         try {
             const batch = writeBatch(firestore);
             
-            const updatePayload: Partial<UserProfile> & { updatedAt: FieldValue } = {
+            const updatePayload: Partial<UserProfile> = {
                 vehicleVerificationStatus: newStatus,
                 approved: newStatus === 'approved',
                 updatedAt: serverTimestamp(),
             };
 
-            // Grant promo credit on first approval
             const WELCOME_BONUS = 5000;
+            // Grant promo credit on first approval, if not already granted.
             if (newStatus === 'approved' && !driver.promoCreditGranted) {
-                updatePayload.platformCreditPromo = (driver.platformCreditPromo || 0) + WELCOME_BONUS;
+                updatePayload.platformCreditPromo = increment(WELCOME_BONUS);
                 updatePayload.promoCreditGranted = true;
             }
 
             batch.update(driverProfileRef, updatePayload);
 
-            // Create audit log
+            // Create audit log for the verification action.
             const auditLogRef = doc(collection(firestore, 'auditLogs'));
-            const details = newStatus === 'approved' 
-                ? `El administrador ${adminProfile.name} aprobó al conductor. ${!driver.promoCreditGranted ? `Se otorgó un bono de bienvenida de ${formatCurrency(WELCOME_BONUS)}.` : ''}`
+            const verificationDetails = newStatus === 'approved' 
+                ? `El administrador ${adminProfile.name} aprobó al conductor.`
                 : `El administrador ${adminProfile.name} rechazó al conductor.`;
 
-            const logEntry: Omit<AuditLog, 'timestamp' | 'details' | 'id'> & { timestamp: FieldValue; details: string; } = {
+            batch.set(auditLogRef, {
                 adminId: user.uid,
                 adminName: adminProfile.name,
                 action: newStatus === 'approved' ? 'driver_approved' : 'driver_rejected',
                 entityId: driverId,
                 timestamp: serverTimestamp(),
-                details: details
-            };
-            batch.set(auditLogRef, logEntry);
+                details: verificationDetails
+            });
+
+            // Create a separate audit log for the bonus if it was granted.
+            if (newStatus === 'approved' && !driver.promoCreditGranted) {
+                const bonusAuditLogRef = doc(collection(firestore, 'auditLogs'));
+                batch.set(bonusAuditLogRef, {
+                    adminId: user.uid,
+                    adminName: adminProfile.name,
+                    action: 'platform_credit_adjusted',
+                    entityId: driverId,
+                    timestamp: serverTimestamp(),
+                    details: `Bono de bienvenida de ${formatCurrency(WELCOME_BONUS)} otorgado automáticamente por aprobación.`
+                });
+            }
 
             await batch.commit();
 
@@ -251,6 +263,7 @@ export default function DriverDetailPage() {
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado del conductor.' });
         }
     }
+
 
     const handleInspectRides = async () => {
         setIsInspecting(true);
