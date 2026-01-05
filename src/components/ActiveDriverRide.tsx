@@ -139,6 +139,12 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                     console.log("La comisión para este viaje ya fue procesada.");
                     return { ...rideData, id: currentRideSnap.id };
                 }
+                
+                const driverSnap = await transaction.get(driverRef);
+                if (!driverSnap.exists()) {
+                    throw new Error("No se encontró el perfil del conductor.");
+                }
+                const driverData = driverSnap.data() as UserProfile;
 
                 // --- Start of FASE 2 Logic ---
                 // 1. Calculate final fare
@@ -150,14 +156,8 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                     isNight: false,
                 });
 
-                // 2. Get deterministic ride count for commission tier
-                const ridesQuery = query(
-                    collection(firestore, "rides"),
-                    where("driverId", "==", user.uid),
-                    where("status", "==", "finished")
-                );
-                const completedRidesSnap = await getDocs(ridesQuery);
-                const ridesCompletedBeforeThis = completedRidesSnap.size;
+                // 2. Get deterministic ride count for commission tier from the canonical counter
+                const ridesCompletedBeforeThis = driverData.ridesCompleted ?? 0;
 
                 // 3. Calculate commission for THIS ride
                 const commissionRate = getCommissionRate(ridesCompletedBeforeThis);
