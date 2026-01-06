@@ -79,22 +79,28 @@ export default function AdminDashboard() {
 
   const isLoading = usersLoading || activeRidesLoading || allRidesLoading || summariesLoading;
 
+  const alertThresholds = {
+    activeRides: 10,
+    driversOnline: 2,
+    weeklyRevenue: 10000,
+  };
+
 
   return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <h1 className="text-3xl font-bold">Dashboard de Lanzamiento</h1>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatCard title="Comisión Total (Histórico)" value={isLoading ? '...' : formatCurrency(totalCommissionEarned)} icon={<VamoIcon name="dollar-sign" className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Facturación Bruta (Semana)" value={isLoading ? '...' : formatCurrency(currentWeekGross)} icon={<VamoIcon name="calendar-clock" className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Comisión a Recibir (Semana)" value={isLoading ? '...' : formatCurrency(currentWeekCommission)} icon={<VamoIcon name="wallet" className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Viajes activos" value={isLoading ? '...' : activeRides} icon={<VamoIcon name="search" className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Comisión Total (Histórico)" value={isLoading ? '...' : formatCurrency(totalCommissionEarned)} icon="dollar-sign" />
+          <StatCard title="Facturación Bruta (Semana)" value={isLoading ? '...' : formatCurrency(currentWeekGross)} icon="calendar-clock" alert={!isLoading && currentWeekGross < alertThresholds.weeklyRevenue} />
+          <StatCard title="Comisión a Recibir (Semana)" value={isLoading ? '...' : formatCurrency(currentWeekCommission)} icon="wallet" />
+          <StatCard title="Viajes activos" value={isLoading ? '...' : activeRides} icon="search" alert={!isLoading && activeRides > alertThresholds.activeRides} />
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard title="Usuarios registrados" value={isLoading ? '...' : totalUsers} icon={<VamoIcon name="users" className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Viajes totales" value={isLoading ? '...' : totalRides} icon={<VamoIcon name="car" className="h-5 w-5 text-muted-foreground"/>} />
-          <StatCard title="Conductores en línea" value={isLoading ? '...' : onlineDrivers.length} icon={<VamoIcon name="map" className="h-5 w-5 text-muted-foreground"/>} />
+          <StatCard title="Usuarios registrados" value={isLoading ? '...' : totalUsers} icon="users" />
+          <StatCard title="Viajes totales" value={isLoading ? '...' : totalRides} icon="car" />
+          <StatCard title="Conductores en línea" value={isLoading ? '...' : onlineDrivers.length} icon="map" alert={!isLoading && onlineDrivers.length < alertThresholds.driversOnline} />
         </div>
       </div>
   )
