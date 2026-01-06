@@ -8,11 +8,6 @@ env:
     value: BNpGYieUtpKbKIzhPBmSXfhJwENZfI3okRNqHpJV5owMoPuHPOIuJIWCwZ9PFcMBSI9niAxl3T33QVLVtNWK0tw
   - variable: NEXT_PUBLIC_MP_PUBLIC_KEY
     value: APP_USR-584788ff-bf06-4978-870e-538ca68983fb
-  # ADVERTENCIA DE SEGURIDAD: Este token es secreto y no debería estar aquí en una app de producción final.
-  # Se coloca aquí temporalmente porque el panel de Firebase App Hosting no permite configurarlo como "secret".
-  # La práctica recomendada es moverlo a Secret Manager tan pronto como sea posible.
-  - variable: MERCADOPAGO_ACCESS_TOKEN
-    value: APP_USR-6363903695837690-120218-e2f26d49090a026bf38d14806e4495d3-665467758
 
 build:
   command: npm install && npm run build
