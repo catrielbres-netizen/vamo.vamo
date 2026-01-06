@@ -6,6 +6,8 @@ env:
   # Asegúrate de que esta clave VAPID sea la NUEVA que generes.
   - variable: NEXT_PUBLIC_FCM_VAPID_KEY
     value: BNpGYieUtpKbKIzhPBmSXfhJwENZfI3okRNqHpJV5owMoPuHPOIuJIWCwZ9PFcMBSI9niAxl3T33QVLVtNWK0tw
+  - variable: NEXT_PUBLIC_MP_PUBLIC_KEY
+    value: APP_USR-fca5ad55-6e9f-4ff1-9108-d72e29816d44
 
 build:
   command: npm install && npm run build
