@@ -4,9 +4,21 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { useEffect } from 'react';
 
 export default function PaymentFailurePage() {
     const router = useRouter();
+    const { toast } = useToast();
+
+    useEffect(() => {
+        toast({
+            variant: 'destructive',
+            title: '❌ Pago Rechazado',
+            description: 'La transacción no pudo ser completada.',
+        });
+    }, [toast]);
+
 
     const handleRetry = () => {
         router.push('/driver/earnings');
@@ -36,3 +48,4 @@ export default function PaymentFailurePage() {
         </div>
     );
 }
+

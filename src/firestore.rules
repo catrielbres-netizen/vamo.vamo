@@ -56,5 +56,18 @@ service cloud.firestore {
         (isApprovedDriver(request.auth.uid) && request.resource.data.driverId == request.auth.uid)
       );
     }
+
+    // Transacciones de plataforma
+    match /platform_transactions/{transactionId} {
+        allow read: if request.auth.uid == resource.data.driverId || isAdmin(request.auth.uid);
+        allow create: if isAdmin(request.auth.uid); // Solo admin puede crear ajustes
+    }
+
+    // Intenciones de pago (para Mercado Pago)
+    match /payment_intents/{intentId} {
+        allow read: if request.auth.uid == resource.data.driverId || isAdmin(request.auth.uid);
+        // La creación la hace el server action, por lo que no necesita regla de cliente
+    }
+
   }
 }

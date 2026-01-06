@@ -1,4 +1,3 @@
-
 // /app/driver/rides/page.tsx
 'use client';
 
@@ -19,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useFCM } from '@/hooks/useFCM';
 import { Button } from '@/components/ui/button';
+import { getAuth } from 'firebase/auth';
 
 // Ubicación de respaldo para cuando el GPS no está disponible (ej. en una computadora)
 const FALLBACK_DRIVER_LOCATION = { lat: -43.3009, lng: -65.1018 }; // Terminal de Rawson, Chubut

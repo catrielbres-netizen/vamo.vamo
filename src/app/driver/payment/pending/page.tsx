@@ -4,9 +4,19 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { useEffect } from 'react';
 
 export default function PaymentPendingPage() {
     const router = useRouter();
+    const { toast } = useToast();
+
+    useEffect(() => {
+        toast({
+            title: '⏳ Pago Pendiente',
+            description: 'Tu pago está siendo procesado por Mercado Pago.',
+        });
+    }, [toast]);
 
     const handleGoToEarnings = () => {
         router.push('/driver/earnings');
