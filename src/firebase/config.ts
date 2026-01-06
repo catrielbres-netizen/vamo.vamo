@@ -1,3 +1,4 @@
+
 // PASO CRÍTICO: Reemplaza todo este objeto con el NUEVO `firebaseConfig`
 // que generaste en la consola de Firebase después de rehacer tu Web App.
 // Asegúrate de que el `projectId` sea "studio-6697160840-7c67f".
