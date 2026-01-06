@@ -193,8 +193,6 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                     const leg = result.routes[0].legs[0];
                     const newDistanceMeters = leg.distance?.value ?? 0;
                     
-                    const originalFare = ride.pricing.estimatedTotal;
-                    
                     const totalWaitMinutes = Math.ceil(totalAccumulatedWaitSeconds / 60);
 
                     const finalFare = calculateFare({
@@ -219,7 +217,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
     }
     
     calculateNewRoute();
-  }, [newDestination, ride.driverLocation, ride.pricing.estimatedTotal, ride.pricing.estimatedDistanceMeters, ride.serviceType, totalAccumulatedWaitSeconds, toast]);
+  }, [newDestination, ride.driverLocation, ride.pricing.estimatedDistanceMeters, ride.serviceType, totalAccumulatedWaitSeconds, toast]);
 
 
   const handleConfirmReroute = async () => {
@@ -232,7 +230,6 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
         await updateDocumentNonBlocking(rideRef, {
             destination: newDestination,
             'pricing.finalTotal': newFare,
-            'pricing.estimatedDistanceMeters': ride.pricing.estimatedDistanceMeters + (newFare - ride.pricing.estimatedTotal), // Approximation
             rerouteHistory: [
                 ...(ride.rerouteHistory || []),
                 { from: ride.destination, to: newDestination, timestamp: serverTimestamp() }

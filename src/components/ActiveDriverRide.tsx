@@ -31,6 +31,15 @@ const statusActions: { [key: string]: { action: string, label: string } } = {
   paused: { action: 'in_progress', label: 'Reanudar Viaje' },
 };
 
+const formatCurrency = (value: number) => {
+    if (typeof value !== 'number' || isNaN(value)) return '$0';
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+    }).format(value);
+};
+
+
 const formatDuration = (seconds: number) => {
     if (seconds === 0) return 'Calculando...';
     const mins = Math.floor(seconds / 60);
@@ -162,9 +171,10 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 const driverData = driverSnap.data() as UserProfile;
 
                 // --- Start of FASE 5 Ledger-Only Logic ---
-                // 1. Calculate final fare
+                // 1. Calculate final fare (this is now the definitive calculation)
                 const totalWaitTimeSeconds = (rideData.pauseHistory || []).reduce((acc, p) => acc + p.duration, 0);
-                const finalPrice = calculateFare({
+                // The finalTotal from a reroute is the new definitive price. If no reroute, use estimated.
+                const finalPrice = rideData.pricing.finalTotal || calculateFare({
                     distanceMeters: rideData.pricing.estimatedDistanceMeters ?? 0,
                     waitingMinutes: Math.ceil(totalWaitTimeSeconds / 60),
                     service: rideData.serviceType,
@@ -174,13 +184,13 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 // 2. Get deterministic ride count for commission tier from the canonical counter
                 const ridesCompletedBeforeThis = driverData.ridesCompleted ?? 0;
 
-                // 3. Calculate commission for THIS ride
+                // 3. Calculate commission for THIS ride based on the final, definitive price
                 const commissionRate = getCommissionRate(ridesCompletedBeforeThis);
                 const rideCommission = Math.round(finalPrice * commissionRate);
 
                 // --- Prepare Atomic Updates ---
                 
-                // A) Update Driver Profile's ride counter (NO MORE BALANCE UPDATE)
+                // A) Update Driver Profile's ride counter
                 transaction.update(driverRef, { 
                     ridesCompleted: increment(1),
                     updatedAt: serverTimestamp(),
@@ -221,8 +231,6 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 };
                 transaction.update(rideRef, rideUpdatePayload);
                 
-                // --- End of FASE 5 Logic ---
-
                 // Return the data needed for the UI callback
                 return {
                     ...rideData,
@@ -272,7 +280,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
   const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
-  const currentTotal = ride.pricing.finalTotal || ride.pricing.estimatedTotal + waitingCost;
+  const currentTotal = (ride.pricing.finalTotal || ride.pricing.estimatedTotal) + waitingCost;
   
   const arrivalInfo = ride.driverArrivalInfo;
   const mainTripInfo = {
@@ -364,7 +372,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
             <div>
                 <p className="text-sm text-muted-foreground">Tarifa Actual a Cobrar</p>
                 <p className="font-bold text-2xl text-primary">
-                    ${new Intl.NumberFormat('es-AR').format(currentTotal)}
+                    {formatCurrency(currentTotal)}
                 </p>
             </div>
         </div>
