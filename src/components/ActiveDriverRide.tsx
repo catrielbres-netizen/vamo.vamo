@@ -157,7 +157,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 }
                 const rideData = currentRideSnap.data() as Ride;
 
-                // Idempotency Check: if commission is already charged, do nothing.
+                // Idempotency Check
                 if (rideData.pricing?.rideCommission != null) {
                     console.log("La comisión para este viaje ya fue procesada.");
                     return { ...rideData, id: currentRideSnap.id };
@@ -168,26 +168,20 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                     throw new Error("No se encontró el perfil del conductor.");
                 }
                 const driverData = driverSnap.data() as UserProfile;
-
-                // --- Start of FASE 5 Ledger-Only Logic ---
-                // 1. Calculate final fare (this is now the definitive calculation)
+                
+                // Calculate final fare including reroutes and waits
                 const totalWaitTimeSeconds = (rideData.pauseHistory || []).reduce((acc, p) => acc + p.duration, 0);
-                
                 const extraCostFromReroutes = rideData.rerouteHistory?.reduce((sum, r) => sum + (r.cost ?? 0), 0) ?? 0;
+                const waitingCost = Math.ceil(totalWaitTimeSeconds / 60) * WAITING_PER_MIN;
                 
-                // The finalTotal from a reroute is the new definitive price. If no reroute, use estimated.
-                 const finalPrice = (rideData.pricing.finalTotal || ride.pricing.estimatedTotal) + extraCostFromReroutes;
+                const finalPrice = ride.pricing.estimatedTotal + extraCostFromReroutes + waitingCost;
 
-
-                // 2. Get deterministic ride count for commission tier from the canonical counter
+                // Calculate commission for THIS ride based on the final, definitive price
                 const ridesCompletedBeforeThis = driverData.ridesCompleted ?? 0;
-
-                // 3. Calculate commission for THIS ride based on the final, definitive price
                 const commissionRate = getCommissionRate(ridesCompletedBeforeThis);
                 const rideCommission = Math.round(finalPrice * commissionRate);
 
                 // --- Prepare Atomic Updates ---
-                
                 // A) Update Driver Profile's ride counter
                 transaction.update(driverRef, { 
                     ridesCompleted: increment(1),
@@ -221,7 +215,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                     finishedAt: finishedAtTimestamp,
                     updatedAt: finishedAtTimestamp,
                     completedRide: {
-                        distanceMeters: rideData.pricing.estimatedDistanceMeters + (rideData.extraDistanceMeters || 0),
+                        distanceMeters: rideData.pricing.estimatedDistanceMeters + (rideData.pricing.extraDistanceMeters || 0),
                         durationSeconds: rideData.pricing.estimatedDurationSeconds || 0,
                         waitingSeconds: totalWaitTimeSeconds,
                         totalPrice: finalPrice,
@@ -230,16 +224,14 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 };
                 transaction.update(rideRef, rideUpdatePayload);
                 
-                // Return the data needed for the UI callback
                 return {
                     ...rideData,
                     ...rideUpdatePayload,
                     id: currentRideSnap.id,
-                    finishedAt: Timestamp.now(), // Use local time for immediate UI update
+                    finishedAt: Timestamp.now(), 
                 };
             });
             
-            // If transaction is successful
             onFinishRide(finalRideData);
 
         } catch (error: any) {
@@ -252,10 +244,9 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
         } finally {
             setIsFinishing(false);
         }
-        return; // Important: Stop execution here for 'finished' status
+        return;
     }
 
-    // For other simple status updates that don't need a transaction
     updateDocumentNonBlocking(rideRef, payload);
   };
 

@@ -194,11 +194,14 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                     
                     const totalWaitMinutes = Math.ceil(totalAccumulatedWaitSeconds / 60);
 
-                    const finalFare = calculateFare({
-                        distanceMeters: ride.pricing.estimatedDistanceMeters + newDistanceMeters,
-                        waitingMinutes: totalWaitMinutes,
+                    // This is an ESTIMATION. The final price is calculated on the server on ride finish.
+                    const extraFareFromNewRoute = calculateFare({
+                        distanceMeters: newDistanceMeters,
                         service: ride.serviceType,
                     });
+
+                    // We add the extra fare to the original estimated total
+                    const finalFare = ride.pricing.estimatedTotal + extraFareFromNewRoute;
 
                     setNewFare(finalFare);
 
@@ -216,38 +219,58 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
     }
     
     calculateNewRoute();
-  }, [newDestination, ride.driverLocation, ride.pricing.estimatedDistanceMeters, ride.serviceType, totalAccumulatedWaitSeconds, toast]);
+  }, [newDestination, ride.driverLocation, ride.pricing.estimatedTotal, ride.serviceType, totalAccumulatedWaitSeconds, toast]);
 
 
   const handleConfirmReroute = async () => {
-    if (!firestore || !newDestination || newFare === null) return;
+    if (!firestore || !newDestination || newFare === null || !ride.driverLocation) return;
     
     setIsCalculating(true);
     const rideRef = doc(firestore, 'rides', ride.id);
     
-    try {
-        await updateDocumentNonBlocking(rideRef, {
-            destination: newDestination,
-            'pricing.finalTotal': newFare,
-            rerouteHistory: [
-                ...(ride.rerouteHistory || []),
-                { from: ride.destination, to: newDestination, timestamp: serverTimestamp() }
-            ],
-            updatedAt: serverTimestamp()
-        });
-        
-        toast({
-            title: "¡Destino actualizado!",
-            description: "Tu conductor ha sido notificado."
-        });
-        setRerouteModalOpen(false);
+    const directionsService = new window.google.maps.DirectionsService();
+    directionsService.route(
+        {
+            origin: new window.google.maps.LatLng(ride.driverLocation.lat, ride.driverLocation.lng),
+            destination: new window.google.maps.LatLng(newDestination.lat, newDestination.lng),
+            travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        async (result, status) => {
+            if (status !== window.google.maps.DirectionsStatus.OK || !result?.routes?.[0]?.legs?.[0]) {
+                toast({ variant: 'destructive', title: "Error", description: "No se pudo obtener la ruta. Intente de nuevo." });
+                setIsCalculating(false);
+                return;
+            }
 
-    } catch (error) {
-        console.error("Error updating destination:", error);
-        toast({ variant: 'destructive', title: "Error", description: "No se pudo actualizar el destino." });
-    } finally {
-        setIsCalculating(false);
-    }
+            const leg = result.routes[0].legs[0];
+            const extraDistanceMeters = leg.distance?.value ?? 0;
+            const extraCost = calculateFare({ distanceMeters: extraDistanceMeters, service: ride.serviceType, isNight: false }) - calculateFare({ distanceMeters: 0, service: ride.serviceType });
+
+            try {
+                await updateDocumentNonBlocking(rideRef, {
+                    destination: newDestination,
+                    'pricing.finalTotal': newFare,
+                    rerouteHistory: [
+                        ...(ride.rerouteHistory || []),
+                        { from: ride.destination, to: newDestination, cost: extraCost, createdAt: serverTimestamp() }
+                    ],
+                    updatedAt: serverTimestamp()
+                });
+                
+                toast({
+                    title: "¡Destino actualizado!",
+                    description: "Tu conductor ha sido notificado."
+                });
+                setRerouteModalOpen(false);
+
+            } catch (error) {
+                console.error("Error updating destination:", error);
+                toast({ variant: 'destructive', title: "Error", description: "No se pudo actualizar el destino." });
+            } finally {
+                setIsCalculating(false);
+            }
+        }
+    );
   };
 
 

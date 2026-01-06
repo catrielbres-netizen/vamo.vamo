@@ -81,6 +81,7 @@ export interface CompletedRide {
 }
 
 export interface Ride {
+  id?: string;
   passengerId: string;
   passengerName?: string | null;
   origin: {
@@ -124,8 +125,6 @@ export interface Ride {
   rerouteHistory?: {
     from: Place;
     to: Place;
-    distanceMeters: number;
-    timeMinutes?: number;
     cost: number;
     createdAt: FieldValue;
   }[];
