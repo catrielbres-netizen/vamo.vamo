@@ -133,7 +133,6 @@ export default function DriverDetailPage() {
 
                 // Update the canonical balance
                 transaction.update(driverProfileRef, { 
-                    platformCreditPaid: increment(amount),
                     updatedAt: serverTimestamp(),
                 });
             });
@@ -196,7 +195,6 @@ export default function DriverDetailPage() {
                     
                     // Update driver's canonical balance and grant flag
                     transaction.update(driverProfileRef, {
-                        platformCreditPaid: increment(WELCOME_BONUS),
                         promoCreditGranted: true,
                     });
                     bonusGranted = true;
@@ -312,7 +310,6 @@ export default function DriverDetailPage() {
     const netToReceive = totalEarnings - commissionOwed + bonusesApplied;
     const verificationInfo = verificationStatusBadge[driver.vehicleVerificationStatus || 'unverified'];
     const isSummaryPending = summary?.status === 'pending' && commissionOwed > 0;
-    const platformCreditPaid = driver.platformCreditPaid ?? 0;
 
     return (
         <div className="space-y-6">
@@ -392,8 +389,8 @@ export default function DriverDetailPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div>
-                             <p className="text-3xl font-bold">{formatCurrency(platformCreditPaid)}</p>
-                             <p className="text-sm text-muted-foreground">Saldo Actual</p>
+                             <p className="text-3xl font-bold">{formatCurrency(0)}</p>
+                             <p className="text-sm text-muted-foreground">Saldo Actual (Calculado)</p>
                              {driver.promoCreditGranted && <p className="text-xs text-muted-foreground">(Incluye bono de bienvenida)</p>}
                         </div>
                     </CardContent>

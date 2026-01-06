@@ -32,7 +32,6 @@ export type AuditLogAction =
   | "driver_unsuspended";
 
 export type PlatformTransactionType =
-  | "ride_commission" // DEPRECATED: Use 'debit_commission'
   | "credit_payment"   // Carga de saldo real (ej. Mercado Pago)
   | "credit_promo"     // Crédito promocional (ej. bono de bienvenida)
   | "debit_adjustment" // Ajuste manual de débito por admin

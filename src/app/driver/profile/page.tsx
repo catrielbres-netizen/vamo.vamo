@@ -3,17 +3,20 @@
 // src/app/driver/profile/page.tsx
 'use client';
 
-import { useUser } from '@/firebase';
+import { useUser, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VamoIcon } from '@/components/VamoIcon';
-import { UserProfile } from '@/lib/types';
+import { UserProfile, PlatformTransaction } from '@/lib/types';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useMemo } from 'react';
+import { collection, query, where } from 'firebase/firestore';
+
 
 const verificationStatusBadge: Record<UserProfile['vehicleVerificationStatus'] & string, { text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
     unverified: { text: 'No Verificado', variant: 'destructive' },
@@ -44,9 +47,25 @@ const ProfileInfoRow = ({ icon, label, value, valueClassName, children }: { icon
 
 
 export default function DriverProfilePage() {
-  const { profile, loading } = useUser();
+  const { profile, user, loading: userLoading } = useUser();
   const auth = useAuth();
+  const firestore = useFirestore();
   const router = useRouter();
+
+  const transactionsQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(
+        collection(firestore, 'platform_transactions'),
+        where('driverId', '==', user.uid)
+    );
+  }, [firestore, user?.uid]);
+  
+  const { data: transactions, isLoading: transactionsLoading } = useCollection<PlatformTransaction>(transactionsQuery);
+
+  const balance = useMemo(() => {
+    if (!transactions) return 0;
+    return transactions.reduce((acc, tx) => acc + tx.amount, 0);
+  }, [transactions]);
   
   const handleLogout = async () => {
     if (auth) {
@@ -55,7 +74,9 @@ export default function DriverProfilePage() {
     }
   }
 
-  if (loading) {
+  const isLoading = userLoading || transactionsLoading;
+
+  if (isLoading) {
     return (
         <div className="space-y-6">
             <Card>
@@ -81,7 +102,6 @@ export default function DriverProfilePage() {
   
   const verificationInfo = verificationStatusBadge[profile.vehicleVerificationStatus || 'unverified'];
   const averageRating = profile.averageRating?.toFixed(1) ?? 'N/A';
-  const platformCreditPaid = profile.platformCreditPaid ?? 0;
 
   return (
     <div className="space-y-6">
@@ -104,7 +124,7 @@ export default function DriverProfilePage() {
               icon={<VamoIcon name="wallet" />} 
               label="Crédito de Plataforma"
             >
-                <p className={cn("text-lg font-bold", platformCreditPaid >= 0 ? "text-green-500" : "text-destructive")}>{formatCurrency(platformCreditPaid)}</p>
+                <p className={cn("text-lg font-bold", balance >= 0 ? "text-green-500" : "text-destructive")}>{formatCurrency(balance)}</p>
                 {profile.promoCreditGranted && <p className="text-xs text-muted-foreground">Incluye tu bono de bienvenida.</p>}
             </ProfileInfoRow>
         </CardContent>
@@ -117,4 +137,3 @@ export default function DriverProfilePage() {
     </div>
   );
 }
-

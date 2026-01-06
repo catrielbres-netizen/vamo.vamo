@@ -75,11 +75,11 @@ const TransactionHistory = ({ driverId }: { driverId: string }) => {
                 )}
             </CardContent>
             <CardFooter>
-                 <Button className="w-full" asChild>
-                     <DialogTrigger>
+                 <DialogTrigger asChild>
+                    <Button className="w-full">
                          <VamoIcon name="credit-card" className="mr-2" /> Cargar Saldo
-                     </DialogTrigger>
-                 </Button>
+                    </Button>
+                 </DialogTrigger>
             </CardFooter>
             <Separator className="my-4" />
             <CardHeader>
