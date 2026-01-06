@@ -2,7 +2,7 @@
 // src/app/api/webhooks/mercadopago/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { MercadoPagoConfig, Payment } from "mercadopago";
-import { FieldValue, serverTimestamp } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 import { getFirebaseAdminApp } from "@/lib/server/firebase-admin";
 import { PlatformTransaction, PaymentIntent } from "@/lib/types";
 
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
           transaction.update(paymentIntentRef, {
               status: "rejected",
               note: `Amount mismatch. Expected ${intent.amount}, got ${payment.transaction_amount}.`,
-              updatedAt: serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
           });
           return;
       }
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
         source: "mp_topup",
         referenceId: paymentIntentId, // Link to the intent
         note: `Carga de saldo via Mercado Pago. Payment ID: ${paymentId}`,
-        createdAt: serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       };
       transaction.set(txLogRef, logEntry);
       
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
       transaction.update(paymentIntentRef, {
         status: "credited",
         mpPaymentId: paymentId,
-        updatedAt: serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
     });
     // ---- END OF ATOMIC TRANSACTION ----

@@ -5,7 +5,7 @@
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 
 import { PaymentIntent } from '@/lib/types';
 import EarningsClientPage from './EarningsClientPage';
@@ -43,7 +43,7 @@ async function createPreferenceAction(formData: FormData) {
         amount,
         status: "pending",
         provider: "mercadopago",
-        createdAt: Timestamp.now(),
+        createdAt: FieldValue.serverTimestamp(),
     };
     await intentRef.set(newIntent);
 
@@ -76,7 +76,7 @@ async function createPreferenceAction(formData: FormData) {
     // --- PASO 3: Guardar el ID de la preferencia en nuestro `payment_intent` ---
     await intentRef.update({
         mpPreferenceId: preferenceResponse.id,
-        updatedAt: Timestamp.now(),
+        updatedAt: FieldValue.serverTimestamp(),
     });
     
     revalidatePath('/driver/earnings');
