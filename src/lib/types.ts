@@ -1,3 +1,4 @@
+
 // src/lib/types.ts
 
 import { type Timestamp, type FieldValue } from "firebase/firestore";

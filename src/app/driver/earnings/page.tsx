@@ -1,3 +1,4 @@
+
 // src/app/driver/earnings/page.tsx
 'use server';
 
@@ -37,7 +38,7 @@ async function createPreferenceAction(formData: FormData) {
 
     // --- PASO 1: Crear nuestro `payment_intent` interno ---
     const intentRef = db.collection("payment_intents").doc();
-    const newIntent: PaymentIntent = {
+    const newIntent: Omit<PaymentIntent, 'id'> = {
         driverId,
         amount,
         status: "pending",

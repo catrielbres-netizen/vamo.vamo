@@ -1,3 +1,4 @@
+
 // src/app/api/webhooks/mercadopago/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { MercadoPagoConfig, Payment } from "mercadopago";
@@ -81,14 +82,8 @@ export async function POST(req: NextRequest) {
       };
       transaction.set(txLogRef, logEntry);
       
-      // 7. Update the driver's canonical balance
-      const driverRef = db.collection("users").doc(intent.driverId);
-      transaction.update(driverRef, {
-        platformCreditPaid: FieldValue.increment(intent.amount),
-        updatedAt: serverTimestamp(),
-      });
-      
-      // 8. Mark the PaymentIntent as credited (final step for idempotency)
+      // 7. Mark the PaymentIntent as credited (final step for idempotency)
+      // WE DO NOT TOUCH THE DRIVER'S PROFILE HERE. The balance is derived from the ledger.
       transaction.update(paymentIntentRef, {
         status: "credited",
         mpPaymentId: paymentId,
