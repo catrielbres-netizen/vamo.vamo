@@ -2,7 +2,7 @@
 'use client';
 
 import { useFirestore, useUser } from '@/firebase';
-import { doc, serverTimestamp, Timestamp, runTransaction, FieldValue, collection, increment, query, where, getDocs } from 'firebase/firestore';
+import { doc, serverTimestamp, Timestamp, runTransaction, FieldValue, collection, increment, getDocs, where, query } from 'firebase/firestore';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,13 +14,14 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RideStatusInfo } from '@/lib/ride-status';
-import { calculateFare, WAITING_PER_MIN, getCommissionRate } from '@/lib/pricing';
+import { WAITING_PER_MIN, getCommissionRate } from '@/lib/pricing';
 import { VamoIcon } from '@/components/VamoIcon';
 import { useState, useEffect, useRef } from 'react';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, PlatformTransaction } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { useToast } from '@/hooks/use-toast';
+import FinishedRideSummary from '@/components/FinishedRideSummary';
 
 
 const statusActions: { [key: string]: { action: string, label: string } } = {
@@ -148,52 +149,45 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
     if (newStatus === 'finished') {
         setIsFinishing(true);
         try {
-             const finalRideData = await runTransaction(firestore, async (transaction) => {
+            const finalRideData = await runTransaction(firestore, async (transaction) => {
                 const driverRef = doc(firestore, 'users', user.uid);
                 const currentRideSnap = await transaction.get(rideRef);
-
-                if (!currentRideSnap.exists()) {
-                    throw new Error("No se encontró el viaje.");
-                }
+                if (!currentRideSnap.exists()) throw new Error("No se encontró el viaje.");
+                
                 const rideData = currentRideSnap.data() as Ride;
 
-                // Idempotency Check
                 if (rideData.pricing?.rideCommission != null) {
                     console.log("La comisión para este viaje ya fue procesada.");
-                    return { ...rideData, id: currentRideSnap.id };
+                    return { ...rideData, id: currentRideSnap.id, status: 'already_processed' };
                 }
-                
+
                 const driverSnap = await transaction.get(driverRef);
-                if (!driverSnap.exists()) {
-                    throw new Error("No se encontró el perfil del conductor.");
-                }
-                const driverData = driverSnap.data() as UserProfile;
+                if (!driverSnap.exists()) throw new Error("No se encontró el perfil del conductor.");
                 
+                const driverData = driverSnap.data() as UserProfile;
+
                 // Calculate final fare including reroutes and waits
                 const totalWaitTimeSeconds = (rideData.pauseHistory || []).reduce((acc, p) => acc + p.duration, 0);
                 const extraCostFromReroutes = rideData.rerouteHistory?.reduce((sum, r) => sum + (r.cost ?? 0), 0) ?? 0;
                 const waitingCost = Math.ceil(totalWaitTimeSeconds / 60) * WAITING_PER_MIN;
                 
-                const finalPrice = ride.pricing.estimatedTotal + extraCostFromReroutes + waitingCost;
+                const baseTotal = ride.pricing.estimatedTotal;
+                const finalPrice = baseTotal + extraCostFromReroutes + waitingCost;
 
-                // Calculate commission for THIS ride based on the final, definitive price
                 const ridesCompletedBeforeThis = driverData.ridesCompleted ?? 0;
                 const commissionRate = getCommissionRate(ridesCompletedBeforeThis);
                 const rideCommission = Math.round(finalPrice * commissionRate);
 
-                // --- Prepare Atomic Updates ---
-                // A) Update Driver Profile's ride counter
                 transaction.update(driverRef, { 
                     ridesCompleted: increment(1),
                     updatedAt: serverTimestamp(),
                 });
 
-                // B) Create Accounting Log (Ledger) for the commission debit
                 const transactionLogRef = doc(collection(firestore, 'platform_transactions'));
                 const logEntry: Omit<PlatformTransaction, 'createdAt'> & { createdAt: FieldValue } = {
                     driverId: user.uid,
-                    amount: -rideCommission, // It's a debit
-                    type: 'debit_commission',
+                    amount: -rideCommission,
+                    type: 'ride_commission',
                     source: 'ride_finish',
                     referenceId: ride.id,
                     note: `Comisión (${(commissionRate * 100).toFixed(0)}%) del viaje a ${rideData.destination.address}`,
@@ -201,7 +195,6 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 };
                 transaction.set(transactionLogRef, logEntry);
 
-                // C) Update Ride document (make commission immutable)
                 const finishedAtTimestamp = serverTimestamp();
                 const finalPricing = { 
                     ...rideData.pricing, 
@@ -232,7 +225,12 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 };
             });
             
-            onFinishRide(finalRideData);
+            if (finalRideData.status === 'already_processed') {
+                toast({ variant: "destructive", title: "Viaje ya procesado", description: "Este viaje ya había sido finalizado." });
+                onFinishRide({ ...ride, status: 'finished' } as WithId<Ride>);
+            } else {
+                onFinishRide(finalRideData);
+            }
 
         } catch (error: any) {
             console.error("Error al finalizar el viaje:", error);

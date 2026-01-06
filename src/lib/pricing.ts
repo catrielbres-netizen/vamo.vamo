@@ -1,4 +1,3 @@
-
 // lib/pricing.ts
 
 export type ServiceType = "premium" | "privado" | "express";

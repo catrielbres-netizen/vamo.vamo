@@ -247,7 +247,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                     'pricing.extraDistanceMeters': increment(extraDistanceMeters),
                     rerouteHistory: [
                         ...(ride.rerouteHistory || []),
-                        { from: ride.destination, to: newDestination, cost: extraCost, createdAt: serverTimestamp() }
+                        { from: ride.destination, to: newDestination, cost: extraCost, distanceMeters: extraDistanceMeters, createdAt: serverTimestamp() }
                     ],
                     updatedAt: serverTimestamp()
                 });
@@ -328,6 +328,12 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-muted-foreground">Tiempo de espera</span>
                                 <span>{formatDuration(ride.completedRide.waitingSeconds)}</span>
+                            </div>
+                        )}
+                        {ride.pricing.extraCost && ride.pricing.extraCost > 0 && (
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-muted-foreground">Costo por desvíos</span>
+                                <span>{formatCurrency(ride.pricing.extraCost)}</span>
                             </div>
                         )}
                          {ride.pricing.discountAmount && ride.pricing.discountAmount > 0 && (

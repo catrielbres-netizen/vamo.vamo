@@ -32,11 +32,12 @@ export type AuditLogAction =
   | "driver_unsuspended";
 
 export type PlatformTransactionType =
-  | "debit_commission" // Cobro de comisión por viaje
+  | "ride_commission" // DEPRECATED: Use 'debit_commission'
   | "credit_payment"   // Carga de saldo real (ej. Mercado Pago)
   | "credit_promo"     // Crédito promocional (ej. bono de bienvenida)
   | "debit_adjustment" // Ajuste manual de débito por admin
-  | "credit_manual";   // Ajuste manual de crédito por admin
+  | "credit_manual"   // Ajuste manual de crédito por admin
+  | "debit_commission"; // Nuevo tipo para comisiones de viaje
 
 export type PaymentIntentStatus = "pending" | "approved" | "rejected" | "credited";
 

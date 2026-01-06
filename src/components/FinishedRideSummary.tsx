@@ -94,14 +94,14 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
         : 'Fecha no disponible';
     
     let stopsDetail = ride.completedRide && ride.completedRide.waitingSeconds > 0
-        ? `  - Tiempo total de espera: ${formatDuration(ride.completedRide.waitingSeconds)}`
-        : "  - Ninguna";
+        ? `  - Tiempo total de espera: ${formatDuration(ride.completedRide.waitingSeconds)}%0A`
+        : "";
     
     let rerouteDetail = (ride.rerouteHistory || []).map((r, index) =>
         `  - Desvío ${index + 1}: a ${r.to.address} (+${formatCurrency(r.cost)})`
     ).join('%0A');
      if (!rerouteDetail) {
-        rerouteDetail = "  - Ninguno";
+        rerouteDetail = "";
     }
 
     const message = `
@@ -116,8 +116,8 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
 *Detalle de Costos*
   - Tarifa Base + Distancia: ${formatCurrency(baseFareAndDistance)}
   - Costo por Espera: ${formatCurrency(waitingCost)}
-  - Costo por Desvíos: ${formatCurrency(extraCostFromReroutes)}
-  ${ride.pricing.discountAmount ? `- Descuento VamO: ${formatCurrency(ride.pricing.discountAmount)}` : ''}
+${extraCostFromReroutes > 0 ? `  - Costo por Desvíos: ${formatCurrency(extraCostFromReroutes)}` : ''}
+${(ride.pricing.discountAmount || 0) > 0 ? `  - Descuento VamO: -${formatCurrency(ride.pricing.discountAmount!)}` : ''}
 
 *TOTAL A COBRAR:* *${formatCurrency(finalPrice)}*
 -----------------------------------
@@ -142,10 +142,12 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
                     <span className="text-muted-foreground">Tarifa base + distancia</span>
                     <span>{formatCurrency(baseFareAndDistance)}</span>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Costo por espera ({formatDuration(ride.completedRide.waitingSeconds)})</span>
-                    <span>{formatCurrency(waitingCost)}</span>
-                </div>
+                {waitingCost > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Costo por espera ({formatDuration(ride.completedRide.waitingSeconds)})</span>
+                        <span>{formatCurrency(waitingCost)}</span>
+                    </div>
+                )}
                 {extraCostFromReroutes > 0 && (
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Costo por desvíos</span>
