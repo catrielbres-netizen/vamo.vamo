@@ -5,7 +5,7 @@
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 
 import { PaymentIntent } from '@/lib/types';
 import EarningsClientPage from './EarningsClientPage';

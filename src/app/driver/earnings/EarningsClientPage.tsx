@@ -1,7 +1,7 @@
 
 'use client';
 import { useState, useTransition, useEffect } from 'react';
-import { useUser } from '@/firebase';
+import { useUser, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { Card, CardContent, CardHeader, CardFooter, CardDescription, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { VamoIcon } from '@/components/VamoIcon';
@@ -12,6 +12,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { PlatformTransaction } from '@/lib/types';
+import { WithId } from '@/firebase/firestore/use-collection';
+import { Separator } from '@/components/ui/separator';
 
 function formatCurrency(value: number) {
     if (typeof value !== 'number' || isNaN(value)) return '$...';
@@ -27,8 +31,82 @@ interface EarningsClientPageProps {
     createPreferenceAction: (formData: FormData) => Promise<void>;
 }
 
+const TransactionHistory = ({ driverId }: { driverId: string }) => {
+    const firestore = useFirestore();
+
+    const transactionsQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(
+            collection(firestore, 'platform_transactions'),
+            where('driverId', '==', driverId),
+            orderBy('createdAt', 'desc')
+        );
+    }, [firestore, driverId]);
+
+    const { data: transactions, isLoading } = useCollection<WithId<PlatformTransaction>>(transactionsQuery);
+    
+    const balance = transactions?.reduce((acc, tx) => acc + tx.amount, 0) ?? 0;
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><VamoIcon name="wallet" /> Billetera VamO</CardTitle>
+                <CardDescription>Crédito para el pago automático de comisiones.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div>
+                    <p className="text-sm text-muted-foreground">Saldo Actual (calculado)</p>
+                    <p className={cn("text-4xl font-bold", balance >= 0 ? "text-primary" : "text-destructive")}>
+                        {isLoading ? '...' : formatCurrency(balance)}
+                    </p>
+                </div>
+                 {balance < 0 && (
+                    <Alert variant="destructive">
+                        <VamoIcon name="alert-triangle" className="h-4 w-4" />
+                        <AlertTitle>¡Saldo Insuficiente!</AlertTitle>
+                        <AlertDescription>
+                            Tu saldo es negativo. Por favor, cargá crédito para poder seguir recibiendo viajes.
+                        </AlertDescription>
+                    </Alert>
+                )}
+            </CardContent>
+            <CardFooter>
+                 <Button className="w-full" asChild>
+                     <DialogTrigger>
+                         <VamoIcon name="credit-card" className="mr-2" /> Cargar Saldo
+                     </DialogTrigger>
+                 </Button>
+            </CardFooter>
+            <Separator className="my-4" />
+            <CardHeader>
+                 <CardTitle className="text-lg">Historial de Movimientos</CardTitle>
+            </CardHeader>
+             <CardContent>
+                 {isLoading && <p className="text-center text-muted-foreground">Cargando transacciones...</p>}
+                 {!isLoading && transactions && transactions.length > 0 ? (
+                     <ul className="space-y-3">
+                         {transactions.map(tx => (
+                             <li key={tx.id} className="flex justify-between items-center text-sm">
+                                 <div>
+                                     <p className={cn("font-medium", tx.amount > 0 ? 'text-green-500' : 'text-destructive-foreground/80')}>{tx.note || 'Transacción'}</p>
+                                     <p className="text-xs text-muted-foreground">{(tx.createdAt as Timestamp)?.toDate().toLocaleString('es-AR')}</p>
+                                 </div>
+                                 <p className={cn("font-bold", tx.amount > 0 ? 'text-green-600' : 'text-destructive-foreground')}>
+                                     {formatCurrency(tx.amount)}
+                                 </p>
+                             </li>
+                         ))}
+                     </ul>
+                 ) : (
+                     <p className="text-center text-muted-foreground py-4">No hay movimientos en tu billetera.</p>
+                 )}
+             </CardContent>
+        </Card>
+    )
+}
+
 export default function EarningsClientPage({ createPreferenceAction }: EarningsClientPageProps) {
-    const { user, profile, loading: isLoading } = useUser();
+    const { user, loading: isLoading } = useUser();
     const router = useRouter();
     const { toast } = useToast();
     const searchParams = useSearchParams();
@@ -85,83 +163,38 @@ export default function EarningsClientPage({ createPreferenceAction }: EarningsC
         setIsDialogOpen(false);
     };
     
-    if (isLoading || !profile) {
+    if (isLoading || !user) {
         return <p className="text-center">Cargando panel financiero...</p>;
     }
-    
-    const platformCreditPaid = profile.platformCreditPaid ?? 0;
 
     return (
-        <>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Cargar Saldo con Mercado Pago</DialogTitle>
-                        <DialogDescription>
-                            Seleccioná el monto que querés cargar. Serás redirigido a Mercado Pago para completar la transacción de forma segura.
-                        </DialogDescription>
-                    </DialogHeader>
-                     <form>
-                        <RadioGroup value={selectedAmount} onValueChange={setSelectedAmount} className="grid gap-4 my-4">
-                            {TOPUP_AMOUNTS.map(amount => (
-                                <Label key={amount} htmlFor={`amount-${amount}`} className="flex items-center justify-between p-4 rounded-lg border has-[:checked]:border-primary cursor-pointer">
-                                    <span className="font-semibold text-lg">{formatCurrency(amount)}</span>
-                                    <RadioGroupItem value={amount.toString()} id={`amount-${amount}`} />
-                                </Label>
-                            ))}
-                        </RadioGroup>
-                    </form>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleFormAction} disabled={!selectedAmount || isPending}>
-                            {isPending ? 'Procesando...' : `Pagar ${formatCurrency(Number(selectedAmount))}`}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <div className="space-y-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><VamoIcon name="wallet" /> Billetera VamO</CardTitle>
-                        <CardDescription>Crédito para el pago automático de comisiones.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div>
-                            <p className="text-sm text-muted-foreground">Saldo Disponible</p>
-                            <p className={cn("text-3xl font-bold", platformCreditPaid >= 0 ? "text-primary" : "text-destructive")}>
-                                {formatCurrency(platformCreditPaid)}
-                            </p>
-                            {profile.promoCreditGranted && <p className="text-xs text-muted-foreground">(Incluye tu bono de bienvenida)</p>}
-                        </div>
-                        
-                        {platformCreditPaid < 0 && (
-                            <Alert variant="destructive">
-                            <VamoIcon name="alert-triangle" className="h-4 w-4" />
-                            <AlertTitle>¡Saldo Insuficiente!</AlertTitle>
-                            <AlertDescription>
-                                Tu saldo es negativo. Por favor, cargá crédito para poder seguir recibiendo viajes.
-                            </AlertDescription>
-                            </Alert>
-                        )}
-                    </CardContent>
-                    <CardFooter>
-                        <Button className="w-full" onClick={() => setIsDialogOpen(true)}>
-                            <VamoIcon name="credit-card" className="mr-2" /> Cargar Saldo
-                        </Button>
-                    </CardFooter>
-                </Card>
-                
-                <Alert>
-                    <VamoIcon name="info" className="h-4 w-4" />
-                    <AlertTitle>¿Cómo funciona la comisión?</AlertTitle>
-                    <AlertDescription>
-                    La comisión por el uso de la plataforma se descuenta automáticamente de tu billetera al finalizar cada viaje.
-                    <br />
-                    <strong>Si tu saldo es insuficiente, no podrás recibir nuevos viajes hasta recargarlo.</strong> El crédito promocional no se utiliza para cubrir deudas.
-                    </AlertDescription>
-                </Alert>
-            </div>
-        </>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+             <TransactionHistory driverId={user.uid} />
+            
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Cargar Saldo con Mercado Pago</DialogTitle>
+                    <DialogDescription>
+                        Seleccioná el monto que querés cargar. Serás redirigido a Mercado Pago para completar la transacción de forma segura.
+                    </DialogDescription>
+                </DialogHeader>
+                    <form>
+                    <RadioGroup value={selectedAmount} onValueChange={setSelectedAmount} className="grid gap-4 my-4">
+                        {TOPUP_AMOUNTS.map(amount => (
+                            <Label key={amount} htmlFor={`amount-${amount}`} className="flex items-center justify-between p-4 rounded-lg border has-[:checked]:border-primary cursor-pointer">
+                                <span className="font-semibold text-lg">{formatCurrency(amount)}</span>
+                                <RadioGroupItem value={amount.toString()} id={`amount-${amount}`} />
+                            </Label>
+                        ))}
+                    </RadioGroup>
+                </form>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+                    <Button onClick={handleFormAction} disabled={!selectedAmount || isPending}>
+                        {isPending ? 'Procesando...' : `Pagar ${formatCurrency(Number(selectedAmount))}`}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }

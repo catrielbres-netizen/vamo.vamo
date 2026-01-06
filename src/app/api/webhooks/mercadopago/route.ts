@@ -69,6 +69,19 @@ export async function POST(req: NextRequest) {
         return;
       }
 
+      // CRITICAL CHECK: Validate that the paid amount matches the intended amount.
+      if (payment.transaction_amount !== intent.amount) {
+          console.error(`Webhook Error: Amount mismatch for intent ${paymentIntentId}. Expected ${intent.amount} but received ${payment.transaction_amount}.`);
+          // Mark intent as failed to prevent retries with wrong amount.
+          transaction.update(paymentIntentRef, {
+              status: "rejected",
+              note: `Amount mismatch. Expected ${intent.amount}, got ${payment.transaction_amount}.`,
+              updatedAt: serverTimestamp(),
+          });
+          return;
+      }
+
+
       // 6. Create the ledger entry (platform_transactions)
       const txLogRef = db.collection("platform_transactions").doc();
       const logEntry: Omit<PlatformTransaction, 'createdAt'> & { createdAt: FieldValue } = {
