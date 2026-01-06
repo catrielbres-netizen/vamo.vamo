@@ -3,10 +3,10 @@ runtime: nodejs20
 
 env:
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    value: AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA
+    value: AIzaSyDxxxxxxxxxxxxxxxxxxxxxx_YUWK1az4zphC9PA
   # Asegúrate de que esta clave VAPID sea la NUEVA que generes.
   - variable: NEXT_PUBLIC_FCM_VAPID_KEY
-    value: BNpGYieUtpKbKIzhPBmSXfhJwENZfI3okRNqHpJV5owMoPuHPOIuJIWCwZ9PFcMBSI9niAxl3T33QVLVtNWK0tw
+    value: Bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx_NUEVA
   - variable: NEXT_PUBLIC_MP_PUBLIC_KEY
     value: APP_USR-584788ff-bf06-4978-870e-538ca68983fb
 
@@ -15,3 +15,4 @@ build:
 
 run:
   command: npm start
+
