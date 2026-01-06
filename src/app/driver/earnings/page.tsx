@@ -1,78 +1,92 @@
 // src/app/driver/earnings/page.tsx
-'use client';
+'use server';
+
+import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { useUser } from '@/firebase';
-import { Card, CardContent, CardHeader, CardFooter, CardDescription, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { VamoIcon } from '@/components/VamoIcon';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { collection, doc, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase';
+import { redirect } from 'next/navigation';
+import { PaymentIntent } from '@/lib/types';
+import { revalidatePath } from 'next/cache';
+import EarningsClientPage from './EarningsClientPage';
 
-function formatCurrency(value: number) {
-    if (typeof value !== 'number' || isNaN(value)) return '$...';
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-    }).format(value);
-}
+// Initialize Firebase to get Firestore instance
+// This needs to be done at the top level for Server Actions
+const { firestore } = initializeFirebase();
 
-export default function EarningsPage() {
-    const { user, profile, loading: isLoading } = useUser();
-    const adminWhatsAppNumber = "5492804967673";
+async function createPreference(formData: FormData) {
+    'use server';
 
-    if (isLoading || !profile) {
-        return <p className="text-center">Cargando panel financiero...</p>;
+    const rawAmount = formData.get('amount');
+    const driverId = formData.get('driverId') as string;
+    const amount = Number(rawAmount);
+
+    if (![5000, 10000, 20000].includes(amount)) {
+        throw new Error('Monto de recarga inválido.');
+    }
+    if (!driverId) {
+        throw new Error('ID de conductor no encontrado.');
     }
     
-    const platformCreditPaid = profile.platformCreditPaid ?? 0;
+    // --- PASO 2: Crear Preference (Backend) ---
+    // 1. Crear documento en `payment_intents`
+    const intentRef = collection(firestore, "payment_intents");
+    const newIntent: Omit<PaymentIntent, 'id'> = {
+        driverId,
+        amount,
+        status: "pending",
+        createdAt: serverTimestamp(),
+    };
+    const intentDoc = await addDoc(intentRef, newIntent);
 
-    const handleLoadCredit = () => {
-        const message = "Hola! Quiero cargar crédito en mi billetera de VamO.";
-        const url = `https://wa.me/${adminWhatsAppNumber}?text=${encodeURIComponent(message)}`;
-        window.open(url, '_blank');
+    // 2. Crear preferencia en Mercado Pago
+    const client = new MercadoPagoConfig({ 
+        accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN! 
+    });
+    const preference = new Preference(client);
+
+    const preferenceResponse = await preference.create({
+        body: {
+            items: [
+                {
+                    id: intentDoc.id,
+                    title: `Carga de saldo VamO por ${amount}`,
+                    quantity: 1,
+                    unit_price: amount,
+                    currency_id: 'ARS',
+                },
+            ],
+            external_reference: intentDoc.id, // 🔐 Clave contable
+            back_urls: {
+                success: `${process.env.NEXT_PUBLIC_APP_URL}/driver/earnings?mp_status=success`,
+                failure: `${process.env.NEXT_PUBLIC_APP_URL}/driver/earnings?mp_status=failure`,
+                pending: `${process.env.NEXT_PUBLIC_APP_URL}/driver/earnings?mp_status=pending`,
+            },
+            auto_return: 'approved',
+            notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
+        },
+    });
+
+    // 3. Guardar el ID de la preferencia en nuestro intent
+    await updateDoc(doc(firestore, "payment_intents", intentDoc.id), {
+        mpPreferenceId: preferenceResponse.id,
+    });
+    
+    // 4. Devolver `init_point` y redirigir
+    if (preferenceResponse.init_point) {
+        redirect(preferenceResponse.init_point);
+    } else {
+        throw new Error("No se pudo crear el punto de pago de Mercado Pago.");
     }
+}
+
+export default async function EarningsPage() {
+    // This is now a Server Component, so we fetch data directly
+    // Note: The `useUser` hook can't be used in Server Components directly.
+    // We'll pass the necessary data to the client component.
 
     return (
-        <div className="space-y-6">
-             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><VamoIcon name="wallet" /> Billetera VamO</CardTitle>
-                    <CardDescription>Crédito para el pago automático de comisiones.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                     <div>
-                         <p className="text-sm text-muted-foreground">Saldo Disponible</p>
-                         <p className={cn("text-3xl font-bold", platformCreditPaid >= 0 ? "text-primary" : "text-destructive")}>
-                            {formatCurrency(platformCreditPaid)}
-                        </p>
-                        {profile.promoCreditGranted && <p className="text-xs text-muted-foreground">(Incluye tu bono de bienvenida)</p>}
-                     </div>
-                     
-                     {platformCreditPaid < 0 && (
-                        <Alert variant="destructive">
-                           <VamoIcon name="alert-triangle" className="h-4 w-4" />
-                           <AlertTitle>¡Saldo Insuficiente!</AlertTitle>
-                           <AlertDescription>
-                              Tu saldo es negativo. Por favor, cargá crédito para poder seguir recibiendo viajes.
-                           </AlertDescription>
-                        </Alert>
-                     )}
-                </CardContent>
-                <CardFooter>
-                    <Button className="w-full" onClick={handleLoadCredit}>
-                        <VamoIcon name="credit-card" /> Cargar Crédito
-                    </Button>
-                </CardFooter>
-            </Card>
-            
-            <Alert>
-                <VamoIcon name="info" className="h-4 w-4" />
-                <AlertTitle>¿Cómo funciona la comisión?</AlertTitle>
-                <AlertDescription>
-                   La comisión por el uso de la plataforma se descuenta automáticamente de tu billetera al finalizar cada viaje.
-                   <br />
-                   <strong>Si tu saldo es insuficiente, no podrás recibir nuevos viajes hasta recargarlo.</strong> El crédito promocional no se utiliza para cubrir deudas.
-                </AlertDescription>
-            </Alert>
-        </div>
+        <EarningsClientPage createPreferenceAction={createPreference} />
     );
 }

@@ -33,17 +33,28 @@ export type AuditLogAction =
 
 export type PlatformTransactionType =
   | "credit_promo"
-  | "credit_payment" // A real payment from the driver
-  | "credit_manual" // Manual adjustment by an admin
-  | "debit_commission" // Automatic commission debit
-  | "debit_adjustment"; // Manual debit by an admin
+  | "credit_payment"
+  | "credit_manual"
+  | "debit_commission"
+  | "debit_adjustment";
+
+export type PaymentIntentStatus = "pending" | "approved" | "rejected";
+
+export interface PaymentIntent {
+  driverId: string;
+  amount: number;
+  status: PaymentIntentStatus;
+  createdAt: Timestamp | FieldValue;
+  mpPreferenceId?: string;
+  mpPaymentId?: string;
+}
 
 export interface PlatformTransaction {
   driverId: string;
   amount: number; // Positive for credit, negative for debit
   type: PlatformTransactionType;
   createdAt: Timestamp | FieldValue;
-  source: "system" | "payment" | "admin" | "ride_finish";
+  source: "system" | "admin" | "mp_topup";
   referenceId?: string; // ID of the ride, payment, etc.
   note?: string; // Motivo del ajuste manual, etc.
 }
