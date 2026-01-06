@@ -157,7 +157,7 @@ export type UserProfile = {
     driverStatus?: DriverStatus;
     carModelYear?: number | null;
     vehicleVerificationStatus?: VerificationStatus;
-    platformCreditPaid: number; // Canonical balance from real money top-ups
+    platformCreditPaid: number; // DEPRECATED - Balance is now calculated from ledger.
     promoCreditGranted?: boolean; // Flag to ensure promo is granted only once
     currentLocation?: {
       lat: number;

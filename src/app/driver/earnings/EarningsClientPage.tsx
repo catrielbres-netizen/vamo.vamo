@@ -1,6 +1,6 @@
 
 'use client';
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, useMemo } from 'react';
 import { useUser, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { Card, CardContent, CardHeader, CardFooter, CardDescription, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -45,7 +45,11 @@ const TransactionHistory = ({ driverId }: { driverId: string }) => {
 
     const { data: transactions, isLoading } = useCollection<WithId<PlatformTransaction>>(transactionsQuery);
     
-    const balance = transactions?.reduce((acc, tx) => acc + tx.amount, 0) ?? 0;
+    // El saldo emerge del ledger
+    const balance = useMemo(() => {
+        if (!transactions) return 0;
+        return transactions.reduce((acc, tx) => acc + tx.amount, 0);
+    }, [transactions]);
 
     return (
         <Card>
@@ -55,7 +59,7 @@ const TransactionHistory = ({ driverId }: { driverId: string }) => {
             </CardHeader>
             <CardContent className="space-y-4">
                 <div>
-                    <p className="text-sm text-muted-foreground">Saldo Actual (calculado)</p>
+                    <p className="text-sm text-muted-foreground">Saldo Actual</p>
                     <p className={cn("text-4xl font-bold", balance >= 0 ? "text-primary" : "text-destructive")}>
                         {isLoading ? '...' : formatCurrency(balance)}
                     </p>
@@ -88,16 +92,18 @@ const TransactionHistory = ({ driverId }: { driverId: string }) => {
                          {transactions.map(tx => (
                              <li key={tx.id} className="flex justify-between items-center text-sm">
                                  <div>
-                                     <p className={cn("font-medium", tx.amount > 0 ? 'text-green-500' : 'text-destructive-foreground/80')}>{tx.note || 'Transacción'}</p>
+                                     <p className={cn("font-medium capitalize", tx.amount > 0 ? 'text-green-500' : 'text-destructive-foreground/80')}>
+                                        {tx.note || tx.type.replace(/_/g, ' ')}
+                                    </p>
                                      <p className="text-xs text-muted-foreground">{(tx.createdAt as Timestamp)?.toDate().toLocaleString('es-AR')}</p>
                                  </div>
                                  <p className={cn("font-bold", tx.amount > 0 ? 'text-green-600' : 'text-destructive-foreground')}>
-                                     {formatCurrency(tx.amount)}
+                                     {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
                                  </p>
                              </li>
                          ))}
                      </ul>
-                 ) : (
+                 ) : !isLoading && (
                      <p className="text-center text-muted-foreground py-4">No hay movimientos en tu billetera.</p>
                  )}
              </CardContent>

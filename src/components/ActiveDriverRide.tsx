@@ -1,3 +1,4 @@
+
 // @/components/ActiveDriverRide.tsx
 'use client';
 
@@ -146,7 +147,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 }
                 const driverData = driverSnap.data() as UserProfile;
 
-                // --- Start of FASE 2 Logic ---
+                // --- Start of FASE 5 Ledger-Only Logic ---
                 // 1. Calculate final fare
                 const totalWaitTimeSeconds = (rideData.pauseHistory || []).reduce((acc, p) => acc + p.duration, 0);
                 const finalPrice = calculateFare({
@@ -165,14 +166,26 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
 
                 // --- Prepare Atomic Updates ---
                 
-                // A) Update Driver Profile
+                // A) Update Driver Profile's ride counter (NO MORE BALANCE UPDATE)
                 transaction.update(driverRef, { 
-                    platformCreditPaid: increment(-rideCommission),
                     ridesCompleted: increment(1),
                     updatedAt: serverTimestamp(),
                 });
 
-                // B) Update Ride document (make commission immutable)
+                // B) Create Accounting Log (Ledger) for the commission debit
+                const transactionLogRef = doc(collection(firestore, 'platform_transactions'));
+                const logEntry: Omit<PlatformTransaction, 'createdAt'> & { createdAt: FieldValue } = {
+                    driverId: user.uid,
+                    amount: -rideCommission, // It's a debit
+                    type: 'debit_commission',
+                    source: 'ride_finish',
+                    referenceId: ride.id,
+                    note: `Comisión (${(commissionRate * 100).toFixed(0)}%) del viaje a ${rideData.destination.address}`,
+                    createdAt: serverTimestamp(),
+                };
+                transaction.set(transactionLogRef, logEntry);
+
+                // C) Update Ride document (make commission immutable)
                 const finishedAtTimestamp = serverTimestamp();
                 const finalPricing = { 
                     ...rideData.pricing, 
@@ -194,20 +207,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 };
                 transaction.update(rideRef, rideUpdatePayload);
                 
-                // C) Create Accounting Log (Ledger)
-                const transactionLogRef = doc(collection(firestore, 'platform_transactions'));
-                const logEntry: Omit<PlatformTransaction, 'createdAt'> & { createdAt: FieldValue } = {
-                    driverId: user.uid,
-                    amount: -rideCommission, // It's a debit
-                    type: 'debit_commission',
-                    source: 'ride_finish',
-                    referenceId: ride.id,
-                    note: `Comisión (${(commissionRate * 100).toFixed(0)}%) del viaje a ${rideData.destination.address}`,
-                    createdAt: serverTimestamp(),
-                };
-                transaction.set(transactionLogRef, logEntry);
-
-                // --- End of FASE 2 Logic ---
+                // --- End of FASE 5 Logic ---
 
                 // Return the data needed for the UI callback
                 return {
