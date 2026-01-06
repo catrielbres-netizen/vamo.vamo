@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
 import { Separator } from '@/components/ui/separator';
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride, UserProfile, Place, ServiceType } from '@/lib/types';
+import { Ride, UserProfile, Place, ServiceType, PlatformTransaction } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { haversineDistance } from '@/lib/geo';
 import { APIProvider } from '@vis.gl/react-google-maps';
@@ -302,17 +302,40 @@ export default function RidePage() {
     );
 
     const driversSnapshot = await getDocs(onlineDriversQuery);
+
+    const driverIds = driversSnapshot.docs.map(doc => doc.id);
     
+    // Batch-fetch all transactions for online drivers
+    let allTransactions: PlatformTransaction[] = [];
+    if(driverIds.length > 0) {
+      const transactionsQuery = query(
+        collection(firestore, 'platform_transactions'),
+        where('driverId', 'in', driverIds)
+      );
+      const transactionsSnapshot = await getDocs(transactionsQuery);
+      allTransactions = transactionsSnapshot.docs.map(doc => doc.data() as PlatformTransaction);
+    }
+    
+    const transactionsByDriver: Record<string, PlatformTransaction[]> = {};
+    for (const tx of allTransactions) {
+      if (!transactionsByDriver[tx.driverId]) {
+        transactionsByDriver[tx.driverId] = [];
+      }
+      transactionsByDriver[tx.driverId].push(tx);
+    }
+
     const eligibleDrivers = driversSnapshot.docs
         .map(doc => ({ ...doc.data() as UserProfile, id: doc.id }))
         .filter(driver => {
             if (driver.isSuspended) return false;
             
             // --- "Middleware" de Asignación ---
-            // Regla 1: El crédito pagado del conductor debe ser >= 0
-            const paidCredit = driver.platformCreditPaid ?? 0;
-            if (paidCredit < 0) {
-                console.log(`❌ Driver ${driver.id} descartado: crédito insuficiente (${paidCredit})`);
+            const driverTransactions = transactionsByDriver[driver.id] || [];
+            const balance = driverTransactions.reduce((acc, tx) => acc + tx.amount, 0);
+
+            // Regla 1: El saldo del conductor debe ser >= 0
+            if (balance < 0) {
+                console.log(`❌ Driver ${driver.id} descartado: crédito insuficiente (${balance})`);
                 return false;
             }
 

@@ -10,7 +10,7 @@ import ActiveDriverRide from '@/components/ActiveDriverRide';
 import FinishedRideSummary from '@/components/FinishedRideSummary';
 import { useToast } from "@/hooks/use-toast";
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride, ServiceType, UserProfile } from '@/lib/types';
+import { Ride, ServiceType, UserProfile, PlatformTransaction } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -126,6 +126,17 @@ export default function DriverRidesPage() {
   const activeRideStateRef = useRef<WithId<Ride> | null>(null);
 
   const isOnline = profile?.driverStatus === 'online';
+
+  const transactionsQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(
+        collection(firestore, 'platform_transactions'),
+        where('driverId', '==', user.uid)
+    );
+  }, [firestore, user?.uid]);
+
+  const { data: transactions } = useCollection<PlatformTransaction>(transactionsQuery);
+  const balance = useMemo(() => transactions?.reduce((acc, tx) => acc + tx.amount, 0) ?? 0, [transactions]);
 
   // --- New Dispatch Logic ---
   // A driver is now offered a ride if they are the current candidate.
@@ -310,6 +321,16 @@ export default function DriverRidesPage() {
                     aria-label="Toggle online status"
                 />
             </div>
+             
+             {isOnline && balance < 0 && (
+                <Alert variant="destructive">
+                    <VamoIcon name="alert-triangle" className="h-4 w-4" />
+                    <AlertTitle>¡Saldo Insuficiente!</AlertTitle>
+                    <AlertDescription>
+                        No podrás recibir nuevos viajes hasta que no regularices tu saldo. Por favor, cargá crédito desde la pestaña "Ganancias".
+                    </AlertDescription>
+                </Alert>
+            )}
 
             {isOnline && fcmStatus !== 'enabled' && (
               <Alert variant="default" className="bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700">
