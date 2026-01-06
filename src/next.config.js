@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+// Forcing a cache invalidation to fix module resolution error
 const nextConfig = {
   transpilePackages: [
     '@vis.gl/react-google-maps',
