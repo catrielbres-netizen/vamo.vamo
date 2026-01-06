@@ -14,6 +14,7 @@ import { getFirebaseAdminApp } from '@/lib/server/firebase-admin';
 const { db } = getFirebaseAdminApp();
 
 // Configure Mercado Pago SDK
+// Ensure MERCADOPAGO_ACCESS_TOKEN is set in your environment variables
 const client = new MercadoPagoConfig({
   accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN!,
 });
@@ -30,6 +31,10 @@ async function createPreferenceAction(formData: FormData) {
         throw new Error('Datos de pago inválidos.');
     }
     
+    if (!db) {
+        throw new Error('La conexión con la base de datos no está disponible. Verifique la configuración del servidor.');
+    }
+
     // --- PASO 1: Crear nuestro `payment_intent` interno ---
     const intentRef = db.collection("payment_intents").doc();
     const newIntent: PaymentIntent = {
