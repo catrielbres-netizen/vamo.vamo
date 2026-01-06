@@ -1,35 +1,32 @@
-// public/firebase-messaging-sw.js
-// This file needs to be in the public directory
+
+// Scripts for Firebase service worker (using modular SDK v9+)
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
 
-// ⚡ This configuration will be replaced by the build process with the actual Firebase config
+// The Firebase config object from your app's configuration
 const firebaseConfig = {
   "projectId": "studio-6697160840-7c67f",
   "appId": "1:68554242118:web:93c2b08fdb55d657167247",
   "apiKey": "AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA",
   "authDomain": "studio-6697160840-7c67f.firebaseapp.com",
-  "measurementId": "",
   "storageBucket": "studio-6697160840-7c67f.appspot.com",
   "messagingSenderId": "68554242118"
 };
 
+// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
-// Initialize Firebase Messaging
+// Retrieve an instance of Firebase Messaging so that it can handle background messages.
 const messaging = firebase.messaging();
 
-// Handle background notifications
 messaging.onBackgroundMessage(function(payload) {
-  console.log('[firebase-messaging-sw.js] Background notification received:', payload);
-
-  const notificationTitle = payload.notification?.title || 'Nuevo Viaje Disponible';
+  console.log('[firebase-messaging-sw.js] Received background message ', payload);
+  
+  const notificationTitle = payload.notification?.title || 'VamO';
   const notificationOptions = {
-    body: payload.notification?.body || 'Un nuevo viaje está esperando ser aceptado.',
-    icon: '/favicon.ico', // You can customize this
-    data: {
-      url: payload.data?.url || '/driver/rides', // Default redirect URL
-    },
+    body: payload.notification?.body || 'Tenés una nueva notificación',
+    icon: '/icons/favicon-32x32.png',
+    data: payload.data || { url: '/' } // Default URL if data is not provided
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
@@ -38,21 +35,19 @@ messaging.onBackgroundMessage(function(payload) {
 // Handle notification click
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-
-  const targetUrl = event.notification.data?.url || '/driver/rides';
+  const urlToOpen = event.notification.data?.url || '/driver/rides';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
       // Check if there is already a window/tab open with the target URL
       for (let client of windowClients) {
-        // Use includes() for flexibility, in case of query params
-        if (client.url.includes(targetUrl) && 'focus' in client) {
+        if (client.url === urlToOpen && 'focus' in client) {
           return client.focus();
         }
       }
-      // If no window is open, open a new one
+      // If not, open a new window/tab
       if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
+        return clients.openWindow(urlToOpen);
       }
     })
   );
