@@ -96,7 +96,6 @@ export async function POST(req: NextRequest) {
       transaction.set(txLogRef, logEntry);
       
       // 7. Mark the PaymentIntent as credited (final step for idempotency)
-      // WE DO NOT TOUCH THE DRIVER'S PROFILE HERE. The balance is derived from the ledger.
       transaction.update(paymentIntentRef, {
         status: "credited",
         mpPaymentId: paymentId,
