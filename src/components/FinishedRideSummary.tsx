@@ -16,7 +16,7 @@ import { Ride } from '@/lib/types';
 import { Timestamp, doc, serverTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
+import { WAITING_PER_MIN } from '@/lib/pricing';
 import RatingForm from './RatingForm';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +24,7 @@ import { Separator } from './ui/separator';
 
 
 function formatCurrency(value: number) {
+  if (typeof value !== 'number' || isNaN(value)) return '$...';
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
@@ -39,22 +40,30 @@ const formatDuration = (seconds: number) => {
 export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ride>, onClose: () => void }) {
   const firestore = useFirestore();
   const { toast } = useToast();
-  const finalPrice = ride.pricing.finalTotal || ride.pricing.estimatedTotal;
+  
+  if (!ride.pricing || !ride.completedRide) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Error en el Viaje</CardTitle>
+                <CardDescription>No se pudo cargar el resumen.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <p className="text-center text-destructive">Faltan datos de precios o del viaje completado.</p>
+            </CardContent>
+            <CardFooter>
+                 <Button onClick={onClose} className="w-full">
+                    Volver
+                </Button>
+            </CardFooter>
+        </Card>
+    );
+  }
 
-  const totalWaitSeconds = (ride.pauseHistory || []).reduce((acc, p) => acc + p.duration, 0);
-  const waitingCost = Math.ceil(totalWaitSeconds / 60) * WAITING_PER_MIN;
+  const finalPrice = ride.completedRide.totalPrice;
+  const waitingCost = Math.ceil(ride.completedRide.waitingSeconds / 60) * WAITING_PER_MIN;
   const extraCostFromReroutes = ride.pricing.extraCost ?? 0;
-  const baseFareAndDistance = finalPrice - waitingCost - extraCostFromReroutes;
-
-
-  // Mock driver fiscal data
-  const driverFiscalData = {
-    name: "Juan Pérez (Conductor)",
-    cuit: "20-12345678-9",
-    iibb: "901-123456",
-    domicilio: "Av. Siempre Viva 742, Rawson, Chubut",
-    condicion: "Monotributista"
-  };
+  const baseFareAndDistance = finalPrice - waitingCost - extraCostFromReroutes - (ride.pricing.discountAmount || 0);
 
   const handleRatingSubmit = async (rating: number, comments: string) => {
     if (!firestore) return;
@@ -84,18 +93,15 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
         ? format((ride.finishedAt as Timestamp).toDate(), "d 'de' MMMM 'de' yyyy 'a las' HH:mm", { locale: es })
         : 'Fecha no disponible';
     
-    let stopsDetail = (ride.pauseHistory || []).map((p, index) => 
-        `  Pausa ${index + 1}: ${formatDuration(p.duration)} min`
-    ).join('%0A');
-    if(!stopsDetail) {
-      stopsDetail = "Ninguna";
-    }
-
+    let stopsDetail = ride.completedRide && ride.completedRide.waitingSeconds > 0
+        ? `  - Tiempo total de espera: ${formatDuration(ride.completedRide.waitingSeconds)}`
+        : "  - Ninguna";
+    
     let rerouteDetail = (ride.rerouteHistory || []).map((r, index) =>
-        `  Desvío ${index + 1}: a ${r.to.address} (+${formatCurrency(r.cost)})`
+        `  - Desvío ${index + 1}: a ${r.to.address} (+${formatCurrency(r.cost)})`
     ).join('%0A');
      if (!rerouteDetail) {
-        rerouteDetail = "Ninguno";
+        rerouteDetail = "  - Ninguno";
     }
 
     const message = `
@@ -111,20 +117,10 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
   - Tarifa Base + Distancia: ${formatCurrency(baseFareAndDistance)}
   - Costo por Espera: ${formatCurrency(waitingCost)}
   - Costo por Desvíos: ${formatCurrency(extraCostFromReroutes)}
-*Paradas/Esperas:*
-${stopsDetail}
-*Desvíos:*
-${rerouteDetail}
------------------------------------
+  ${ride.pricing.discountAmount ? `- Descuento VamO: ${formatCurrency(ride.pricing.discountAmount)}` : ''}
+
 *TOTAL A COBRAR:* *${formatCurrency(finalPrice)}*
 -----------------------------------
-*Datos del Conductor*
-*Nombre:* ${driverFiscalData.name}
-*CUIT:* ${driverFiscalData.cuit}
-*IIBB:* ${driverFiscalData.iibb}
-*Domicilio:* ${driverFiscalData.domicilio}
-*Condición IVA:* ${driverFiscalData.condicion}
-
 ¡Gracias por viajar con VamO!
     `.trim().replace(/\n/g, '%0A').replace(/ /g, '%20');
 
@@ -146,20 +142,20 @@ ${rerouteDetail}
                     <span className="text-muted-foreground">Tarifa base + distancia</span>
                     <span>{formatCurrency(baseFareAndDistance)}</span>
                 </div>
-                 {ride.pricing.discountAmount && ride.pricing.discountAmount > 0 ? (
-                    <div className="flex justify-between items-center text-sm text-blue-500">
-                        <span className="flex items-center gap-1"><VamoIcon name="percent" className="w-3 h-3"/> VamO te cubre bono</span>
-                        <span>{formatCurrency(ride.pricing.discountAmount)}</span>
-                    </div>
-                ) : null}
                 <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Costo por espera</span>
+                    <span className="text-muted-foreground">Costo por espera ({formatDuration(ride.completedRide.waitingSeconds)})</span>
                     <span>{formatCurrency(waitingCost)}</span>
                 </div>
                 {extraCostFromReroutes > 0 && (
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Costo por desvíos</span>
                         <span>{formatCurrency(extraCostFromReroutes)}</span>
+                    </div>
+                )}
+                 {ride.pricing.discountAmount && ride.pricing.discountAmount > 0 && (
+                    <div className="flex justify-between items-center text-sm text-green-500">
+                        <span className="text-muted-foreground">Descuento VamO</span>
+                        <span>-{formatCurrency(ride.pricing.discountAmount)}</span>
                     </div>
                 )}
             </div>

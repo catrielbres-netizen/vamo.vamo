@@ -126,6 +126,8 @@ export interface Ride {
     from: Place;
     to: Place;
     cost: number;
+    distanceMeters: number;
+    timeMinutes: number;
     createdAt: FieldValue;
   }[];
   passengerRating?: number | null;
@@ -159,7 +161,6 @@ export type UserProfile = {
     averageRating?: number | null;
     ridesCompleted: number; // Canonical counter
     isSuspended?: boolean;
-    platformCreditPaid?: number; // Saldo canónico (legacy, no usar más)
     // Passenger fields
     vamoPoints?: number;
     activeBonus?: boolean;

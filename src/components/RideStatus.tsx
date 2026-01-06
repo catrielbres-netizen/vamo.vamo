@@ -5,7 +5,7 @@ import { DriverInfo } from './DriverInfo';
 import { TripTimers } from './TripTimers';
 import { WAITING_PER_MIN } from '@/lib/pricing';
 import { useEffect, useState, useRef } from 'react';
-import { Timestamp, doc, runTransaction, collection, getDocs, where, query, serverTimestamp } from 'firebase/firestore';
+import { Timestamp, doc, runTransaction, collection, getDocs, where, query, serverTimestamp, increment } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { VamoIcon } from './VamoIcon';
 import RatingForm from './RatingForm';
-import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
+import { useFirestore, updateDocumentNonBlocking, useUser } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place } from '@/lib/types';
@@ -43,6 +43,7 @@ const formatDuration = (seconds: number) => {
 
 export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, onNewRide: (isFinished: boolean) => void }) {
   const firestore = useFirestore();
+  const { user, profile } = useUser();
   const { toast } = useToast();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
   const pointsAwardedRef = useRef(false);
@@ -91,17 +92,13 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                         return;
                     }
                     
-                    const profileData = userProfileDoc.data() as UserProfile;
-                    const currentPoints = profileData.vamoPoints || 0;
-                    const ridesCompleted = profileData.ridesCompleted || 0;
-                    
-                    const newTotalPoints = currentPoints + VAMO_POINTS_PER_RIDE;
-                    const newRidesCompleted = ridesCompleted + 1;
+                    const currentProfile = userProfileDoc.data() as UserProfile;
+                    const newTotalPoints = (currentProfile.vamoPoints || 0) + VAMO_POINTS_PER_RIDE;
                     const hasBonus = newTotalPoints >= 30;
 
                     transaction.update(userProfileRef, { 
                         vamoPoints: newTotalPoints,
-                        ridesCompleted: newRidesCompleted,
+                        ridesCompleted: increment(1),
                         activeBonus: hasBonus,
                     });
                     
@@ -138,12 +135,12 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
             });
             
             await runTransaction(firestore, async (transaction) => {
-                const ridesQuery = query(
+                const driverRidesQuery = query(
                     collection(firestore, 'rides'),
                     where('driverId', '==', ride.driverId),
                     where('status', '==', 'finished')
                 );
-                const driverRidesSnapshot = await getDocs(ridesQuery);
+                const driverRidesSnapshot = await getDocs(driverRidesQuery);
 
                 let totalRating = 0;
                 let ratingCount = 0;
@@ -192,16 +189,12 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                     const leg = result.routes[0].legs[0];
                     const newDistanceMeters = leg.distance?.value ?? 0;
                     
-                    const totalWaitMinutes = Math.ceil(totalAccumulatedWaitSeconds / 60);
-
-                    // This is an ESTIMATION. The final price is calculated on the server on ride finish.
                     const extraFareFromNewRoute = calculateFare({
                         distanceMeters: newDistanceMeters,
                         service: ride.serviceType,
                     });
 
-                    // We add the extra fare to the original estimated total
-                    const finalFare = ride.pricing.estimatedTotal + extraFareFromNewRoute;
+                    const finalFare = (ride.pricing.finalTotal || ride.pricing.estimatedTotal) + extraFareFromNewRoute;
 
                     setNewFare(finalFare);
 
@@ -219,7 +212,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
     }
     
     calculateNewRoute();
-  }, [newDestination, ride.driverLocation, ride.pricing.estimatedTotal, ride.serviceType, totalAccumulatedWaitSeconds, toast]);
+  }, [newDestination, ride.driverLocation, ride.pricing, ride.serviceType, toast]);
 
 
   const handleConfirmReroute = async () => {
@@ -250,6 +243,8 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                 await updateDocumentNonBlocking(rideRef, {
                     destination: newDestination,
                     'pricing.finalTotal': newFare,
+                     'pricing.extraCost': increment(extraCost),
+                    'pricing.extraDistanceMeters': increment(extraDistanceMeters),
                     rerouteHistory: [
                         ...(ride.rerouteHistory || []),
                         { from: ride.destination, to: newDestination, cost: extraCost, createdAt: serverTimestamp() }
@@ -276,7 +271,11 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
   const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
-  const currentTotal = (ride.pricing.finalTotal || ride.pricing.estimatedTotal) + waitingCost;
+  
+  let currentTotal = ride.pricing.estimatedTotal;
+  if(profile?.activeBonus) currentTotal *= 0.9;
+  currentTotal += waitingCost;
+  if(ride.pricing.extraCost) currentTotal += ride.pricing.extraCost;
   
   if (ride.status === 'finished' || ride.status === 'cancelled') {
     const isCancelled = ride.status === 'cancelled';
