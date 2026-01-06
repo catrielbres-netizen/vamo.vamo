@@ -187,7 +187,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 const logEntry: Omit<PlatformTransaction, 'createdAt'> & { createdAt: FieldValue } = {
                     driverId: user.uid,
                     amount: -rideCommission,
-                    type: 'ride_commission',
+                    type: 'debit_commission',
                     source: 'ride_finish',
                     referenceId: ride.id,
                     note: `Comisión (${(commissionRate * 100).toFixed(0)}%) del viaje a ${rideData.destination.address}`,
