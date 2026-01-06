@@ -26,3 +26,4 @@ build:
 
 run:
   command: npm start
+

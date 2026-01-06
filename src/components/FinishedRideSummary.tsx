@@ -45,11 +45,11 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Error en el Viaje</CardTitle>
-                <CardDescription>No se pudo cargar el resumen.</CardDescription>
+                <CardTitle>Viaje Terminado</CardTitle>
+                 <CardDescription>El viaje fue completado o cancelado.</CardDescription>
             </CardHeader>
             <CardContent>
-                <p className="text-center text-destructive">Faltan datos de precios o del viaje completado.</p>
+                <p className="text-center text-muted-foreground">Volviendo a la pantalla de búsqueda de viajes...</p>
             </CardContent>
             <CardFooter>
                  <Button onClick={onClose} className="w-full">

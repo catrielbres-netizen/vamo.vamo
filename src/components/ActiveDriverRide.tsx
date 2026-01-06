@@ -22,7 +22,6 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, PlatformTransaction } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { useToast } from '@/hooks/use-toast';
-import FinishedRideSummary from '@/components/FinishedRideSummary';
 
 
 const statusActions: { [key: string]: { action: string, label: string } } = {
@@ -226,11 +225,11 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 };
             });
             
-            if (finalRideData.status === 'already_processed') {
-                toast({ variant: "destructive", title: "Viaje ya procesado", description: "Este viaje ya había sido finalizado." });
-                onFinishRide({ ...ride, status: 'finished' } as WithId<Ride>);
-            } else {
-                onFinishRide(finalRideData);
+            if (finalRideData && finalRideData.status !== 'already_processed') {
+                onFinishRide(finalRideData as WithId<Ride>);
+            } else if (finalRideData) {
+                 toast({ variant: "destructive", title: "Viaje ya procesado", description: "Este viaje ya había sido finalizado." });
+                 onFinishRide({ ...ride, status: 'finished' } as WithId<Ride>);
             }
 
         } catch (error: any) {

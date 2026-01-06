@@ -1,3 +1,4 @@
+
 /** @type {import('next').NextConfig} */
 // Forcing a cache invalidation to fix module resolution error
 const nextConfig = {
@@ -9,7 +10,7 @@ const nextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: 'https,
+        protocol: 'https',
         hostname: 'placehold.co',
         pathname: '/**',
       },

@@ -24,26 +24,6 @@ import { getAuth } from 'firebase/auth';
 const FALLBACK_DRIVER_LOCATION = { lat: -43.3009, lng: -65.1018 }; // Terminal de Rawson, Chubut
 
 
-// Helper function to determine which services a driver can see based on their car model year
-const getAllowedServices = (profile: UserProfile | null): ServiceType[] => {
-    if (!profile || !profile.carModelYear) {
-        return [];
-    }
-
-    const year = profile.carModelYear;
-
-    if (year >= 2022) {
-        // Premium drivers can take any ride
-        return ['premium', 'privado', 'express'];
-    }
-    if (year >= 2016) {
-        // Privado drivers can take Privado and Express
-        return ['privado', 'express'];
-    }
-    // Older cars can only take Express
-    return ['express'];
-}
-
 const statusMessages: Record<UserProfile['vehicleVerificationStatus'] & string, {title: string, description: string, icon: string}> = {
     unverified: {
         title: 'Perfil Incompleto',
@@ -265,9 +245,10 @@ export default function DriverRidesPage() {
       setActiveRide(currentActiveRide);
       
       if(wasActive && !currentActiveRide) {
+         setLastFinishedRide(activeRideStateRef.current); // Use the ref to get the last known state
          toast({
-            title: "Viaje cancelado o finalizado",
-            description: "El viaje ha sido completado o cancelado por el pasajero. Vuelves a estar disponible.",
+            title: "Viaje finalizado o cancelado",
+            description: "El viaje ha sido completado o cancelado por el pasajero.",
             variant: "destructive",
           });
       }
@@ -286,6 +267,7 @@ export default function DriverRidesPage() {
   };
   
   const handleFinishRide = (finishedRide: WithId<Ride>) => {
+    setActiveRide(null);
     setLastFinishedRide(finishedRide);
     toast({
         title: "¡Viaje finalizado!",
