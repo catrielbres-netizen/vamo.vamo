@@ -24,8 +24,6 @@ export default function EarningsPage() {
     }
     
     const platformCreditPaid = profile.platformCreditPaid ?? 0;
-    const platformCreditPromo = profile.platformCreditPromo ?? 0;
-    const totalCredit = platformCreditPaid + platformCreditPromo;
 
     const handleLoadCredit = () => {
         const message = "Hola! Quiero cargar crédito en mi billetera de VamO.";
@@ -42,21 +40,19 @@ export default function EarningsPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                      <div>
-                         <p className="text-sm text-muted-foreground">Saldo Total Disponible</p>
-                         <p className={cn("text-3xl font-bold", totalCredit >= 0 ? "text-primary" : "text-destructive")}>
-                            {formatCurrency(totalCredit)}
+                         <p className="text-sm text-muted-foreground">Saldo Disponible</p>
+                         <p className={cn("text-3xl font-bold", platformCreditPaid >= 0 ? "text-primary" : "text-destructive")}>
+                            {formatCurrency(platformCreditPaid)}
                         </p>
+                        {profile.promoCreditGranted && <p className="text-xs text-muted-foreground">(Incluye tu bono de bienvenida)</p>}
                      </div>
-                     <div className="text-xs space-y-1 text-muted-foreground bg-secondary/50 p-2 rounded-md">
-                        <div className="flex justify-between"><span>Crédito Cargado:</span> <span className="font-medium">{formatCurrency(platformCreditPaid)}</span></div>
-                        <div className="flex justify-between"><span>Crédito Promocional:</span> <span className="font-medium">{formatCurrency(platformCreditPromo)}</span></div>
-                     </div>
+                     
                      {platformCreditPaid < 0 && (
                         <Alert variant="destructive">
                            <VamoIcon name="alert-triangle" className="h-4 w-4" />
                            <AlertTitle>¡Saldo Insuficiente!</AlertTitle>
                            <AlertDescription>
-                              Tu saldo cargado es negativo. Por favor, cargá crédito para poder seguir recibiendo viajes.
+                              Tu saldo es negativo. Por favor, cargá crédito para poder seguir recibiendo viajes.
                            </AlertDescription>
                         </Alert>
                      )}
@@ -72,9 +68,9 @@ export default function EarningsPage() {
                 <VamoIcon name="info" className="h-4 w-4" />
                 <AlertTitle>¿Cómo funciona la comisión?</AlertTitle>
                 <AlertDescription>
-                   La comisión por el uso de la plataforma se descuenta automáticamente de tu Crédito Cargado al finalizar cada viaje.
+                   La comisión por el uso de la plataforma se descuenta automáticamente de tu billetera al finalizar cada viaje.
                    <br />
-                   <strong>Si tu saldo cargado es insuficiente, no podrás recibir nuevos viajes hasta recargarlo.</strong> El crédito promocional no se utiliza para cubrir deudas.
+                   <strong>Si tu saldo es insuficiente, no podrás recibir nuevos viajes hasta recargarlo.</strong> El crédito promocional no se utiliza para cubrir deudas.
                 </AlertDescription>
             </Alert>
         </div>

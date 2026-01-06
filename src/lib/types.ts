@@ -1,4 +1,3 @@
-
 // src/lib/types.ts
 
 import { type Timestamp, type FieldValue } from "firebase/firestore";
@@ -34,18 +33,18 @@ export type AuditLogAction =
 
 export type PlatformTransactionType =
   | "credit_promo"
-  | "credit_payment"
-  | "credit_manual"
-  | "debit_commission"
-  | "debit_adjustment";
+  | "credit_payment" // A real payment from the driver
+  | "credit_manual" // Manual adjustment by an admin
+  | "debit_commission" // Automatic commission debit
+  | "debit_adjustment"; // Manual debit by an admin
 
 export interface PlatformTransaction {
   driverId: string;
-  amount: number; // Positivo para crédito, negativo para débito
+  amount: number; // Positive for credit, negative for debit
   type: PlatformTransactionType;
   createdAt: Timestamp | FieldValue;
   source: "system" | "payment" | "admin" | "ride_finish";
-  referenceId?: string; // ID del viaje, pago, etc.
+  referenceId?: string; // ID of the ride, payment, etc.
   note?: string; // Motivo del ajuste manual, etc.
 }
 
@@ -131,7 +130,7 @@ export type UserProfile = {
     fcmToken?: string | null; // For Push Notifications
     fcmUpdatedAt?: any;
     averageRating?: number | null;
-    ridesCompleted?: number;
+    ridesCompleted: number; // Canonical counter
     isSuspended?: boolean;
     // Passenger fields
     vamoPoints?: number;
@@ -141,7 +140,7 @@ export type UserProfile = {
     driverStatus?: DriverStatus;
     carModelYear?: number | null;
     vehicleVerificationStatus?: VerificationStatus;
-    platformCreditPaid?: number; // Saldo que el conductor carga + bonos
+    platformCreditPaid: number; // Canonical balance from real money top-ups
     promoCreditGranted?: boolean; // Flag to ensure promo is granted only once
     currentLocation?: {
       lat: number;
@@ -168,4 +167,3 @@ export interface AuditLog {
     timestamp: Timestamp;
     details?: string | null;
 }
-

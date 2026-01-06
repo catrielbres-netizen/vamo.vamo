@@ -1,11 +1,9 @@
-
-
 // src/app/admin/drivers/[driverId]/page.tsx
 'use client';
 import { useState, useEffect } from 'react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
 import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, serverTimestamp, writeBatch, runTransaction, FieldValue, increment } from 'firebase/firestore';
-import { Ride, DriverSummary, UserProfile, AuditLog } from '@/lib/types';
+import { Ride, DriverSummary, UserProfile, AuditLog, PlatformTransaction } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -57,6 +55,7 @@ export default function DriverDetailPage() {
     const [inspectionResult, setInspectionResult] = useState<string | null>(null);
     const [creditAdjustment, setCreditAdjustment] = useState('');
     const [isAdjustingCredit, setIsAdjustingCredit] = useState(false);
+    const [adjustmentReason, setAdjustmentReason] = useState('');
 
 
     const driverProfileRef = useMemoFirebase(() => firestore ? doc(firestore, 'users', driverId) : null, [firestore, driverId]);
@@ -107,8 +106,8 @@ export default function DriverDetailPage() {
 
     const handleAdjustCredit = async () => {
         const amount = parseFloat(creditAdjustment);
-        if (isNaN(amount) || !driverProfileRef || !firestore || !user?.uid || !adminProfile?.name) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Monto inválido o datos de sesión faltantes.' });
+        if (isNaN(amount) || !driverProfileRef || !firestore || !user?.uid || !adminProfile?.name || !adjustmentReason) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Monto o motivo inválido, o datos de sesión faltantes.' });
             return;
         }
 
@@ -120,28 +119,31 @@ export default function DriverDetailPage() {
                     throw new Error("El conductor no existe.");
                 }
 
-                const currentCredit = driverDoc.data().platformCreditPaid || 0;
-                const newCredit = currentCredit + amount;
-                
-                transaction.update(driverProfileRef, { platformCreditPaid: newCredit });
-
-                const auditLogRef = doc(collection(firestore, 'auditLogs'));
-                const logEntry: Omit<AuditLog, 'timestamp' | 'details' | 'id'> & { timestamp: FieldValue; details: string; } = {
-                    adminId: user.uid,
-                    adminName: adminProfile.name,
-                    action: 'platform_credit_adjusted',
-                    entityId: driverId,
-                    timestamp: serverTimestamp(),
-                    details: `Crédito PAGADO ajustado en ${formatCurrency(amount)}. Saldo anterior: ${formatCurrency(currentCredit)}. Saldo nuevo: ${formatCurrency(newCredit)}.`
+                // Create ledger entry
+                const txLogRef = doc(collection(firestore, 'platform_transactions'));
+                const logEntry: Omit<PlatformTransaction, 'createdAt'> & { createdAt: FieldValue } = {
+                    driverId: driverId,
+                    amount: amount,
+                    type: amount > 0 ? 'credit_manual' : 'debit_adjustment',
+                    source: 'admin',
+                    note: adjustmentReason,
+                    createdAt: serverTimestamp(),
                 };
-                transaction.set(auditLogRef, logEntry);
+                transaction.set(txLogRef, logEntry);
+
+                // Update the canonical balance
+                transaction.update(driverProfileRef, { 
+                    platformCreditPaid: increment(amount),
+                    updatedAt: serverTimestamp(),
+                });
             });
 
             toast({
-                title: '¡Crédito Pagado ajustado!',
-                description: `El nuevo saldo pagado del conductor es ${formatCurrency((driver?.platformCreditPaid || 0) + amount)}.`
+                title: '¡Crédito ajustado!',
+                description: `El saldo del conductor fue ajustado en ${formatCurrency(amount)}.`
             });
             setCreditAdjustment('');
+            setAdjustmentReason('');
 
         } catch (error) {
             console.error("Error adjusting credit:", error);
@@ -162,57 +164,54 @@ export default function DriverDetailPage() {
         try {
             await runTransaction(firestore, async (transaction) => {
                 const driverDoc = await transaction.get(driverProfileRef);
-                if (!driverDoc.exists()) {
-                    throw new Error("Driver not found.");
-                }
+                if (!driverDoc.exists()) throw new Error("Driver not found.");
+                
                 const driverData = driverDoc.data() as UserProfile;
 
-                // Create audit log for the verification action first.
+                // 1. Audit Log for the verification action
                 const auditLogRef = doc(collection(firestore, 'auditLogs'));
-                const verificationDetails = newStatus === 'approved' 
-                    ? `El administrador ${adminProfile.name} aprobó al conductor.`
-                    : `El administrador ${adminProfile.name} rechazó al conductor.`;
-                
                 transaction.set(auditLogRef, {
                     adminId: user.uid,
                     adminName: adminProfile.name,
                     action: newStatus === 'approved' ? 'driver_approved' : 'driver_rejected',
                     entityId: driverId,
                     timestamp: serverTimestamp(),
-                    details: verificationDetails
+                    details: newStatus === 'approved' ? 'Aprobado por admin.' : 'Rechazado por admin.'
                 });
 
-                // Prepare driver profile update
-                const updatePayload: Partial<UserProfile> = {
+                let bonusGranted = false;
+                // 2. Grant welcome bonus ONLY on first approval
+                if (newStatus === 'approved' && !driverData.promoCreditGranted) {
+                    // Create ledger entry for the bonus
+                    const promoTxRef = doc(collection(firestore, 'platform_transactions'));
+                    transaction.set(promoTxRef, {
+                        driverId: driverId,
+                        amount: WELCOME_BONUS,
+                        type: 'credit_promo',
+                        source: 'system',
+                        referenceId: 'initial_bonus',
+                        note: 'Bono de bienvenida por aprobación de cuenta',
+                        createdAt: serverTimestamp(),
+                    });
+                    
+                    // Update driver's canonical balance and grant flag
+                    transaction.update(driverProfileRef, {
+                        platformCreditPaid: increment(WELCOME_BONUS),
+                        promoCreditGranted: true,
+                    });
+                    bonusGranted = true;
+                }
+                
+                // 3. Update driver's verification status
+                transaction.update(driverProfileRef, {
                     vehicleVerificationStatus: newStatus,
                     approved: newStatus === 'approved',
                     updatedAt: serverTimestamp(),
-                };
+                });
 
-                let bonusGranted = false;
-                // Grant promo credit on first approval, if not already granted.
-                if (newStatus === 'approved' && !driverData.promoCreditGranted) {
-                    updatePayload.platformCreditPaid = increment(WELCOME_BONUS);
-                    updatePayload.promoCreditGranted = true;
-                    bonusGranted = true;
-
-                    // Create a separate audit log for the bonus.
-                    const bonusAuditLogRef = doc(collection(firestore, 'auditLogs'));
-                    transaction.set(bonusAuditLogRef, {
-                        adminId: user.uid,
-                        adminName: adminProfile.name,
-                        action: 'platform_credit_adjusted',
-                        entityId: driverId,
-                        timestamp: serverTimestamp(),
-                        details: `Bono de bienvenida de ${formatCurrency(WELCOME_BONUS)} otorgado automáticamente por aprobación.`
-                    });
-                }
-                
-                transaction.update(driverProfileRef, updatePayload);
                 return bonusGranted;
             });
 
-            // This part runs after the transaction is successful
             toast({
                 title: '¡Acción completada!',
                 description: `El conductor ha sido ${newStatus === 'approved' ? 'aprobado' : 'rechazado'}.` + (newStatus === 'approved' && !driver.promoCreditGranted ? ' Se añadió el bono de bienvenida.' : ''),
@@ -388,18 +387,19 @@ export default function DriverDetailPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <VamoIcon name="wallet" /> Crédito de Plataforma
+                            <VamoIcon name="wallet" /> Billetera
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div>
                              <p className="text-3xl font-bold">{formatCurrency(platformCreditPaid)}</p>
-                             <p className="text-sm text-muted-foreground">Saldo Total Disponible</p>
+                             <p className="text-sm text-muted-foreground">Saldo Actual</p>
+                             {driver.promoCreditGranted && <p className="text-xs text-muted-foreground">(Incluye bono de bienvenida)</p>}
                         </div>
                     </CardContent>
                     <CardFooter className="flex-col items-start gap-4 border-t pt-4">
                          <div className="w-full space-y-2">
-                             <Label htmlFor="credit-adjustment">Ajustar Crédito (Manual)</Label>
+                             <Label>Ajustar Saldo (Contable)</Label>
                              <div className="flex w-full items-center gap-2">
                                  <Input
                                     id="credit-adjustment"
@@ -409,11 +409,20 @@ export default function DriverDetailPage() {
                                     onChange={(e) => setCreditAdjustment(e.target.value)}
                                     disabled={isAdjustingCredit}
                                 />
-                                <Button onClick={handleAdjustCredit} disabled={isAdjustingCredit || !creditAdjustment}>
-                                    {isAdjustingCredit ? <VamoIcon name="loader" className="animate-spin" /> : <VamoIcon name="check" />}
-                                </Button>
                              </div>
-                             <p className="text-xs text-muted-foreground">Carga saldo o aplica débitos manuales. Usar con cuidado.</p>
+                             <Input
+                                id="adjustment-reason"
+                                type="text"
+                                placeholder="Motivo del ajuste (ej: Carga MP)"
+                                value={adjustmentReason}
+                                onChange={(e) => setAdjustmentReason(e.target.value)}
+                                disabled={isAdjustingCredit}
+                             />
+                            <Button onClick={handleAdjustCredit} disabled={isAdjustingCredit || !creditAdjustment || !adjustmentReason} className="w-full">
+                                {isAdjustingCredit ? <VamoIcon name="loader" className="animate-spin" /> : <VamoIcon name="check" />}
+                                Aplicar Ajuste
+                            </Button>
+                             <p className="text-xs text-muted-foreground">Crea una transacción en el ledger del conductor. Usar con cuidado.</p>
                          </div>
                     </CardFooter>
                 </Card>
@@ -618,4 +627,3 @@ export default function DriverDetailPage() {
         </div>
     );
 }
-
