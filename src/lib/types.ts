@@ -33,18 +33,20 @@ export type AuditLogAction =
 
 export type PlatformTransactionType =
   | "credit_promo"
-  | "credit_payment"
   | "credit_manual"
   | "debit_commission"
-  | "debit_adjustment";
+  | "debit_adjustment"
+  | "credit_payment"; // Added for MP top-ups
 
-export type PaymentIntentStatus = "pending" | "approved" | "rejected";
+export type PaymentIntentStatus = "pending" | "approved" | "rejected" | "credited";
+
 
 export interface PaymentIntent {
   driverId: string;
   amount: number;
   status: PaymentIntentStatus;
   createdAt: Timestamp | FieldValue;
+  updatedAt?: Timestamp | FieldValue;
   mpPreferenceId?: string;
   mpPaymentId?: string;
 }
@@ -54,7 +56,7 @@ export interface PlatformTransaction {
   amount: number; // Positive for credit, negative for debit
   type: PlatformTransactionType;
   createdAt: Timestamp | FieldValue;
-  source: "system" | "admin" | "mp_topup";
+  source: "system" | "admin" | "mp_topup" | "ride_finish"; // Expanded source
   referenceId?: string; // ID of the ride, payment, etc.
   note?: string; // Motivo del ajuste manual, etc.
 }

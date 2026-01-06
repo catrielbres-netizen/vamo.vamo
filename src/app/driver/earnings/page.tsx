@@ -2,18 +2,22 @@
 'use server';
 
 import { MercadoPagoConfig, Preference } from 'mercadopago';
-import { useUser } from '@/firebase';
-import { collection, doc, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { getFirestore } from 'firebase/firestore';
-import { initializeFirebase } from '@/firebase';
 import { redirect } from 'next/navigation';
-import { PaymentIntent } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
-import EarningsClientPage from './EarningsClientPage';
+import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 
-// Initialize Firebase to get Firestore instance
-// This needs to be done at the top level for Server Actions
-const { firestore } = initializeFirebase();
+import { PaymentIntent } from '@/lib/types';
+import EarningsClientPage from './EarningsClientPage';
+import { getFirebaseAdminApp } from '@/lib/server/firebase-admin';
+
+// Initialize Firebase Admin SDK
+const { db } = getFirebaseAdminApp();
+
+// Configure Mercado Pago SDK
+const client = new MercadoPagoConfig({
+  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN!,
+});
+
 
 async function createPreference(formData: FormData) {
     'use server';
@@ -22,42 +26,36 @@ async function createPreference(formData: FormData) {
     const driverId = formData.get('driverId') as string;
     const amount = Number(rawAmount);
 
-    if (![5000, 10000, 20000].includes(amount)) {
-        throw new Error('Monto de recarga inválido.');
-    }
-    if (!driverId) {
-        throw new Error('ID de conductor no encontrado.');
+    if (![5000, 10000, 20000].includes(amount) || !driverId) {
+        throw new Error('Datos de pago inválidos.');
     }
     
-    // --- PASO 2: Crear Preference (Backend) ---
-    // 1. Crear documento en `payment_intents`
-    const intentRef = collection(firestore, "payment_intents");
-    const newIntent: Omit<PaymentIntent, 'id'> = {
+    // --- PASO 1: Crear nuestro `payment_intent` interno ---
+    const intentRef = db.collection("payment_intents").doc();
+    const newIntent: PaymentIntent = {
         driverId,
         amount,
         status: "pending",
-        createdAt: serverTimestamp(),
+        createdAt: Timestamp.now(),
     };
-    const intentDoc = await addDoc(intentRef, newIntent);
+    await intentRef.set(newIntent);
 
-    // 2. Crear preferencia en Mercado Pago
-    const client = new MercadoPagoConfig({ 
-        accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN! 
-    });
+
+    // --- PASO 2: Crear la preferencia en Mercado Pago ---
     const preference = new Preference(client);
-
     const preferenceResponse = await preference.create({
         body: {
             items: [
                 {
-                    id: intentDoc.id,
+                    id: intentRef.id,
                     title: `Carga de saldo VamO por ${amount}`,
                     quantity: 1,
                     unit_price: amount,
                     currency_id: 'ARS',
                 },
             ],
-            external_reference: intentDoc.id, // 🔐 Clave contable
+            // 🔐 external_reference es la clave que vincula el pago de MP con nuestro sistema
+            external_reference: `payment_intent:${intentRef.id}`, 
             back_urls: {
                 success: `${process.env.NEXT_PUBLIC_APP_URL}/driver/earnings?mp_status=success`,
                 failure: `${process.env.NEXT_PUBLIC_APP_URL}/driver/earnings?mp_status=failure`,
@@ -68,12 +66,15 @@ async function createPreference(formData: FormData) {
         },
     });
 
-    // 3. Guardar el ID de la preferencia en nuestro intent
-    await updateDoc(doc(firestore, "payment_intents", intentDoc.id), {
+    // --- PASO 3: Guardar el ID de la preferencia en nuestro `payment_intent` ---
+    await intentRef.update({
         mpPreferenceId: preferenceResponse.id,
+        updatedAt: Timestamp.now(),
     });
     
-    // 4. Devolver `init_point` y redirigir
+    revalidatePath('/driver/earnings');
+
+    // --- PASO 4: Redirigir al conductor al checkout ---
     if (preferenceResponse.init_point) {
         redirect(preferenceResponse.init_point);
     } else {
@@ -82,10 +83,6 @@ async function createPreference(formData: FormData) {
 }
 
 export default async function EarningsPage() {
-    // This is now a Server Component, so we fetch data directly
-    // Note: The `useUser` hook can't be used in Server Components directly.
-    // We'll pass the necessary data to the client component.
-
     return (
         <EarningsClientPage createPreferenceAction={createPreference} />
     );

@@ -8,6 +8,8 @@ import {
   CollectionReference,
   DocumentReference,
   SetOptions,
+  getDocs,
+  query,
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import {FirestorePermissionError} from '@/firebase/errors';
@@ -86,4 +88,23 @@ export function deleteDocumentNonBlocking(docRef: DocumentReference) {
         })
       )
     });
+}
+
+/**
+ * Fetches documents from a query without using real-time snapshots.
+ * Returns a promise that resolves with the documents.
+ */
+export function getDocuments<T>(q: any) {
+  return getDocs(q)
+    .catch(error => {
+       const path = (q as any)._query.path.canonicalString();
+       errorEmitter.emit(
+        'permission-error',
+        new FirestorePermissionError({
+          path: path,
+          operation: 'list',
+        })
+      )
+       throw error;
+    })
 }

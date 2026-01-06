@@ -34,7 +34,7 @@ export default function EarningsClientPage({ createPreferenceAction }: EarningsC
     const searchParams = useSearchParams();
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [selectedAmount, setSelectedAmount] = useState<string | undefined>(undefined);
+    const [selectedAmount, setSelectedAmount] = useState<string | undefined>("5000");
     const [isPending, startTransition] = useTransition();
 
     useEffect(() => {
@@ -43,7 +43,7 @@ export default function EarningsClientPage({ createPreferenceAction }: EarningsC
             if (mpStatus === 'success') {
                 toast({
                     title: '✅ Pago Aprobado',
-                    description: 'Tu pago fue aprobado. Tu saldo se actualizará en breve.',
+                    description: 'Tu pago fue aprobado. Tu saldo se actualizará en breve cuando recibamos la confirmación del servidor.',
                 });
             } else if (mpStatus === 'failure') {
                  toast({
@@ -76,7 +76,7 @@ export default function EarningsClientPage({ createPreferenceAction }: EarningsC
         startTransition(async () => {
             try {
                 await createPreferenceAction(formData);
-                // The redirect will happen on the server
+                // La redirección a MP ocurre en la Server Action
             } catch (error: any) {
                 toast({ variant: 'destructive', title: 'Error al crear pago', description: error.message });
             }
@@ -114,7 +114,7 @@ export default function EarningsClientPage({ createPreferenceAction }: EarningsC
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
                         <Button onClick={handleFormAction} disabled={!selectedAmount || isPending}>
-                            {isPending ? 'Procesando...' : 'Pagar con Mercado Pago'}
+                            {isPending ? 'Procesando...' : `Pagar ${formatCurrency(Number(selectedAmount))}`}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
