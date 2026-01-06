@@ -49,6 +49,7 @@ export interface PaymentIntent {
   provider: "mercadopago";
   mpPreferenceId?: string;
   mpPaymentId?: string | null;
+  note?: string;
   createdAt: Timestamp | FieldValue;
   updatedAt?: Timestamp | FieldValue;
 }
@@ -121,7 +122,7 @@ export interface Ride {
   rerouteHistory?: {
     from: Place;
     to: Place;
-    timestamp: Timestamp;
+    timestamp: FieldValue;
   }[];
   passengerRating?: number | null;
   driverRating?: number | null;
