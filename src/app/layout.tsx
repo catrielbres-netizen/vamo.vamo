@@ -8,6 +8,7 @@ import { Providers } from './providers';
 export const metadata: Metadata = {
   title: 'VamO - Tu Viaje, a Tu Manera',
   description: 'Una app de viajes compartidos hecha con Next.js.',
+   manifest: "/manifest.json",
 };
 
 export default function RootLayout({
@@ -18,7 +19,6 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
-        <link rel="manifest" href="/manifest.json" />
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
         <meta name="theme-color" content="#FF7F00" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
