@@ -148,7 +148,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
     if (newStatus === 'finished') {
         setIsFinishing(true);
         try {
-            const finalRideData = await runTransaction(firestore, async (transaction) => {
+             const finalRideData = await runTransaction(firestore, async (transaction) => {
                 const driverRef = doc(firestore, 'users', user.uid);
                 const currentRideSnap = await transaction.get(rideRef);
 
@@ -172,13 +172,12 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 // --- Start of FASE 5 Ledger-Only Logic ---
                 // 1. Calculate final fare (this is now the definitive calculation)
                 const totalWaitTimeSeconds = (rideData.pauseHistory || []).reduce((acc, p) => acc + p.duration, 0);
+                
+                const extraCostFromReroutes = rideData.rerouteHistory?.reduce((sum, r) => sum + (r.cost ?? 0), 0) ?? 0;
+                
                 // The finalTotal from a reroute is the new definitive price. If no reroute, use estimated.
-                const finalPrice = rideData.pricing.finalTotal || calculateFare({
-                    distanceMeters: rideData.pricing.estimatedDistanceMeters ?? 0,
-                    waitingMinutes: Math.ceil(totalWaitTimeSeconds / 60),
-                    service: rideData.serviceType,
-                    isNight: false,
-                });
+                 const finalPrice = (rideData.pricing.finalTotal || ride.pricing.estimatedTotal) + extraCostFromReroutes;
+
 
                 // 2. Get deterministic ride count for commission tier from the canonical counter
                 const ridesCompletedBeforeThis = driverData.ridesCompleted ?? 0;
@@ -213,7 +212,8 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                 const finalPricing = { 
                     ...rideData.pricing, 
                     finalTotal: finalPrice, 
-                    rideCommission: rideCommission 
+                    rideCommission: rideCommission,
+                    extraCost: extraCostFromReroutes,
                 };
                 const rideUpdatePayload: any = {
                     status: 'finished',
@@ -221,7 +221,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
                     finishedAt: finishedAtTimestamp,
                     updatedAt: finishedAtTimestamp,
                     completedRide: {
-                        distanceMeters: rideData.pricing.estimatedDistanceMeters,
+                        distanceMeters: rideData.pricing.estimatedDistanceMeters + (rideData.extraDistanceMeters || 0),
                         durationSeconds: rideData.pricing.estimatedDurationSeconds || 0,
                         waitingSeconds: totalWaitTimeSeconds,
                         totalPrice: finalPrice,
@@ -279,7 +279,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
   const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
-  const currentTotal = (ride.pricing.finalTotal || ride.pricing.estimatedTotal) + waitingCost;
+  const currentTotal = (ride.pricing.finalTotal || ride.pricing.estimatedTotal) + waitingCost + (ride.pricing.extraCost || 0);
   
   const arrivalInfo = ride.driverArrivalInfo;
   const mainTripInfo = {

@@ -1,4 +1,3 @@
-
 // @/components/FinishedRideSummary.tsx
 'use client';
 
@@ -21,6 +20,7 @@ import { calculateFare, WAITING_PER_MIN } from '@/lib/pricing';
 import RatingForm from './RatingForm';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { Separator } from './ui/separator';
 
 
 function formatCurrency(value: number) {
@@ -43,8 +43,8 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
 
   const totalWaitSeconds = (ride.pauseHistory || []).reduce((acc, p) => acc + p.duration, 0);
   const waitingCost = Math.ceil(totalWaitSeconds / 60) * WAITING_PER_MIN;
-  const baseFare = calculateFare({ distanceMeters: 0, service: 'premium' });
-  const baseDistancePrice = (finalPrice - waitingCost - baseFare) / (1 + (ride.pricing.discountAmount || 0));
+  const extraCostFromReroutes = ride.pricing.extraCost ?? 0;
+  const baseFareAndDistance = finalPrice - waitingCost - extraCostFromReroutes;
 
 
   // Mock driver fiscal data
@@ -91,21 +91,30 @@ export default function FinishedRideSummary({ ride, onClose }: { ride: WithId<Ri
       stopsDetail = "Ninguna";
     }
 
+    let rerouteDetail = (ride.rerouteHistory || []).map((r, index) =>
+        `  Desvío ${index + 1}: a ${r.to.address} (+${formatCurrency(r.cost)})`
+    ).join('%0A');
+     if (!rerouteDetail) {
+        rerouteDetail = "Ninguno";
+    }
+
     const message = `
 *Resumen de Viaje - VamO* 🚕
 -----------------------------------
 *Datos del Viaje*
 *Fecha:* ${rideDate}
 *Pasajero:* ${ride.passengerName || 'No especificado'}
-*Destino:* ${ride.destination.address}
+*Destino Final:* ${ride.destination.address}
 *Servicio:* ${ride.serviceType.charAt(0).toUpperCase() + ride.serviceType.slice(1)}
 
 *Detalle de Costos*
-  - Tarifa Base: ${formatCurrency(baseFare)}
-  - Costo por Distancia: ${formatCurrency(baseDistancePrice)}
+  - Tarifa Base + Distancia: ${formatCurrency(baseFareAndDistance)}
   - Costo por Espera: ${formatCurrency(waitingCost)}
+  - Costo por Desvíos: ${formatCurrency(extraCostFromReroutes)}
 *Paradas/Esperas:*
 ${stopsDetail}
+*Desvíos:*
+${rerouteDetail}
 -----------------------------------
 *TOTAL A COBRAR:* *${formatCurrency(finalPrice)}*
 -----------------------------------
@@ -135,7 +144,7 @@ ${stopsDetail}
             <div className="border-t border-b py-4 space-y-2">
                 <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground">Tarifa base + distancia</span>
-                    <span>{formatCurrency(baseFare + baseDistancePrice)}</span>
+                    <span>{formatCurrency(baseFareAndDistance)}</span>
                 </div>
                  {ride.pricing.discountAmount && ride.pricing.discountAmount > 0 ? (
                     <div className="flex justify-between items-center text-sm text-blue-500">
@@ -147,11 +156,22 @@ ${stopsDetail}
                     <span className="text-muted-foreground">Costo por espera</span>
                     <span>{formatCurrency(waitingCost)}</span>
                 </div>
+                {extraCostFromReroutes > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Costo por desvíos</span>
+                        <span>{formatCurrency(extraCostFromReroutes)}</span>
+                    </div>
+                )}
             </div>
              <div className="flex justify-between items-center font-bold text-lg">
                 <span>Total a Cobrar al Pasajero</span>
                 <span className="text-primary">{formatCurrency(finalPrice)}</span>
             </div>
+            
+            <Separator />
+            
+             <p className="text-sm text-muted-foreground">Comisión VamO ({(ride.pricing.rideCommission! / finalPrice * 100).toFixed(0)}%): <span className="font-medium text-destructive">-{formatCurrency(ride.pricing.rideCommission!)}</span></p>
+
         </CardContent>
         <RatingForm
           participantName={ride.passengerName || 'Pasajero'}

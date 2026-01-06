@@ -101,6 +101,8 @@ export interface Ride {
     estimatedDurationSeconds?: number | null;
     discountAmount?: number | null;
     rideCommission?: number | null; // Commission for this specific ride
+    extraDistanceMeters?: number; // Distance from reroutes
+    extraCost?: number; // Cost from reroutes
   };
   status: RideStatus;
   createdAt: Timestamp | FieldValue;
@@ -122,7 +124,10 @@ export interface Ride {
   rerouteHistory?: {
     from: Place;
     to: Place;
-    timestamp: FieldValue;
+    distanceMeters: number;
+    timeMinutes?: number;
+    cost: number;
+    createdAt: FieldValue;
   }[];
   passengerRating?: number | null;
   driverRating?: number | null;
@@ -155,6 +160,7 @@ export type UserProfile = {
     averageRating?: number | null;
     ridesCompleted: number; // Canonical counter
     isSuspended?: boolean;
+    platformCreditPaid?: number; // Saldo canónico (legacy, no usar más)
     // Passenger fields
     vamoPoints?: number;
     activeBonus?: boolean;
