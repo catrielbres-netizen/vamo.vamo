@@ -1,3 +1,4 @@
+
 // /app/driver/rides/page.tsx
 'use client';
 
@@ -192,9 +193,14 @@ export default function DriverRidesPage() {
         locationWatchId.current = navigator.geolocation.watchPosition(
             (position) => {
                 const { latitude, longitude } = position.coords;
-                updateDocumentNonBlocking(userProfileRef, {
-                    currentLocation: { lat: latitude, lng: longitude }
-                });
+                const newLocation = { lat: latitude, lng: longitude };
+                updateDocumentNonBlocking(userProfileRef, { currentLocation: newLocation });
+
+                // Also update location on active ride for rerouting calculations
+                if (activeRideStateRef.current) {
+                    const rideRef = doc(firestore, 'rides', activeRideStateRef.current.id);
+                    updateDocumentNonBlocking(rideRef, { driverLocation: newLocation });
+                }
             },
             (error) => {
                 console.warn("Error al obtener ubicación del conductor:", error.message);
@@ -205,6 +211,10 @@ export default function DriverRidesPage() {
                 });
                 // Si el GPS falla (ej. en desktop), usamos la ubicación de respaldo
                 updateDocumentNonBlocking(userProfileRef, { currentLocation: FALLBACK_DRIVER_LOCATION });
+                if (activeRideStateRef.current) {
+                    const rideRef = doc(firestore, 'rides', activeRideStateRef.current.id);
+                    updateDocumentNonBlocking(rideRef, { driverLocation: FALLBACK_DRIVER_LOCATION });
+                }
             },
             { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
         );
@@ -217,8 +227,8 @@ export default function DriverRidesPage() {
         }
     };
     
-    // Manage tracking based on online status and active ride
-    if (profile?.approved && isOnline && !activeRide) {
+    // Manage tracking based on online status or if there is an active ride
+    if (profile?.approved && (isOnline || activeRide)) {
         startLocationTracking();
     } else {
         stopLocationTracking();
@@ -322,7 +332,7 @@ export default function DriverRidesPage() {
                 />
             </div>
              
-             {isOnline && balance < 0 && (
+             {balance < 0 && (
                 <Alert variant="destructive">
                     <VamoIcon name="alert-triangle" className="h-4 w-4" />
                     <AlertTitle>¡Saldo Insuficiente!</AlertTitle>

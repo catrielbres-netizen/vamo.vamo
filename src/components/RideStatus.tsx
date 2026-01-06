@@ -1,3 +1,4 @@
+
 // @/components/RideStatus.tsx
 'use client';
 import { TripCard } from './TripCard';
@@ -5,7 +6,7 @@ import { DriverInfo } from './DriverInfo';
 import { TripTimers } from './TripTimers';
 import { WAITING_PER_MIN } from '@/lib/pricing';
 import { useEffect, useState, useRef } from 'react';
-import { Timestamp, doc, runTransaction, collection, getDocs, where, query } from 'firebase/firestore';
+import { Timestamp, doc, runTransaction, collection, getDocs, where, query, serverTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
@@ -16,13 +17,17 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { VamoIcon, WhatsAppLogo } from './VamoIcon';
+import { VamoIcon } from './VamoIcon';
 import RatingForm from './RatingForm';
 import { useFirestore, updateDocumentNonBlocking } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride, UserProfile } from '@/lib/types';
+import { Ride, UserProfile, Place } from '@/lib/types';
+import PlaceAutocompleteInput from './PlaceAutocompleteInput';
+import { calculateFare } from '@/lib/pricing';
+import { haversineDistance } from '@/lib/geo';
 
 
 function formatCurrency(value: number) {
@@ -42,6 +47,10 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
   const { toast } = useToast();
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
   const pointsAwardedRef = useRef(false);
+  const [isRerouteModalOpen, setRerouteModalOpen] = useState(false);
+  const [newDestination, setNewDestination] = useState<Place | null>(null);
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [newFare, setNewFare] = useState<number | null>(null);
 
   const totalAccumulatedWaitSeconds = (ride.pauseHistory || []).reduce((acc: number, p: any) => acc + p.duration, 0);
 
@@ -110,7 +119,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
 
         awardPoints();
     }
-  }, [ride.status, ride.id, ride.passengerId, firestore, ride.vamoPointsAwarded, ride.passengerName]);
+  }, [ride.status, ride.id, ride.passengerId, firestore, ride.vamoPointsAwarded]);
 
 
   const handleRatingAndContinue = async (rating: number, comments: string) => {
@@ -157,6 +166,94 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
     
     onNewRide(true);
   };
+
+  const handleOpenRerouteModal = () => {
+    setNewDestination(null);
+    setNewFare(null);
+    setRerouteModalOpen(true);
+  };
+
+  useEffect(() => {
+    const calculateNewRoute = () => {
+        if (!newDestination?.lat || !ride.driverLocation?.lat) {
+            setNewFare(null);
+            return;
+        }
+
+        setIsCalculating(true);
+        const directionsService = new window.google.maps.DirectionsService();
+        directionsService.route(
+            {
+                origin: new window.google.maps.LatLng(ride.driverLocation.lat, ride.driverLocation.lng),
+                destination: new window.google.maps.LatLng(newDestination.lat, newDestination.lng),
+                travelMode: window.google.maps.TravelMode.DRIVING,
+            },
+            (result, status) => {
+                if (status === window.google.maps.DirectionsStatus.OK && result?.routes?.[0]?.legs?.[0]) {
+                    const leg = result.routes[0].legs[0];
+                    const newDistanceMeters = leg.distance?.value ?? 0;
+                    
+                    const originalFare = ride.pricing.estimatedTotal;
+                    
+                    const totalWaitMinutes = Math.ceil(totalAccumulatedWaitSeconds / 60);
+
+                    const finalFare = calculateFare({
+                        distanceMeters: ride.pricing.estimatedDistanceMeters + newDistanceMeters,
+                        waitingMinutes: totalWaitMinutes,
+                        service: ride.serviceType,
+                    });
+
+                    setNewFare(finalFare);
+
+                } else {
+                    toast({
+                        variant: 'destructive',
+                        title: 'No se pudo calcular la nueva ruta',
+                        description: 'La tarifa no pudo ser actualizada. Intentá de nuevo.'
+                    });
+                    setNewFare(null);
+                }
+                setIsCalculating(false);
+            }
+        );
+    }
+    
+    calculateNewRoute();
+  }, [newDestination, ride.driverLocation, ride.pricing.estimatedTotal, ride.pricing.estimatedDistanceMeters, ride.serviceType, totalAccumulatedWaitSeconds, toast]);
+
+
+  const handleConfirmReroute = async () => {
+    if (!firestore || !newDestination || newFare === null) return;
+    
+    setIsCalculating(true);
+    const rideRef = doc(firestore, 'rides', ride.id);
+    
+    try {
+        await updateDocumentNonBlocking(rideRef, {
+            destination: newDestination,
+            'pricing.finalTotal': newFare,
+            'pricing.estimatedDistanceMeters': ride.pricing.estimatedDistanceMeters + (newFare - ride.pricing.estimatedTotal), // Approximation
+            rerouteHistory: [
+                ...(ride.rerouteHistory || []),
+                { from: ride.destination, to: newDestination, timestamp: serverTimestamp() }
+            ],
+            updatedAt: serverTimestamp()
+        });
+        
+        toast({
+            title: "¡Destino actualizado!",
+            description: "Tu conductor ha sido notificado."
+        });
+        setRerouteModalOpen(false);
+
+    } catch (error) {
+        console.error("Error updating destination:", error);
+        toast({ variant: 'destructive', title: "Error", description: "No se pudo actualizar el destino." });
+    } finally {
+        setIsCalculating(false);
+    }
+  };
+
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
   const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
@@ -264,7 +361,35 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
   }
 
   return (
-    <div>
+    <>
+      <Dialog open={isRerouteModalOpen} onOpenChange={setRerouteModalOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Cambiar Destino</DialogTitle>
+                <DialogDescription>
+                    Ingresá la nueva dirección. La tarifa se recalculará.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+                <PlaceAutocompleteInput onPlaceSelect={setNewDestination} placeholder="Nuevo destino" />
+                {isCalculating && <p className="text-center">Calculando nueva tarifa...</p>}
+                {newFare !== null && (
+                    <div className="text-center p-3 bg-secondary rounded-md">
+                        <p className="text-muted-foreground">Nueva tarifa estimada</p>
+                        <p className="text-2xl font-bold">{formatCurrency(newFare)}</p>
+                    </div>
+                )}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setRerouteModalOpen(false)}>Cancelar</Button>
+                <Button onClick={handleConfirmReroute} disabled={!newDestination || newFare === null || isCalculating}>
+                    {isCalculating ? "Calculando..." : "Confirmar Nuevo Destino"}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       <TripCard
         status={ride.status}
         origin={ride.origin}
@@ -288,6 +413,14 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
             waitCost={formatCurrency(waitingCost)}
             currentTotal={formatCurrency(currentTotal)}
        />
-    </div>
+        {ride.status === 'in_progress' && (
+            <div className="m-4">
+                <Button variant="outline" className="w-full" onClick={handleOpenRerouteModal}>
+                    <VamoIcon name="route" className="mr-2" />
+                    Cambiar Destino
+                </Button>
+            </div>
+        )}
+    </>
   );
 }

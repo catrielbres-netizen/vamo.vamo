@@ -1,4 +1,3 @@
-
 // src/lib/types.ts
 
 import { type Timestamp, type FieldValue } from "firebase/firestore";
@@ -108,6 +107,7 @@ export interface Ride {
   finishedAt?: Timestamp | FieldValue | null;
   driverId?: string | null;
   driverName?: string | null;
+  driverLocation?: { lat: number; lng: number; } | null;
   driverArrivalInfo?: {
     distanceMeters: number;
     durationSeconds: number;
@@ -117,6 +117,11 @@ export interface Ride {
     started: Timestamp;
     ended: Timestamp;
     duration: number; // in seconds
+  }[];
+  rerouteHistory?: {
+    from: Place;
+    to: Place;
+    timestamp: Timestamp;
   }[];
   passengerRating?: number | null;
   driverRating?: number | null;

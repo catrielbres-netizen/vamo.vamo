@@ -50,6 +50,8 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
   const [currentPauseSeconds, setCurrentPauseSeconds] = useState(0);
   const { user } = useUser();
   const prevStatusRef = useRef<Ride['status'] | undefined>();
+  const prevRerouteCountRef = useRef(ride.rerouteHistory?.length || 0);
+
 
   const totalAccumulatedWaitSeconds = (ride.pauseHistory || []).reduce((acc: number, p: any) => acc + p.duration, 0);
 
@@ -87,7 +89,19 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
         }
         prevStatusRef.current = ride.status;
     }
-  }, [ride.status]);
+    
+    // Check for reroute
+    const currentRerouteCount = ride.rerouteHistory?.length || 0;
+    if (currentRerouteCount > prevRerouteCountRef.current) {
+        toast({
+            title: "¡Ruta Actualizada!",
+            description: `El pasajero ha cambiado el destino. La nueva tarifa es de ${formatCurrency(ride.pricing.finalTotal || ride.pricing.estimatedTotal)}.`
+        });
+        speak("El pasajero cambió el destino.");
+    }
+    prevRerouteCountRef.current = currentRerouteCount;
+
+  }, [ride.status, ride.rerouteHistory, ride.pricing.finalTotal, ride.pricing.estimatedTotal, toast]);
 
   const updateStatus = async (newStatus: string) => {
     if (!firestore || !user) return;
@@ -258,13 +272,15 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
 
   const totalWaitWithCurrent = totalAccumulatedWaitSeconds + currentPauseSeconds;
   const waitingCost = Math.ceil(totalWaitWithCurrent / 60) * WAITING_PER_MIN;
-  const currentTotal = ride.pricing.estimatedTotal + waitingCost;
+  const currentTotal = ride.pricing.finalTotal || ride.pricing.estimatedTotal + waitingCost;
   
   const arrivalInfo = ride.driverArrivalInfo;
   const mainTripInfo = {
       distance: ride.pricing.estimatedDistanceMeters,
       duration: ride.pricing.estimatedDurationSeconds
   };
+  const destinationAddress = ride.rerouteHistory && ride.rerouteHistory.length > 0 ? ride.destination.address : ride.destination.address;
+
 
   return (
     <Card>
@@ -272,10 +288,18 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
         <CardTitle>
             Viaje en curso
         </CardTitle>
-        <Badge variant={ride.status === 'paused' ? 'destructive' : 'secondary'} className="flex items-center gap-2 whitespace-nowrap">
-            <VamoIcon name={statusInfo.icon} />
-            {statusInfo.text}
-        </Badge>
+        <div className="flex items-center gap-2">
+            {ride.rerouteHistory && ride.rerouteHistory.length > 0 && (
+                <Badge variant="outline" className="border-blue-500 text-blue-500">
+                    <VamoIcon name="route" className="mr-1" />
+                    Ruta Cambiada
+                </Badge>
+            )}
+            <Badge variant={ride.status === 'paused' ? 'destructive' : 'secondary'} className="flex items-center gap-2 whitespace-nowrap">
+                <VamoIcon name={statusInfo.icon} />
+                {statusInfo.text}
+            </Badge>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <p className="flex items-center">
@@ -298,7 +322,7 @@ export default function ActiveDriverRide({ ride, onFinishRide }: { ride: WithId<
             <div className="bg-secondary/50 p-3 rounded-lg text-center">
                 <p className="font-semibold">Llevar Pasajero a Destino</p>
                 <p className="flex items-center justify-center text-xs text-muted-foreground">
-                    <VamoIcon name="flag" className="w-3 h-3 mr-1"/> {ride.destination.address}
+                    <VamoIcon name="flag" className="w-3 h-3 mr-1"/> {destinationAddress}
                 </p>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                     <div className="flex items-center justify-center gap-1.5"><VamoIcon name="route" className="w-4 h-4 text-primary"/> <span>{formatDistance(mainTripInfo.distance)}</span></div>
