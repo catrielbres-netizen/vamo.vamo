@@ -32,31 +32,34 @@ export type AuditLogAction =
   | "driver_unsuspended";
 
 export type PlatformTransactionType =
-  | "credit_promo"
-  | "credit_manual"
-  | "debit_commission"
-  | "debit_adjustment"
-  | "credit_payment"; // Added for MP top-ups
+  | "debit_commission" // Cobro de comisión por viaje
+  | "credit_payment"   // Carga de saldo real (ej. Mercado Pago)
+  | "credit_promo"     // Crédito promocional (ej. bono de bienvenida)
+  | "debit_adjustment" // Ajuste manual de débito por admin
+  | "credit_manual";   // Ajuste manual de crédito por admin
 
 export type PaymentIntentStatus = "pending" | "approved" | "rejected" | "credited";
 
 
 export interface PaymentIntent {
+  id?: string;
   driverId: string;
   amount: number;
   status: PaymentIntentStatus;
+  provider: "mercadopago";
+  mpPreferenceId?: string;
+  mpPaymentId?: string | null;
   createdAt: Timestamp | FieldValue;
   updatedAt?: Timestamp | FieldValue;
-  mpPreferenceId?: string;
-  mpPaymentId?: string;
 }
+
 
 export interface PlatformTransaction {
   driverId: string;
   amount: number; // Positive for credit, negative for debit
   type: PlatformTransactionType;
   createdAt: Timestamp | FieldValue;
-  source: "system" | "admin" | "mp_topup" | "ride_finish"; // Expanded source
+  source: "system" | "admin" | "ride_finish" | "mp_topup"; // Expanded source
   referenceId?: string; // ID of the ride, payment, etc.
   note?: string; // Motivo del ajuste manual, etc.
 }

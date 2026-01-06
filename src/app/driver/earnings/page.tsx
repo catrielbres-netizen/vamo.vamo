@@ -19,7 +19,7 @@ const client = new MercadoPagoConfig({
 });
 
 
-async function createPreference(formData: FormData) {
+async function createPreferenceAction(formData: FormData) {
     'use server';
 
     const rawAmount = formData.get('amount');
@@ -36,6 +36,7 @@ async function createPreference(formData: FormData) {
         driverId,
         amount,
         status: "pending",
+        provider: "mercadopago",
         createdAt: Timestamp.now(),
     };
     await intentRef.set(newIntent);
@@ -84,6 +85,6 @@ async function createPreference(formData: FormData) {
 
 export default async function EarningsPage() {
     return (
-        <EarningsClientPage createPreferenceAction={createPreference} />
+        <EarningsClientPage createPreferenceAction={createPreferenceAction} />
     );
 }
