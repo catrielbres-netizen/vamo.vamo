@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'VamO',
     short_name: 'VamO',
-    description: 'Movilidad inteligente, rápida y segura',
+    description: 'Movete fácil, movete con VamO',
     start_url: '/',
     display: 'standalone',
     background_color: '#FFFFFF',
@@ -23,15 +23,10 @@ export default function manifest(): MetadataRoute.Manifest {
         type: 'image/png',
       },
       {
-        src: '/icons/icon-maskable.png',
+        src: '/icons/icon-512x512-maskable.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',
-      },
-      {
-        src: '/icons/apple-touch-icon.png',
-        sizes: '180x180',
-        type: 'image/png',
       },
     ],
   };

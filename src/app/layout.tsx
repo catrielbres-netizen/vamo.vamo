@@ -18,6 +18,15 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'VamO',
   },
+  icons: {
+    icon: [
+      { url: '/icons/icon-192x192.png', sizes: '192x192' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512' },
+    ],
+    apple: [
+      { url: '/icons/icon-192x192.png', sizes: '192x192' },
+    ],
+  },
 };
 
 export default function RootLayout({
