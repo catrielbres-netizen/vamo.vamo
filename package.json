@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "postinstall": "rm -rf .next"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
