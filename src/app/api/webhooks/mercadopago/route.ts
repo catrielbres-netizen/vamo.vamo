@@ -6,17 +6,22 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getFirebaseAdminApp } from "@/lib/server/firebase-admin";
 import { PlatformTransaction, PaymentIntent } from "@/lib/types";
 
-// Initialize Firebase Admin SDK
-const { db } = getFirebaseAdminApp();
-
-// Initialize Mercado Pago SDK
-const mpClient = new MercadoPagoConfig({
-  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN!,
-});
+// Force Node.js runtime for App Hosting compatibility with firebase-admin
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  // Initialize SDKs inside the handler to avoid running at build time
+  const { db } = getFirebaseAdminApp();
+  const mpClient = new MercadoPagoConfig({
+    accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN!,
+  });
+
   if (!db) {
       console.error("MP Webhook Error: Firestore not initialized");
+      return NextResponse.json({ error: "Internal server misconfiguration" }, { status: 500 });
+  }
+  if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
+      console.error("MP Webhook Error: MERCADOPAGO_ACCESS_TOKEN is not set.");
       return NextResponse.json({ error: "Internal server misconfiguration" }, { status: 500 });
   }
 
