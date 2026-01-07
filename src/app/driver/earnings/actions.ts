@@ -4,7 +4,7 @@
 import { getFirebaseAdminApp } from '@/lib/server/firebase-admin';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { redirect } from 'next/navigation';
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 import { PaymentIntent } from '@/lib/types';
 
 
@@ -27,12 +27,12 @@ export async function createPreferenceAction(formData: FormData) {
 
     // 1. Create a payment intent in our database
     const paymentIntentRef = db.collection('payment_intents').doc();
-    const intent: PaymentIntent = {
+    const intent: Omit<PaymentIntent, 'createdAt'> & { createdAt: FieldValue } = {
       driverId,
       amount,
       status: 'pending',
       provider: 'mercadopago',
-      createdAt: Timestamp.now(),
+      createdAt: FieldValue.serverTimestamp(),
     };
     await paymentIntentRef.set(intent);
 
