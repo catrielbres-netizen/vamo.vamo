@@ -9,9 +9,15 @@ export const dynamic = 'force-dynamic';
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'VamO - Tu Viaje, a Tu Manera',
-  description: 'Una app de viajes compartidos hecha con Next.js.',
-   manifest: "/manifest.json",
+  title: 'VamO',
+  description: 'Movilidad inteligente',
+  manifest: '/manifest.webmanifest',
+  themeColor: '#E10600', // 🔴
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'VamO',
+  },
 };
 
 export default function RootLayout({

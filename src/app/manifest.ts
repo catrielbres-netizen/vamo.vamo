@@ -1,15 +1,38 @@
+// src/app/manifest.ts
+import type { MetadataRoute } from 'next';
 
-import { MetadataRoute } from 'next'
- 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'VamO - Tu Viaje, a Tu Manera',
+    name: 'VamO',
     short_name: 'VamO',
-    description: 'Una app de viajes compartidos.',
+    description: 'Movilidad inteligente, rápida y segura',
     start_url: '/',
     display: 'standalone',
-    background_color: '#E8EAF6',
-    theme_color: '#1A237E',
-    icons: [], // Empty array to prevent 404 errors for now
-  }
+    background_color: '#FFFFFF',
+    theme_color: '#E10600', // 🔴 Rojo Coca-Cola
+    orientation: 'portrait',
+    icons: [
+      {
+        src: '/icons/icon-192x192.png',
+        sizes: '192x192',
+        type: 'image/png',
+      },
+      {
+        src: '/icons/icon-512x512.png',
+        sizes: '512x512',
+        type: 'image/png',
+      },
+      {
+        src: '/icons/icon-maskable.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+      {
+        src: '/icons/apple-touch-icon.png',
+        sizes: '180x180',
+        type: 'image/png',
+      },
+    ],
+  };
 }
