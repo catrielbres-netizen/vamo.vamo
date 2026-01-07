@@ -1,5 +1,6 @@
-
 // src/app/driver/earnings/page.tsx
+export const dynamic = "force-dynamic";
+
 'use server';
 
 import { MercadoPagoConfig, Preference } from 'mercadopago';

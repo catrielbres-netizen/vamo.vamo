@@ -1,4 +1,5 @@
 // src/app/dashboard/ride/page.tsx
+export const dynamic = "force-dynamic";
 
 'use client';
 

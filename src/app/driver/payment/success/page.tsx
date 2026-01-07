@@ -1,3 +1,5 @@
+// src/app/driver/payment/success/page.tsx
+export const dynamic = "force-dynamic";
 
 'use client';
 import { useRouter } from 'next/navigation';
@@ -47,4 +49,3 @@ export default function PaymentSuccessPage() {
         </div>
     );
 }
-

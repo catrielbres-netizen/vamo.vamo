@@ -1,5 +1,6 @@
-
 // src/app/driver/discounts/page.tsx
+export const dynamic = "force-dynamic";
+
 'use client';
 import { useState, useEffect } from 'react';
 import { useFirestore, useUser } from '@/firebase';

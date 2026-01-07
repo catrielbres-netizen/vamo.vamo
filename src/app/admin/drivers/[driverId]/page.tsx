@@ -1,5 +1,6 @@
-
 // src/app/admin/drivers/[driverId]/page.tsx
+export const dynamic = "force-dynamic";
+
 'use client';
 import { useState, useEffect } from 'react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';

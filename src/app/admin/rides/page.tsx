@@ -1,3 +1,5 @@
+// src/app/admin/rides/page.tsx
+export const dynamic = "force-dynamic";
 
 'use client'
 

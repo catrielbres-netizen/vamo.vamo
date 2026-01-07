@@ -1,6 +1,6 @@
-
-
 // src/app/driver/profile/page.tsx
+export const dynamic = "force-dynamic";
+
 'use client';
 
 import { useUser, useCollection, useFirestore, useMemoFirebase } from '@/firebase';

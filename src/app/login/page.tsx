@@ -1,5 +1,6 @@
-
 // src/app/login/page.tsx
+export const dynamic = "force-dynamic";
+
 'use client';
 import { useState } from 'react';
 import { useAuth, useFirestore }from '@/firebase';

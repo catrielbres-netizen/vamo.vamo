@@ -1,4 +1,6 @@
 // /app/driver/rides/page.tsx
+export const dynamic = "force-dynamic";
+
 'use client';
 
 import { useEffect, useRef, useState, useMemo } from 'react';

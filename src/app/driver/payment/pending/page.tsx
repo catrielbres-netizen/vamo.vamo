@@ -1,3 +1,5 @@
+// src/app/driver/payment/pending/page.tsx
+export const dynamic = "force-dynamic";
 
 'use client';
 import { useRouter } from 'next/navigation';

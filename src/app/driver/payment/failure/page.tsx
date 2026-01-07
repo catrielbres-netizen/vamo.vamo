@@ -1,3 +1,5 @@
+// src/app/driver/payment/failure/page.tsx
+export const dynamic = "force-dynamic";
 
 'use client';
 import { useRouter } from 'next/navigation';
@@ -48,4 +50,3 @@ export default function PaymentFailurePage() {
         </div>
     );
 }
-
