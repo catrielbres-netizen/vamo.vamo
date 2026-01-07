@@ -1,7 +1,8 @@
 // src/app/login/page.tsx
+'use client';
+
 export const dynamic = "force-dynamic";
 
-'use client';
 import { useState } from 'react';
 import { useAuth, useFirestore }from '@/firebase';
 import { initiateEmailSignUp, initiateDriverEmailSignUp } from '@/firebase/non-blocking-login';

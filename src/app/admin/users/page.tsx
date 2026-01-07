@@ -1,7 +1,7 @@
 // src/app/admin/users/page.tsx
-export const dynamic = "force-dynamic";
+'use client';
 
-'use client'
+export const dynamic = "force-dynamic";
 
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase'
 import { collection } from 'firebase/firestore'

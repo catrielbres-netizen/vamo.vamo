@@ -1,7 +1,7 @@
 // src/app/page.tsx
-export const dynamic = "force-dynamic";
-
 'use client';
+
+export const dynamic = "force-dynamic";
 
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';

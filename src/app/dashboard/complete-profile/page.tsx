@@ -1,7 +1,8 @@
 // src/app/dashboard/complete-profile/page.tsx
+'use client';
+
 export const dynamic = "force-dynamic";
 
-'use client';
 import { useState, useEffect } from 'react';
 import { useFirestore, useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';

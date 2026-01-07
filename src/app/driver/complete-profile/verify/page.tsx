@@ -1,7 +1,8 @@
 // src/app/driver/complete-profile/verify/page.tsx
+'use client';
+
 export const dynamic = "force-dynamic";
 
-'use client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { VamoIcon, WhatsAppLogo } from '@/components/VamoIcon';

@@ -1,7 +1,7 @@
 // src/app/dashboard/profile/page.tsx
-export const dynamic = "force-dynamic";
-
 'use client';
+
+export const dynamic = "force-dynamic";
 
 import { useUser } from '@/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
