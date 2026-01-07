@@ -1,3 +1,4 @@
+
 // src/app/driver/earnings/page.tsx
 'use server';
 
@@ -13,18 +14,17 @@ import EarningsClientPage from './EarningsClientPage';
 import { getFirebaseAdminApp } from '@/lib/server/firebase-admin';
 
 
-// Configure Mercado Pago SDK
-// Ensure MERCADOPAGO_ACCESS_TOKEN is set in your environment variables
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN!,
-});
-
-
 async function createPreferenceAction(formData: FormData) {
     'use server';
+    
+    // SDK and DB Initialization inside the Server Action
+    const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+    if (!accessToken) {
+        throw new Error("La clave de acceso de Mercado Pago no está configurada.");
+    }
+    const client = new MercadoPagoConfig({ accessToken });
 
     const { db } = getFirebaseAdminApp();
-
     if (!db) {
         throw new Error('La conexión con la base de datos no está disponible. Verifique la configuración del servidor.');
     }
@@ -95,3 +95,4 @@ export default async function EarningsPage() {
         <EarningsClientPage createPreferenceAction={createPreferenceAction} />
     );
 }
+
