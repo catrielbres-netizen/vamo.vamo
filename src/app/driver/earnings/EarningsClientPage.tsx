@@ -1,7 +1,7 @@
 
 'use client';
 import { useState, useTransition, useEffect, useMemo } from 'react';
-import { useUser, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { Card, CardContent, CardHeader, CardFooter, CardDescription, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { VamoIcon } from '@/components/VamoIcon';
@@ -16,6 +16,8 @@ import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore
 import { PlatformTransaction } from '@/lib/types';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Separator } from '@/components/ui/separator';
+// Import the Server Action directly into the Client Component
+import { createPreferenceAction } from './actions';
 
 function formatCurrency(value: number) {
     if (typeof value !== 'number' || isNaN(value)) return '$...';
@@ -27,9 +29,6 @@ function formatCurrency(value: number) {
 
 const TOPUP_AMOUNTS = [5000, 10000, 20000];
 
-interface EarningsClientPageProps {
-    createPreferenceAction: (formData: FormData) => Promise<void>;
-}
 
 const TransactionHistory = ({ driverId }: { driverId: string }) => {
     const firestore = useFirestore();
@@ -111,7 +110,7 @@ const TransactionHistory = ({ driverId }: { driverId: string }) => {
     )
 }
 
-export default function EarningsClientPage({ createPreferenceAction }: EarningsClientPageProps) {
+export default function EarningsClientPage() {
     const { user, loading: isLoading } = useUser();
     const router = useRouter();
     const { toast } = useToast();

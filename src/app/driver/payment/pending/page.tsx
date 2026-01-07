@@ -1,7 +1,6 @@
+
 // src/app/driver/payment/pending/page.tsx
 'use client';
-
-export const dynamic = "force-dynamic";
 
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
