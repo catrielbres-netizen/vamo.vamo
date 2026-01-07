@@ -2,32 +2,27 @@
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 
-let app: App;
-let db: Firestore;
-
-// This service account is automatically provided by App Hosting.
-// In local dev, you need to provide the service account credentials.
-if (getApps().length === 0) {
-    // IMPORTANT: When running locally, set the GOOGLE_APPLICATION_CREDENTIALS
-    // environment variable to the path of your service account key file.
-    // The SDK will automatically pick it up.
-    // For App Hosting, this initialization is automatic.
-    try {
-        app = initializeApp();
-        db = getFirestore(app);
-    } catch(e) {
-        console.error("Firebase Admin SDK initialization failed.", e);
-        // Fallback or error handling for local dev without credentials
-        // @ts-ignore
-        app = null; 
-        // @ts-ignore
-        db = null;
+function initializeAdminApp() {
+    if (getApps().length > 0) {
+        return getApps()[0];
     }
-} else {
-    app = getApps()[0];
-    db = getFirestore(app);
+    
+    try {
+        // This service account is automatically provided by App Hosting.
+        // For local dev, set GOOGLE_APPLICATION_CREDENTIALS.
+        return initializeApp();
+    } catch (e) {
+        console.error("Firebase Admin SDK initialization failed.", e);
+        // This will cause db to be null and fail gracefully downstream
+        return null;
+    }
 }
 
+const app: App | null = initializeAdminApp();
+const db: Firestore | null = app ? getFirestore(app) : null;
+
 export const getFirebaseAdminApp = () => {
+    // This function now simply returns the initialized instances.
+    // The null check should be performed by the consumer.
     return { app, db };
 }

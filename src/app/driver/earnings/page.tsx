@@ -11,8 +11,6 @@ import { PaymentIntent } from '@/lib/types';
 import EarningsClientPage from './EarningsClientPage';
 import { getFirebaseAdminApp } from '@/lib/server/firebase-admin';
 
-// Initialize Firebase Admin SDK
-const { db } = getFirebaseAdminApp();
 
 // Configure Mercado Pago SDK
 // Ensure MERCADOPAGO_ACCESS_TOKEN is set in your environment variables
@@ -24,6 +22,12 @@ const client = new MercadoPagoConfig({
 async function createPreferenceAction(formData: FormData) {
     'use server';
 
+    const { db } = getFirebaseAdminApp();
+
+    if (!db) {
+        throw new Error('La conexión con la base de datos no está disponible. Verifique la configuración del servidor.');
+    }
+
     const rawAmount = formData.get('amount');
     const driverId = formData.get('driverId') as string;
     const amount = Number(rawAmount);
@@ -32,10 +36,6 @@ async function createPreferenceAction(formData: FormData) {
         throw new Error('Datos de pago inválidos.');
     }
     
-    if (!db) {
-        throw new Error('La conexión con la base de datos no está disponible. Verifique la configuración del servidor.');
-    }
-
     // --- PASO 1: Crear nuestro `payment_intent` interno ---
     const intentRef = db.collection("payment_intents").doc();
     const newIntent: Omit<PaymentIntent, 'id' | 'createdAt'> & { createdAt: FieldValue } = {

@@ -11,17 +11,17 @@ env:
     value: APP_USR-584788ff-bf06-4978-870e-538ca68983fb
   # Replace with your REAL Firebase project credentials
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: AIzaSy...REAL_API_KEY
+    value: AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: vamo-app-real.firebaseapp.com
+    value: studio-6697160840-7c67f.firebaseapp.com
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: vamo-app-real
+    value: studio-6697160840-7c67f
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: vamo-app-real.appspot.com
+    value: studio-6697160840-7c67f.appspot.com
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: "123456789012"
+    value: "6697160840"
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: 1:123456789012:web:REAL_APP_ID
+    value: 1:6697160840:web:968f9353ef69b35e05c192
 
 build:
   command: npm install && npm run build
