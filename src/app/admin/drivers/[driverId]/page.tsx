@@ -135,7 +135,7 @@ export default function DriverDetailPage() {
                 };
                 transaction.set(txLogRef, logEntry);
 
-                // Update the canonical balance
+                // Update driver's canonical balance
                 transaction.update(driverProfileRef, { 
                     updatedAt: serverTimestamp(),
                 });

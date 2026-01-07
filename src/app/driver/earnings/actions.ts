@@ -4,7 +4,7 @@
 import { getFirebaseAdminApp } from '@/lib/server/firebase-admin';
 import { redirect } from 'next/navigation';
 import { FieldValue } from 'firebase-admin/firestore';
-import { PaymentIntent } from '@/lib/types';
+import type { PaymentIntent } from '@/lib/types';
 
 
 export async function createPreferenceAction(formData: FormData) {
@@ -30,11 +30,11 @@ export async function createPreferenceAction(formData: FormData) {
     // 1. Create a payment intent in our database
     const paymentIntentRef = db.collection('payment_intents').doc();
     
-    const intent: Omit<PaymentIntent, 'createdAt' | 'id'> & { createdAt: FieldValue } = {
+    const intent: Omit<PaymentIntent, 'id'> = {
       driverId,
       amount,
-      status: 'pending' as PaymentIntent['status'],
-      provider: 'mercadopago' as const,
+      status: 'pending',
+      provider: 'mercadopago',
       createdAt: FieldValue.serverTimestamp(),
     };
     await paymentIntentRef.set(intent);
@@ -80,3 +80,4 @@ export async function createPreferenceAction(formData: FormData) {
         throw new Error('No se pudo obtener el punto de inicio de pago de Mercado Pago.');
     }
   }
+

@@ -1,32 +1,11 @@
-
 // src/app/driver/payment/success/page.tsx
-'use client';
-
-import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import { useEffect } from 'react';
+import Link from 'next/link';
 
-
+// This page is now a static Server Component.
 export default function PaymentSuccessPage() {
-    const router = useRouter();
-    const { toast } = useToast();
-
-    // Show a toast confirmation on this page as well
-    useEffect(() => {
-        toast({
-            title: '✅ ¡Pago Aprobado!',
-            description: 'Tu saldo se actualizará en breve.',
-        });
-    }, [toast]);
-
-
-    const handleGoToEarnings = () => {
-        router.push('/driver/earnings');
-    };
-
     return (
         <div className="container mx-auto max-w-md p-4 flex justify-center items-center min-h-screen">
             <Card className="w-full text-center border-green-500">
@@ -43,7 +22,9 @@ export default function PaymentSuccessPage() {
                     <p className="text-sm text-muted-foreground mb-4">
                         Tu saldo se actualizará en tu billetera en unos momentos.
                     </p>
-                    <Button onClick={handleGoToEarnings}>Volver a Mis Ganancias</Button>
+                     <Button asChild>
+                        <Link href="/driver/earnings">Volver a Mis Ganancias</Link>
+                    </Button>
                 </CardContent>
             </Card>
         </div>

@@ -1,29 +1,11 @@
-
 // src/app/driver/payment/pending/page.tsx
-'use client';
-
-import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import { useEffect } from 'react';
+import Link from 'next/link';
 
+// This page is now a static Server Component.
 export default function PaymentPendingPage() {
-    const router = useRouter();
-    const { toast } = useToast();
-
-    useEffect(() => {
-        toast({
-            title: '⏳ Pago Pendiente',
-            description: 'Tu pago está siendo procesado por Mercado Pago.',
-        });
-    }, [toast]);
-
-    const handleGoToEarnings = () => {
-        router.push('/driver/earnings');
-    };
-
     return (
         <div className="container mx-auto max-w-md p-4 flex justify-center items-center min-h-screen">
             <Card className="w-full text-center border-blue-500">
@@ -40,8 +22,8 @@ export default function PaymentPendingPage() {
                     <p className="text-sm text-muted-foreground mb-4">
                         Generalmente, esto se aprueba en instantes. Te notificaremos cuando se acredite. Podés cerrar esta ventana.
                     </p>
-                    <Button onClick={handleGoToEarnings} variant="outline">
-                        Volver a Mis Ganancias
+                    <Button asChild variant="outline">
+                         <Link href="/driver/earnings">Volver a Mis Ganancias</Link>
                     </Button>
                 </CardContent>
             </Card>
