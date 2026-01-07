@@ -1,7 +1,5 @@
 
-// PASO CRÍTICO: Reemplaza todo este objeto con el NUEVO `firebaseConfig`
-// que generaste en la consola de Firebase después de rehacer tu Web App.
-// Asegúrate de que el `projectId` sea "vamo-app-real".
+// src/firebase/config.ts
 
 export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,

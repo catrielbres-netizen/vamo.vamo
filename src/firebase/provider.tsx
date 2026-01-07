@@ -1,14 +1,13 @@
-
 'use client';
 
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
-import { FirebaseApp } from 'firebase/app';
-import { Firestore, doc } from 'firebase/firestore';
-import { Auth, User, onAuthStateChanged } from 'firebase/auth';
-import { Messaging } from 'firebase/messaging';
+import { type FirebaseApp } from 'firebase/app';
+import { type Firestore, doc } from 'firebase/firestore';
+import { type Auth, type User, onAuthStateChanged } from 'firebase/auth';
+import { type Messaging } from 'firebase/messaging';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
 import { useDoc } from './firestore/use-doc';
-import { UserProfile } from '@/lib/types';
+import { type UserProfile } from '@/lib/types';
 import { useMemoFirebase } from '@/firebase';
 
 
@@ -58,12 +57,14 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       setUser(firebaseUser);
       setIsAuthLoading(false);
     });
+    
     // Ensure that loading state is updated even if onAuthStateChanged doesn't fire
     // on initial load (e.g. from cache).
     if (auth.currentUser) {
         setUser(auth.currentUser);
         setIsAuthLoading(false);
     }
+    
     return () => unsubscribe();
   }, [auth]);
 
