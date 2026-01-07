@@ -1,5 +1,5 @@
-
 // src/app/not-found.tsx
+'use client';
 export const dynamic = 'force-dynamic';
 
 import Link from "next/link";
