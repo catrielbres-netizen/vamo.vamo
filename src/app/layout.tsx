@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { Providers } from './providers';
 import { Inter } from 'next/font/google'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'VamO - Tu Viaje, a Tu Manera',
@@ -27,8 +27,8 @@ export default function RootLayout({
       </head>
       <body
         className={cn(
-          'min-h-screen bg-background font-sans antialiased dark',
-          inter.variable
+          'min-h-screen bg-background font-sans antialiased',
+          inter.className
         )}
       >
         <Providers>

@@ -1,4 +1,3 @@
-
 // src/app/api/webhooks/mercadopago/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { MercadoPagoConfig, Payment } from "mercadopago";
@@ -6,8 +5,9 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getFirebaseAdminApp } from "@/lib/server/firebase-admin";
 import { PlatformTransaction, PaymentIntent } from "@/lib/types";
 
-// Force Node.js runtime for App Hosting compatibility with server-side SDKs
+// Force Node.js runtime and dynamic rendering to prevent build-time errors
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   // Initialize SDKs and configurations *inside* the handler
