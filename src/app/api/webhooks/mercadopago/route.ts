@@ -1,6 +1,5 @@
 // src/app/api/webhooks/mercadopago/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { MercadoPagoConfig, Payment } from "mercadopago";
 import { FieldValue } from 'firebase-admin/firestore';
 import { getFirebaseAdminApp } from "@/lib/server/firebase-admin";
 import { PlatformTransaction, PaymentIntent } from "@/lib/types";
@@ -10,7 +9,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  // Initialize SDKs and configurations *inside* the handler
+  // Initialize SDKs and configurations *inside* the handler for robustness
+  const { MercadoPagoConfig, Payment } = await import("mercadopago");
   const { db } = getFirebaseAdminApp();
   
   if (!db) {

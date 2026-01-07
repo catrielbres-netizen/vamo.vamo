@@ -1,6 +1,8 @@
 // src/lib/types.ts
 
-import { type Timestamp, type FieldValue } from "firebase/firestore";
+// Tipos agnósticos para evitar conflictos de build entre client y admin SDK.
+export type FirestoreTimestamp = any;
+export type FirestoreFieldValue = any;
 
 export type ServiceType = "premium" | "privado" | "express";
 
@@ -50,8 +52,8 @@ export interface PaymentIntent {
   mpPreferenceId?: string;
   mpPaymentId?: string | null;
   note?: string;
-  createdAt: Timestamp | FieldValue;
-  updatedAt?: Timestamp | FieldValue;
+  createdAt: FirestoreTimestamp | FirestoreFieldValue;
+  updatedAt?: FirestoreTimestamp | FirestoreFieldValue;
 }
 
 
@@ -59,7 +61,7 @@ export interface PlatformTransaction {
   driverId: string;
   amount: number; // Positive for credit, negative for debit
   type: PlatformTransactionType;
-  createdAt: Timestamp | FieldValue;
+  createdAt: FirestoreTimestamp | FirestoreFieldValue;
   source: "system" | "admin" | "ride_finish" | "mp_topup"; // Expanded source
   referenceId?: string; // ID of the ride, payment, etc.
   note?: string; // Motivo del ajuste manual, etc.
@@ -77,7 +79,7 @@ export interface CompletedRide {
     durationSeconds: number;
     waitingSeconds: number;
     totalPrice: number;
-    finishedAt: Timestamp | FieldValue;
+    finishedAt: FirestoreTimestamp | FirestoreFieldValue;
 }
 
 export interface Ride {
@@ -106,9 +108,9 @@ export interface Ride {
     extraCost?: number; // Cost from reroutes
   };
   status: RideStatus;
-  createdAt: Timestamp | FieldValue;
-  updatedAt: Timestamp | FieldValue;
-  finishedAt?: Timestamp | FieldValue | null;
+  createdAt: FirestoreTimestamp | FirestoreFieldValue;
+  updatedAt: FirestoreTimestamp | FirestoreFieldValue;
+  finishedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
   driverId?: string | null;
   driverName?: string | null;
   driverLocation?: { lat: number; lng: number; } | null;
@@ -116,10 +118,10 @@ export interface Ride {
     distanceMeters: number;
     durationSeconds: number;
   } | null;
-  pauseStartedAt?: Timestamp | FieldValue | null;
+  pauseStartedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
   pauseHistory?: {
-    started: Timestamp;
-    ended: Timestamp;
+    started: FirestoreTimestamp;
+    ended: FirestoreTimestamp;
     duration: number; // in seconds
   }[];
   rerouteHistory?: {
@@ -128,7 +130,7 @@ export interface Ride {
     cost: number;
     distanceMeters: number;
     timeMinutes: number;
-    createdAt: FieldValue;
+    createdAt: FirestoreFieldValue;
   }[];
   passengerRating?: number | null;
   driverRating?: number | null;
@@ -141,7 +143,7 @@ export interface Ride {
   // --- New fields for dispatch queue ---
   candidates: string[]; // Array of driver UIDs
   currentCandidateIndex: number;
-  expiresAt?: Timestamp | FieldValue | null;
+  expiresAt?: FirestoreTimestamp | FirestoreFieldValue | null;
 }
 
 export type UserProfile = {
@@ -184,7 +186,7 @@ export interface DriverSummary {
     commissionRate: number;
     bonusesApplied: number;
     status: 'pending' | 'paid';
-    updatedAt: Timestamp;
+    updatedAt: FirestoreTimestamp;
 }
 
 export interface AuditLog {
@@ -192,6 +194,6 @@ export interface AuditLog {
     adminName: string;
     action: AuditLogAction;
     entityId: string; // ID of the ride, driver, etc.
-    timestamp: Timestamp;
+    timestamp: FirestoreTimestamp;
     details?: string | null;
 }

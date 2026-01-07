@@ -2,7 +2,6 @@
 'use server';
 
 import { getFirebaseAdminApp } from '@/lib/server/firebase-admin';
-import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { redirect } from 'next/navigation';
 import { FieldValue } from 'firebase-admin/firestore';
 import { PaymentIntent } from '@/lib/types';
@@ -16,6 +15,9 @@ export async function createPreferenceAction(formData: FormData) {
       throw new Error('Monto y ID de conductor son requeridos.');
     }
     
+    // Dynamically import mercadopago inside the function
+    const { MercadoPagoConfig, Preference } = await import('mercadopago');
+
     const { db } = getFirebaseAdminApp();
     const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -27,11 +29,12 @@ export async function createPreferenceAction(formData: FormData) {
 
     // 1. Create a payment intent in our database
     const paymentIntentRef = db.collection('payment_intents').doc();
-    const intent: Omit<PaymentIntent, 'createdAt'> & { createdAt: FieldValue } = {
+    
+    const intent: Omit<PaymentIntent, 'createdAt' | 'id'> & { createdAt: FieldValue } = {
       driverId,
       amount,
-      status: 'pending',
-      provider: 'mercadopago',
+      status: 'pending' as PaymentIntent['status'],
+      provider: 'mercadopago' as const,
       createdAt: FieldValue.serverTimestamp(),
     };
     await paymentIntentRef.set(intent);
