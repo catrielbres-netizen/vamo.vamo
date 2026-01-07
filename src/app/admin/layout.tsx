@@ -1,6 +1,4 @@
-
 // src/app/admin/layout.tsx
-'use client';
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +11,11 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import Providers from '../providers'
 
+
+// This is the Client Component that handles auth logic
 function AdminAuthWrapper({ children }: { children: React.ReactNode }) {
+  'use client';
+  
   const { profile, loading } = useUser()
   const router = useRouter()
   
@@ -51,6 +53,7 @@ function AdminAuthWrapper({ children }: { children: React.ReactNode }) {
   )
 }
 
+// This is the Layout, a Server Component
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <Providers>

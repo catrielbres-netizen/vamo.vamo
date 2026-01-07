@@ -1,6 +1,4 @@
-
 // src/app/login/page.tsx
-'use client';
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +19,8 @@ import Providers from '../providers';
 
 
 function LoginPageContent() {
+    'use client';
+    
     const auth = useAuth();
     const firestore = useFirestore();
     const router = useRouter();

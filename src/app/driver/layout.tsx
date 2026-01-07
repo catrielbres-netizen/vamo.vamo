@@ -1,8 +1,5 @@
-
 // src/app/driver/layout.tsx
-'use client';
 
-// 🔒 IMPIDE PRERENDER Y STATIC BUILD
 export const dynamic = "force-dynamic";
 
 import { VamoIcon } from '@/components/VamoIcon';
@@ -18,6 +15,8 @@ import Providers from '../providers';
 
 
 function DriverAuthWrapper({ children }: { children: React.ReactNode }) {
+  'use client';
+
   const router = useRouter();
   const pathname = usePathname();
   const { profile, user, loading: userLoading } = useUser();

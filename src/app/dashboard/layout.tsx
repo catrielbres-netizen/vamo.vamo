@@ -1,6 +1,4 @@
-
 // src/app/dashboard/layout.tsx
-'use client';
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +14,8 @@ import { PassengerHeader } from '@/components/PassengerHeader';
 import Providers from '../providers';
 
 function DashboardAuthWrapper({ children }: { children: React.ReactNode }) {
+  'use client';
+
   const router = useRouter();
   const pathname = usePathname();
   const { profile, user, loading: userLoading } = useUser();

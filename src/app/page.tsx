@@ -1,6 +1,4 @@
-
 // src/app/page.tsx
-'use client';
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +8,10 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { useUser } from '@/firebase';
 import Providers from './providers';
 
+// This is the Client Component that contains all the client-side logic and hooks.
 function HomePageContent() {
+  'use client';
+  
   const router = useRouter();
   const { user, profile, loading } = useUser();
 
@@ -24,7 +25,7 @@ function HomePageContent() {
         // User has a profile, redirect based on role
         switch (profile.role) {
           case 'admin':
-            router.replace('/admin/dashboard');
+            router.replace('/admin');
             break;
           case 'driver':
             router.replace('/driver');
@@ -35,13 +36,8 @@ function HomePageContent() {
             router.replace('/dashboard');
             break;
         }
-      } else {
-        // This is a crucial state: user is authenticated but has no profile data yet.
-        // This might happen for a moment after sign-up. 
-        // We stay on the loading screen and let the next state change handle it.
-        // If it persists, it could indicate an error during profile creation.
-        // For now, we do nothing and wait for the 'profile' to be populated.
       }
+      // If user exists but profile is still loading, do nothing and wait for the next render.
     } else {
       // No user is authenticated, redirect to the login page
       router.replace('/login');
@@ -59,10 +55,12 @@ function HomePageContent() {
   );
 }
 
+
+// This is the Server Component entry point for the page.
 export default function Home() {
-    return (
-        <Providers>
-            <HomePageContent />
-        </Providers>
-    )
+  return (
+    <Providers>
+      <HomePageContent />
+    </Providers>
+  );
 }
