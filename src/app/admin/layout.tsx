@@ -1,5 +1,7 @@
-
+// src/app/admin/layout.tsx
 'use client'
+
+export const dynamic = "force-dynamic";
 
 import { AdminNavbar } from './components/AdminNavbar'
 import { usePathname } from 'next/navigation'

@@ -1,6 +1,5 @@
-
 'use client';
-import { useState, useTransition, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { Card, CardContent, CardHeader, CardFooter, CardDescription, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -18,6 +17,7 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Separator } from '@/components/ui/separator';
 // Import the Server Action directly into the Client Component
 import { createPreferenceAction } from './actions';
+import { useFormStatus } from 'react-dom';
 
 function formatCurrency(value: number) {
     if (typeof value !== 'number' || isNaN(value)) return '$...';
@@ -110,6 +110,16 @@ const TransactionHistory = ({ driverId }: { driverId: string }) => {
     )
 }
 
+function SubmitButton({ selectedAmount }: { selectedAmount: string }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" disabled={!selectedAmount || pending}>
+      {pending ? 'Procesando...' : `Pagar ${formatCurrency(Number(selectedAmount))}`}
+    </Button>
+  );
+}
+
 export default function EarningsClientPage() {
     const { user, loading: isLoading } = useUser();
     const router = useRouter();
@@ -117,8 +127,8 @@ export default function EarningsClientPage() {
     const searchParams = useSearchParams();
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [selectedAmount, setSelectedAmount] = useState<string | undefined>("5000");
-    const [isPending, startTransition] = useTransition();
+    const [selectedAmount, setSelectedAmount] = useState<string>("5000");
+
 
     useEffect(() => {
         const mpStatus = searchParams.get('mp_status');
@@ -145,29 +155,6 @@ export default function EarningsClientPage() {
         }
     }, [searchParams, router, toast]);
 
-
-    const handleFormAction = async () => {
-        if (!selectedAmount || !user?.uid) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Por favor, seleccioná un monto.' });
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append('amount', selectedAmount);
-        formData.append('driverId', user.uid);
-        
-        startTransition(async () => {
-            try {
-                await createPreferenceAction(formData);
-                // La redirección a MP ocurre en la Server Action
-            } catch (error: any) {
-                toast({ variant: 'destructive', title: 'Error al crear pago', description: error.message });
-            }
-        });
-
-        setIsDialogOpen(false);
-    };
-    
     if (isLoading || !user) {
         return <p className="text-center">Cargando panel financiero...</p>;
     }
@@ -183,8 +170,9 @@ export default function EarningsClientPage() {
                         Seleccioná el monto que querés cargar. Serás redirigido a Mercado Pago para completar la transacción de forma segura.
                     </DialogDescription>
                 </DialogHeader>
-                    <form>
-                    <RadioGroup value={selectedAmount} onValueChange={setSelectedAmount} className="grid gap-4 my-4">
+                <form action={createPreferenceAction}>
+                    <input type="hidden" name="driverId" value={user.uid} />
+                    <RadioGroup name="amount" value={selectedAmount} onValueChange={setSelectedAmount} className="grid gap-4 my-4">
                         {TOPUP_AMOUNTS.map(amount => (
                             <Label key={amount} htmlFor={`amount-${amount}`} className="flex items-center justify-between p-4 rounded-lg border has-[:checked]:border-primary cursor-pointer">
                                 <span className="font-semibold text-lg">{formatCurrency(amount)}</span>
@@ -192,13 +180,11 @@ export default function EarningsClientPage() {
                             </Label>
                         ))}
                     </RadioGroup>
+                     <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsDialogOpen(false)} type="button">Cancelar</Button>
+                        <SubmitButton selectedAmount={selectedAmount} />
+                    </DialogFooter>
                 </form>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                    <Button onClick={handleFormAction} disabled={!selectedAmount || isPending}>
-                        {isPending ? 'Procesando...' : `Pagar ${formatCurrency(Number(selectedAmount))}`}
-                    </Button>
-                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

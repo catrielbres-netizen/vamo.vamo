@@ -2,7 +2,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from 'firebase-admin/firestore';
 import { getFirebaseAdminApp } from "@/lib/server/firebase-admin";
-import { PlatformTransaction, PaymentIntent } from "@/lib/types";
+
+// Define local types to avoid importing from @/lib/types and causing build issues
+interface LocalPaymentIntent {
+  driverId: string;
+  amount: number;
+  status: string;
+}
+
+interface LocalPlatformTransaction {
+  driverId: string;
+  amount: number;
+  type: string;
+  source: string;
+  referenceId: string;
+  note: string;
+  createdAt: FieldValue;
+}
+
 
 // Force Node.js runtime and dynamic rendering to prevent build-time errors
 export const runtime = "nodejs";
@@ -61,7 +78,7 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      const intent = intentSnap.data() as PaymentIntent;
+      const intent = intentSnap.data() as LocalPaymentIntent;
 
       if (intent.status === "credited") {
         console.log(`Webhook Info: PaymentIntent ${paymentIntentId} already credited. Ignoring.`);
@@ -79,7 +96,7 @@ export async function POST(req: NextRequest) {
       }
 
       const txLogRef = db.collection("platform_transactions").doc();
-      const logEntry: Omit<PlatformTransaction, 'createdAt'> & { createdAt: FieldValue } = {
+      const logEntry: LocalPlatformTransaction = {
         driverId: intent.driverId,
         amount: intent.amount,
         type: "credit_payment",
