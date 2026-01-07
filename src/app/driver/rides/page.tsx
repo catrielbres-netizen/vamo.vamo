@@ -263,10 +263,6 @@ export default function DriverRidesPage() {
     };
   }, [firestore, user?.uid, toast]);
 
-
-  const handleAcceptRide = () => {
-    setLastFinishedRide(null);
-  };
   
   const handleFinishRide = (finishedRide: WithId<Ride>) => {
     setActiveRide(null);
@@ -365,7 +361,6 @@ export default function DriverRidesPage() {
                         <DriverRideCard
                             key={offeredRide.id}
                             ride={offeredRide}
-                            onAccept={handleAcceptRide}
                         />
                     ) : (
                         <p className="text-center text-muted-foreground pt-8">No hay viajes ofrecidos en este momento. Mantené la app abierta.</p>

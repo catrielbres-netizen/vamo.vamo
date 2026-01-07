@@ -36,10 +36,8 @@ const formatDuration = (seconds: number) => {
 
 export default function DriverRideCard({
   ride,
-  onAccept,
 }: {
   ride: Ride & { id: string };
-  onAccept: () => void;
 }) {
   const firestore = useFirestore();
   const { user, profile } = useUser();
@@ -93,7 +91,7 @@ export default function DriverRideCard({
                 updatedAt: serverTimestamp(),
             });
             toast({ title: "¡Viaje Aceptado!" });
-            onAccept();
+            // The onAccept prop is no longer needed here, as the page will react to the Firestore update.
         }
     );
   };
