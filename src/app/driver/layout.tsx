@@ -1,7 +1,8 @@
 // src/app/driver/layout.tsx
-'use client';
-
+// 🔒 IMPIDE PRERENDER Y STATIC BUILD
 export const dynamic = "force-dynamic";
+
+'use client';
 
 import { VamoIcon } from '@/components/VamoIcon';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';

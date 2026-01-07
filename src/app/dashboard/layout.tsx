@@ -1,3 +1,4 @@
+
 // src/app/dashboard/layout.tsx
 'use client';
 
@@ -106,9 +107,7 @@ export default function DashboardLayout({
 }) {
   return (
     <Providers>
-      <DashboardAuthWrapper>
-        {children}
-      </DashboardAuthWrapper>
+      <DashboardAuthWrapper>{children}</DashboardAuthWrapper>
     </Providers>
   )
 }
