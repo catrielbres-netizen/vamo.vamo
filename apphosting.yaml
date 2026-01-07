@@ -2,26 +2,29 @@
 runtime: nodejs20
 
 env:
-  - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    value: AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA
   # Replace with your REAL VAPID Key from the new Firebase Project
   - variable: NEXT_PUBLIC_FCM_VAPID_KEY
-    value: YOUR_REAL_VAPID_KEY
-  - variable: NEXT_PUBLIC_MP_PUBLIC_KEY
-    value: APP_USR-584788ff-bf06-4978-870e-538ca68983fb
+    value: "YOUR_REAL_VAPID_KEY"
   # Replace with your REAL Firebase project credentials
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA
+    value: "AIzaSy...REAL_API_KEY"
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: studio-6697160840-7c67f.firebaseapp.com
+    value: "vamo-app-real.firebaseapp.com"
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: studio-6697160840-7c67f
+    value: "vamo-app-real"
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: studio-6697160840-7c67f.appspot.com
+    value: "vamo-app-real.appspot.com"
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: "6697160840"
+    value: "YOUR_REAL_MESSAGING_SENDER_ID"
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: 1:6697160840:web:968f9353ef69b35e05c192
+    value: "YOUR_REAL_APP_ID"
+  # Set the MercadoPago Access Token here
+  - variable: MERCADOPAGO_ACCESS_TOKEN
+    value: "YOUR_REAL_MP_ACCESS_TOKEN"
+  # Set the base URL for the app
+  - variable: NEXT_PUBLIC_APP_URL
+    value: "https://<your-app-url>"
+
 
 build:
   command: npm install && npm run build

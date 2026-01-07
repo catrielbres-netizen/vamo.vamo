@@ -1,47 +1,42 @@
 
-importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
+// /public/firebase-messaging-sw.js
 
-// IMPORTANT: Replace with your REAL Firebase project credentials
+// IMPORTANT: Do not add this file to .gitignore
+// This file needs to be publicly accessible at the root of your domain.
+
+// Give the service worker access to Firebase Messaging.
+// Note that you can only use Firebase Messaging here, other Firebase services
+// are not available in the service worker.
+importScripts('https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js');
+
+// Initialize the Firebase app in the service worker with your project's credentials
+// CRITICAL: Replace these with your REAL project's config
 const firebaseConfig = {
-  "projectId": "vamo-app-real",
-  "appId": "1:123456789012:web:REAL_APP_ID",
-  "apiKey": "AIzaSy...REAL_API_KEY",
-  "authDomain": "vamo-app-real.firebaseapp.com",
-  "storageBucket": "vamo-app-real.appspot.com",
-  "messagingSenderId": "123456789012"
+  apiKey: "AIzaSy...REAL_API_KEY",
+  authDomain: "vamo-app-real.firebaseapp.com",
+  projectId: "vamo-app-real",
+  storageBucket: "vamo-app-real.appspot.com",
+  messagingSenderId: "YOUR_REAL_MESSAGING_SENDER_ID",
+  appId: "YOUR_REAL_APP_ID",
 };
+
 
 firebase.initializeApp(firebaseConfig);
 
+// Retrieve an instance of Firebase Messaging so that it can handle background
+// messages.
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage(function(payload) {
+messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
-
-  const notificationTitle = payload.notification?.title || 'VamO';
+  // Customize notification here
+  const notificationTitle = payload.notification.title;
   const notificationOptions = {
-    body: payload.notification?.body || '',
-    icon: '/icons/favicon-32x32.png',
-    data: payload.data,
+    body: payload.notification.body,
+    icon: '/icons/favicon-32x32.png' // Or your preferred icon
   };
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
-});
-
-self.addEventListener('notificationclick', function(event) {
-  event.notification.close();
-  const urlToOpen = event.notification.data?.url || '/driver/rides';
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-      for (let client of windowClients) {
-        if (client.url.endsWith(urlToOpen) && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
-      }
-    })
-  );
+  self.registration.showNotification(notificationTitle,
+    notificationOptions);
 });
