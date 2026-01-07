@@ -3,7 +3,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useFirestore, useDoc, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, writeBatch, runTransaction, FieldValue, increment } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, doc, updateDoc, addDoc, writeBatch, runTransaction, increment, serverTimestamp } from 'firebase/firestore';
 import { Ride, DriverSummary, UserProfile, AuditLog, PlatformTransaction } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { getWeek, getYear, startOfWeek } from 'date-fns';
@@ -122,7 +122,7 @@ export default function DriverDetailPage() {
 
                 // Create ledger entry
                 const txLogRef = doc(collection(firestore, 'platform_transactions'));
-                const logEntry: Omit<PlatformTransaction, 'createdAt'> & { createdAt: FieldValue } = {
+                const logEntry: Omit<PlatformTransaction, 'createdAt'> & { createdAt: any } = {
                     driverId: driverId,
                     amount: amount,
                     type: amount > 0 ? 'credit_manual' : 'debit_adjustment',
@@ -266,7 +266,7 @@ export default function DriverDetailPage() {
             });
 
             const auditLogRef = doc(collection(firestore, 'auditLogs'));
-            const logEntry: Omit<AuditLog, 'timestamp' | 'details'| 'id'> & { timestamp: FieldValue; details: string; } = {
+            const logEntry: Omit<AuditLog, 'timestamp' | 'details'| 'id'> & { timestamp: any; details: string; } = {
                 adminId: user.uid,
                 adminName: adminProfile.name,
                 action: suspend ? 'driver_suspended' : 'driver_unsuspended',
