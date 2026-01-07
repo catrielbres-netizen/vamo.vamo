@@ -17,9 +17,10 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { Separator } from '@/components/ui/separator';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import Providers from '../providers';
 
 
-export default function LoginPage() {
+function LoginPageContent() {
     const auth = useAuth();
     const firestore = useFirestore();
     const router = useRouter();
@@ -162,4 +163,12 @@ export default function LoginPage() {
             </Card>
         </main>
     );
+}
+
+export default function LoginPage() {
+    return (
+        <Providers>
+            <LoginPageContent />
+        </Providers>
+    )
 }

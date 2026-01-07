@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import { cn } from '@/lib/utils';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
-import Providers from './providers';
 import { Inter } from 'next/font/google'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -31,12 +30,10 @@ export default function RootLayout({
           inter.className
         )}
       >
-        <Providers>
-            <div className="relative flex min-h-screen flex-col">
-              <main className="flex-1">{children}</main>
-            </div>
-            <Toaster />
-        </Providers>
+        <div className="relative flex min-h-screen flex-col">
+          <main className="flex-1">{children}</main>
+        </div>
+        <Toaster />
       </body>
     </html>
   );

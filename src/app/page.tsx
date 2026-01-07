@@ -8,8 +8,9 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { VamoIcon } from '@/components/VamoIcon';
 import { useUser } from '@/firebase';
+import Providers from './providers';
 
-export default function Home() {
+function HomePageContent() {
   const router = useRouter();
   const { user, profile, loading } = useUser();
 
@@ -56,4 +57,12 @@ export default function Home() {
       </div>
     </div>
   );
+}
+
+export default function Home() {
+    return (
+        <Providers>
+            <HomePageContent />
+        </Providers>
+    )
 }
