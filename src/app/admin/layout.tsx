@@ -8,16 +8,15 @@ import { useUser } from '@/firebase'
 import { VamoIcon } from '@/components/VamoIcon'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
+import Providers from '../providers'
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+function AdminAuthWrapper({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useUser()
   const router = useRouter()
-  const pathname = usePathname()
   
   const authStatus = requireAdmin(profile, loading)
 
   useEffect(() => {
-    // Si no está autorizado y no es la página de crear admin (que es pública si no hay admins)
     if (authStatus === 'unauthorized') {
         router.replace('/login')
     }
@@ -34,7 +33,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
   
   if (authStatus === 'unauthorized') {
-      // Este estado se ve brevemente antes de que el useEffect redirija.
       return (
         <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
             <p className="mt-4 text-muted-foreground">Redirigiendo...</p>
@@ -42,11 +40,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     )
   }
 
-  // Si está autorizado, muestra el layout de admin completo
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
        <AdminNavbar />
        <main className="flex-1 p-6">{children}</main>
     </div>
+  )
+}
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Providers>
+      <AdminAuthWrapper>{children}</AdminAuthWrapper>
+    </Providers>
   )
 }

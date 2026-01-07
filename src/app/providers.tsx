@@ -3,7 +3,7 @@
 
 import { FirebaseClientProvider } from '@/firebase';
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({ children }: { children: React.ReactNode }) {
   return (
       <FirebaseClientProvider>
         {children}

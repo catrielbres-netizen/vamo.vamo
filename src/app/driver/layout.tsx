@@ -9,25 +9,17 @@ import { collection, query, where, limit } from 'firebase/firestore';
 import { Ride } from '@/lib/types';
 import { MapsProvider } from '@/components/MapsProvider';
 import { useFCM } from '@/hooks/useFCM';
-import { useToast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
+import Providers from '../providers';
 
 
-export default function DriverLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function DriverAuthWrapper({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { profile, user, loading: userLoading } = useUser();
   const firestore = useFirestore();
   
-  // Initialize FCM hook at the layout level to ensure it's always active
   useFCM(); 
 
-
-  // Query to find any active ride for the current driver
   const activeRideQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
@@ -45,15 +37,13 @@ export default function DriverLayout({
 
 
   useEffect(() => {
-    if (loading) return; // Don't do anything while loading
+    if (loading) return;
 
     if (!profile) {
-      // If there's no profile, something is wrong, maybe send to login
       router.replace('/login');
       return;
     }
     
-    // If the profile is not completed and they are not on the completion pages, redirect them.
     if (!profile.profileCompleted && !pathname.startsWith('/driver/complete-profile')) {
       router.replace('/driver/complete-profile');
     }
@@ -110,4 +100,16 @@ export default function DriverLayout({
         </div>
       </MapsProvider>
   );
+}
+
+export default function DriverLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Providers>
+      <DriverAuthWrapper>{children}</DriverAuthWrapper>
+    </Providers>
+  )
 }

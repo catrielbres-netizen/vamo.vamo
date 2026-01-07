@@ -9,18 +9,14 @@ import { collection, query, where, limit } from 'firebase/firestore';
 import { Ride } from '@/lib/types';
 import { MapsProvider } from '@/components/MapsProvider';
 import { PassengerHeader } from '@/components/PassengerHeader';
+import Providers from '../providers';
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function DashboardAuthWrapper({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { profile, user, loading: userLoading } = useUser();
   const firestore = useFirestore();
 
-  // Query to find any active ride for the current passenger
   const activeRideQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
@@ -97,4 +93,19 @@ export default function DashboardLayout({
         </div>
     </MapsProvider>
   );
+}
+
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Providers>
+      <DashboardAuthWrapper>
+        {children}
+      </DashboardAuthWrapper>
+    </Providers>
+  )
 }

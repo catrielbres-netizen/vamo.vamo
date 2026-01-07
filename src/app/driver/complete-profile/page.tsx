@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 import { useState } from 'react';
 import { useAuth, useFirestore, useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -73,7 +73,7 @@ export default function CompleteDriverProfilePage() {
                 carModelYear: parseInt(carModelYear, 10),
                 profileCompleted: true,
                 vehicleVerificationStatus: 'pending_review', // Move to pending after submitting info
-                updatedAt: new Date(),
+                updatedAt: serverTimestamp(),
             });
 
             toast({
