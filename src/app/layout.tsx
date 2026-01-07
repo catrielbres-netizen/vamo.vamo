@@ -4,6 +4,8 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { Inter } from 'next/font/google'
 
+export const dynamic = 'force-dynamic';
+
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
