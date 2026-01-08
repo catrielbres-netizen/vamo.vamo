@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -7,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { DialogFooter } from '@/components/ui/dialog';
 import { createPreferenceAction } from './actions';
+import { VamoIcon } from '@/components/VamoIcon';
 
 function formatCurrency(value: number) {
     if (typeof value !== 'number' || isNaN(value)) return '$...';
@@ -23,6 +25,7 @@ function SubmitButton({ selectedAmount }: { selectedAmount: string }) {
 
   return (
     <Button type="submit" disabled={!selectedAmount || pending}>
+      {pending ? <VamoIcon name="loader" className="animate-spin" /> : null}
       {pending ? 'Procesando...' : `Pagar ${formatCurrency(Number(selectedAmount))}`}
     </Button>
   );
