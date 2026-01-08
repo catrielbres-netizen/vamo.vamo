@@ -1,5 +1,6 @@
 // src/app/dashboard/ride/page.tsx
 'use client';
+export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';

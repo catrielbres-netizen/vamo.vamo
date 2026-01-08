@@ -1,5 +1,6 @@
 // src/app/dashboard/info/page.tsx
 'use client';
+export const dynamic = 'force-dynamic';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { VamoIcon } from '@/components/VamoIcon';
