@@ -38,18 +38,18 @@ function DashboardAuthWrapper({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return; 
 
-    if (!profile) {
+    if (!user) {
       router.replace('/login');
       return;
     }
     
-    if (!profile.profileCompleted && !pathname.startsWith('/dashboard/complete-profile')) {
+    if (profile && !profile.profileCompleted && !pathname.startsWith('/dashboard/complete-profile')) {
       router.replace('/dashboard/complete-profile');
     }
     
-  }, [profile, loading, pathname, router]);
+  }, [profile, user, loading, pathname, router]);
 
-  if (loading || (!profile?.profileCompleted && !pathname.startsWith('/dashboard/complete-profile'))) {
+  if (loading || (profile && !profile.profileCompleted && !pathname.startsWith('/dashboard/complete-profile'))) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
         <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />

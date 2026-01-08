@@ -40,21 +40,23 @@ function DriverAuthWrapper({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
 
-    if (!profile) {
+    if (!user) {
       router.replace('/login');
       return;
     }
     
-    if (profile.role !== 'driver') {
-        router.replace('/dashboard'); // Redirect non-drivers away
-        return;
-    }
+    if (profile) {
+        if (profile.role !== 'driver') {
+            router.replace('/dashboard'); // Redirect non-drivers away
+            return;
+        }
 
-    if (!profile.profileCompleted && !pathname.startsWith('/driver/complete-profile')) {
-      router.replace('/driver/complete-profile');
+        if (!profile.profileCompleted && !pathname.startsWith('/driver/complete-profile')) {
+          router.replace('/driver/complete-profile');
+        }
     }
     
-  }, [profile, loading, pathname, router]);
+  }, [profile, user, loading, pathname, router]);
 
   if (loading || (profile && !profile.profileCompleted && !pathname.startsWith('/driver/complete-profile'))) {
     return (
