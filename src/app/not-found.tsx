@@ -1,6 +1,6 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
-// src/app/not-found.tsx
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 

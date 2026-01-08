@@ -1,5 +1,4 @@
 'use client';
-
 export const dynamic = 'force-dynamic';
 
 import { VamoIcon } from '@/components/VamoIcon';

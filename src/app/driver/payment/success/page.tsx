@@ -1,4 +1,4 @@
-// src/app/driver/payment/success/page.tsx
+'use client';
 export const dynamic = 'force-dynamic';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { VamoIcon } from '@/components/VamoIcon';
