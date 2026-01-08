@@ -1,4 +1,3 @@
-// src/app/admin/layout.tsx
 'use client';
 
 import { AdminNavbar } from './components/AdminNavbar';
@@ -12,15 +11,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return; // Espera a que termine la carga
+    if (loading) return; // Wait for the session to load
 
+    // If loading is finished and there's no profile or the role is not admin, redirect
     if (!profile || profile.role !== 'admin') {
       router.replace('/login');
     }
   }, [loading, profile, router]);
 
-  // Mientras carga o si el perfil no es de admin, no renderiza nada para evitar flashes de contenido.
-  // El useEffect se encargará de la redirección.
+  // While loading, or if the profile is not yet available or invalid, show a loading screen
   if (loading || !profile || profile.role !== 'admin') {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
@@ -30,6 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
+  // Once authorized, render the layout
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
       <AdminNavbar />

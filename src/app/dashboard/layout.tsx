@@ -1,4 +1,3 @@
-// src/app/dashboard/layout.tsx
 'use client';
 
 import { VamoIcon } from '@/components/VamoIcon';
@@ -44,7 +43,7 @@ export default function DashboardLayout({
     }
     
     if (profile && profile.role !== 'passenger' && profile.role !== undefined) {
-        router.replace('/'); // Si no es pasajero (y tiene rol), lo mandamos a la raíz para que redirija
+        router.replace('/'); // If not a passenger (and has a role), send to root to redirect
         return;
     }
 

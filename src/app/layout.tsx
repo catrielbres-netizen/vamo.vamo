@@ -38,9 +38,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning>
-      <head>
-        <meta name="theme-color" content="#1A237E" />
-      </head>
+      <head />
       <body
         className={cn(
           'min-h-screen bg-background font-sans antialiased',
