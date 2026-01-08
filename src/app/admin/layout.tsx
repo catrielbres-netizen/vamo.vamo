@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { AdminNavbar } from './components/AdminNavbar';
 import { useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';

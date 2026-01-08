@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { cn } from '@/lib/utils';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
@@ -11,7 +11,6 @@ export const metadata: Metadata = {
   title: 'VamO',
   description: 'Movete fácil, movete con VamO',
   manifest: '/manifest.webmanifest',
-  themeColor: '#1A237E',
 
   appleWebApp: {
     capable: true,
@@ -30,6 +29,11 @@ export const metadata: Metadata = {
     ],
   },
 };
+
+export const viewport: Viewport = {
+  themeColor: '#1A237E',
+};
+
 
 export default function RootLayout({
   children,
