@@ -1,6 +1,7 @@
 // src/app/page.tsx
-export const dynamic = "force-dynamic";
 import HomePageClient from './HomePageClient';
+
+export const dynamic = 'force-dynamic';
 
 // Este es el Componente de Servidor para la página de inicio.
 // Su única responsabilidad es renderizar el componente de cliente.

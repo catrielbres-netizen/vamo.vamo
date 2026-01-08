@@ -3,8 +3,7 @@ import { cn } from '@/lib/utils';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { Inter } from 'next/font/google'
-
-export const dynamic = 'force-dynamic';
+import ClientProviders from './ClientProviders';
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -12,7 +11,7 @@ export const metadata: Metadata = {
   title: 'VamO',
   description: 'Movete fácil, movete con VamO',
   manifest: '/manifest.webmanifest',
-  themeColor: '#E10600',
+  themeColor: '#1A237E',
 
   appleWebApp: {
     capable: true,
@@ -22,8 +21,9 @@ export const metadata: Metadata = {
 
   icons: {
     icon: [
-      { url: '/icons/icon-192x192.png', sizes: '192x192' },
-      { url: '/icons/icon-512x512.png', sizes: '512x512' },
+      { url: '/icons/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
     ],
     apple: [
       { url: '/icons/apple-touch-icon.png', sizes: '180x180' },
@@ -39,7 +39,6 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
-        <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
         <meta name="theme-color" content="#1A237E" />
       </head>
       <body
@@ -48,10 +47,12 @@ export default function RootLayout({
           inter.className
         )}
       >
-        <div className="relative flex min-h-screen flex-col">
-          <main className="flex-1">{children}</main>
-        </div>
-        <Toaster />
+        <ClientProviders>
+          <div className="relative flex min-h-screen flex-col">
+            <main className="flex-1">{children}</main>
+          </div>
+          <Toaster />
+        </ClientProviders>
       </body>
     </html>
   );

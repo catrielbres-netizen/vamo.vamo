@@ -6,7 +6,6 @@ import { useUser } from '@/firebase';
 import { VamoIcon } from '@/components/VamoIcon';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import Providers from '../providers';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useUser();
@@ -32,11 +31,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <Providers>
-      <div className="flex min-h-screen w-full flex-col bg-muted/40">
-        <AdminNavbar />
-        <main className="flex-1 p-6">{children}</main>
-      </div>
-    </Providers>
+    <div className="flex min-h-screen w-full flex-col bg-muted/40">
+      <AdminNavbar />
+      <main className="flex-1 p-6">{children}</main>
+    </div>
   );
 }

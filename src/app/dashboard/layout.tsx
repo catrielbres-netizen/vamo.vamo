@@ -8,9 +8,7 @@ import { useUser, useCollection, useFirestore, useMemoFirebase } from '@/firebas
 import { useEffect, useMemo } from 'react';
 import { collection, query, where, limit } from 'firebase/firestore';
 import { Ride } from '@/lib/types';
-import { MapsProvider } from '@/components/MapsProvider';
 import { PassengerHeader } from '@/components/PassengerHeader';
-import Providers from '../providers';
 
 export default function DashboardLayout({
   children,
@@ -75,33 +73,29 @@ export default function DashboardLayout({
   const userName = profile?.name || (user?.isAnonymous ? "Invitado" : user?.displayName || "Usuario");
 
   return (
-    <Providers>
-        <MapsProvider>
-            <div className="container mx-auto max-w-md p-4">
-                <PassengerHeader 
-                    userName={userName}
-                    location="Rawson, Chubut" 
-                />
+    <div className="container mx-auto max-w-md p-4">
+        <PassengerHeader 
+            userName={userName}
+            location="Rawson, Chubut" 
+        />
 
-            {!hasActiveRide && (
-                <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
-                    <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="ride" className="gap-2">
-                            <VamoIcon name="car" className="w-4 h-4" /> Viaje
-                        </TabsTrigger>
-                        <TabsTrigger value="info" className="gap-2">
-                            <VamoIcon name="info" className="w-4 h-4" /> Info
-                        </TabsTrigger>
-                        <TabsTrigger value="profile" className="gap-2">
-                            <VamoIcon name="user" className="w-4 h-4" /> Perfil
-                        </TabsTrigger>
-                    </TabsList>
-                </Tabs>
-            )}
-            
-            <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
-            </div>
-        </MapsProvider>
-    </Providers>
+    {!hasActiveRide && (
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
+            <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="ride" className="gap-2">
+                    <VamoIcon name="car" className="w-4 h-4" /> Viaje
+                </TabsTrigger>
+                <TabsTrigger value="info" className="gap-2">
+                    <VamoIcon name="info" className="w-4 h-4" /> Info
+                </TabsTrigger>
+                <TabsTrigger value="profile" className="gap-2">
+                    <VamoIcon name="user" className="w-4 h-4" /> Perfil
+                </TabsTrigger>
+            </TabsList>
+        </Tabs>
+    )}
+    
+    <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
+    </div>
   );
 }

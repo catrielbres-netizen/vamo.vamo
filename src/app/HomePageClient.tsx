@@ -4,10 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { VamoIcon } from '@/components/VamoIcon';
 import { useUser } from '@/firebase';
-import Providers from './providers';
 
 // Este es el Componente de Cliente que contiene toda la lógica y los hooks.
-function HomeLogic() {
+export default function HomePageClient() {
   const router = useRouter();
   const { user, profile, loading } = useUser();
 
@@ -49,13 +48,4 @@ function HomeLogic() {
       </div>
     </div>
   );
-}
-
-// Este componente envuelve la lógica con los Providers necesarios.
-export default function HomePageClient() {
-    return (
-        <Providers>
-            <HomeLogic />
-        </Providers>
-    );
 }
