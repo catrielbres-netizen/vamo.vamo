@@ -10,14 +10,16 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'VamO',
-  description: 'Movilidad inteligente',
+  description: 'Movete fácil, movete con VamO',
   manifest: '/manifest.webmanifest',
-  themeColor: '#E10600', // 🔴
+  themeColor: '#E10600',
+
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'VamO',
   },
+
   icons: {
     icon: [
       { url: '/icons/icon-192x192.png', sizes: '192x192' },

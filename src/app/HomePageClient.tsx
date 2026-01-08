@@ -1,24 +1,23 @@
 // src/app/HomePageClient.tsx
 'use client';
-
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { VamoIcon } from '@/components/VamoIcon';
 import { useUser } from '@/firebase';
 
-// This is the Client Component that contains all the client-side logic and hooks.
+// Este es el Componente de Cliente que contiene toda la lógica y los hooks.
 export default function HomePageClient() {
   const router = useRouter();
   const { user, profile, loading } = useUser();
 
   useEffect(() => {
-    // Wait until the authentication state is fully loaded
+    // Esperar hasta que el estado de autenticación esté completamente cargado
     if (loading) return;
 
     if (user) {
-      // User is authenticated
+      // Usuario autenticado
       if (profile) {
-        // User has a profile, redirect based on role
+        // Usuario tiene un perfil, redirigir según el rol
         switch (profile.role) {
           case 'admin':
             router.replace('/admin');
@@ -28,19 +27,19 @@ export default function HomePageClient() {
             break;
           case 'passenger':
           default:
-            // Default to passenger dashboard if role is passenger or undefined
+            // Por defecto al panel de pasajero si el rol es 'passenger' o indefinido
             router.replace('/dashboard');
             break;
         }
       }
-      // If user exists but profile is still loading, do nothing and wait for the next render.
+      // Si el usuario existe pero el perfil todavía se está cargando, no hacer nada y esperar al siguiente renderizado.
     } else {
-      // No user is authenticated, redirect to the login page
+      // No hay usuario autenticado, redirigir a la página de inicio de sesión
       router.replace('/login');
     }
   }, [user, profile, loading, router]);
 
-  // Universal loading screen while determining the user's destination.
+  // Pantalla de carga universal mientras se determina el destino del usuario.
   return (
     <div className="flex h-screen items-center justify-center">
       <div className="flex flex-col items-center gap-4">

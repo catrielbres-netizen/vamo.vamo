@@ -1,7 +1,5 @@
 // src/app/dashboard/layout.tsx
-
 export const dynamic = "force-dynamic";
-
 import { VamoIcon } from '@/components/VamoIcon';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';

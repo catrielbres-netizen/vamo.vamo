@@ -1,7 +1,5 @@
 // src/app/driver/layout.tsx
-
 export const dynamic = "force-dynamic";
-
 import { VamoIcon } from '@/components/VamoIcon';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
@@ -12,7 +10,6 @@ import { Ride } from '@/lib/types';
 import { MapsProvider } from '@/components/MapsProvider';
 import { useFCM } from '@/hooks/useFCM';
 import Providers from '../providers';
-
 
 function DriverAuthWrapper({ children }: { children: React.ReactNode }) {
   'use client';
@@ -48,13 +45,18 @@ function DriverAuthWrapper({ children }: { children: React.ReactNode }) {
       return;
     }
     
+    if (profile.role !== 'driver') {
+        router.replace('/dashboard'); // Redirect non-drivers away
+        return;
+    }
+
     if (!profile.profileCompleted && !pathname.startsWith('/driver/complete-profile')) {
       router.replace('/driver/complete-profile');
     }
     
   }, [profile, loading, pathname, router]);
 
-  if (loading || (!profile?.profileCompleted && !pathname.startsWith('/driver/complete-profile'))) {
+  if (loading || (profile && !profile.profileCompleted && !pathname.startsWith('/driver/complete-profile'))) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
         <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />

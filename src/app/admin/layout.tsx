@@ -1,18 +1,14 @@
 // src/app/admin/layout.tsx
-
 export const dynamic = "force-dynamic";
-
 import { AdminNavbar } from './components/AdminNavbar'
-import { usePathname } from 'next/navigation'
-import { requireAdmin } from '@/lib/auth/requireAdmin'
 import { useUser } from '@/firebase'
 import { VamoIcon } from '@/components/VamoIcon'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import Providers from '../providers'
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
-
-// This is the Client Component that handles auth logic
+// Este es el Client Component que maneja la lógica de autenticación
 function AdminAuthWrapper({ children }: { children: React.ReactNode }) {
   'use client';
   
@@ -53,7 +49,7 @@ function AdminAuthWrapper({ children }: { children: React.ReactNode }) {
   )
 }
 
-// This is the Layout, a Server Component
+// Este es el Layout, un Server Component
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <Providers>
