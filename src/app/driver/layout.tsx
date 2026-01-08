@@ -54,12 +54,17 @@ export default function DriverLayout({
 
         if (!profile.profileCompleted && !pathname.startsWith('/driver/complete-profile')) {
           router.replace('/driver/complete-profile');
+          return;
         }
+    }
+    
+    if (pathname === '/driver') {
+        router.replace('/driver/rides');
     }
     
   }, [profile, user, loading, pathname, router]);
 
-  if (loading || (user && !profile) || (profile && profile.role !== 'driver') || (profile && !profile.profileCompleted && !pathname.startsWith('/driver/complete-profile'))) {
+  if (loading || (user && !profile) || (profile && profile.role !== 'driver') || (profile && !profile.profileCompleted && !pathname.startsWith('/driver/complete-profile')) || pathname === '/driver') {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
         <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />

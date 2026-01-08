@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import { StatCard } from '@/app/admin/components/StatCard'
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase'

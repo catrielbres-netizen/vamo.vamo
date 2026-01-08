@@ -50,11 +50,16 @@ export default function DashboardLayout({
 
     if (profile && !profile.profileCompleted && !pathname.startsWith('/dashboard/complete-profile')) {
       router.replace('/dashboard/complete-profile');
+      return;
+    }
+    
+    if (pathname === '/dashboard') {
+        router.replace('/dashboard/ride');
     }
     
   }, [profile, user, loading, pathname, router]);
 
-  if (loading || (user && !profile) || (profile && !profile.profileCompleted && !pathname.startsWith('/dashboard/complete-profile'))) {
+  if (loading || (user && !profile) || (profile && !profile.profileCompleted && !pathname.startsWith('/dashboard/complete-profile')) || pathname === '/dashboard') {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
         <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />
