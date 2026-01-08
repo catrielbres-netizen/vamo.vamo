@@ -51,6 +51,7 @@ function HomeLogic() {
   );
 }
 
+// Este componente envuelve la lógica con los Providers necesarios.
 export default function HomePageClient() {
     return (
         <Providers>

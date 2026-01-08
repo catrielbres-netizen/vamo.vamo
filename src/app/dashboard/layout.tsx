@@ -1,5 +1,6 @@
 // src/app/dashboard/layout.tsx
-export const dynamic = "force-dynamic";
+'use client';
+
 import { VamoIcon } from '@/components/VamoIcon';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
@@ -11,9 +12,11 @@ import { MapsProvider } from '@/components/MapsProvider';
 import { PassengerHeader } from '@/components/PassengerHeader';
 import Providers from '../providers';
 
-function DashboardAuthWrapper({ children }: { children: React.ReactNode }) {
-  'use client';
-
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const { profile, user, loading: userLoading } = useUser();
@@ -22,10 +25,10 @@ function DashboardAuthWrapper({ children }: { children: React.ReactNode }) {
   const activeRideQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
-        collection(firestore, 'rides'),
-        where('passengerId', '==', user.uid),
-        where('status', 'in', ['searching_driver', 'driver_assigned', 'driver_arriving', 'arrived', 'in_progress', 'paused']),
-        limit(1)
+      collection(firestore, 'rides'),
+      where('passengerId', '==', user.uid),
+      where('status', 'in', ['searching_driver', 'driver_assigned', 'driver_arriving', 'arrived', 'in_progress', 'paused']),
+      limit(1)
     );
   }, [firestore, user?.uid]);
 
@@ -34,22 +37,26 @@ function DashboardAuthWrapper({ children }: { children: React.ReactNode }) {
 
   const loading = userLoading || (user ? rideLoading : false);
 
-
   useEffect(() => {
-    if (loading) return; 
+    if (loading) return;
 
     if (!user) {
       router.replace('/login');
       return;
     }
     
+    if (profile && profile.role !== 'passenger' && profile.role !== undefined) {
+        router.replace('/'); // Si no es pasajero (y tiene rol), lo mandamos a la raíz para que redirija
+        return;
+    }
+
     if (profile && !profile.profileCompleted && !pathname.startsWith('/dashboard/complete-profile')) {
       router.replace('/dashboard/complete-profile');
     }
     
   }, [profile, user, loading, pathname, router]);
 
-  if (loading || (profile && !profile.profileCompleted && !pathname.startsWith('/dashboard/complete-profile'))) {
+  if (loading || (user && !profile) || (profile && !profile.profileCompleted && !pathname.startsWith('/dashboard/complete-profile'))) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
         <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />
@@ -68,44 +75,33 @@ function DashboardAuthWrapper({ children }: { children: React.ReactNode }) {
   const userName = profile?.name || (user?.isAnonymous ? "Invitado" : user?.displayName || "Usuario");
 
   return (
-    <MapsProvider>
-        <div className="container mx-auto max-w-md p-4">
-            <PassengerHeader 
-                userName={userName}
-                location="Rawson, Chubut" 
-            />
-
-        {!hasActiveRide && (
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
-                <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="ride" className="gap-2">
-                        <VamoIcon name="car" className="w-4 h-4" /> Viaje
-                    </TabsTrigger>
-                    <TabsTrigger value="info" className="gap-2">
-                        <VamoIcon name="info" className="w-4 h-4" /> Info
-                    </TabsTrigger>
-                    <TabsTrigger value="profile" className="gap-2">
-                        <VamoIcon name="user" className="w-4 h-4" /> Perfil
-                    </TabsTrigger>
-                </TabsList>
-            </Tabs>
-        )}
-        
-        <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
-        </div>
-    </MapsProvider>
-  );
-}
-
-
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
     <Providers>
-      <DashboardAuthWrapper>{children}</DashboardAuthWrapper>
+        <MapsProvider>
+            <div className="container mx-auto max-w-md p-4">
+                <PassengerHeader 
+                    userName={userName}
+                    location="Rawson, Chubut" 
+                />
+
+            {!hasActiveRide && (
+                <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full my-4">
+                    <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="ride" className="gap-2">
+                            <VamoIcon name="car" className="w-4 h-4" /> Viaje
+                        </TabsTrigger>
+                        <TabsTrigger value="info" className="gap-2">
+                            <VamoIcon name="info" className="w-4 h-4" /> Info
+                        </TabsTrigger>
+                        <TabsTrigger value="profile" className="gap-2">
+                            <VamoIcon name="user" className="w-4 h-4" /> Perfil
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
+            )}
+            
+            <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
+            </div>
+        </MapsProvider>
     </Providers>
-  )
+  );
 }

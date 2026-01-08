@@ -1,5 +1,6 @@
 // src/app/driver/layout.tsx
-export const dynamic = "force-dynamic";
+'use client';
+
 import { VamoIcon } from '@/components/VamoIcon';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
@@ -11,9 +12,11 @@ import { MapsProvider } from '@/components/MapsProvider';
 import { useFCM } from '@/hooks/useFCM';
 import Providers from '../providers';
 
-function DriverAuthWrapper({ children }: { children: React.ReactNode }) {
-  'use client';
-
+export default function DriverLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const { profile, user, loading: userLoading } = useUser();
@@ -47,7 +50,7 @@ function DriverAuthWrapper({ children }: { children: React.ReactNode }) {
     
     if (profile) {
         if (profile.role !== 'driver') {
-            router.replace('/dashboard'); // Redirect non-drivers away
+            router.replace('/'); // Redirect non-drivers away
             return;
         }
 
@@ -58,7 +61,7 @@ function DriverAuthWrapper({ children }: { children: React.ReactNode }) {
     
   }, [profile, user, loading, pathname, router]);
 
-  if (loading || (profile && !profile.profileCompleted && !pathname.startsWith('/driver/complete-profile'))) {
+  if (loading || (user && !profile) || (profile && profile.role !== 'driver') || (profile && !profile.profileCompleted && !pathname.startsWith('/driver/complete-profile'))) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
         <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />
@@ -75,49 +78,39 @@ function DriverAuthWrapper({ children }: { children: React.ReactNode }) {
   };
 
   return (
-      <MapsProvider>
-        <div className="container mx-auto max-w-md p-4">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-2">
-              <VamoIcon name="layout-dashboard" className="h-8 w-8 text-primary" />
-              <h1 className="text-2xl font-bold">Panel Conductor</h1>
+      <Providers>
+        <MapsProvider>
+            <div className="container mx-auto max-w-md p-4">
+            <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-2">
+                <VamoIcon name="layout-dashboard" className="h-8 w-8 text-primary" />
+                <h1 className="text-2xl font-bold">Panel Conductor</h1>
+                </div>
+                <span className="text-sm font-medium text-muted-foreground">{profile?.name}</span>
             </div>
-            <span className="text-sm font-medium text-muted-foreground">{profile?.name}</span>
-          </div>
 
-          {!hasActiveRide && (
-              <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full mb-4">
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="rides" className="gap-2">
-                    <VamoIcon name="car" className="w-4 h-4" /> Viajes
-                  </TabsTrigger>
-                  <TabsTrigger value="earnings" className="gap-2">
-                    <VamoIcon name="wallet" className="w-4 h-4" /> Ganancias
-                  </TabsTrigger>
-                  <TabsTrigger value="discounts" className="gap-2">
-                    <VamoIcon name="percent" className="w-4 h-4" /> Bonos
-                  </TabsTrigger>
-                  <TabsTrigger value="profile" className="gap-2">
-                    <VamoIcon name="user" className="w-4 h-4" /> Perfil
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-          )}
-          
-          <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
-        </div>
-      </MapsProvider>
+            {!hasActiveRide && (
+                <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full mb-4">
+                    <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="rides" className="gap-2">
+                        <VamoIcon name="car" className="w-4 h-4" /> Viajes
+                    </TabsTrigger>
+                    <TabsTrigger value="earnings" className="gap-2">
+                        <VamoIcon name="wallet" className="w-4 h-4" /> Ganancias
+                    </TabsTrigger>
+                    <TabsTrigger value="discounts" className="gap-2">
+                        <VamoIcon name="percent" className="w-4 h-4" /> Bonos
+                    </TabsTrigger>
+                    <TabsTrigger value="profile" className="gap-2">
+                        <VamoIcon name="user" className="w-4 h-4" /> Perfil
+                    </TabsTrigger>
+                    </TabsList>
+                </Tabs>
+            )}
+            
+            <main className={hasActiveRide ? 'mt-6' : ''}>{children}</main>
+            </div>
+        </MapsProvider>
+      </Providers>
   );
-}
-
-export default function DriverLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <Providers>
-      <DriverAuthWrapper>{children}</DriverAuthWrapper>
-    </Providers>
-  )
 }

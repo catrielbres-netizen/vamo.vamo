@@ -1,59 +1,42 @@
 // src/app/admin/layout.tsx
-export const dynamic = "force-dynamic";
-import { AdminNavbar } from './components/AdminNavbar'
-import { useUser } from '@/firebase'
-import { VamoIcon } from '@/components/VamoIcon'
-import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
-import Providers from '../providers'
-import { requireAdmin } from '@/lib/auth/requireAdmin';
+'use client';
 
-// Este es el Client Component que maneja la lógica de autenticación
-function AdminAuthWrapper({ children }: { children: React.ReactNode }) {
-  'use client';
-  
-  const { profile, loading } = useUser()
-  const router = useRouter()
-  
-  const authStatus = requireAdmin(profile, loading)
+import { AdminNavbar } from './components/AdminNavbar';
+import { useUser } from '@/firebase';
+import { VamoIcon } from '@/components/VamoIcon';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import Providers from '../providers';
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { profile, loading } = useUser();
+  const router = useRouter();
 
   useEffect(() => {
-    if (authStatus === 'unauthorized') {
-        router.replace('/login')
+    if (loading) return; // Espera a que termine la carga
+
+    if (!profile || profile.role !== 'admin') {
+      router.replace('/login');
     }
-  },[authStatus, router])
+  }, [loading, profile, router]);
 
-
-  if (authStatus === 'loading') {
+  // Mientras carga o si el perfil no es de admin, no renderiza nada para evitar flashes de contenido.
+  // El useEffect se encargará de la redirección.
+  if (loading || !profile || profile.role !== 'admin') {
     return (
-        <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
-            <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />
-            <p className="mt-4 text-muted-foreground">Verificando acceso...</p>
-        </div>
-    )
-  }
-  
-  if (authStatus === 'unauthorized') {
-      return (
-        <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
-            <p className="mt-4 text-muted-foreground">Redirigiendo...</p>
-        </div>
-    )
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
+        <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />
+        <p className="mt-4 text-muted-foreground">Verificando acceso...</p>
+      </div>
+    );
   }
 
-  return (
-    <div className="flex min-h-screen w-full flex-col bg-muted/40">
-       <AdminNavbar />
-       <main className="flex-1 p-6">{children}</main>
-    </div>
-  )
-}
-
-// Este es el Layout, un Server Component
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <Providers>
-      <AdminAuthWrapper>{children}</AdminAuthWrapper>
+      <div className="flex min-h-screen w-full flex-col bg-muted/40">
+        <AdminNavbar />
+        <main className="flex-1 p-6">{children}</main>
+      </div>
     </Providers>
-  )
+  );
 }

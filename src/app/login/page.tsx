@@ -1,5 +1,4 @@
 // src/app/login/page.tsx
-export const dynamic = "force-dynamic";
 import LoginPageClient from './LoginPageClient';
 
 // Este es el Componente de Servidor para la página de inicio de sesión.
