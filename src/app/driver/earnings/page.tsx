@@ -9,17 +9,13 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { PlatformTransaction } from '@/lib/types';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Separator } from '@/components/ui/separator';
-// Import the Server Action directly into the Client Component
-import { createPreferenceAction } from './actions';
-import { useFormStatus } from 'react-dom';
+import { PaymentForm } from './PaymentForm';
 
 function formatCurrency(value: number) {
     if (typeof value !== 'number' || isNaN(value)) return '$...';
@@ -28,8 +24,6 @@ function formatCurrency(value: number) {
       currency: 'ARS',
     }).format(value);
 }
-
-const TOPUP_AMOUNTS = [5000, 10000, 20000];
 
 
 const TransactionHistory = ({ driverId }: { driverId: string }) => {
@@ -46,7 +40,6 @@ const TransactionHistory = ({ driverId }: { driverId: string }) => {
 
     const { data: transactions, isLoading } = useCollection<WithId<PlatformTransaction>>(transactionsQuery);
     
-    // El saldo emerge del ledger
     const balance = useMemo(() => {
         if (!transactions) return 0;
         return transactions.reduce((acc, tx) => acc + tx.amount, 0);
@@ -112,16 +105,6 @@ const TransactionHistory = ({ driverId }: { driverId: string }) => {
     )
 }
 
-function SubmitButton({ selectedAmount }: { selectedAmount: string }) {
-  const { pending } = useFormStatus();
-
-  return (
-    <Button type="submit" disabled={!selectedAmount || pending}>
-      {pending ? 'Procesando...' : `Pagar ${formatCurrency(Number(selectedAmount))}`}
-    </Button>
-  );
-}
-
 export default function DriverEarningsPage() {
     const { user, loading: isLoading } = useUser();
     const router = useRouter();
@@ -129,7 +112,6 @@ export default function DriverEarningsPage() {
     const searchParams = useSearchParams();
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [selectedAmount, setSelectedAmount] = useState<string>("5000");
 
 
     useEffect(() => {
@@ -152,7 +134,6 @@ export default function DriverEarningsPage() {
                     description: 'Tu pago está siendo procesado por Mercado Pago.',
                 });
             }
-            // Clean URL
             router.replace('/driver/earnings');
         }
     }, [searchParams, router, toast]);
@@ -174,21 +155,7 @@ export default function DriverEarningsPage() {
                         Seleccioná el monto que querés cargar. Serás redirigido a Mercado Pago para completar la transacción de forma segura.
                     </DialogDescription>
                 </DialogHeader>
-                <form action={createPreferenceAction}>
-                    <input type="hidden" name="driverId" value={user.uid} />
-                    <RadioGroup name="amount" value={selectedAmount} onValueChange={setSelectedAmount} className="grid gap-4 my-4">
-                        {TOPUP_AMOUNTS.map(amount => (
-                            <Label key={amount} htmlFor={`amount-${amount}`} className="flex items-center justify-between p-4 rounded-lg border has-[:checked]:border-primary cursor-pointer">
-                                <span className="font-semibold text-lg">{formatCurrency(amount)}</span>
-                                <RadioGroupItem value={amount.toString()} id={`amount-${amount}`} />
-                            </Label>
-                        ))}
-                    </RadioGroup>
-                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsDialogOpen(false)} type="button">Cancelar</Button>
-                        <SubmitButton selectedAmount={selectedAmount} />
-                    </DialogFooter>
-                </form>
+                <PaymentForm driverId={user.uid} onCancel={() => setIsDialogOpen(false)} />
             </DialogContent>
         </Dialog>
     );
