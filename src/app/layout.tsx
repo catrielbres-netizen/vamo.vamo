@@ -14,7 +14,6 @@ export const metadata: Metadata = {
   title: 'VamO',
   description: 'Movete fácil, movete con VamO',
   manifest: '/manifest.webmanifest',
-  mobileWebAppCapable: 'yes',
   appleWebApp: {
     capable: true,
     title: 'VamO',
@@ -35,7 +34,6 @@ export default function RootLayout({
     <html lang="es" suppressHydrationWarning>
       <head>
         <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="16x16" />
-        <link rel="icon" href="/icons/favicon-32x32.png" sizes="32x32" type="image/png" />
       </head>
       <body
         className={cn(
