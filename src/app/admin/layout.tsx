@@ -7,6 +7,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { VamoIcon } from '@/components/VamoIcon';
 
+export const dynamic = 'force-dynamic';
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { profile, loading } = useUser();
   const router = useRouter();

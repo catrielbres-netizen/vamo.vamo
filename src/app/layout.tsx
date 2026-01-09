@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   title: 'VamO',
   description: 'Movete fácil, movete con VamO',
   manifest: '/manifest.webmanifest',
-  themeColor: '#1A237E',
+  mobileWebAppCapable: 'yes',
   appleWebApp: {
     capable: true,
     title: 'VamO',

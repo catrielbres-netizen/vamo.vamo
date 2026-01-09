@@ -10,6 +10,8 @@ import { collection, query, where, limit } from 'firebase/firestore';
 import { Ride } from '@/lib/types';
 import { PassengerHeader } from '@/components/PassengerHeader';
 
+export const dynamic = 'force-dynamic';
+
 export default function DashboardLayout({
   children,
 }: {
