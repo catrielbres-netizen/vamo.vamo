@@ -7,7 +7,7 @@ env:
     value: "BEXXXXXXXXXXXXX" # Reemplazar con la VAPID Key real
   # Replace with your REAL Firebase project credentials
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: "AIzaSyCvJiKLN9UStCWaOlIa_6kv2kw3fUZ6CKo"
+    value: "YOUR_REAL_FIREBASE_API_KEY"
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
     value: "vamo-app-real.firebaseapp.com"
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
@@ -34,4 +34,5 @@ build:
 
 run:
   command: npm start
+
 
