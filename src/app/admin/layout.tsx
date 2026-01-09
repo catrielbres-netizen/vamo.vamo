@@ -1,5 +1,5 @@
+
 'use client';
-export const dynamic = 'force-dynamic';
 
 import { AdminNavbar } from './components/AdminNavbar';
 import { useUser } from '@/firebase';
@@ -20,7 +20,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
     
-    // Si el usuario está en la raíz de admin, redirigir al dashboard.
+    // If the user is at the root of admin, redirect to the dashboard.
     if (pathname === '/admin') {
       router.replace('/admin/dashboard');
     }

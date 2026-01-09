@@ -1,10 +1,8 @@
-'use client';
-export const dynamic = 'force-dynamic';
 
 import HomePageClient from './HomePageClient';
 
-// Este es el Componente de Servidor para la página de inicio.
-// Su única responsabilidad es renderizar el componente de cliente.
+// This is the Server Component for the home page.
+// Its only responsibility is to render the client component.
 export default function Home() {
   return <HomePageClient />;
 }

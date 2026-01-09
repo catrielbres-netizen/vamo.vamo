@@ -1,6 +1,5 @@
-'use client';
-export const dynamic = 'force-dynamic';
 
+'use client';
 import { VamoIcon } from '@/components/VamoIcon';
 
 // This page's sole purpose is to be a valid child for the layout.

@@ -1,5 +1,5 @@
+
 'use client';
-export const dynamic = 'force-dynamic';
 
 import { VamoIcon } from '@/components/VamoIcon';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';

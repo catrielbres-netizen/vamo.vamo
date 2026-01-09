@@ -1,9 +1,7 @@
-'use client';
-export const dynamic = 'force-dynamic';
 
 import LoginPageClient from './LoginPageClient';
 
-// Este es el Componente de Servidor para la página de inicio de sesión.
+// This is the Server Component for the login page.
 export default function LoginPage() {
   return (
       <LoginPageClient />
