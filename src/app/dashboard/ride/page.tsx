@@ -28,7 +28,7 @@ import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Place, ServiceType, PlatformTransaction } from '@/lib/types';
 import { speak } from '@/lib/speak';
 import { haversineDistance } from '@/lib/geo';
-import { APIProvider } from '@vis.gl/react-google-maps';
+import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import MapSelector from '@/components/MapSelector';
@@ -70,13 +70,15 @@ const canDriverTakeRide = (driverProfile: UserProfile, rideService: ServiceType)
     return driverCategoryLevel >= requestedServiceLevel;
 };
 
-
-export default function RidePage() {
+// New component to render content that depends on Maps API
+function RidePageContent() {
   const auth = useAuth();
   const firestore = useFirestore();
   const { user, profile, loading } = useUser();
   const { toast } = useToast();
   const router = useRouter();
+
+  const mapsLib = useMapsLibrary('routes');
 
 
   const [origin, setOrigin] = useState<Place | null>(null);
@@ -87,7 +89,6 @@ export default function RidePage() {
   const [estimatedFare, setEstimatedFare] = useState(0);
   const [lastFinishedRide, setLastFinishedRide] = useState<WithId<Ride> | null>(null);
   const [isMapSelectorOpen, setMapSelectorOpen] = useState(false);
-  const [mapsReady, setMapsReady] = useState(false);
   
   // This query now ONLY fetches TRULY active rides.
   const activeRideQuery = useMemoFirebase(() => {
@@ -144,17 +145,6 @@ export default function RidePage() {
     }
   };
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-        if (window.google?.maps?.DirectionsService) {
-            setMapsReady(true);
-            clearInterval(interval);
-        }
-    }, 300);
-
-    return () => clearInterval(interval);
-  }, []);
-
 
   useEffect(() => {
     const calculateRoute = () => {
@@ -165,7 +155,7 @@ export default function RidePage() {
           return;
       }
 
-      // Fallback for when Google Maps API is not ready
+      // Fallback for when Google Maps API is not ready or failed
       const fallbackEstimate = () => {
           console.log("Usando cálculo de distancia Haversine (línea recta).");
           const dist = haversineDistance(origin, destination);
@@ -173,7 +163,7 @@ export default function RidePage() {
           setDurationSeconds(0); // Can't estimate duration from straight line
           const fare = calculateFare({ distanceMeters: dist, service: serviceType });
           setEstimatedFare(fare);
-          if (mapsReady) { // Only toast if Maps API was ready but directions still failed
+          if (mapsLib) { // Only toast if Maps API was ready but directions still failed
             toast({
                 variant: 'destructive',
                 title: 'No se pudo calcular la ruta exacta',
@@ -182,20 +172,20 @@ export default function RidePage() {
           }
       }
       
-      if (!mapsReady) {
+      if (!mapsLib) {
           fallbackEstimate();
           return;
       }
 
-      const directionsService = new window.google.maps.DirectionsService();
+      const directionsService = new mapsLib.DirectionsService();
       directionsService.route(
           {
-              origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-              destination: new window.google.maps.LatLng(destination.lat, destination.lng),
-              travelMode: window.google.maps.TravelMode.DRIVING,
+              origin: new mapsLib.LatLng(origin.lat, origin.lng),
+              destination: new mapsLib.LatLng(destination.lat, destination.lng),
+              travelMode: mapsLib.TravelMode.DRIVING,
           },
           (result, status) => {
-              if (status === window.google.maps.DirectionsStatus.OK && result?.routes?.[0]?.legs?.[0]) {
+              if (status === mapsLib.DirectionsStatus.OK && result?.routes?.[0]?.legs?.[0]) {
                   console.log("Ruta calculada con DirectionsService.");
                   const leg = result.routes[0].legs[0];
                   const dist = leg.distance?.value ?? 0;
@@ -212,7 +202,7 @@ export default function RidePage() {
       );
     }
     calculateRoute();
-  }, [destination?.lat, destination?.lng, origin?.lat, origin?.lng, serviceType, mapsReady, toast]);
+  }, [destination?.lat, destination?.lng, origin?.lat, origin?.lng, serviceType, mapsLib, toast]);
   
   useEffect(() => {
     const prevStatus = prevRideRef.current?.status;
@@ -530,15 +520,7 @@ export default function RidePage() {
               Movete por el mapa y ubicá el pin en el punto exacto donde querés ir.
             </DialogDescription>
           </DialogHeader>
-          {apiKey ? (
-            <APIProvider apiKey={apiKey}>
-              <MapSelector onLocationSelect={handleMapSelect} />
-            </APIProvider>
-          ) : (
-             <div className="flex flex-col items-center justify-center h-full">
-                <p className="text-destructive">La clave de API de Google Maps no está configurada.</p>
-             </div>
-          )}
+            <MapSelector onLocationSelect={handleMapSelect} />
         </DialogContent>
       </Dialog>
 
@@ -592,4 +574,26 @@ export default function RidePage() {
        </div>
     </>
   );
+}
+
+export default function RidePage() {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+    if (!apiKey || apiKey === 'YOUR_REAL_GOOGLE_MAPS_API_KEY') {
+        return (
+            <div className="flex flex-col items-center justify-center h-64 text-center">
+                <VamoIcon name="map" className="h-10 w-10 text-muted-foreground mb-4" />
+                <h3 className="font-semibold text-lg">Función de Mapas Deshabilitada</h3>
+                <p className="text-sm text-muted-foreground">
+                    El administrador no ha configurado la clave de Google Maps.
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <APIProvider apiKey={apiKey}>
+            <RidePageContent />
+        </APIProvider>
+    );
 }

@@ -2,7 +2,7 @@
 // @/components/MapSelector.tsx
 'use client';
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Map, useMap } from '@vis.gl/react-google-maps';
+import { Map, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { Button } from './ui/button';
 import { VamoIcon } from './VamoIcon';
 import { Place } from '@/lib/types';
@@ -39,7 +39,7 @@ export default function MapSelector({ onLocationSelect }: MapSelectorProps) {
                     mapId="map-selector-map"
                     onCenterChanged={(e) => setPinLocation({ lat: e.detail.center.lat, lng: e.detail.center.lng })}
                 >
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full">
                         <VamoIcon name="map-pin" className="h-10 w-10 text-primary drop-shadow-lg" />
                     </div>
                 </Map>
@@ -62,14 +62,15 @@ export default function MapSelector({ onLocationSelect }: MapSelectorProps) {
 
 function ReverseGeocoder({ center, onPlaceFound }: { center: {lat: number, lng: number}, onPlaceFound: (place: Place) => void }) {
     const map = useMap();
+    const geocodingLib = useMapsLibrary('geocoding');
     const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
     const debouncedCenter = useDebounce(center, 500); // Debounce to avoid excessive API calls
 
     useEffect(() => {
-        if (map && !geocoder) {
-            setGeocoder(new google.maps.Geocoder());
+        if (geocodingLib && !geocoder) {
+            setGeocoder(new geocodingLib.Geocoder());
         }
-    }, [map, geocoder]);
+    }, [geocodingLib, geocoder]);
 
     const performGeocode = useCallback(() => {
         if (geocoder && debouncedCenter) {
@@ -93,4 +94,3 @@ function ReverseGeocoder({ center, onPlaceFound }: { center: {lat: number, lng: 
 
     return null; // This component does not render anything itself
 }
-
