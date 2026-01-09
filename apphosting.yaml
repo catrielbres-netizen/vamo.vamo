@@ -1,39 +1,8 @@
 
 runtime: nodejs20
 
-env:
-  # Replace with your REAL VAPID Key from the new Firebase Project
-  - variable: NEXT_PUBLIC_FCM_VAPID_KEY
-    value: "BEXXXXXXXXXXXXX" # Reemplazar con la VAPID Key real
-  # Firebase project credentials for 'studio-6697160840-7c67f'
-  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: "AIzaSyCvJiKLN9UStCWaOlIa_6kv2kw3fUZ6CKo"
-  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: "studio-6697160840-7c67f.firebaseapp.com"
-  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: "studio-6697160840-7c67f"
-  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: "studio-6697160840-7c67f.appspot.com"
-  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: "6697160840"
-  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: "1:6697160840:web:d335a78215882e3089d494"
-  # Set the MercadoPago Access Token here
-  - variable: MERCADOPAGO_ACCESS_TOKEN
-    value: "YOUR_REAL_MP_ACCESS_TOKEN"
-  # Set the base URL for the app
-  - variable: NEXT_PUBLIC_APP_URL
-    value: "https://<your-app-url>"
-  # Set the Google Maps API Key here
-  - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    value: "YOUR_REAL_GOOGLE_MAPS_API_KEY"
-
-
 build:
   command: npm install && npm run build
 
 run:
   command: npm start
-
-
-
