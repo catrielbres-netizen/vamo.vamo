@@ -1,3 +1,4 @@
+
 'use client';
 export const dynamic = 'force-dynamic';
 
@@ -180,8 +181,8 @@ function RidePageContent() {
       const directionsService = new mapsLib.DirectionsService();
       directionsService.route(
           {
-              origin: new mapsLib.LatLng(origin.lat, origin.lng),
-              destination: new mapsLib.LatLng(destination.lat, destination.lng),
+              origin: { lat: origin.lat, lng: origin.lng },
+              destination: { lat: destination.lat, lng: destination.lng },
               travelMode: mapsLib.TravelMode.DRIVING,
           },
           (result, status) => {
@@ -597,3 +598,5 @@ export default function RidePage() {
         </APIProvider>
     );
 }
+
+    
