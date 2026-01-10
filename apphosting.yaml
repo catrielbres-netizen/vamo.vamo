@@ -1,5 +1,6 @@
 
 runtime: nodejs20
+rootDir: .
 
 build:
   command: npm install && npm run build
