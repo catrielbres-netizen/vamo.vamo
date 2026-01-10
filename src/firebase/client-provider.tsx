@@ -12,21 +12,16 @@ import { useDoc } from './firestore/use-doc';
 import { type UserProfile } from '@/lib/types';
 import { useMemoFirebase } from './hooks';
 
-// This function ensures that we have a single instance of the Firebase app on the client.
-function initializeClientApp() {
-  if (getApps().length) {
-    return getApp();
-  }
-  return initializeApp(firebaseConfig);
-}
+// --- Types and Context Definitions ---
 
-// --- Context Definitions ---
+type InitializationState = 'loading' | 'success' | 'error';
 
 interface FirebaseServices {
-  firebaseApp: FirebaseApp;
-  firestore: Firestore;
-  auth: Auth;
+  firebaseApp: FirebaseApp | null;
+  firestore: Firestore | null;
+  auth: Auth | null;
   messaging: Messaging | null;
+  initializationState: InitializationState;
 }
 
 interface UserContextState {
@@ -41,55 +36,75 @@ const UserContext = createContext<UserContextState | undefined>(undefined);
 // --- Provider Component ---
 
 export function FirebaseClientProvider({ children }: { children: ReactNode }) {
-  // Memoize the initialization of Firebase services to ensure it only runs once.
+  const [initializationState, setInitializationState] = useState<InitializationState>('loading');
+
   const services = useMemo<FirebaseServices>(() => {
-    const app = initializeClientApp();
-    const auth = getAuth(app);
-    setPersistence(auth, browserLocalPersistence);
-    const firestore = getFirestore(app);
-    let messaging: Messaging | null = null;
-    if (typeof window !== 'undefined') {
-      try {
-        messaging = getMessaging(app);
-      } catch (e) {
-        console.error("Could not initialize messaging", e);
-      }
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('YOUR_REAL')) {
+      console.error("Firebase API Key is not configured. Firebase services will be disabled.");
+      setInitializationState('error');
+      return { firebaseApp: null, firestore: null, auth: null, messaging: null, initializationState: 'error' };
     }
-    return { firebaseApp: app, auth, firestore, messaging };
+
+    try {
+      const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      setPersistence(auth, browserLocalPersistence);
+      const firestore = getFirestore(app);
+      let messaging: Messaging | null = null;
+      if (typeof window !== 'undefined') {
+        try {
+          messaging = getMessaging(app);
+        } catch (e) {
+          console.error("Could not initialize messaging", e);
+        }
+      }
+      setInitializationState('success');
+      return { firebaseApp: app, auth, firestore, messaging, initializationState: 'success' };
+    } catch (error) {
+      console.error("Firebase initialization failed:", error);
+      setInitializationState('error');
+      return { firebaseApp: null, firestore: null, auth: null, messaging: null, initializationState: 'error' };
+    }
   }, []);
 
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(services.auth, (firebaseUser) => {
-      setUser(firebaseUser);
+    if (services.auth) {
+      const unsubscribe = onAuthStateChanged(services.auth, (firebaseUser) => {
+        setUser(firebaseUser);
+        setIsAuthLoading(false);
+      });
+      return () => unsubscribe();
+    } else {
       setIsAuthLoading(false);
-    });
-    return () => unsubscribe();
+    }
   }, [services.auth]);
 
   const userProfileRef = useMemoFirebase(
     () => (services.firestore && user ? doc(services.firestore, 'users', user.uid) : null),
     [services.firestore, user]
   );
+  
   const { data: profile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
 
   const userContextValue = useMemo<UserContextState>(() => ({
     user,
     profile: profile || null,
-    loading: isAuthLoading || (!!user && isProfileLoading),
-  }), [user, profile, isAuthLoading, isProfileLoading]);
+    loading: services.initializationState === 'loading' || isAuthLoading || (!!user && isProfileLoading),
+  }), [user, profile, services.initializationState, isAuthLoading, isProfileLoading]);
 
   return (
-    <FirebaseServicesContext.Provider value={services}>
+    <FirebaseServicesContext.Provider value={{...services, initializationState}}>
       <UserContext.Provider value={userContextValue}>
-        <FirebaseErrorListener />
+        {initializationState === 'success' && <FirebaseErrorListener />}
         {children}
       </UserContext.Provider>
     </FirebaseServicesContext.Provider>
   );
 }
+
 
 // --- Hooks ---
 
@@ -101,10 +116,12 @@ function useFirebaseServices() {
   return context;
 }
 
-export const useAuth = (): Auth => useFirebaseServices().auth;
-export const useFirestore = (): Firestore => useFirebaseServices().firestore;
-export const useFirebaseApp = (): FirebaseApp => useFirebaseServices().firebaseApp;
+export const useAuth = (): Auth | null => useFirebaseServices().auth;
+export const useFirestore = (): Firestore | null => useFirebaseServices().firestore;
+export const useFirebaseApp = (): FirebaseApp | null => useFirebaseServices().firebaseApp;
 export const useMessaging = (): Messaging | null => useFirebaseServices().messaging;
+export const useFirebaseInitialization = (): InitializationState => useFirebaseServices().initializationState;
+
 
 export function useUser(): UserContextState {
   const context = useContext(UserContext);

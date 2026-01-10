@@ -1,3 +1,4 @@
+
 // src/app/login/LoginPageClient.tsx
 'use client';
 
@@ -34,7 +35,10 @@ export default function LoginPageClient() {
             toast({ variant: 'destructive', title: 'Campos requeridos', description: 'Por favor, ingresa email y contraseña.' });
             return;
         }
-        if (!auth) return;
+        if (!auth) {
+            toast({ variant: 'destructive', title: 'Error de configuración', description: 'El servicio de autenticación no está disponible.' });
+            return;
+        }
 
         setIsSubmitting(true);
         try {
@@ -53,7 +57,10 @@ export default function LoginPageClient() {
             toast({ variant: 'destructive', title: 'Email requerido', description: 'Por favor, ingresá tu email para restablecer la contraseña.' });
             return;
         }
-        if (!auth) return;
+        if (!auth) {
+            toast({ variant: 'destructive', title: 'Error de configuración', description: 'El servicio de autenticación no está disponible.' });
+            return;
+        };
         
         setIsSubmitting(true);
         try {
@@ -72,7 +79,7 @@ export default function LoginPageClient() {
             return;
         }
         if (!auth || !firestore) {
-            toast({ variant: 'destructive', title: 'Error de sistema', description: 'Firebase no está inicializado.' });
+            toast({ variant: 'destructive', title: 'Error de sistema', description: 'Firebase no está inicializado correctamente.' });
             return;
         }
 
@@ -112,7 +119,7 @@ export default function LoginPageClient() {
                             <Label htmlFor="password">Contraseña</Label>                            
                             <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting}/>
                         </div>
-                        <Button onClick={handleSignIn} disabled={isSubmitting} className="w-full">
+                        <Button onClick={handleSignIn} disabled={isSubmitting || !auth} className="w-full">
                             {isSubmitting ? 'Ingresando...' : 'Iniciar Sesión'}
                         </Button>
                     </div>
@@ -120,7 +127,7 @@ export default function LoginPageClient() {
                     <div className="text-center text-sm mt-4">
                          <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="link" className="text-muted-foreground p-0 h-auto">¿Olvidaste tu contraseña?</Button>
+                                <Button variant="link" className="text-muted-foreground p-0 h-auto" disabled={!auth}>¿Olvidaste tu contraseña?</Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
@@ -146,10 +153,10 @@ export default function LoginPageClient() {
                     <div className="text-center space-y-2">
                         <p className="text-sm text-muted-foreground">Si sos nuevo, colocá un email y una contraseña y seleccioná si sos pasajero o querés conducir con VamO.</p>
                         <div className="flex gap-4 justify-center">
-                            <Button variant="link" onClick={() => handleSignUp('passenger')} disabled={isSubmitting}>
+                            <Button variant="link" onClick={() => handleSignUp('passenger')} disabled={isSubmitting || !auth}>
                                 Pasajero
                             </Button>
-                            <Button variant="link" onClick={() => handleSignUp('driver')} disabled={isSubmitting}>
+                            <Button variant="link" onClick={() => handleSignUp('driver')} disabled={isSubmitting || !auth}>
                                 Conductor
                             </Button>
                         </div>

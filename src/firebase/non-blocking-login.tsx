@@ -10,12 +10,16 @@ import { UserProfile } from '@/lib/types';
 
 
 /** Initiate anonymous sign-in (non-blocking). */
-export function initiateAnonymousSignIn(authInstance: Auth): void {
+export function initiateAnonymousSignIn(authInstance: Auth | null): void {
+  if (!authInstance) return;
   signInAnonymously(authInstance);
 }
 
 /** Initiate email/password sign-up (non-blocking). */
-export async function initiateEmailSignUp(authInstance: Auth, firestore: Firestore, email: string, password: string): Promise<void> {
+export async function initiateEmailSignUp(authInstance: Auth | null, firestore: Firestore | null, email: string, password: string): Promise<void> {
+  if (!authInstance || !firestore) {
+    throw new Error("Firebase not initialized correctly.");
+  }
   try {
     const userCredential = await createUserWithEmailAndPassword(authInstance, email, password);
     const user = userCredential.user;
@@ -43,7 +47,10 @@ export async function initiateEmailSignUp(authInstance: Auth, firestore: Firesto
 }
 
 /** Initiate email/password sign-up for a DRIVER (non-blocking). */
-export async function initiateDriverEmailSignUp(authInstance: Auth, firestore: Firestore, email: string, password: string): Promise<void> {
+export async function initiateDriverEmailSignUp(authInstance: Auth | null, firestore: Firestore | null, email: string, password: string): Promise<void> {
+  if (!authInstance || !firestore) {
+    throw new Error("Firebase not initialized correctly.");
+  }
   try {
     const userCredential = await createUserWithEmailAndPassword(authInstance, email, password);
     const user = userCredential.user;

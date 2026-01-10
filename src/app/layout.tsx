@@ -6,6 +6,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import ClientProviders from './ClientProviders';
 
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,7 @@ export const viewport = {
   themeColor: '#1A237E',
 };
 
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -42,9 +44,9 @@ export default function RootLayout({
         )}
       >
         <ClientProviders>
-          <div className="relative flex min-h-screen flex-col">
-            <main className="flex-1">{children}</main>
-          </div>
+            <div className="relative flex min-h-screen flex-col">
+              <main className="flex-1">{children}</main>
+            </div>
           <Toaster />
         </ClientProviders>
       </body>
