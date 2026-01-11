@@ -180,8 +180,8 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
         const directionsService = new window.google.maps.DirectionsService();
         directionsService.route(
             {
-                origin: new window.google.maps.LatLng(ride.driverLocation.lat, ride.driverLocation.lng),
-                destination: new window.google.maps.LatLng(newDestination.lat, newDestination.lng),
+                origin: new google.maps.LatLng(ride.driverLocation.lat, ride.driverLocation.lng),
+                destination: new google.maps.LatLng(newDestination.lat, newDestination.lng),
                 travelMode: window.google.maps.TravelMode.DRIVING,
             },
             (result, status) => {
@@ -224,8 +224,8 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
     const directionsService = new window.google.maps.DirectionsService();
     directionsService.route(
         {
-            origin: new window.google.maps.LatLng(ride.driverLocation.lat, ride.driverLocation.lng),
-            destination: new window.google.maps.LatLng(newDestination.lat, newDestination.lng),
+            origin: new google.maps.LatLng(ride.driverLocation.lat, ride.driverLocation.lng),
+            destination: new google.maps.LatLng(newDestination.lat, newDestination.lng),
             travelMode: window.google.maps.TravelMode.DRIVING,
         },
         async (result, status) => {
@@ -247,7 +247,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                     'pricing.extraDistanceMeters': increment(extraDistanceMeters),
                     rerouteHistory: [
                         ...(ride.rerouteHistory || []),
-                        { from: ride.destination, to: newDestination, cost: extraCost, distanceMeters: extraDistanceMeters, createdAt: serverTimestamp() }
+                        { from: ride.destination, to: newDestination, cost: extraCost, distanceMeters: extraDistanceMeters, timeMinutes: 0, createdAt: serverTimestamp() }
                     ],
                     updatedAt: serverTimestamp()
                 });
@@ -448,3 +448,5 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
     </>
   );
 }
+
+    

@@ -64,8 +64,8 @@ export default function DriverRideCard({
     const directionsService = new window.google.maps.DirectionsService();
     directionsService.route(
         {
-            origin: new window.google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
-            destination: new window.google.maps.LatLng(ride.origin.lat, ride.origin.lng),
+            origin: new google.maps.LatLng(profile.currentLocation.lat, profile.currentLocation.lng),
+            destination: new google.maps.LatLng(ride.origin.lat, ride.origin.lng),
             travelMode: window.google.maps.TravelMode.DRIVING,
         },
         (result, status) => {
@@ -151,3 +151,5 @@ export default function DriverRideCard({
     </Card>
   );
 }
+
+    
