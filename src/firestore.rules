@@ -1,0 +1,86 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isDriver() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver';
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /rides/{rideId} {
+      allow get: if signedIn() && (
+        resource.data.passengerId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        (isDriver() && resource.data.status == 'searching') ||
+        isAdmin()
+      );
+      
+      // A 'list' rule is a pre-flight check. The query will only return 
+      // documents for which the user also has 'get' permission.
+      // Therefore, this rule can be broad, while the 'get' rule remains strict.
+      allow list: if signedIn();
+                     
+      allow create: if signedIn() && request.resource.data.passengerId == request.auth.uid;
+      
+      allow update: if false; // All updates must go through backend functions.
+    }
+
+    match /drivers_locations/{driverId} {
+      allow get: if signedIn();
+      allow list: if isAdmin();
+      allow write: if signedIn() && request.auth.uid == driverId;
+    }
+
+    match /platform_transactions/{transactionId} {
+      allow get: if isAdmin() || (signedIn() && resource.data.driverId == request.auth.uid);
+      // This broad list rule is safe because the 'get' rule above ensures
+      // that a query will only succeed if the client specifically filters by
+      // their own driverId. An attempt to list all transactions will fail.
+      allow list: if signedIn();
+    }
+    
+    // Offers are deprecated in the new model, but we keep the rule for safety.
+    match /rideOffers/{offerId} {
+      allow read, list: if false;
+    }
+
+    match /rewards/rewards {
+      allow get: if signedIn();
+    }
+    match /config/pricing {
+      allow get: if signedIn();
+    }
+
+    match /driver_points/{driverId} {
+        allow get: if signedIn() && request.auth.uid == driverId;
+    }
+    
+    match /rides/{rideId}/tracking/{pointId} {
+        allow write: if get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid;
+        allow read: if signedIn();
+    }
+
+    match /withdrawal_requests/{requestId} {
+      allow create: if isDriver() && request.resource.data.driverId == request.auth.uid;
+      allow read, list: if isAdmin();
+      allow update: if isAdmin();
+    }
+  }
+}

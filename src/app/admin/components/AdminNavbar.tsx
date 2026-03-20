@@ -1,0 +1,60 @@
+
+'use client'
+
+import React from 'react';
+import Link from 'next/link'
+import { VamoIcon } from '@/components/VamoIcon'
+import { usePathname } from 'next/navigation'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/firebase'
+import { signOut } from 'firebase/auth'
+import { useRouter } from 'next/navigation'
+
+const navLinks = [
+    { href: '/admin/dashboard', label: 'Dashboard' },
+    { href: '/admin/drivers', label: 'Conductores' },
+    { href: '/admin/withdrawals', label: 'Retiros' },
+]
+
+export function AdminNavbar() {
+  const pathname = usePathname()
+  const auth = useAuth()
+  const router = useRouter()
+
+  const isActive = (href: string) => {
+    return pathname.startsWith(href);
+  }
+
+  const handleLogout = async () => {
+    if (auth) {
+        await signOut(auth)
+        router.push('/login')
+    }
+  }
+
+  return (
+    <nav className="flex items-center gap-6 border-b bg-background p-4 sticky top-0 z-10">
+        <VamoIcon name="shield-check" className="h-6 w-6 text-primary" />
+        <span className="hidden md:inline font-bold">Admin VamO</span>
+        {navLinks.map(link => (
+            <Link 
+                key={link.href}
+                href={link.href}
+                className={cn(
+                    "text-sm font-medium transition-colors hover:text-primary",
+                    isActive(link.href) ? "text-primary" : "text-muted-foreground"
+                )}
+            >
+                {link.label}
+            </Link>
+        ))}
+        <div className="ml-auto">
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+                <VamoIcon name="logout" className="mr-2 h-4 w-4" />
+                Cerrar Sesión
+            </Button>
+        </div>
+    </nav>
+  )
+}

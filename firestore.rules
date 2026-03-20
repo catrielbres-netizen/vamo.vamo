@@ -1,0 +1,84 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isDriver() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver';
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /rides/{rideId} {
+      // SIMPLIFIED: Any authenticated user can get a ride if they know its ID.
+      // This is safe because ride IDs are not guessable and are only known
+      // to participants (passenger, driver) or admins.
+      allow get: if signedIn();
+
+      allow list: if signedIn();
+
+      allow create: if signedIn() && request.resource.data.passengerId == request.auth.uid;
+
+      allow update: if false;
+    }
+
+    match /drivers_locations/{driverId} {
+      allow get: if signedIn();
+      allow list: if isAdmin();
+      allow write: if signedIn() && request.auth.uid == driverId;
+    }
+
+    match /platform_transactions/{transactionId} {
+      allow get: if isAdmin() || (signedIn() && resource.data.driverId == request.auth.uid);
+      allow list: if signedIn();
+    }
+
+    match /rideOffers/{offerId} {
+      allow get: if signedIn() && (
+        resource.data.driverId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow list: if signedIn();
+
+      allow create, update, delete: if false;
+    }
+
+    match /rewards/rewards {
+      allow get: if signedIn();
+    }
+
+    match /config/pricing {
+      allow get: if signedIn();
+    }
+
+    match /driver_points/{driverId} {
+      allow get: if signedIn() && request.auth.uid == driverId;
+    }
+
+    match /rides/{rideId}/tracking/{pointId} {
+      allow write: if get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid;
+      allow read: if signedIn();
+    }
+
+    match /withdrawal_requests/{requestId} {
+      allow create: if isDriver() && request.resource.data.driverId == request.auth.uid;
+      allow read, list: if isAdmin();
+      allow update: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,391 @@
+
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user in the VamO system, can be a passenger, driver, admin, or municipal admin.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "role": {
+          "type": "string",
+          "description": "The user's role: passenger, driver, admin, or admin_municipal."
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's full name."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        },
+        "city": {
+            "type": "string",
+            "description": "The city where the user is primarily located."
+        },
+        "country": {
+            "type": "string",
+            "description": "The country code of the user (e.g., 'AR')."
+        },
+        "nonWithdrawableBalance": {
+            "type": "number",
+            "description": "The portion of the balance that is promotional and cannot be withdrawn (e.g., welcome bonus)."
+        },
+        "vehicleType": {
+          "type": "string",
+          "description": "For drivers, the type of vehicle: taxi or remis."
+        },
+        "vehicleModel": {
+            "type": "string",
+            "description": "The model of the driver's vehicle (e.g., 'Toyota Etios')."
+        },
+        "vehicleColor": {
+            "type": "string",
+            "description": "The color of the driver's vehicle."
+        },
+        "plateNumber": {
+            "type": "string",
+            "description": "The license plate number of the driver's vehicle."
+        },
+        "licenseNumber": {
+          "type": "string",
+          "description": "The driver's official license number."
+        },
+        "licenseVerified": {
+          "type": "boolean",
+          "description": "Indicates if the driver's license has been verified by an admin."
+        },
+        "servicesOffered": {
+          "type": "object",
+          "description": "Specifies which services a driver has opted into.",
+          "properties": {
+            "express": { "type": "boolean" },
+            "premium": { "type": "boolean" }
+          }
+        },
+        "rewardPoints": {
+            "type": "number",
+            "description": "Gamification points earned by the driver."
+        },
+        "stats": {
+            "type": "object",
+            "description": "Performance and activity metrics for the user.",
+            "properties": {
+                "ridesCompleted": {
+                    "type": "number",
+                    "description": "Total number of completed rides."
+                },
+                "acceptanceRate": {
+                    "type": "number",
+                    "description": "The driver's ride acceptance rate."
+                },
+                "cancellationRate": {
+                    "type": "number",
+                    "description": "The driver's ride cancellation rate."
+                }
+            }
+        },
+        "documentation": {
+          "type": "object",
+          "description": "Contains the status and expiration of all driver-related documents.",
+          "properties": {
+            "dni": { "$ref": "#/entities/DriverDocument" },
+            "license": { "$ref": "#/entities/DriverDocument" },
+            "insurance": { "$ref": "#/entities/DriverDocument" },
+            "municipalHabilitation": { "$ref": "#/entities/DriverDocument" },
+            "disinfectionCertificate": { "$ref": "#/entities/DriverDocument" }
+          }
+        },
+        "driverStatus": {
+          "type": "string",
+          "description": "The driver's current operational status (denormalized for UI).",
+          "enum": ["offline", "inactive", "online", "in_ride"]
+        },
+        "municipalStatus": {
+          "type": "string",
+          "description": "The driver's official status as per the municipality.",
+          "enum": ["approved", "suspended", "expired", "pending_review"]
+        },
+        "lastDisinfectionAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last disinfection."
+        },
+        "disinfectionExpiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Expiration date of the last disinfection certificate."
+        },
+        "isTripInsured": {
+          "type": "boolean",
+          "description": "Indicates if the driver has trip-based insurance active."
+        },
+        "fcmToken": {
+          "type": "string",
+          "description": "Firebase Cloud Messaging token for push notifications."
+        }
+      },
+      "required": ["id", "role", "name", "email"]
+    },
+    "DriverLocation": {
+        "title": "Driver Location",
+        "type": "object",
+        "description": "Stores the real-time location and operational status of a driver for fast querying.",
+        "properties": {
+          "geohash": { "type": "string" },
+          "currentLocation": { "type": "object", "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } } },
+          "lastSeenAt": { "type": "string", "format": "date-time" },
+          "driverStatus": { "type": "string", "enum": ["offline", "inactive", "online", "in_ride"] },
+          "approved": { "type": "boolean" },
+          "isSuspended": { "type": "boolean" },
+          "pendingOffers": { "type": "number" }
+        },
+        "required": ["lastSeenAt", "driverStatus"]
+    },
+    "Ride": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Ride",
+      "type": "object",
+      "description": "Represents a ride request and its details.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Ride entity."
+        },
+        "passengerId": {
+          "type": "string",
+          "description": "Reference to Passenger. (Relationship: Passenger 1:N Ride)"
+        },
+        "driverId": {
+          "type": "string",
+          "description": "Reference to Driver. (Relationship: Driver 1:N Ride)"
+        },
+        "origin": {
+          "type": "string",
+          "description": "The starting location of the ride."
+        },
+        "destination": {
+          "type": "string",
+          "description": "The destination of the ride."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the ride (e.g., requested, searching, en route, active, paused, completed)."
+        },
+        "fare": {
+          "type": "number",
+          "description": "The calculated fare for the ride."
+        },
+        "serviceType": {
+          "type": "string",
+          "description": "The type of ride service selected (Premium, Express)."
+        },
+        "startTime": {
+          "type": "string",
+          "description": "The date and time when the ride started.",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "The date and time when the ride ended.",
+          "format": "date-time"
+        },
+        "matchingStartedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the matching engine started searching for drivers."
+        },
+        "matchingExpiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the ride request expires if no driver is found."
+        },
+        "notifiedDrivers": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of driver IDs that have been notified for this ride to avoid duplicates."
+        },
+        "requestRadius": {
+            "type": "number",
+            "description": "The radius in meters for the driver search."
+        },
+        "city": {
+            "type": "string",
+            "description": "The city where the ride was requested."
+        },
+        "matchingVersion": {
+            "type": "string",
+            "description": "Version of the matching algorithm used for this ride."
+        },
+        "pricingVersion": {
+            "type": "string",
+            "description": "Version of the pricing algorithm used for fare estimation."
+        }
+      },
+      "required": [
+        "id",
+        "passengerId",
+        "origin",
+        "destination",
+        "status",
+        "fare",
+        "serviceType"
+      ]
+    },
+    "DriverDocument": {
+      "title": "Driver Document",
+      "type": "object",
+      "description": "Represents a single piece of documentation for a driver.",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["valid", "expired", "pending_review", "rejected"],
+          "description": "The current status of the document."
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The expiration date of the document."
+        },
+        "fileUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to the stored document file (e.g., in Firebase Storage)."
+        }
+      },
+      "required": ["status"]
+    },
+    "RideOffer": {
+        "title": "Ride Offer",
+        "type": "object",
+        "description": "Represents an offer sent to a specific driver for a specific ride.",
+        "properties": {
+            "rideId": { "type": "string" },
+            "driverId": { "type": "string" },
+            "status": { "type": "string", "enum": ["pending", "accepted", "rejected", "expired", "cancelled"] },
+            "sentAt": { "type": "string", "format": "date-time" },
+            "expiresAt": { "type": "string", "format": "date-time" },
+            "finalizedAt": { "type": "string", "format": "date-time", "description": "Timestamp when the offer was finalized (accepted, rejected, expired, etc.)." },
+            "score": { "type": "number" },
+            "distanceMeters": { "type": "number", "description": "Distance in meters from the driver to the pickup point at the time of the offer." },
+            "round": { "type": "number", "description": "The matching round this offer was sent in (1, 2, 3...)." }
+        },
+        "required": ["rideId", "driverId", "status", "sentAt", "expiresAt", "round"]
+    },
+    "WithdrawalRequest": {
+        "title": "Withdrawal Request",
+        "type": "object",
+        "description": "Represents a driver's request to withdraw funds from their wallet.",
+        "properties": {
+            "driverId": { "type": "string" },
+            "driverName": { "type": "string" },
+            "amount": { "type": "number" },
+            "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+            "bankInfo": {
+                "type": "object",
+                "properties": {
+                    "accountHolder": { "type": "string" },
+                    "cbuOrAlias": { "type": "string" }
+                }
+            },
+            "createdAt": { "type": "string", "format": "date-time" },
+            "processedAt": { "type": "string", "format": "date-time" },
+            "processedBy": { "type": "string", "description": "Admin UID who processed the request." }
+        },
+        "required": ["driverId", "driverName", "amount", "status", "bankInfo", "createdAt"]
+    }
+  },
+  "auth": {
+    "providers": ["password", "anonymous"]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/entities/User"
+          },
+          "description": "Stores user profiles. Each document is uniquely identified by the user's ID. This now includes detailed driver documentation and municipal status.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/drivers_locations/{driverId}",
+        "definition": {
+          "entityName": "DriverLocation",
+          "schema": {
+            "$ref": "#/entities/DriverLocation"
+          },
+          "description": "Optimized collection for fast, real-time geo-queries of available drivers.",
+          "params": [
+            {
+              "name": "driverId",
+              "description": "The unique identifier for the driver."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/rides/{rideId}",
+        "definition": {
+          "entityName": "Ride",
+          "schema": {
+            "$ref": "#/entities/Ride"
+          },
+          "description": "Stores ride details. This collection is central to the application's operation.",
+          "params": [
+            {
+              "name": "rideId",
+              "description": "The unique identifier for the ride."
+            }
+          ]
+        }
+      },
+      {
+          "path": "/rideOffers/{offerId}",
+          "definition": {
+              "entityName": "RideOffer",
+              "schema": {
+                  "$ref": "#/entities/RideOffer"
+              },
+              "description": "Stores individual ride offers sent to drivers to avoid race conditions and manage the matching lifecycle.",
+              "params": [
+                  {
+                      "name": "offerId",
+                      "description": "The unique identifier for the ride offer."
+                  }
+              ]
+          }
+      },
+      {
+          "path": "/withdrawal_requests/{requestId}",
+          "definition": {
+              "entityName": "WithdrawalRequest",
+              "schema": {
+                  "$ref": "#/entities/WithdrawalRequest"
+              },
+              "description": "Stores driver withdrawal requests for admin processing.",
+              "params": [
+                  {
+                      "name": "requestId",
+                      "description": "The unique identifier for the withdrawal request."
+                  }
+              ]
+          }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to support the VamO application's features, including ride requests, fare calculations, user role management, and real-time updates. The structure prioritizes authorization independence and simplifies security rules.  \n\nAuthorization Independence: For the Rides subcollection under each user (both passengers and drivers), relevant user information (roles) can be denormalized into the ride documents. This avoids the need for `get()` calls in security rules to verify user roles, thus enabling atomic operations.\n\nQAPs (Query Approval Policies): The structure ensures secure `list` operations by segregating data based on user roles and relationships (e.g., rides owned by passengers are stored under their respective user documents). This segregation, combined with path-based rules, enables secure listing of resources.\n\nData Clarity and Predictability:  Explicit state modeling is used with the `status` field in the `Ride` entity to represent the ride's state clearly (e.g., 'requested', 'searching', 'en route', 'active', 'paused', 'completed').\n"
+  }
+}
