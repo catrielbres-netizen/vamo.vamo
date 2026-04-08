@@ -19,6 +19,8 @@ interface DriverDashboardContextType {
   loading: boolean;
   error: string | null;
   newRideIds: Set<string>;
+  currentLocation: { lat: number, lng: number } | null;
+  setCurrentLocation: (loc: { lat: number, lng: number } | null) => void;
 }
 
 const DriverDashboardContext = createContext<DriverDashboardContextType | undefined>(
@@ -26,33 +28,24 @@ const DriverDashboardContext = createContext<DriverDashboardContextType | undefi
 );
 
 async function fetchAndEnrichRides(rides: WithId<RideOffer>[]): Promise<EnrichedRideOffer[]> {
-    const db = getFirestore();
-    const enrichedRides: EnrichedRideOffer[] = [];
-
-    for (const rideOffer of rides) {
-        const rideDocRef = doc(db, 'rides', rideOffer.rideId);
-        const rideDocSnap = await getDoc(rideDocRef);
-
-        if (rideDocSnap.exists()) {
-            const rideData = rideDocSnap.data() as Ride;
-            enrichedRides.push({
-                ...rideOffer,
-                passengerName: rideData.passengerName,
-                origin: rideData.origin,
-                destination: rideData.destination,
-                pricing: rideData.pricing,
-            });
-        } else {
-          enrichedRides.push({
-            ...rideOffer,
-            passengerName: null,
-            origin: { address: 'No disponible', lat: 0, lng: 0 },
-            destination: { address: 'No disponible', lat: 0, lng: 0 },
-            pricing: { estimatedTotal: 0, estimatedDistanceMeters: 0 },
-        });
+    // Current RideOffer already has denormalized data (origin, destination, passengerName, pricing).
+    // We no longer need to fetch the 'rides' document sequentially for each offer.
+    return rides.map(offer => ({
+        ...offer,
+        // These fields are now guaranteed to be in the RideOffer document from the backend.
+        // We provide defaults just in case of older documents.
+        passengerName: offer.passengerName || "Pasajero",
+        origin: offer.origin,
+        destination: offer.destination,
+        pricing: {
+            estimated: {
+                total: offer.estimatedTotal,
+                breakdown: {} as any, // Only total is critical for initial broadcast display
+                configSnapshot: {} as any,
+                calculatedAt: null as any,
+            }
         }
-    }
-    return enrichedRides;
+    }));
 }
 
 export const DriverRidesProvider = ({ children }: { children: React.ReactNode }) => {
@@ -67,6 +60,7 @@ export const DriverRidesProvider = ({ children }: { children: React.ReactNode })
   
   const [enrichedRides, setEnrichedRides] = useState<EnrichedRideOffer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number, lng: number } | null>(null);
 
   useEffect(() => {
     if (initialLoading) {
@@ -88,7 +82,9 @@ export const DriverRidesProvider = ({ children }: { children: React.ReactNode })
     loading: isLoading,
     error,
     newRideIds,
-  }), [enrichedRides, isLoading, error, newRideIds]);
+    currentLocation,
+    setCurrentLocation
+  }), [enrichedRides, isLoading, error, newRideIds, currentLocation]);
 
   return (
     <DriverDashboardContext.Provider value={value}>

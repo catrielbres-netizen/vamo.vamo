@@ -1,33 +1,40 @@
 'use client';
-import React from 'react';
-import { TripCard } from './TripCard';
-import { DriverInfo } from './DriverInfo';
-import { useEffect, useState, useMemo } from 'react';
-import { doc, serverTimestamp, updateDoc, arrayUnion, runTransaction, Timestamp } from 'firebase/firestore';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter
-} from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
+
+import React, { useEffect, useState, useMemo } from 'react';
+import { doc, Timestamp } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { 
+  AlertDialog, 
+  AlertDialogTrigger, 
+  AlertDialogContent, 
+  AlertDialogHeader, 
+  AlertDialogTitle, 
+  AlertDialogDescription, 
+  AlertDialogFooter 
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { VamoIcon } from '@/components/VamoIcon';
-import { useFirestore, useUser, useFirebaseApp, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirestore, useFirebaseApp, useDoc, useMemoFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { WithId } from '@/firebase/firestore/use-collection';
-import { Ride, Place } from '@/lib/types';
+import { Ride, isPanicButtonVisible } from '@/lib/types';
 import { WAITING_PER_MIN } from '@/lib/pricing';
-import RideMap from './RideMap';
-import { Map } from '@vis.gl/react-google-maps';
-import MapSelector from './MapSelector';
 import { haversineDistance } from '@/lib/geo';
 import { useMapsAvailability } from '@/components/MapsProvider';
 import { Alert, AlertDescription as AlertDescriptionUI, AlertTitle } from './ui/alert';
+import { PassengerSearchingSheet } from './PassengerSearchingSheet';
+import { PassengerRideHeader } from './PassengerRideHeader';
+import { PassengerTripCard } from './PassengerTripCard';
+import { PassengerDriverCard } from './PassengerDriverCard';
 import { WaitTimerDialog } from './WaitTimerDialog';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { PanicButton } from './PanicButton';
+import { useWaitTimer } from '@/hooks/useWaitTimer';
+import RideMap from './RideMap';
+import { VamoBottomSheet } from './VamoBottomSheet';
+import { ChatContainer } from './Chat/ChatContainer';
+import { Map } from '@vis.gl/react-google-maps';
+import { RideReceipt } from './RideReceipt';
+import { cn } from '@/lib/utils';
 
 function formatCurrency(value: number) {
   if (typeof value !== 'number' || isNaN(value)) return '$...';
@@ -37,51 +44,57 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+const STATUS_CONFIG: Record<string, { title: string; subtitle: string }> = {
+    searching: { title: "Buscando conductor", subtitle: "Conectando con un vehículo cercano..." },
+    driver_assigned: { title: "Conductor en camino", subtitle: "Ya confirmamos tu viaje" },
+    driver_arrived: { title: "Conductor llegó", subtitle: "Te está esperando en el punto de encuentro" },
+    in_progress: { title: "Viaje en curso", subtitle: "Dirigiéndote a tu destino" },
+    paused: { title: "Viaje en espera", subtitle: "El conductor ha pausado el cronómetro" },
+    completed: { title: "Viaje finalizado", subtitle: "Gracias por viajar con VamO" },
+    cancelled: { title: "Viaje cancelado", subtitle: "No se pudo concretar el viaje" },
+};
+
 export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, onNewRide: () => void }) {
   const firestore = useFirestore();
-  const { user } = useUser();
   const firebaseApp = useFirebaseApp();
   const { toast } = useToast();
   const { mapsAvailable } = useMapsAvailability();
   
-  const [isMapSelectorOpen, setMapSelectorOpen] = useState(false);
-  const [isRerouteModalOpen, setRerouteModalOpen] = useState(false);
+  const { waitMinutes, waitCost, isCurrentlyWaiting, hasWaitData } = useWaitTimer(ride);
   
-  const [newDestination, setNewDestination] = useState<Place | null>(null);
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [newFare, setNewFare] = useState<number | null>(null);
-
-  const [waitMinutes, setWaitMinutes] = useState('00:00');
-  const [waitCost, setWaitCost] = useState(0);
   const [isWaitTimerOpen, setIsWaitTimerOpen] = useState(false);
   const [driverEta, setDriverEta] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  
+  // FCM Denied State (Bloque 6 Fix)
+  const [isFcmDenied, setIsFcmDenied] = useState(false);
+
+  useEffect(() => {
+    if (typeof Notification !== 'undefined') {
+      setIsFcmDenied(Notification.permission === 'denied');
+    }
+  }, []);
 
   const driverLocationRef = useMemoFirebase(() => {
     if (!firestore || !ride.driverId) return null;
     return doc(firestore, "drivers_locations", ride.driverId);
   }, [firestore, ride.driverId]);
 
-  const { data: driverLocationData } = useDoc<{ currentLocation?: any }>(driverLocationRef);
+  const { data: driverLocationData } = useDoc<any>(driverLocationRef);
   
-  // DEBUGGING LOG
-  console.log('driverLocationData =>', driverLocationData);
-  console.log('driverLocationData.currentLocation =>', driverLocationData?.currentLocation);
-
-  const transformedDriverLocation = useMemo(() => {
+  const driverLocation = useMemo(() => {
     const loc = driverLocationData?.currentLocation;
     if (!loc) return null;
-    // Handle both {lat, lng} and GeoPoint {latitude, longitude}
-    const lat = (loc as any).lat ?? (loc as any).latitude;
-    const lng = (loc as any).lng ?? (loc as any).longitude;
+    const lat = loc.lat ?? loc.latitude;
+    const lng = loc.lng ?? loc.longitude;
     if (lat == null || lng == null) return null;
     return { lat, lng };
   }, [driverLocationData]);
 
-
   useEffect(() => {
-    if (ride.status === 'driver_assigned' && transformedDriverLocation && ride.origin) {
-        const distance = haversineDistance(transformedDriverLocation, ride.origin);
-        // Average speed 30 km/h -> 8.33 m/s
+    if (ride.status === 'driver_assigned' && driverLocation && ride.origin) {
+        const distance = haversineDistance(driverLocation, ride.origin);
         const etaSeconds = distance / 8.33;
         const etaMinutes = Math.ceil(etaSeconds / 60);
 
@@ -95,67 +108,21 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
     } else {
         setDriverEta(null);
     }
-  }, [transformedDriverLocation, ride.origin, ride.status]);
+  }, [driverLocation, ride.origin, ride.status]);
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-    
-    const isCurrentlyWaiting = ride.status === 'driver_arrived' || ride.status === 'paused';
-    
-    if (isCurrentlyWaiting) {
-      setIsWaitTimerOpen(true);
-    } else {
-      setIsWaitTimerOpen(false);
-    }
-
-    const historicalWaitingSeconds = (ride.pauseHistory || []).reduce((acc, p) => acc + p.duration, 0);
-
-    const updateWaitState = (totalSeconds: number) => {
-        const totalMinutes = Math.floor(totalSeconds / 60);
-        const remainingSeconds = Math.floor(totalSeconds % 60);
-        setWaitMinutes(`${String(totalMinutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`);
-        
-        const costOfWait = Math.ceil(Math.max(0, totalSeconds) / 60) * WAITING_PER_MIN;
-        setWaitCost(costOfWait);
-    };
-
-    if (isCurrentlyWaiting) {
-      const startTimeStamp = ride.status === 'driver_arrived' ? ride.arrivedAt : ride.pauseStartedAt;
-        
-      if (startTimeStamp instanceof Timestamp) {
-        const startTime = startTimeStamp.toDate();
-        
-        intervalId = setInterval(() => {
-          const now = new Date();
-          const currentOngoingSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
-          updateWaitState(historicalWaitingSeconds + Math.max(0, currentOngoingSeconds));
-        }, 1000);
-
-        const initialCurrentSeconds = Math.floor((new Date().getTime() - startTime.getTime()) / 1000);
-        updateWaitState(historicalWaitingSeconds + Math.max(0, initialCurrentSeconds));
-
-      } else {
-        updateWaitState(historicalWaitingSeconds);
-      }
-    } else {
-      updateWaitState(historicalWaitingSeconds);
-    }
-    
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [ride.status, ride.arrivedAt, ride.pauseStartedAt, ride.pauseHistory]);
+    setIsWaitTimerOpen(isCurrentlyWaiting);
+  }, [isCurrentlyWaiting]);
 
   const handleCancelRide = async () => {
     if (!ride || !firebaseApp) return;
-
+    setIsCancelling(true);
     try {
-      const functions = getFunctions(firebaseApp, 'us-central1');
+      const functions = getFunctions(undefined, 'us-central1');
       const cancelRideV1 = httpsCallable(functions, 'cancelRideV1');
       await cancelRideV1({ rideId: ride.id, reason: 'cancelled_by_passenger' });
-      
       toast({ title: 'Viaje cancelado correctamente' });
-      
+      setIsCancelDialogOpen(false);
     } catch (e: any) {
       console.error("Error cancelando el viaje (pasajero):", e);
       toast({
@@ -163,111 +130,229 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
         title: 'No se pudo cancelar el viaje',
         description: e.message || 'Intenta nuevamente',
       });
+    } finally {
+      setIsCancelling(false);
     }
   };
+
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   
-  const baseTotal = ride.pricing.finalTotal || ride.pricing.estimatedTotal;
+  // Unified Wait Timer Logic (Bloque 6 Fix)
+  // No longer need separate effect that overrides isCurrentlyWaiting
+
+  const baseTotal = ride.pricing?.final?.total || ride.pricing?.estimated?.total || (ride.pricing as any)?.finalTotal || (ride.pricing as any)?.estimatedTotal || 0;
   const currentTotalWithWait = baseTotal + waitCost;
-  
   const showMap = ['searching', 'driver_assigned', 'driver_arrived', 'in_progress', 'paused'].includes(ride.status) && mapsAvailable;
-  
   const canPassengerCancel = ride && ['searching', 'driver_assigned', 'driver_arrived'].includes(ride.status);
+
+  const config = STATUS_CONFIG[ride.status] || { title: "Estado del viaje", subtitle: "Actualizando..." };
 
   return (
     <>
+      <div className="fixed inset-0 flex flex-col bg-transparent overflow-hidden"> 
+      {/* MAP BACKGROUND */}
       {showMap && (
-        <div className="m-4 h-64 rounded-xl overflow-hidden shadow-lg border">
+        <div className="absolute inset-0 z-0">
             <Map
-                defaultCenter={ride.origin}
-                defaultZoom={16}
-                gestureHandling="greedy"
-                disableDefaultUI={true}
-                clickableIcons={false}
-                streetViewControl={false}
-                mapTypeControl={false}
-                fullscreenControl={false}
-                zoomControl={false}
-                mapId="ride-status-map"
+              defaultCenter={ride.origin}
+              defaultZoom={15}
+              gestureHandling={'greedy'}
+              disableDefaultUI={true}
+              mapId={process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || "vamo-passenger-map"}
             >
                 <RideMap 
                     status={ride.status}
                     origin={ride.origin}
                     destination={ride.destination}
-                    driverLocation={transformedDriverLocation}
+                    driverLocation={driverLocation}
+                    isExpanded={isExpanded}
                 />
             </Map>
         </div>
       )}
 
-      {!mapsAvailable && ride.status !== 'searching' && (
-         <div className="m-4">
-            <Alert variant="destructive">
-                <VamoIcon name="alert-triangle" className="h-4 w-4" />
-                <AlertTitle>Mapas Deshabilitados</AlertTitle>
-                <AlertDescriptionUI>
-                    La clave de API de Google Maps no está configurada. El mapa no se puede mostrar.
-                </AlertDescriptionUI>
-            </Alert>
+      {/* TOP STATUS OVERLAY (MINIMAL) */}
+      <div className="absolute top-6 inset-x-0 z-50 flex flex-col items-center gap-3 pointer-events-none px-6">
+          <div className="glass-morphism premium-shadow rounded-full px-5 py-2 flex items-center gap-2 pointer-events-auto border border-white/5">
+              <div className={cn("w-2 h-2 rounded-full", ride.status === 'searching' ? 'bg-indigo-500 animate-pulse' : 'bg-primary')} />
+              <span className="text-[10px] font-black uppercase tracking-widest text-white">{config.title}</span>
+          </div>
+
+          {/* FCM DENIED BANNER (Bug 2 Fix) */}
+          {isFcmDenied && (
+            <div className="glass-morphism premium-shadow border border-red-500/30 rounded-2xl px-4 py-2 flex items-center gap-3 pointer-events-auto max-w-xs animate-in slide-in-from-top-4 duration-500">
+                <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+                    <VamoIcon name="bell-off" className="w-4 h-4 text-red-500" />
+                </div>
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-black uppercase text-red-500 tracking-tighter">NOTIFICACIONES BLOQUEADAS</span>
+                    <span className="text-[9px] text-red-200/60 leading-tight">Tocá el candado 🔒 en la barra y habilitá Permisos.</span>
+                </div>
+            </div>
+          )}
+      </div>
+
+      {/* UNIFIED VAMO SHEET */}
+      <VamoBottomSheet
+        isOpen={true}
+        isExpanded={isExpanded}
+        onToggleExpand={() => setIsExpanded(!isExpanded)}
+        minHeight={ride.status === 'searching' ? '55vh' : '40vh'}
+        maxHeight="75vh"
+      >
+          {ride.status === 'searching' ? (
+             <PassengerSearchingSheet
+               serviceType={ride.serviceType as 'premium' | 'express'}
+               estimatedPrice={ride.pricing?.estimated?.total || null}
+               originAddress={ride.origin.address}
+               destinationAddress={ride.destination.address}
+               onCancel={handleCancelRide}
+               isCancelling={isCancelling}
+             />
+          ) : (ride.status === 'cancelled' || (['driver_assigned', 'driver_arrived', 'in_progress', 'paused'].includes(ride.status) && !ride.driverId)) ? (
+             <div className="flex flex-col items-center justify-center p-10 text-center animate-in fade-in duration-500">
+                 <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center mb-6">
+                     <VamoIcon name="x-circle" className="w-10 h-10 text-red-500" />
+                 </div>
+                 <h2 className="text-2xl font-black text-white uppercase mb-2">Viaje Cancelado</h2>
+                 <p className="text-zinc-500 font-medium mb-8">
+                     {ride.cancelReason === 'expired_no_acceptance' || ride.cancelReason === 'expired_no_drivers'
+                         ? "No encontramos conductores disponibles en este momento."
+                         : "El viaje no pudo completarse o fue cancelado."}
+                 </p>
+                 <Button 
+                    onClick={onNewRide}
+                    className="w-full h-14 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-black uppercase tracking-widest"
+                 >
+                    Volver a intentar
+                 </Button>
+             </div>
+          ) : (
+             <div className="flex flex-col animate-in fade-in duration-300">
+                 {/* DRIVER INFO - Only if we have a real driver assigned */}
+                 {ride.driverId ? (
+                    <PassengerDriverCard 
+                        name={ride.driverName || 'Conductor'}
+                        rating={ride.driverRating || '5.0'}
+                        vehicle={ride.driverVehicle || 'Cargando...'}
+                        plate={ride.driverPlate || '...'}
+                        vehiclePhoto={ride.driverVehiclePhoto}
+                        photoURL={(ride as any).driverPhotoUrl}
+                        eta={ride.status === 'driver_assigned' ? driverEta : null}
+                        statusText={ride.status !== 'driver_assigned' ? (ride.status === 'driver_arrived' ? 'AQUÍ' : 'EN VIAJE') : null}
+                        onChat={() => setIsChatOpen(true)}
+                        unreadCount={ride.chatSummary?.unreadCountPassenger || 0}
+                    />
+                 ) : (
+                    <div className="p-6 text-center text-zinc-500 font-bold uppercase tracking-widest">
+                        Actualizando conductor...
+                    </div>
+                 )}
+
+                 {/* ACTIVE WAIT INDICATOR (IF ANY) */}
+                 {hasWaitData && waitCost > 0 && (
+                     <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-3 mb-4 flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                             <VamoIcon name="clock" className="h-4 w-4 text-orange-500" />
+                             <span className="text-[10px] font-black uppercase text-orange-600 dark:text-orange-400">Espera: {waitMinutes} min</span>
+                         </div>
+                         <span className="text-sm font-black text-orange-600">+{formatCurrency(waitCost)}</span>
+                     </div>
+                 )}
+
+                 {/* EXPANDABLE SECTION */}
+                 {isExpanded && (
+                    <div className="flex flex-col gap-4 mb-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <PassengerTripCard 
+                            serviceType={ride.serviceType as 'premium' | 'express'}
+                            estimatedPrice={ride.pricing?.estimated?.total || null}
+                            originAddress={ride.origin.address}
+                            destinationAddress={ride.destination.address}
+                        />
+                    </div>
+                 )}
+
+                 {/* PRICE & PRIMARY ACTION */}
+                 <div className="flex flex-col gap-4 mt-2">
+                     <div className="flex items-center justify-between bg-zinc-900/50 rounded-2xl p-5 border border-white/5">
+                         <div className="flex flex-col">
+                             <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1">Total Final</span>
+                             <span className="text-2xl font-black text-white leading-none">{formatCurrency(currentTotalWithWait)}</span>
+                         </div>
+                         <VamoIcon name="credit-card" className="h-6 w-6 text-zinc-700" />
+                     </div>
+
+                     {isPanicButtonVisible(ride.status) && (
+                         <PanicButton rideId={ride.id} role="passenger" className="w-full h-14 rounded-2xl font-black uppercase tracking-widest shadow-xl border-none" />
+                     )}
+
+                     {canPassengerCancel && (
+                         <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+                             <AlertDialogTrigger asChild>
+                                 <button className="w-full h-12 flex items-center justify-center font-black text-[10px] uppercase tracking-widest text-zinc-600 hover:text-white transition-colors">
+                                     Cancelar viaje
+                                 </button>
+                             </AlertDialogTrigger>
+                             <AlertDialogContent className="rounded-[2.5rem] p-8 border-zinc-800 bg-zinc-950">
+                                 <AlertDialogHeader>
+                                     <AlertDialogTitle className="text-2xl font-black uppercase text-center text-white">¿Cancelar?</AlertDialogTitle>
+                                     <AlertDialogDescription className="text-zinc-500 text-center font-medium mt-2">
+                                         {ride.status === 'driver_arrived'
+                                         ? 'Tu conductor ya llegó al punto de encuentro.'
+                                         : 'Tu conductor ya está en camino a buscarte.'}
+                                     </AlertDialogDescription>
+                                 </AlertDialogHeader>
+                                 <div className="flex flex-col gap-3 mt-8">
+                                     <Button variant="destructive" className="rounded-2xl h-14 font-black uppercase tracking-widest" disabled={isCancelling} onClick={handleCancelRide}>
+                                         {isCancelling ? <VamoIcon name="loader" className="animate-spin mr-2" /> : 'Confirmar Cancelación'}
+                                     </Button>
+                                     <Button variant="ghost" className="rounded-2xl h-12 font-bold text-zinc-500" disabled={isCancelling} onClick={() => setIsCancelDialogOpen(false)}>
+                                         Volver
+                                     </Button>
+                                 </div>
+                             </AlertDialogContent>
+                         </AlertDialog>
+                     )}
+                 </div>
+             </div>
+          )}
+      </VamoBottomSheet>
+      
+      {/* IMMEDIATE COMPLETION RECEIPT (Bloque 6) */}
+      {ride.status === 'completed' && (
+        <div className="fixed inset-0 z-[60] bg-background pointer-events-auto overflow-y-auto px-4 py-8">
+            <RideReceipt 
+                ride={ride} 
+                onClose={onNewRide}
+                className="max-w-md mx-auto"
+            />
         </div>
       )}
+    </div>
 
-      <WaitTimerDialog
-        isOpen={isWaitTimerOpen}
-        onOpenChange={setIsWaitTimerOpen}
-        waitMinutes={waitMinutes}
-        waitCost={formatCurrency(waitCost)}
-        currentTotal={formatCurrency(currentTotalWithWait)}
-      />
+    {/* WAIT TIMER DIALOG (Bloque 3/6 Fix) */}
+    <WaitTimerDialog
+      isOpen={isWaitTimerOpen}
+      onOpenChange={setIsWaitTimerOpen}
+      waitMinutes={waitMinutes}
+      waitCost={formatCurrency(waitCost)}
+      currentTotal={formatCurrency(currentTotalWithWait)}
+    />
 
-      <TripCard
-        status={ride.status}
-        origin={ride.origin}
-        destination={ride.destination}
-      />
-      <DriverInfo
-        driver={
-          ride.driverId
-            ? {
-                name: ride.driverName || 'Conductor',
-                arrivalInfo: driverEta || (ride.status === 'driver_assigned' ? 'Calculando...' : null),
-              }
-            : null
-        }
-      />
-       <div className="m-4 p-3 text-sm rounded-lg bg-card border shadow-sm flex flex-col gap-3">
-        <div className="bg-secondary/50 p-3 rounded-md text-center">
-            <p className="text-xs text-muted-foreground">Tarifa actual estimada</p>
-            <p className="font-bold text-lg text-primary">{formatCurrency(currentTotalWithWait)}</p>
-        </div>
+    {/* CHAT OVERLAY (Pasajero) */}
+    {isChatOpen && (
+      <div className="fixed inset-0 z-[100] flex flex-col justify-end p-4 animate-in slide-in-from-bottom-5 duration-300">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsChatOpen(false)} />
+          <div className="relative z-10 w-full max-w-lg mx-auto">
+              <ChatContainer 
+                  ride={ride}
+                  role="passenger"
+                  onClose={() => setIsChatOpen(false)}
+              />
+          </div>
       </div>
-        
-        {canPassengerCancel && (
-            <div className="m-4">
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="destructive" className="w-full">Cancelar Viaje</Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>¿Cancelar viaje?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                {['driver_assigned', 'driver_arrived'].includes(ride.status)
-                                ? 'Tu conductor ya está en camino.'
-                                : 'Se detendrá la búsqueda de un conductor.'}
-                                <br/><br/>
-                                <strong className="text-destructive-foreground">Atención:</strong> Si cancelas más de 2 viajes en una semana, tu cuenta podría ser suspendida por 72 horas para asegurar la disponibilidad de los conductores.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>No, continuar</AlertDialogCancel>
-                            <AlertDialogAction asChild>
-                                <Button variant="destructive" onClick={handleCancelRide}>Sí, Cancelar</Button>
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </div>
-        )}
-    </>
+    )}
+  </>
   );
 }

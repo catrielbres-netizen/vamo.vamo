@@ -6,27 +6,54 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { VamoIcon, WhatsAppLogo } from '@/components/VamoIcon';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import { useState } from 'react';
+import { getAuth } from 'firebase/auth';
 
 export default function VerifyPage() {
     const adminWhatsAppNumber = "5492804967673";
     const router = useRouter();
-    const { profile, loading } = useUser();
+    const firestore = useFirestore();
+    const { user, profile, loading } = useUser();
+
+    const driverRef = useMemoFirebase(() => {
+        if (!firestore || !user?.uid) return null;
+        return doc(firestore, 'users', user.uid);
+    }, [firestore, user?.uid]);
+
+    const { data: latestProfile } = useDoc(driverRef);
+    const [isVerifying, setIsVerifying] = useState(false);
+
+    const handleVerifyStatus = async () => {
+        setIsVerifying(true);
+        await new Promise(r => setTimeout(r, 1000));
+        
+        const isApproved = latestProfile?.approved === true;
+        if (isApproved) {
+            router.push('/driver/rides');
+        } else {
+            setIsVerifying(false);
+            alert('Tu cuenta aún está pendiente de revisión. Por favor, enviá los documentos por WhatsApp si no lo hiciste.');
+        }
+    };
 
     // The message is now constructed dynamically
     const createWhatsAppMessage = () => {
-        if (loading || !profile) {
+        const currentProfile = latestProfile || profile;
+        if (loading || !currentProfile) {
             return 'Hola, soy un nuevo conductor de VamO y quiero verificar mi cuenta.';
         }
 
-        const fullName = profile.name || 'Nuevo Conductor';
+        const fullName = currentProfile.name || 'Nuevo Conductor';
+        const email = currentProfile.email || user?.email || '';
 
         const baseText = `
 Hola, soy un nuevo conductor de VamO. Quiero verificar mi cuenta.
 -----------------------------------
 *Mis Datos:*
 *Nombre:* ${fullName}
-*Email:* ${profile.email}
+*Email:* ${email}
 -----------------------------------
 Adjunto mi documentación:
 - Foto de DNI (frente y dorso)
@@ -81,12 +108,20 @@ Gracias.
                     </div>
 
                 </CardContent>
-                 <CardContent>
+                 <CardContent className="flex flex-col gap-3">
+                    <Button 
+                        onClick={handleVerifyStatus} 
+                        className="w-full font-bold"
+                        disabled={isVerifying}
+                    >
+                        {isVerifying ? 'Verificando...' : 'Ya envié mis documentos, verificar mi estado'}
+                    </Button>
                     <Button onClick={handleLogout} variant="outline" className="w-full">
-                       Entendido, cerrar sesión
+                       Cerrar sesión
                     </Button>
                 </CardContent>
             </Card>
         </main>
     );
 }
+

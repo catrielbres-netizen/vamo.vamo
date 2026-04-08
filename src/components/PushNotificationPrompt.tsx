@@ -59,7 +59,7 @@ export function PushNotificationPrompt({ forRole }: { forRole: 'passenger' | 'dr
             <AlertTitle className="text-blue-800 dark:text-blue-300">{content.title}</AlertTitle>
             <AlertDescription>
                 <p className="text-blue-700 dark:text-blue-500">{content.description}</p>
-                 <Button size="sm" onClick={enablePush} disabled={status === 'loading'} className="mt-2 w-full bg-blue-600 hover:bg-blue-700">
+                 <Button size="sm" onClick={() => enablePush(true)} disabled={status === 'loading'} className="mt-2 w-full bg-blue-600 hover:bg-blue-700">
                     {status === 'loading' ? <VamoIcon name="loader" className="animate-spin mr-2" /> : <VamoIcon name="check" className="mr-2" />}
                     {content.buttonText}
                 </Button>

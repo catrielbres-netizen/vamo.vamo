@@ -35,8 +35,12 @@ export function WithdrawalForm({ withdrawableBalance, onCancel, onSuccess }: { w
         }
         
         const numericAmount = Number(amount);
-        if (isNaN(numericAmount) || numericAmount <= 0) {
-            toast({ variant: 'destructive', title: 'Monto Inválido', description: 'Ingresá un monto mayor a cero.' });
+        if (isNaN(numericAmount) || numericAmount < 1000) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Monto Insuficiente', 
+                description: 'El monto mínimo para solicitar un retiro es de $1.000.' 
+            });
             return;
         }
 
@@ -53,7 +57,7 @@ export function WithdrawalForm({ withdrawableBalance, onCancel, onSuccess }: { w
         setIsLoading(true);
 
         try {
-            const functions = getFunctions(firebaseApp, 'us-central1');
+            const functions = getFunctions(undefined, 'us-central1');
             const requestWithdrawal = httpsCallable(functions, 'requestWithdrawalV1');
             await requestWithdrawal({
                 amount: numericAmount,
@@ -81,56 +85,80 @@ export function WithdrawalForm({ withdrawableBalance, onCancel, onSuccess }: { w
     };
 
     return (
-        <div className="space-y-4">
-            <div className="p-3 bg-secondary rounded-lg text-center">
-                <p className="text-sm text-muted-foreground">Saldo disponible para retirar</p>
-                <p className="text-lg font-bold text-primary">{formatCurrency(withdrawableBalance)}</p>
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="amount">Monto a Retirar (ARS)</Label>
-                <Input
-                    id="amount"
-                    type="number"
-                    placeholder="Ej: 5000"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    disabled={isLoading}
-                />
-            </div>
-             <div className="space-y-2">
-                <Label htmlFor="accountHolder">Nombre del Titular de la Cuenta</Label>
-                <Input
-                    id="accountHolder"
-                    type="text"
-                    placeholder="Tu nombre completo"
-                    value={accountHolder}
-                    onChange={(e) => setAccountHolder(e.target.value)}
-                    disabled={isLoading}
-                />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="cbuOrAlias">CBU o Alias</Label>
-                <Textarea
-                    id="cbuOrAlias"
-                    placeholder="Ingresá tu CBU de 22 dígitos o tu Alias"
-                    value={cbuOrAlias}
-                    onChange={(e) => setCbuOrAlias(e.target.value)}
-                    disabled={isLoading}
-                />
+        <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="p-6 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl text-center backdrop-blur-xl">
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-1">Saldo disponible</p>
+                <p className="text-3xl font-black text-white">{formatCurrency(withdrawableBalance)}</p>
             </div>
             
-            <DialogFooter className="!mt-6 flex-col gap-2 sm:flex-col sm:space-x-0">
-                <Button onClick={handleSubmit} disabled={isLoading || withdrawableBalance <= 0}>
+            <div className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="amount" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Monto a Retirar (Min $1.000)</Label>
+                    <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-bold">$</span>
+                        <Input
+                            id="amount"
+                            type="number"
+                            placeholder="0"
+                            className="h-14 pl-8 rounded-2xl bg-black/40 border-zinc-800 focus:border-indigo-500/50 transition-all font-bold text-lg"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            disabled={isLoading}
+                        />
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <Label htmlFor="accountHolder" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Nombre del Titular</Label>
+                    <Input
+                        id="accountHolder"
+                        type="text"
+                        placeholder="Nombre completo tal cual figura en el banco"
+                        className="h-12 rounded-2xl bg-black/20 border-zinc-800 focus:border-indigo-500/50"
+                        value={accountHolder}
+                        onChange={(e) => setAccountHolder(e.target.value)}
+                        disabled={isLoading}
+                    />
+                </div>
+
+                <div className="space-y-2">
+                    <Label htmlFor="cbuOrAlias" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">CBU o Alias de Cuenta</Label>
+                    <Textarea
+                        id="cbuOrAlias"
+                        placeholder="CBU de 22 dígitos o el Alias de tu billetera/banco"
+                        className="rounded-2xl bg-black/20 border-zinc-800 focus:border-indigo-500/50 min-h-[80px]"
+                        value={cbuOrAlias}
+                        onChange={(e) => setCbuOrAlias(e.target.value)}
+                        disabled={isLoading}
+                    />
+                </div>
+            </div>
+            
+            <DialogFooter className="!mt-8 flex flex-col gap-3">
+                <Button 
+                    variant="morphic" 
+                    onClick={handleSubmit} 
+                    disabled={isLoading || withdrawableBalance < 1000}
+                    className="w-full h-14 rounded-2xl text-lg shadow-indigo-500/20"
+                >
                     {isLoading ? (
                         <>
                             <VamoIcon name="loader" className="animate-spin mr-2" />
-                            Enviando Solicitud...
+                            Procesando...
                         </>
                     ) : (
-                        'Solicitar Retiro'
+                        'Solicitar Retiro PRO'
                     )}
                 </Button>
-                <Button variant="outline" onClick={onCancel} type="button" disabled={isLoading}>Cancelar</Button>
+                <Button 
+                    variant="ghost" 
+                    onClick={onCancel} 
+                    type="button" 
+                    disabled={isLoading}
+                    className="w-full h-12 rounded-2xl text-zinc-500 font-bold"
+                >
+                    Cancelar
+                </Button>
             </DialogFooter>
         </div>
     );

@@ -42,7 +42,6 @@
   ],
   "exclude": [
     "node_modules",
-    "functions",
-    "src/functions"
+    "functions"
   ]
 }

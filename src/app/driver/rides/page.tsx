@@ -1,13 +1,14 @@
 'use client';
 
-import React from 'react';
-import { useUser } from '@/firebase';
+import React, { useEffect, useRef } from 'react';
+import { useUser, useFirestore } from '@/firebase';
 import { VerificationStatus } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useDriverDashboard } from '@/context/DriverRidesProvider';
 import DriverOfferCard from '@/components/DriverOfferCard';
+import { DriverProgressPanel } from '@/components/DriverProgressPanel';
 
 const statusMessages: Record<VerificationStatus, {title: string, description: string, icon: string}> = {
     unverified: {
@@ -33,8 +34,79 @@ const statusMessages: Record<VerificationStatus, {title: string, description: st
 };
 
 export default function DriverRidesPage() {
-  const { profile } = useUser();
+  const { profile, user } = useUser();
   const { rides: availableOffers, loading: isLoading, error, newRideIds } = useDriverDashboard();
+
+  // --- "Nextel" Sound Alert Logic ---
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const isPlayingRef = useRef(false);
+
+  useEffect(() => {
+    // Only play if there are offers and driver is online
+    const shouldPlay = availableOffers.length > 0 && profile?.driverStatus === 'online';
+
+    if (shouldPlay && !isPlayingRef.current) {
+        isPlayingRef.current = true;
+        
+        const playNextelSound = async () => {
+            if (!isPlayingRef.current) return;
+
+            try {
+                if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+                    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+                }
+                
+                const ctx = audioContextRef.current;
+                
+                // Handle autoplay policy
+                if (ctx.state === 'suspended') {
+                    await ctx.resume();
+                }
+
+                const playBip = (freq: number, start: number, duration: number) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, start);
+                    gain.gain.setValueAtTime(0.1, start);
+                    gain.gain.exponentialRampToValueAtTime(0.01, start + duration);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(start);
+                    osc.stop(start + duration);
+                };
+
+                const now = ctx.currentTime;
+                // Radio "pipi" pattern
+                playBip(900, now, 0.05);
+                playBip(700, now + 0.06, 0.05);
+                
+                // Loop every 2 seconds if still playing
+                setTimeout(() => {
+                    if (isPlayingRef.current) playNextelSound();
+                }, 2000);
+
+            } catch (err) {
+                console.error("Audio playback failed (Nextel Alert):", err);
+                isPlayingRef.current = false;
+            }
+        };
+
+        playNextelSound();
+    } else if (!shouldPlay && isPlayingRef.current) {
+        isPlayingRef.current = false;
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close().catch(() => {});
+        }
+    }
+
+    return () => {
+        isPlayingRef.current = false;
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close().catch(() => {});
+        }
+    };
+  }, [availableOffers.length, profile?.driverStatus]);
 
   if (!profile) {
       return null; 
@@ -60,6 +132,7 @@ export default function DriverRidesPage() {
 
   return (
       <div className="space-y-4">
+
         {isOnline && balance < 0 && (
             <Alert variant="destructive">
                 <VamoIcon name="alert-triangle" className="h-4 w-4" />
@@ -73,25 +146,32 @@ export default function DriverRidesPage() {
         {driverIsAvailable ? (
           <>
             {error && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="rounded-2xl">
                 <AlertTitle>Error al buscar ofertas</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
 
             {!isLoading && availableOffers.length > 0 ? (
-               availableOffers.map((offer) => (
-                <DriverOfferCard key={offer.id} offer={offer} isNew={newRideIds.has(offer.id)} />
-              ))
+               <div className="space-y-4">
+                   {availableOffers.map((offer) => (
+                    <DriverOfferCard key={offer.id} offer={offer} isNew={newRideIds.has(offer.id)} />
+                  ))}
+               </div>
             ) : !isLoading && (
-              <Card className="text-center">
-                  <CardHeader>
-                      <CardTitle>No hay viajes disponibles</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                      <p className="text-muted-foreground">Estás en línea. Te notificaremos cuando haya una nueva solicitud cerca tuyo.</p>
-                  </CardContent>
-              </Card>
+               <div className="flex flex-col items-center justify-center p-8 bg-card border border-border/50 rounded-[2rem] shadow-sm text-center">
+                   <div className="relative w-20 h-20 mb-6">
+                       <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping opacity-75" />
+                       <div className="absolute inset-2 bg-primary/30 rounded-full animate-pulse" />
+                       <div className="absolute inset-4 bg-primary rounded-full shadow-lg flex items-center justify-center">
+                           <VamoIcon name="radar" className="w-6 h-6 text-primary-foreground" />
+                       </div>
+                   </div>
+                   <h3 className="text-2xl font-bold tracking-tight mb-2">Buscando viajes</h3>
+                   <p className="text-muted-foreground font-medium mb-8">Estás en línea. Mantené la app abierta para recibir nuevas solicitudes en tu zona.</p>
+
+                   {profile && <DriverProgressPanel profile={profile} className="w-full mt-4" />}
+               </div>
             )}
           </>
         ) : null}

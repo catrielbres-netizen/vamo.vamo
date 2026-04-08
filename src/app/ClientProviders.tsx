@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 import { MapsProvider } from '@/components/MapsProvider';
 import { FirebaseProvider } from '@/firebase';
 import { CancellationNoticeProvider } from '@/context/CancellationNoticeProvider'; // Import the new provider
+import { ReferralTracker } from '@/components/ReferralTracker';
 
 export default function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -16,7 +17,8 @@ export default function ClientProviders({ children }: { children: React.ReactNod
     >
       <FirebaseProvider>
         <MapsProvider>
-          <CancellationNoticeProvider> // Add the new provider
+          <ReferralTracker />
+          <CancellationNoticeProvider>
             {children}
           </CancellationNoticeProvider>
         </MapsProvider>

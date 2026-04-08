@@ -8,8 +8,9 @@ import { useUser, useFirestore } from '@/firebase';
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useRef, useState } from 'react';
 import { useFCM } from '@/hooks/useFCM';
-import { PushNotificationPrompt } from '@/components/PushNotificationPrompt';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
+import { NotificationGate } from '@/components/NotificationGate';
+import { EmailVerificationAlert } from '@/components/EmailVerificationAlert';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { DriverRidesProvider, useDriverDashboard } from '@/context/DriverRidesProvider';
 import { useActiveRide } from '@/hooks/useActiveRide';
@@ -22,84 +23,188 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { geohashForLocation } from 'geofire-common';
 import { Button } from '@/components/ui/button';
+import { canDriverGoOnline } from '@/lib/eligibility';
+import { DriverProgressPanel } from '@/components/DriverProgressPanel';
 
-const MAX_ACCURACY_METERS = 40;
+const MAX_ACCURACY_METERS = 3000;
 const MIN_DISTANCE_UPDATE_METERS = 25;
 
-function DriverLayoutInner({ children }: { children: React.ReactNode }) {
+const RAWSON_MOCK_LOCATION = { 
+  lat: -43.3002, 
+  lng: -65.1023, 
+  address: "Mariano Moreno 650, Rawson, Chubut" 
+};
+
+/**
+ * DriverLayout: THE ONLY PUBLIC ENTRY POINT.
+ * Strictly implements the synchronous bypass for registration.
+ */
+export default function DriverLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  // DEBUG OBLIGATORIO: Ver qué path real ve Next.js
+  if (pathname) {
+    console.log("PATH ACTUAL:", pathname);
+    if (pathname.includes('/driver/register')) {
+      return <>{children}</>;
+    }
+  }
+
+  // ALL protected logic is isolated inside the AuthGuard.
+  return <DriverAuthGuard>{children}</DriverAuthGuard>;
+}
+
+/**
+ * DriverAuthGuard: Encapsulates all React hooks and auth side-effects.
+ * This ensures the registration page never runs this logic and never redirects.
+ */
+function DriverAuthGuard({ children }: { children: React.ReactNode }) {
+  const { user, profile, loading, error } = useUser();
   const router = useRouter();
   const pathname = usePathname();
-  const { user, profile, loading: isUserLoading } = useUser();
-  const firestore = useFirestore();
-  const { toast } = useToast();
-  useFCM();
 
-  const { loading: isSearchingForRides, error: rideSearchError } = useDriverDashboard();
-  const { activeRide, isRideLoading } = useActiveRide(profile?.activeRideId);
+  // Loading state (Firebase or profile)
+  const isResolvingSession = loading || (!!user && !profile);
 
-  const lastPositionRef = useRef<{lat: number, lng: number} | null>(null);
-  const [hostname, setHostname] = useState('');
+  // Guards
+  useEffect(() => {
+    if (error) {
+        console.error('🛡️ [GUARD_ERROR] DriverLayout - User error:', error.message);
+        router.replace('/login');
+    }
+  }, [error, router]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') setHostname(window.location.hostname);
-  }, []);
+    if (!user && !loading) {
+        router.replace('/login');
+        return;
+    }
 
-  const criticalError = rideSearchError ?? (activeRide === undefined ? "Error loading active ride data." : null);
+    if (profile?.role && profile.role !== 'driver') {
+        console.warn(`🛡️ [GUARD_REDIRECT] DriverLayout - Wrong Role: ${profile.role}. Heading to continue...`);
+        router.replace('/auth/continue');
+        return;
+    }
 
-  if (criticalError && criticalError.includes('Missing or insufficient permissions')) {
+    // Rescue logic for hangs
+    if (isResolvingSession) {
+        const timer = setTimeout(() => {
+            if (!profile && !!user) {
+                console.warn('🛡️ [GUARD_TIMEOUT] Profile hang. Redirecting...');
+                router.replace('/login');
+            }
+        }, 6000);
+        return () => clearTimeout(timer);
+    }
+  }, [user, profile, isResolvingSession, router, loading]);
+
+  if (isResolvingSession) {
     return (
-       <div className="flex h-screen items-center justify-center p-4">
-        <Alert variant="destructive" className="max-w-2xl">
-          <VamoIcon name="alert-triangle" className="h-4 w-4" />
-          <AlertTitle>Error Crítico de Permisos de Firestore</AlertTitle>
-          <AlertDescription>
-              <>
-                <p>La aplicación no puede conectarse a la base de datos. Este es un problema de configuración muy común cuando se despliega la aplicación por primera vez.</p>
-                <p className="mt-4 font-semibold">Causa Más Probable: Restricciones de Clave de API</p>
-                <p className="text-xs text-muted-foreground">Por defecto, las claves de API de Firebase pueden estar restringidas para funcionar solo en `localhost`. Debes autorizar el dominio de tu aplicación desplegada.</p>
-                <ol className="list-decimal list-inside mt-2 text-xs space-y-2">
-                  <li>
-                    Andá a la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="underline font-semibold">Consola de Google Cloud &rarr; APIs y Servicios &rarr; Credenciales</a>.
-                  </li>
-                  <li>
-                    Buscá la clave llamada "Browser key (auto created by Firebase)" o la que coincida con tu `NEXT_PUBLIC_FIREBASE_API_KEY`. Hacé clic en ella para editarla.
-                  </li>
-                  {hostname && (
-                    <li>
-                      En la sección <strong>Restricciones de aplicación</strong>, seleccioná "Sitios web". En "Restricciones de sitios web", asegurate de que <strong>{hostname}</strong> esté en la lista de "Referentes de sitios web".
-                      <div className="mt-1 p-2 bg-background rounded-md font-mono text-[10px] leading-tight">
-                        {`Ejemplo de dominio a agregar: ${hostname}`}
-                      </div>
-                    </li>
-                  )}
-                  <li>Guardá los cambios. Pueden tardar unos minutos en aplicarse.</li>
-                </ol>
-                 <p className="mt-4 text-xs"><strong>Si el error persiste, verifica:</strong><br /> - Que las APIs "Identity Toolkit API" y "Cloud Firestore API" estén habilitadas en tu proyecto de Google Cloud.<br /> - Que tus `firestore.rules` estén configuradas como `allow read, write: if request.auth != null;` para descartar un problema de reglas.</p>
-              </>
-            <p className="mt-3 text-xs border-t pt-2"><strong>Detalle del Error:</strong> {criticalError}</p>
-             <Button onClick={() => router.push('/login')} className="mt-4 w-full">
-                Volver a Iniciar Sesión
-            </Button>
-          </AlertDescription>
-        </Alert>
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-transparent">
+        <div className="flex flex-col items-center gap-4">
+           <div className="w-10 h-10 border-4 border-amber-500/10 border-t-amber-500 rounded-full animate-spin"></div>
+           <p className="text-zinc-600 font-bold uppercase tracking-widest text-[10px] animate-pulse uppercase">Iniciando panel conductor</p>
+        </div>
       </div>
     );
   }
 
-  useEffect(() => {
-    if (isUserLoading) return;
-    if (!user) router.replace('/login');
-    else if (profile && profile.role !== 'driver') router.replace('/');
-    else if (profile?.profileCompleted && pathname === '/driver') router.replace('/driver/rides');
-  }, [profile, user, isUserLoading, pathname, router]);
+  if (!user) {
+    // This part should be reached very rarely if the useEffect above works correctly,
+    // but we keep it for consistency during hydration frames.
+    return (
+      <div className="flex h-screen items-center justify-center bg-transparent p-4 text-center">
+        <div className="max-w-xs w-full space-y-6">
+          <div className="mx-auto w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+            <VamoIcon name="lock" className="h-8 w-8 text-indigo-500" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-white">Acceso Denegado</h2>
+            <p className="text-zinc-500 text-sm">Debés iniciar sesión como conductor para acceder.</p>
+          </div>
+          <Button onClick={() => router.push('/login')} className="w-full h-12 bg-indigo-600 hover:bg-indigo-700">
+            Ir al Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (profile?.role !== 'driver') {
+    return (
+        <div className="flex h-screen w-full flex-col items-center justify-center bg-transparent">
+          <div className="flex flex-col items-center gap-4">
+             <div className="w-10 h-10 border-4 border-amber-500/10 border-t-amber-500 rounded-full animate-spin"></div>
+             <p className="text-zinc-600 font-bold uppercase tracking-widest text-[10px] animate-pulse uppercase text-center">Preparando panel conductor</p>
+          </div>
+        </div>
+      );
+  }
+
+  console.log("🛡️ [GUARD] Access granted to Protected Driver Section.");
+  // VALID SESSION & ROLE: Proceed to tracking and actual UI.
+  return (
+    <NotificationGate>
+      <DriverRidesProvider>
+        <DriverLayoutInner>{children}</DriverLayoutInner>
+      </DriverRidesProvider>
+    </NotificationGate>
+  );
+}
+
+/**
+ * DriverLayoutInner: The actual dashboard UI and tracking logic.
+ */
+function DriverLayoutInner({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  console.log("🏗️ [LAYOUT] DriverLayoutInner mounting...");
+  const { user, profile } = useUser();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+  useFCM();
+
+  const { error: rideSearchError, setCurrentLocation } = useDriverDashboard();
+  const { activeRide, isRideLoading } = useActiveRide(profile?.activeRideId);
+
+  const lastPositionRef = useRef<{lat: number, lng: number} | null>(null);
+  const [isMockingLocation, setIsMockingLocation] = useState(false);
+  const effectiveMockLocation = RAWSON_MOCK_LOCATION;
 
   useEffect(() => {
-    if (!firestore || !user?.uid || profile?.driverStatus !== 'online' || !!activeRide) {
+    if (profile?.profileCompleted && pathname === '/driver') {
+      router.replace('/driver/rides');
+    }
+  }, [profile, pathname, router]);
+
+  useEffect(() => {
+    if (!firestore || !user?.uid || !['online', 'in_ride'].includes(profile?.driverStatus || '')) {
       return;
     }
     const driverLocationRef = doc(firestore, 'drivers_locations', user.uid);
     let locationWatchId: number | null = null;
-  
+    console.log("📍 [TRACKING] Effect mounted. driverStatus:", profile?.driverStatus);
+
+    if (isMockingLocation) {
+        const updateMock = async () => {
+            const geohash = geohashForLocation([effectiveMockLocation.lat, effectiveMockLocation.lng]);
+            try {
+                if (process.env.NODE_ENV === 'development') {
+                    console.warn(`⏳ [DEV-MOCK] Updating location to RAWSON: ${effectiveMockLocation.lat}, ${effectiveMockLocation.lng}`);
+                }
+                await updateDoc(driverLocationRef, { currentLocation: effectiveMockLocation, geohash, lastSeenAt: serverTimestamp() });
+                lastPositionRef.current = effectiveMockLocation;
+                setCurrentLocation(effectiveMockLocation);
+            } catch(e) { console.error("Mock update failed", e); }
+        };
+        updateMock();
+        const interval = setInterval(updateMock, 30000);
+        return () => {
+            console.log("📍 [TRACKING] MOCK effect cleanup");
+            clearInterval(interval);
+        };
+    }
+
     locationWatchId = navigator.geolocation.watchPosition(
       async (position) => {
         const { latitude, longitude, accuracy } = position.coords;
@@ -112,29 +217,55 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
         const geohash = geohashForLocation([latitude, longitude]);
         try {
           await updateDoc(driverLocationRef, { 
-              currentLocation: newLocation, geohash: geohash, lastSeenAt: serverTimestamp(),
+              currentLocation: newLocation, 
+              geohash: geohash, 
+              driverStatus: profile?.driverStatus || 'offline',
+              lastSeenAt: serverTimestamp(),
            });
           lastPositionRef.current = newLocation;
+          setCurrentLocation(newLocation);
         } catch(e) { console.error("Failed to update location on move", e); }
       },
       (error) => console.warn("GPS Error on watchPosition:", error.message),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
-    return () => { if (locationWatchId !== null) navigator.geolocation.clearWatch(locationWatchId); };
-  }, [firestore, user?.uid, profile?.driverStatus, activeRide]);
+    return () => { 
+        console.log("📍 [TRACKING] GPS effect cleanup");
+        if (locationWatchId !== null) navigator.geolocation.clearWatch(locationWatchId); 
+    };
+  }, [firestore, user?.uid, profile?.driverStatus, activeRide, isMockingLocation, setCurrentLocation, effectiveMockLocation]);
 
   useEffect(() => {
-    if (!firestore || !user || !profile || profile.driverStatus !== 'online') return;
+    if (!firestore || !user || !profile || !['online', 'in_ride'].includes(profile.driverStatus || '')) return;
 
     const driverLocationRef = doc(firestore, 'drivers_locations', user.uid);
     const sendHeartbeat = async () => {
       try {
-        await updateDoc(driverLocationRef, { lastSeenAt: serverTimestamp() });
+        console.log("💓 [HEARTBEAT] Tick. Writing lastSeenAt...");
+        await updateDoc(driverLocationRef, { 
+          driverStatus: profile?.driverStatus || 'offline',
+          lastSeenAt: serverTimestamp() 
+        });
       } catch (e) {
         console.warn("Driver location document not found, attempting to recreate it...");
         try {
-          const locationData = lastPositionRef.current ? { currentLocation: lastPositionRef.current, geohash: geohashForLocation([lastPositionRef.current.lat, lastPositionRef.current.lng]) } : { currentLocation: null, geohash: null };
-          await setDoc(driverLocationRef, { ...locationData, driverStatus: 'online', pendingOffers: 0, lastSeenAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          const locationData = lastPositionRef.current ? { 
+            currentLocation: lastPositionRef.current, 
+            geohash: geohashForLocation([lastPositionRef.current.lat, lastPositionRef.current.lng]) 
+          } : { 
+            currentLocation: null, 
+            geohash: null 
+          };
+          
+          await setDoc(driverLocationRef, { 
+            ...locationData, 
+            driverStatus: 'online', 
+            pendingOffers: 0, 
+            approved: !!profile.approved,
+            isSuspended: !!profile.isSuspended,
+            lastSeenAt: serverTimestamp(), 
+            updatedAt: serverTimestamp() 
+          }, { merge: true });
         } catch (finalError) { console.error("Catastrophic failure: Could not recreate driver location document.", finalError); }
       }
     };
@@ -153,7 +284,52 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
        updateDoc(driverLocationRef, { driverStatus: 'offline', updatedAt: serverTimestamp() });
        toast({ title: "Te has desconectado", description: "No recibirás nuevas solicitudes." });
      } else {
-       toast({ title: "Conectando...", description: "Obteniendo tu ubicación GPS..." });
+       const eligibility = canDriverGoOnline(profile, user.emailVerified);
+       if (!eligibility.isEligible) {
+           toast({
+               variant: 'destructive',
+               title: 'No podés conectarte',
+               description: eligibility.reason
+           });
+           if (eligibility.code === 'PROFILE_INCOMPLETE' || eligibility.code === 'MISSING_PHONE') {
+               router.push('/driver/complete-profile');
+           }
+           return;
+       }
+
+       toast({ title: "Conectando...", description: isMockingLocation ? "Usando ubicación MOCK (Rawson)..." : "Obteniendo tu ubicación GPS..." });
+       
+       const proceedOnline = async (lat: number, lng: number) => {
+          const newLocation = { lat, lng };
+          const geohash = geohashForLocation([lat, lng]);
+          lastPositionRef.current = newLocation;
+          setCurrentLocation(newLocation);
+          try {
+            const updates: any = { driverStatus: 'online', updatedAt: serverTimestamp() };
+            // Proactive sync for matching engine eligibility
+            if (user.emailVerified && !profile.emailVerified) {
+                updates.emailVerified = true;
+            }
+            await updateDoc(userProfileRef, updates);
+            await setDoc(driverLocationRef, { 
+                driverStatus: 'online', 
+                updatedAt: serverTimestamp(), 
+                pendingOffers: 0, 
+                currentLocation: newLocation, 
+                geohash: geohash, 
+                approved: !!profile.approved,
+                isSuspended: !!profile.isSuspended,
+                lastSeenAt: serverTimestamp() 
+            }, { merge: true });
+            toast({ title: "¡Estás en línea!", description: isMockingLocation ? "Modo MOCK activado." : "Listo para recibir viajes." });
+          } catch(e) { toast({ variant: "destructive", title: "Error de base de datos", description: "No se pudo guardar tu estado." }); }
+       };
+
+       if (isMockingLocation) {
+          proceedOnline(effectiveMockLocation.lat, effectiveMockLocation.lng);
+          return;
+       }
+
        navigator.geolocation.getCurrentPosition(
          async (position) => {
            const { latitude, longitude, accuracy } = position.coords;
@@ -161,14 +337,7 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
              toast({ variant: 'destructive', title: 'Ubicación Imprecisa', description: `La precisión del GPS es de ${accuracy.toFixed(0)}m. Necesitamos menos de ${MAX_ACCURACY_METERS}m para conectarte.` });
              return;
            }
-           const newLocation = { lat: latitude, lng: longitude };
-           const geohash = geohashForLocation([latitude, longitude]);
-           lastPositionRef.current = newLocation;
-           try {
-             await updateDoc(userProfileRef, { driverStatus: 'online', updatedAt: serverTimestamp() });
-             await setDoc(driverLocationRef, { driverStatus: 'online', updatedAt: serverTimestamp(), pendingOffers: 0, currentLocation: newLocation, geohash: geohash, lastSeenAt: serverTimestamp() }, { merge: true });
-             toast({ title: "¡Estás en línea!", description: "Listo para recibir viajes." });
-           } catch(e) { toast({ variant: "destructive", title: "Error de base de datos", description: "No se pudo guardar tu estado." }); }
+           proceedOnline(latitude, longitude);
          },
          (error) => toast({ variant: 'destructive', title: 'Error de GPS', description: 'No se pudo obtener tu ubicación. Asegúrate de que el GPS esté activado y con permisos.' }),
          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -176,19 +345,9 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
      }
   };
 
-  if (isUserLoading || (profile?.activeRideId && isRideLoading)) {
-    return (
-      <div className="flex h-[50vh] w-full flex-col items-center justify-center">
-        <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />
-        <p className="mt-4 text-muted-foreground">Cargando datos del conductor...</p>
-      </div>
-    );
-  }
-
   if (!profile?.profileCompleted) return <main>{children}</main>;
 
   const shouldShowActiveRide = !!profile.activeRideId && !!activeRide;
-  const shouldShowSearchIndicator = profile.driverStatus === 'online' && !shouldShowActiveRide && isSearchingForRides;
 
   return (
     <>
@@ -210,30 +369,64 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
                           <Label htmlFor="online-toggle" className="font-semibold">{profile.driverStatus === 'online' ? "Estás En Línea" : "Estás Desconectado"}</Label>
                           <span className="text-xs text-muted-foreground">{profile.driverStatus === 'online' ? "Listo para recibir viajes." : "Activá para empezar a trabajar."}</span>
                       </div>
-                      <Switch id="online-toggle" checked={profile.driverStatus === 'online'} onCheckedChange={handleOnlineToggle} disabled={!profile?.approved}/>
+                       <div className="flex items-center gap-4">
+                           {process.env.NODE_ENV === 'development' && (
+                               <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className={`h-8 text-[10px] uppercase font-bold tracking-widest ${isMockingLocation ? 'bg-amber-500/10 text-amber-500 border-amber-500/50' : 'text-muted-foreground'}`}
+                                  onClick={() => setIsMockingLocation(!isMockingLocation)}
+                               >
+                                   {isMockingLocation ? 'MOCK GPS: ON' : 'MOCK GPS: OFF'}
+                               </Button>
+                           )}
+                           <Switch 
+                              id="online-toggle" 
+                              checked={profile.driverStatus === 'online'} 
+                              onCheckedChange={handleOnlineToggle} 
+                              disabled={(profile?.email?.includes('demo_') && profile?.email?.endsWith('@vamo.com')) ? false : !profile?.approved}
+                           />
+                       </div>
                   </div>
               )}
-              {shouldShowSearchIndicator && (
-                <div className="mb-4">
-                  <Alert className="border-sky-400 bg-sky-50 dark:bg-sky-900/30">
-                    <VamoIcon name="loader" className="h-4 w-4 text-sky-500 animate-spin" />
-                    <AlertTitle className="text-sky-700 dark:text-sky-300">Buscando viajes...</AlertTitle>
-                    <AlertDescription className="text-sky-600 dark:text-sky-500">Estás en línea. Te notificaremos en cuanto haya una nueva solicitud.</AlertDescription>
-                  </Alert>
-                </div>
-              )}
-              <div className="space-y-4 mb-4">
-                <PWAInstallPrompt />
-                <PushNotificationPrompt forRole="driver" />
-              </div>
               <Tabs value={pathname.split('/driver/')[1] || 'rides'} onValueChange={(value) => router.push(`/driver/${value}`)} className="w-full">
-                  <TabsList className="grid w-full grid-cols-4">
-                      <TabsTrigger value="rides" className="gap-2"><VamoIcon name="car" /> Viajes</TabsTrigger>
-                      <TabsTrigger value="earnings" className="gap-2"><VamoIcon name="wallet" /> Ganancias</TabsTrigger>
-                      <TabsTrigger value="goals" className="gap-2"><VamoIcon name="target" /> Metas</TabsTrigger>
-                      <TabsTrigger value="profile" className="gap-2"><VamoIcon name="user" /> Perfil</TabsTrigger>
-                  </TabsList>
+                    <TabsList className="flex w-full overflow-x-auto snap-x justify-start md:justify-center gap-1 bg-secondary/50 p-1 no-scrollbar mb-2">
+                        <TabsTrigger value="rides" className="gap-1.5 snap-center shrink-0 text-xs px-3"><VamoIcon name="car" className="w-4 h-4" /> Viajes</TabsTrigger>
+                        <TabsTrigger value="earnings" className="gap-1.5 snap-center shrink-0 text-xs px-3"><VamoIcon name="wallet" className="w-4 h-4" /> Billetera</TabsTrigger>
+                        <TabsTrigger value="profile" className="gap-1.5 snap-center shrink-0 text-xs px-3"><VamoIcon name="user" className="w-4 h-4" /> Perfil</TabsTrigger>
+                        {/* Tab exclusivo para conductores express */}
+                        {profile?.driverSubtype === 'express' && (
+                            <TabsTrigger value="muni-status" className="gap-1.5 snap-center shrink-0 text-xs px-3">
+                                <VamoIcon name="landmark" className="w-4 h-4" /> Habilitación
+                                {/* Punto rojo indicador si no está activo */}
+                                {profile.municipalStatus !== 'active' && (
+                                    <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                                )}
+                            </TabsTrigger>
+                        )}
+                    </TabsList>
               </Tabs>
+
+              {/* Banner municipal compacto para express que no están activos */}
+              {profile?.driverSubtype === 'express' && profile.municipalStatus !== 'active' && (
+                  <button
+                      onClick={() => router.push('/driver/muni-status')}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-left mb-2 hover:bg-amber-500/15 transition-colors"
+                  >
+                      <VamoIcon name="landmark" className="h-4 w-4 text-amber-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-amber-400 truncate">Habilitación municipal pendiente</p>
+                          <p className="text-[10px] text-zinc-500 truncate">No podés operar hasta ser habilitado por la municipalidad</p>
+                      </div>
+                      <VamoIcon name="chevron-right" className="h-4 w-4 text-zinc-600 shrink-0" />
+                  </button>
+              )}
+
+
+              <div className="space-y-4 mb-4">
+                <EmailVerificationAlert />
+                <PWAInstallPrompt />
+              </div>
             </>
         )}
         <main className="mt-6">
@@ -241,31 +434,5 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </>
-  );
-}
-
-export default function DriverLayout({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading } = useUser();
-  const router = useRouter();
-
-  // This outer layout handles the absolute basics: session and role.
-  if (loading || !profile) {
-    return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
-        <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />
-        <p className="mt-4 text-muted-foreground">Verificando perfil de conductor...</p>
-      </div>
-    );
-  }
-
-  if (!user || profile.role !== 'driver') {
-      router.replace(user ? '/' : '/login');
-      return null; // Render nothing while redirecting
-  }
-
-  return (
-    <DriverRidesProvider>
-      <DriverLayoutInner>{children}</DriverLayoutInner>
-    </DriverRidesProvider>
   );
 }

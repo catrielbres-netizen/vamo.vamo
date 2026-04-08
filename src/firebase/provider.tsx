@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, type Firestore } from 'firebase/firestore';
+import { getFunctions, type Functions } from 'firebase/functions';
 import { firebaseConfig } from './config';
 
 // Define the shape of the context
@@ -11,6 +12,7 @@ interface FirebaseContextValue {
   app: FirebaseApp;
   auth: Auth;
   firestore: Firestore;
+  functions: Functions;
   user: User | null;
   isInitializing: boolean;
   error: Error | null;
@@ -35,24 +37,39 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
 
     const auth = getAuth(app);
     const firestore = getFirestore(app);
-    return { app, auth, firestore };
+    const functions = getFunctions(app, 'us-central1');
+    return { app, auth, firestore, functions };
   }, []);
 
   // Set up the auth state listener
   useEffect(() => {
+    console.log("🔐 [AUTH_DEBUG] Setting up onAuthStateChanged listener.");
     const unsubscribe = onAuthStateChanged(
       services.auth,
       (user) => {
+        console.log("🔐 [AUTH_DEBUG] onAuthStateChanged fired. User:", user ? user.uid : 'NULL');
         setUser(user);
         setIsInitializing(false);
       },
       (error) => {
+        console.error("🔐 [AUTH_DEBUG] onAuthStateChanged ERROR:", error.message);
         setError(error);
         setIsInitializing(false);
       }
     );
     return unsubscribe;
   }, [services.auth]);
+
+  // Global Sync: Auth -> Firestore for Email Verification
+  useEffect(() => {
+    if (user && services.firestore && user.emailVerified) {
+        const userRef = doc(services.firestore, 'users', user.uid);
+        // Opportunistic, non-blocking sync. Will fail silently if offline but succeed when back.
+        setDoc(userRef, { emailVerified: true }, { merge: true }).catch(err => {
+            console.warn("No se pudo sincronizar emailVerified a Firestore", err);
+        });
+    }
+  }, [user, services.firestore]);
 
   const contextValue = useMemo(() => ({
     ...services,
@@ -90,4 +107,9 @@ export const useFirestore = (): Firestore => {
 // Convenience hook to get just the FirebaseApp instance
 export const useFirebaseApp = (): FirebaseApp => {
   return useFirebase().app;
+};
+
+// Convenience hook to get Functions instance
+export const useFunctions = (): Functions => {
+  return useFirebase().functions;
 };

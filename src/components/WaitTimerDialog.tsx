@@ -35,7 +35,9 @@ export function WaitTimerDialog({
             Viaje en Espera
           </DialogTitle>
           <DialogDescription>
-            El tiempo de espera tiene un costo adicional que se está sumando a tu tarifa.
+            {waitMinutes.startsWith('00:') || (parseInt(waitMinutes.split(':')[0]) < 5) 
+              ? "Tenés 5 minutos (300s) de espera sin cargo. Luego se aplicará la tarifa por minuto." 
+              : "El tiempo de cortesía ha finalizado y se está aplicando el costo por minuto de espera."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -45,7 +47,11 @@ export function WaitTimerDialog({
           </div>
           <div className="text-center">
             <p className="text-sm text-muted-foreground">Costo adicional por esta espera</p>
-            <p className="text-2xl font-semibold text-destructive">{waitCost}</p>
+            {waitMinutes.startsWith('00:') || (parseInt(waitMinutes.split(':')[0]) < 5) ? (
+              <p className="text-2xl font-semibold text-emerald-500">¡GRATIS!</p>
+            ) : (
+              <p className="text-2xl font-semibold text-destructive">{waitCost}</p>
+            )}
           </div>
           <div className="text-center p-3 bg-secondary rounded-md mt-2">
             <p className="text-xs text-muted-foreground">Nueva tarifa total estimada</p>

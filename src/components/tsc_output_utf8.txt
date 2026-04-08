@@ -1,0 +1,288 @@
+﻿node_modules/@vis.gl/react-google-maps/dist/index.d.ts(1,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(73,29): error TS2694: Namespace 'google.maps.maps3d' has no exported member 'MapMode'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(123,19): error TS2694: Namespace 'google.maps' has no exported member 'Orientation3D'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(124,19): error TS2694: Namespace 'google.maps' has no exported member 'Orientation3DLiteral'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(135,19): error TS2694: Namespace 'google.maps' has no exported member 'Vector3D'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(136,19): error TS2694: Namespace 'google.maps' has no exported member 'Vector3DLiteral'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(211,26): error TS2694: Namespace 'google.maps.maps3d' has no exported member 'Marker3DInteractiveElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(223,59): error TS2724: 'google.maps' has no exported member named 'Map3DElement'. Did you mean 'MapElement'?
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(227,21): error TS2694: Namespace 'google.maps' has no exported member 'Marker3DElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(233,56): error TS2694: Namespace 'google.maps.maps3d' has no exported member 'PopoverElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(236,21): error TS2694: Namespace 'google.maps' has no exported member 'Marker3DInteractiveElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(239,63): error TS2694: Namespace 'google.maps' has no exported member 'Model3DElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(243,21): error TS2694: Namespace 'google.maps' has no exported member 'Model3DInteractiveElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(248,21): error TS2694: Namespace 'google.maps' has no exported member 'Polyline3DElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(253,21): error TS2694: Namespace 'google.maps' has no exported member 'Polyline3DInteractiveElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(258,21): error TS2694: Namespace 'google.maps' has no exported member 'Polygon3DElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(263,21): error TS2694: Namespace 'google.maps' has no exported member 'Polygon3DInteractiveElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(266,62): error TS2694: Namespace 'google.maps' has no exported member 'PopoverElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(326,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceContextualElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(332,39): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceContextualListLayout'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(337,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceContextualListConfigElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(342,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceDetailsElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(351,34): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceDetailsOrientation'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(359,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceDetailsCompactElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(366,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceDetailsPlaceRequestElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(379,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceDetailsLocationRequestElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(384,52): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceSearchAttributionPosition'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(386,34): error TS2724: 'google.maps.places' has no exported member named 'PlaceSearchOrientation'. Did you mean 'PlaceSearchPagination'?
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(398,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceSearchElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(422,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceNearbySearchRequestElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(456,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceTextSearchRequestElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(465,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceContentConfigElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(470,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceAllContentElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(475,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceStandardContentElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(481,46): error TS2694: Namespace 'google.maps.places' has no exported member 'MediaSize'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(487,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceMediaElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(492,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceAddressElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(497,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceRatingElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(502,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceTypeElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(507,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlacePriceElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(512,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceAccessibleEntranceIconElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(517,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceOpenNowStatusElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(522,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceReviewsElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(527,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceSummaryElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(532,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceFeatureListElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(537,28): error TS2724: 'google.maps.places' has no exported member named 'PlaceOpeningHoursElement'. Did you mean 'PlaceOpeningHours'?
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(542,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlacePhoneNumberElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(547,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlacePlusCodeElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(552,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceTypeSpecificHighlightsElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(557,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceWebsiteElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(562,48): error TS2724: 'google.maps.places' has no exported member named 'AttributionColor'. Did you mean 'Attribution'?
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(563,49): error TS2724: 'google.maps.places' has no exported member named 'AttributionColor'. Did you mean 'Attribution'?
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(569,28): error TS2694: Namespace 'google.maps.places' has no exported member 'PlaceAttributionElement'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(593,21): error TS2694: Namespace 'google.maps' has no exported member 'airQuality'.
+node_modules/@vis.gl/react-google-maps/dist/index.d.ts(617,21): error TS2694: Namespace 'google.maps' has no exported member 'elevation'.
+node_modules/next/dist/build/templates/app-page.d.ts(10,40): error TS2307: Cannot find module 'VAR_MODULE_GLOBAL_ERROR' or its corresponding type declarations.
+node_modules/next/dist/build/webpack-config.d.ts(11,104): error TS2694: Namespace '"C:/Users/catri/vamo.vamo/node_modules/next/dist/compiled/webpack/webpack".webpack' has no exported member 'RuleSetUseItem'.
+node_modules/next/dist/build/webpack/loaders/next-app-loader.d.ts(1,13): error TS2613: Module '"C:/Users/catri/vamo.vamo/node_modules/next/dist/compiled/webpack/webpack"' has no default export. Did you mean to use 'import { webpack } from "C:/Users/catri/vamo.vamo/node_modules/next/dist/compiled/webpack/webpack"' instead?
+node_modules/next/dist/build/webpack/plugins/define-env-plugin.d.ts(26,86): error TS2694: Namespace '"C:/Users/catri/vamo.vamo/node_modules/next/dist/compiled/webpack/webpack".webpack' has no exported member 'DefinePlugin'.
+node_modules/next/dist/client/components/error-boundary.d.ts(1,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/client/components/layout-router.d.ts(3,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/client/components/not-found-boundary.d.ts(1,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/client/with-router.d.ts(1,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/server/app-render/entry-base.d.ts(1,85): error TS2307: Cannot find module 'react-server-dom-webpack/server.edge' or its corresponding type declarations.
+node_modules/next/dist/server/render.d.ts(17,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/shared/lib/amp-context.shared-runtime.d.ts(1,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/shared/lib/app-router-context.shared-runtime.d.ts(4,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/shared/lib/head-manager-context.shared-runtime.d.ts(1,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/shared/lib/image-config-context.shared-runtime.d.ts(1,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/shared/lib/loadable-context.shared-runtime.d.ts(1,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/shared/lib/loadable.shared-runtime.d.ts(21,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/shared/lib/router-context.shared-runtime.d.ts(1,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/shared/lib/server-inserted-html.shared-runtime.d.ts(1,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+node_modules/next/dist/shared/lib/utils.d.ts(12,13): error TS1192: Module '"fs"' has no default export.
+node_modules/next/types/index.d.ts(10,13): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+src/components/ActiveDriverRide.tsx(3,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+src/components/ActiveDriverRide.tsx(4,55): error TS2307: Cannot find module '@/firebase' or its corresponding type declarations.
+src/components/ActiveDriverRide.tsx(7,24): error TS2307: Cannot find module '@/components/ui/button' or its corresponding type declarations.
+src/components/ActiveDriverRide.tsx(15,8): error TS2307: Cannot find module '@/components/ui/card' or its corresponding type declarations.
+src/components/ActiveDriverRide.tsx(16,26): error TS2307: Cannot find module '@/components/VamoIcon' or its corresponding type declarations.
+src/components/ActiveDriverRide.tsx(17,44): error TS2307: Cannot find module '@/lib/types' or its corresponding type declarations.
+src/components/ActiveDriverRide.tsx(18,29): error TS6142: Module './PanicButton' was resolved to 'C:/Users/catri/vamo.vamo/src/components/PanicButton.tsx', but '--jsx' is not set.
+src/components/ActiveDriverRide.tsx(19,24): error TS2307: Cannot find module '@/firebase/firestore/use-collection' or its corresponding type declarations.
+src/components/ActiveDriverRide.tsx(20,26): error TS2307: Cannot find module '@/hooks/use-toast' or its corresponding type declarations.
+src/components/ActiveDriverRide.tsx(31,8): error TS2307: Cannot find module '@/components/ui/alert-dialog' or its corresponding type declarations.
+src/components/ActiveDriverRide.tsx(32,33): error TS6142: Module './FinishedRideSummary' was resolved to 'C:/Users/catri/vamo.vamo/src/components/FinishedRideSummary.tsx', but '--jsx' is not set.
+src/components/ActiveDriverRide.tsx(35,21): error TS6142: Module './RideMap' was resolved to 'C:/Users/catri/vamo.vamo/src/components/RideMap.tsx', but '--jsx' is not set.
+src/components/ActiveDriverRide.tsx(36,37): error TS2307: Cannot find module '@/components/MapsProvider' or its corresponding type declarations.
+src/components/ActiveDriverRide.tsx(37,26): error TS6142: Module './TripCard' was resolved to 'C:/Users/catri/vamo.vamo/src/components/TripCard.tsx', but '--jsx' is not set.
+src/components/ActiveDriverRide.tsx(38,30): error TS2307: Cannot find module '@/hooks/useWaitTimer' or its corresponding type declarations.
+src/components/ActiveDriverRide.tsx(39,33): error TS6142: Module './VamoBottomSheet' was resolved to 'C:/Users/catri/vamo.vamo/src/components/VamoBottomSheet.tsx', but '--jsx' is not set.
+src/components/ActiveDriverRide.tsx(40,20): error TS2307: Cannot find module '@/lib/utils' or its corresponding type declarations.
+src/components/ActiveDriverRide.tsx(242,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(243,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(265,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(270,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(275,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(283,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(294,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(304,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(305,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(308,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(320,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(324,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(325,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(333,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(344,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(345,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(346,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(347,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(352,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(359,14): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(361,18): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(362,22): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(363,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(364,28): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(366,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(367,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(368,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(372,22): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(374,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(381,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(382,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(389,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(390,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(391,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(394,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(395,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(396,33): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(397,37): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(398,37): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(400,33): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(404,33): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(405,37): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(406,37): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(414,18): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(420,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(421,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(422,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(424,27): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(425,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(426,31): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(427,31): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(429,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(430,31): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(431,31): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(440,14): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(441,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(442,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(443,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(444,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(445,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(451,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(453,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(454,33): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(455,33): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(458,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(459,33): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(460,37): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(461,41): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(462,41): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(464,37): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(465,41): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(466,41): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(470,41): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(471,45): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(472,45): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(476,37): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(477,41): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(478,41): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(483,29): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(487,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(488,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(493,45): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/ActiveDriverRide.tsx(495,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(3,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+src/components/PassengerSearchingSheet.tsx(4,26): error TS6142: Module './VamoIcon' was resolved to 'C:/Users/catri/vamo.vamo/src/components/VamoIcon.tsx', but '--jsx' is not set.
+src/components/PassengerSearchingSheet.tsx(5,35): error TS6142: Module './PassengerTripCard' was resolved to 'C:/Users/catri/vamo.vamo/src/components/PassengerTripCard.tsx', but '--jsx' is not set.
+src/components/PassengerSearchingSheet.tsx(14,8): error TS2307: Cannot find module '@/components/ui/dialog' or its corresponding type declarations.
+src/components/PassengerSearchingSheet.tsx(15,24): error TS6142: Module './ui/button' was resolved to 'C:/Users/catri/vamo.vamo/src/components/ui/button.tsx', but '--jsx' is not set.
+src/components/PassengerSearchingSheet.tsx(42,5): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(44,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(45,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(46,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(47,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(49,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(50,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(54,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(55,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(56,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(60,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(68,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(69,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(70,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(74,30): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(78,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(79,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(80,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(81,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(85,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(86,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(92,31): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/PassengerSearchingSheet.tsx(95,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(2,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+src/components/RideMap.tsx(4,28): error TS2307: Cannot find module '@/lib/types' or its corresponding type declarations.
+src/components/RideMap.tsx(5,26): error TS6142: Module './VamoIcon' was resolved to 'C:/Users/catri/vamo.vamo/src/components/VamoIcon.tsx', but '--jsx' is not set.
+src/components/RideMap.tsx(125,5): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(127,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(128,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(130,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(131,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(132,17): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(135,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(136,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(143,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(144,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(145,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(151,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(152,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(153,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(154,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideMap.tsx(155,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(3,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+src/components/RideStatus.tsx(14,8): error TS2307: Cannot find module '@/components/ui/alert-dialog' or its corresponding type declarations.
+src/components/RideStatus.tsx(15,24): error TS2307: Cannot find module '@/components/ui/button' or its corresponding type declarations.
+src/components/RideStatus.tsx(16,26): error TS2307: Cannot find module '@/components/VamoIcon' or its corresponding type declarations.
+src/components/RideStatus.tsx(17,71): error TS2307: Cannot find module '@/firebase' or its corresponding type declarations.
+src/components/RideStatus.tsx(18,26): error TS2307: Cannot find module '@/hooks/use-toast' or its corresponding type declarations.
+src/components/RideStatus.tsx(19,24): error TS2307: Cannot find module '@/firebase/firestore/use-collection' or its corresponding type declarations.
+src/components/RideStatus.tsx(20,44): error TS2307: Cannot find module '@/lib/types' or its corresponding type declarations.
+src/components/RideStatus.tsx(21,33): error TS2307: Cannot find module '@/lib/pricing' or its corresponding type declarations.
+src/components/RideStatus.tsx(22,35): error TS2307: Cannot find module '@/lib/geo' or its corresponding type declarations.
+src/components/RideStatus.tsx(23,37): error TS2307: Cannot find module '@/components/MapsProvider' or its corresponding type declarations.
+src/components/RideStatus.tsx(24,75): error TS6142: Module './ui/alert' was resolved to 'C:/Users/catri/vamo.vamo/src/components/ui/alert.tsx', but '--jsx' is not set.
+src/components/RideStatus.tsx(25,41): error TS6142: Module './PassengerSearchingSheet' was resolved to 'C:/Users/catri/vamo.vamo/src/components/PassengerSearchingSheet.tsx', but '--jsx' is not set.
+src/components/RideStatus.tsx(26,37): error TS6142: Module './PassengerRideHeader' was resolved to 'C:/Users/catri/vamo.vamo/src/components/PassengerRideHeader.tsx', but '--jsx' is not set.
+src/components/RideStatus.tsx(27,35): error TS6142: Module './PassengerTripCard' was resolved to 'C:/Users/catri/vamo.vamo/src/components/PassengerTripCard.tsx', but '--jsx' is not set.
+src/components/RideStatus.tsx(28,37): error TS6142: Module './PassengerDriverCard' was resolved to 'C:/Users/catri/vamo.vamo/src/components/PassengerDriverCard.tsx', but '--jsx' is not set.
+src/components/RideStatus.tsx(29,33): error TS6142: Module './WaitTimerDialog' was resolved to 'C:/Users/catri/vamo.vamo/src/components/WaitTimerDialog.tsx', but '--jsx' is not set.
+src/components/RideStatus.tsx(30,29): error TS6142: Module './PanicButton' was resolved to 'C:/Users/catri/vamo.vamo/src/components/PanicButton.tsx', but '--jsx' is not set.
+src/components/RideStatus.tsx(31,30): error TS2307: Cannot find module '@/hooks/useWaitTimer' or its corresponding type declarations.
+src/components/RideStatus.tsx(32,21): error TS6142: Module './RideMap' was resolved to 'C:/Users/catri/vamo.vamo/src/components/RideMap.tsx', but '--jsx' is not set.
+src/components/RideStatus.tsx(33,33): error TS6142: Module './VamoBottomSheet' was resolved to 'C:/Users/catri/vamo.vamo/src/components/VamoBottomSheet.tsx', but '--jsx' is not set.
+src/components/RideStatus.tsx(34,20): error TS2307: Cannot find module '@/lib/utils' or its corresponding type declarations.
+src/components/RideStatus.tsx(134,5): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(137,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(138,13): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(148,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(149,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(150,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(151,15): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(156,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(164,14): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(173,14): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(175,18): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(186,22): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(187,26): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(188,30): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(189,30): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(191,26): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(197,21): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(198,25): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(208,18): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(209,22): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(210,26): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(211,30): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(212,30): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(214,26): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(218,26): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(222,26): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(223,30): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(224,34): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(228,30): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(229,34): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(230,38): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(231,38): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(237,34): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(238,38): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(239,58): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/RideStatus.tsx(241,38): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/VamoBottomSheet.tsx(3,8): error TS1259: Module '"C:/Users/catri/vamo.vamo/node_modules/@types/react/index"' can only be default-imported using the 'esModuleInterop' flag
+src/components/VamoBottomSheet.tsx(4,20): error TS2307: Cannot find module '@/lib/utils' or its corresponding type declarations.
+src/components/VamoBottomSheet.tsx(5,26): error TS6142: Module './VamoIcon' was resolved to 'C:/Users/catri/vamo.vamo/src/components/VamoIcon.tsx', but '--jsx' is not set.
+src/components/VamoBottomSheet.tsx(29,5): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/VamoBottomSheet.tsx(35,7): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/VamoBottomSheet.tsx(47,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/VamoBottomSheet.tsx(51,11): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.
+src/components/VamoBottomSheet.tsx(55,9): error TS17004: Cannot use JSX unless the '--jsx' flag is provided.

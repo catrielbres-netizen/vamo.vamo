@@ -3,73 +3,94 @@
 @tailwind utilities;
 
 @layer base {
-  /* VamO Modern Blue Theme (Dark) - Default */
+  /* Light Theme (Mobile-first, premium Uber/Cabify look) */
   :root {
-    --background: 222 47% 11%;      /* slate-900 */
-    --foreground: 210 40% 98%;      /* slate-50 */
-    --card: 215 28% 17%;            /* slate-800 */
-    --card-foreground: 210 40% 98%; /* slate-50 */
-    --popover: 215 28% 17%;         /* slate-800 */
-    --popover-foreground: 210 40% 98%;/* slate-50 */
-    --primary: 222 83% 58%;         /* blue-600 */
-    --primary-foreground: 210 40% 98%; /* slate-50 */
-    --secondary: 215 25% 27%;       /* slate-700 */
-    --secondary-foreground: 210 40% 98%; /* slate-50 */
-    --muted: 215 25% 27%;           /* slate-700 */
-    --muted-foreground: 215 25% 65%; /* slate-400 */
-    --accent: 199 95% 60%;          /* sky-400 */
-    --accent-foreground: 222 47% 11%;/* slate-900 */
-    --destructive: 0 84% 60%;       /* red-500 */
-    --destructive-foreground: 210 40% 98%; /* slate-50 */
-    --border: 215 25% 27%;          /* slate-700 */
-    --input: 215 25% 27%;           /* slate-700 */
-    --ring: 222 83% 58%;            /* blue-600 */
-    --radius: 0.8rem;
+    --background: 0 0% 100%;       /* white */
+    --foreground: 240 5.9% 10%;    /* zinc-900 */
+    --card: 0 0% 100%;             /* white / zinc-50 */
+    --card-foreground: 240 5.9% 10%; /* zinc-900 */
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 5.9% 10%;
+    --primary: 240 5.9% 10%;       /* zinc-900 - Premium CTA */
+    --primary-foreground: 0 0% 98%;/* zinc-50 */
+    --secondary: 240 4.8% 95.9%;   /* zinc-100 */
+    --secondary-foreground: 240 5.9% 10%; /* zinc-900 */
+    --muted: 240 4.8% 95.9%;       /* zinc-100 */
+    --muted-foreground: 240 3.8% 46.1%; /* zinc-500 */
+    --accent: 243 75% 59%;         /* indigo-600 */
+    --accent-foreground: 0 0% 100%;/* white text on accent */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;        /* zinc-200 */
+    --input: 240 5.9% 90%;         /* zinc-200 */
+    --ring: 240 5.9% 10%;          /* zinc-900 focus ring */
+    --radius: 0.75rem;             /* sleek radius */
   }
 
   .dark {
-    --background: 222 47% 11%;      /* slate-900 */
-    --foreground: 210 40% 98%;      /* slate-50 */
-    --card: 215 28% 17%;            /* slate-800 */
-    --card-foreground: 210 40% 98%; /* slate-50 */
-    --popover: 215 28% 17%;         /* slate-800 */
-    --popover-foreground: 210 40% 98%;/* slate-50 */
-    --primary: 222 83% 58%;         /* blue-600 */
-    --primary-foreground: 210 40% 98%; /* slate-50 */
-    --secondary: 215 25% 27%;       /* slate-700 */
-    --secondary-foreground: 210 40% 98%; /* slate-50 */
-    --muted: 215 25% 27%;           /* slate-700 */
-    --muted-foreground: 215 25% 65%; /* slate-400 */
-    --accent: 199 95% 60%;          /* sky-400 */
-    --accent-foreground: 222 47% 11%;/* slate-900 */
-    --destructive: 0 84% 60%;       /* red-500 */
-    --destructive-foreground: 210 40% 98%; /* slate-50 */
-    --border: 215 25% 27%;          /* slate-700 */
-    --input: 215 25% 27%;           /* slate-700 */
-    --ring: 222 83% 58%;            /* blue-600 */
+    --background: 240 20% 3.5%;    /* Very deep indigo/black */
+    --foreground: 210 20% 98%;     /* Sky white */
+    --card: 240 20% 8%;           /* Translucent indigo hint */
+    --card-foreground: 0 0% 98%;
+    --popover: 240 3.7% 10%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;           /* zinc-50 - Premium CTA */
+    --primary-foreground: 240 5.9% 10%; /* zinc-900 */
+    --secondary: 240 3.7% 15.9%;   /* zinc-800 */
+    --secondary-foreground: 0 0% 98%; /* zinc-50 */
+    --muted: 240 3.7% 15.9%;       /* zinc-800 */
+    --muted-foreground: 240 5% 64.9%; /* zinc-400 */
+    --accent: 239 84% 67%;         /* indigo-500 */
+    --accent-foreground: 0 0% 100%;/* white text on accent */
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;      /* zinc-800 */
+    --input: 240 3.7% 15.9%;       /* zinc-800 */
+    --ring: 240 4.9% 83.9%;        /* zinc-300 focus ring */
+  }
+}
+
+/* Prevent overscroll/bounce on iOS for map bottom sheet UX */
+@layer utilities {
+  .prevent-overscroll {
+    overscroll-behavior-y: none;
   }
   
-  /* Mercado Libre Inspired "Light" Theme */
-  .light {
-    --background: 48 90% 96%;          /* Pastel Cream */
-    --foreground: 222 47% 11%;         /* slate-900 */
-    --card: 0 0% 100%;                  /* white */
-    --card-foreground: 222 47% 11%;     /* slate-900 */
-    --popover: 0 0% 100%;               /* white */
-    --popover-foreground: 222 47% 11%;  /* slate-900 */
-    --primary: 51 98% 50%;              /* Mercado Libre Yellow */
-    --primary-foreground: 222 47% 11%;  /* slate-900 */
-    --secondary: 210 40% 96.1%;         /* slate-100 */
-    --secondary-foreground: 222 47% 11%;/* slate-900 */
-    --muted: 210 40% 96.1%;             /* slate-100 */
-    --muted-foreground: 215 20% 35%;    /* slate-600/700ish - Darkened for readability */
-    --accent: 222 83% 58%;              /* Blue accent */
-    --accent-foreground: 210 40% 98%;   /* slate-50 */
-    --destructive: 0 84% 60%;           /* red-500 */
-    --destructive-foreground: 210 40% 98%; /* slate-50 */
-    --border: 215 27.9% 91%;            /* slate-200 */
-    --input: 215 27.9% 91%;             /* slate-200 */
-    --ring: 51 98% 50%;                 /* Mercado Libre Yellow for focus rings */
+  .glass-morphism {
+    @apply bg-black/40 backdrop-blur-xl border border-white/5;
+  }
+  
+  .bg-morphic {
+    background: radial-gradient(circle at top right, #1e1b4b, #050509);
+    background-attachment: fixed;
+  }
+
+  .btn-glow {
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.3), 0 0 5px rgba(99, 102, 241, 0.2);
+    @apply transition-all hover:scale-[1.02] active:scale-[0.98];
+  }
+  
+  .premium-shadow {
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.1), 0 0 1px rgba(0,0,0,0.1);
+  }
+
+  .radar-pulse-1 {
+    animation: radar-pulse 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  .radar-pulse-2 {
+    animation: radar-pulse 2s cubic-bezier(0, 0, 0.2, 1) infinite 0.5s;
+  }
+  .radar-pulse-3 {
+    animation: radar-pulse 2s cubic-bezier(0, 0, 0.2, 1) infinite 1s;
+  }
+
+  @keyframes radar-pulse {
+    0% { transform: scale(1); opacity: 0.5; }
+    100% { transform: scale(3); opacity: 0; }
+  }
+
+  .sheet-transition {
+    transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1), height 300ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
@@ -79,6 +100,6 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overscroll-none;
   }
 }

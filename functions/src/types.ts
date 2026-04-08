@@ -8,7 +8,7 @@ import * as admin from 'firebase-admin';
 export type FirestoreTimestamp = admin.firestore.Timestamp;
 export type FirestoreFieldValue = admin.firestore.FieldValue;
 
-export type ServiceType = "premium" | "express";
+export type ServiceType = "premium" | "express" | "normal";
 export type VehicleType = "taxi" | "remis";
 
 export type Role = "admin" | "driver" | "passenger" | "admin_municipal";
@@ -24,7 +24,7 @@ export type RideStatus =
 
 export type VerificationStatus = "unverified" | "pending_review" | "approved" | "rejected";
 export type DocumentStatus = "valid" | "expired" | "pending_review" | "rejected";
-export type MunicipalStatus = "approved" | "suspended" | "expired" | "pending_review";
+export type MunicipalStatus = "active" | "approved" | "suspended" | "expired" | "pending_review" | "municipal_approved" | "municipal_observed" | "pending_municipal_review";
 
 export type DriverStatus = "offline" | "inactive" | "online" | "in_ride";
 export type DriverLevel = "bronce" | "plata" | "oro";
@@ -33,6 +33,7 @@ export interface Place {
   address: string;
   lat: number;
   lng: number;
+  city?: string;
 }
 
 export interface TrackingStats {
@@ -59,6 +60,29 @@ export interface CompletedRide {
     pointsAwarded?: number;
     trackingStats: TrackingStats;
     calculatedAt: FirestoreTimestamp;
+    fapEligible?: boolean;
+    driverSubtype?: string;
+}
+
+export interface RideChatMessage {
+    id: string;
+    rideId: string;
+    senderId: string;
+    senderRole: 'passenger' | 'driver' | 'admin';
+    text: string;
+    createdAt: FirestoreTimestamp | FirestoreFieldValue;
+    type: 'text' | 'system' | 'image';
+    status: 'sent' | 'read' | 'failed';
+}
+
+export interface RideChatSummary {
+    unreadCountPassenger: number;
+    unreadCountDriver: number;
+    lastMessageText?: string;
+    lastMessageAt?: FirestoreTimestamp | FirestoreFieldValue;
+    lastMessageSenderId?: string;
+    chatAuditEligible?: boolean;
+    chatEnabled: boolean;
 }
 
 export interface Ride {
@@ -85,6 +109,9 @@ export interface Ride {
   currentOfferedDriverId?: string | null;
   matchingExpiresAt?: FirestoreTimestamp | null;
   notifiedDrivers?: string[];
+  matchingAttempts?: number;
+  operatingAreaId?: string;
+  preferredDriverGender?: string;
   
   driverLocationAtAccept?: {
     lat: number;
@@ -97,6 +124,8 @@ export interface Ride {
   driverRating?: number | null; 
   driverVehicle?: string | null;
   driverPlate?: string | null;
+  driverVehiclePhoto?: string | null;
+  driverPhotoUrl?: string | null;
 
   pricing?: {
     estimatedTotal: number;
@@ -105,6 +134,12 @@ export interface Ride {
     estimatedDurationSeconds?: number;
     surgeMultiplier?: number;
     discountAmount?: number | null;
+    estimated?: {
+        total: number;
+        breakdown: any;
+        configSnapshot: any;
+        calculatedAt: any;
+    };
   };
   pricingVersion?: string;
   
@@ -123,6 +158,9 @@ export interface Ride {
   cancelledBy?: 'passenger' | 'driver' | 'system' | null;
   cancelReason?: string | null;
   cancelledAt?: FirestoreTimestamp | FirestoreFieldValue | null;
+  
+  chatSummary?: RideChatSummary;
+  totalIgnores?: number;
 }
 
 export interface DriverStats {
@@ -133,6 +171,7 @@ export interface DriverStats {
 
 export interface UserProfile {
     id?: any;
+    uid: string; // Atomic UID
     name: string;
     email: string;
     phone?: string | null;
@@ -141,7 +180,9 @@ export interface UserProfile {
     photoURL?: string | null;
 
     city?: string;
+    cityKey?: string;
     country?: string;
+    gender?: string;
     
     createdAt: any;
     updatedAt?: any;
@@ -166,15 +207,35 @@ export interface UserProfile {
     licenseVerified?: boolean;
     vehicleVerificationStatus?: VerificationStatus;
     
-    serviceTier?: 'premium' | 'express';
+    driverSubtype?: 'premium' | 'express';
+    municipalStatus?: string;
+    
     servicesOffered?: {
         express: boolean;
         premium: boolean;
+        normal: boolean;
     };
+
+    driverPreferences?: {
+        acceptsExpress: boolean;
+        acceptsDiscountedRides: boolean;
+        acceptsPets: boolean;
+    };
+
+    expressAccess?: {
+        unlockLevel: number;
+        bonus20Available: number;
+        bonus10Available: number;
+    };
+
+    termsAccepted?: boolean;
+    termsVersion?: string;
+    emailVerified?: boolean;
 
     stats?: DriverStats;
 
     rewardPoints?: number;
+    weeklyPoints?: number;
     driverLevel?: DriverLevel;
     vamoPoints?: number;
 
@@ -185,13 +246,149 @@ export interface UserProfile {
     weeklyCancellations?: number;
     lastCancellationAt?: FirestoreTimestamp | null;
     blockedUntil?: FirestoreTimestamp | null;
+    
+    operatingAreaId?: string;
+    passengerProgress?: {
+        monthlyRides: number;
+        currentMonth: string;
+    };
 }
 
+export type FapType = "accident" | "vandalism" | "robbery" | "medical" | "other";
+
+export interface FapClaim {
+    id: string;
+    caseId: string;
+    rideId: string;
+    passengerId: string;
+    driverId: string;
+    status: 'pending' | 'reviewing' | 'approved' | 'rejected' | 'paid' | 'cancelled';
+    type: FapType;
+    description: string;
+    evidenceUrls: string[];
+    requestedAmount: number;
+    approvedAmount?: number;
+    adminNotes?: string;
+    rejectionReason?: string;
+    rideSnapshot: {
+        origin: string;
+        destination: string;
+        totalFare: number;
+        completedAt: any;
+        driverSubtype: string;
+        city: string | null | undefined;
+    };
+    createdAt: FirestoreTimestamp | FirestoreFieldValue;
+    updatedAt: FirestoreTimestamp | FirestoreFieldValue;
+    resolvedAt?: FirestoreTimestamp | FirestoreFieldValue;
+    paidAt?: FirestoreTimestamp | FirestoreFieldValue;
+    paymentTxId?: string;
+}
+
+export interface FapCounter {
+    year: number;
+    lastNumber: number;
+}
+
+export interface Promotion {
+    id: string;
+    name: string;
+    enabled: boolean;
+    status: 'active' | 'inactive' | 'scheduled';
+    target: 'passenger' | 'driver';
+    context: 'topup' | 'ride' | 'registration';
+    reward: {
+        type: 'fixed' | 'percentage';
+        value: number;
+        cap?: number;
+    };
+    limits: {
+        maxRedemptionsPerUser: number;
+        maxTotalRedemptions?: number;
+    };
+    conditions: {
+        minAmount?: number;
+        maxAmount?: number;
+        city?: string;
+        isFirstAction?: boolean;
+        daysInactive?: number;
+        userLevels?: DriverLevel[];
+    };
+    city: 'global' | string;
+    priority: number;
+    startsAt?: FirestoreTimestamp;
+    endsAt?: FirestoreTimestamp;
+}
+
+export interface PromotionRedemption {
+    id: string;
+    promotionId: string;
+    userId: string;
+    role: Role;
+    redeemedAt: FirestoreTimestamp | FirestoreFieldValue;
+    rewardApplied: number;
+    status: 'applied' | 'reserved' | 'failed';
+    transactionId?: string;
+    rideId?: string;
+}
+
+export type PromotionContext = 'topup' | 'ride' | 'registration';
+
+export interface SystemConfig {
+    matchingEnabled: boolean;
+    expressEnabled: boolean;
+    globalMaintenance: boolean;
+}
+
+export interface CityConfig {
+    pricing?: PricingConfig;
+    enabled: boolean;
+}
+
+export interface ExpressConfig {
+  isExpressUnlockEnabled: boolean;
+  isExpressBonusEnabled: boolean;
+  level1MinFare: number;
+  dailyBudgetCap: number;
+  weeklyBudgetCap: number;
+  bonus10Percent: number;
+  bonus10Cap: number;
+  bonus20Percent: number;
+  bonus20Cap: number;
+  pricing: any;
+  unlockLevel: number;
+}
+
+export interface ExpressBudget {
+    dailyPool: number;
+    spentToday: number;
+    dailyUsed: number;
+    weeklyUsed: number;
+}
+
+export interface Referral {
+    id: string;
+    referrerId: string;
+    referredId: string;
+    status: 'pending' | 'completed' | 'expired';
+    rewardAmount: number;
+    createdAt: FirestoreTimestamp | FirestoreFieldValue;
+}
+
+export interface UserReward {
+    id: string;
+    userId: string;
+    type: string;
+    amount: number;
+    status: 'available' | 'used';
+    createdAt: FirestoreTimestamp | FirestoreFieldValue;
+}
 
 export interface DriverPoints {
   weeklyPoints: number;
   totalPoints: number;
   updatedAt: FirestoreTimestamp;
+  lastResetAt?: FirestoreTimestamp | FirestoreFieldValue;
 }
 
 export interface RewardsConfig {

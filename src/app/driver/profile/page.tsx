@@ -11,15 +11,18 @@ import { UserProfile, VerificationStatus, DriverLevel } from '@/lib/types';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '@/firebase';
 import { useRouter } from 'next/navigation';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { useDriverStats } from '@/hooks/useDriverStats';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { NotificationToggle } from '@/components/NotificationToggle';
 
 const verificationStatusBadge: Record<NonNullable<VerificationStatus> | 'default', { text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
     unverified: { text: 'No Verificado', variant: 'destructive' },
@@ -71,7 +74,97 @@ export default function DriverProfilePage() {
   const [services, setServices] = useState(profile?.servicesOffered || { express: true, premium: true });
   const [isSavingServices, setIsSavingServices] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [referrals, setReferrals] = useState<any[]>([]);
+  const [loadingReferrals, setLoadingReferrals] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (!user || !firestore) return;
+    
+    const q = query(
+        collection(firestore, 'referrals'),
+        where('referrerId', '==', user.uid),
+        orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const refs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setReferrals(refs);
+        setLoadingReferrals(false);
+    }, (error) => {
+        console.error("Error fetching referrals:", error);
+        setLoadingReferrals(false);
+    });
+
+    return () => unsubscribe();
+  }, [user, firestore]);
+
+  const handleGenerateCode = async () => {
+    if (!firebaseApp || isGeneratingCode) return;
+    
+    setIsGeneratingCode(true);
+    try {
+        const functions = getFunctions(firebaseApp, 'us-central1');
+        const generateCode = httpsCallable<any, { referralCode: string }>(functions, 'generateReferralCodeV1');
+        const result = await generateCode();
+        if (result.data?.referralCode) {
+            toast({ title: "Código generado", description: "Ya podés invitar a otros conductores." });
+        }
+    } catch (error: any) {
+        console.error("Error generating code:", error);
+        toast({ 
+            variant: 'destructive', 
+            title: "Error al generar código", 
+            description: "No pudimos generar tu código. Reintentá en unos minutos." 
+        });
+    } finally {
+        setIsGeneratingCode(false);
+    }
+  };
+
+  const handleShare = async () => {
+    const code = profile?.referralCode;
+    if (!code) {
+        handleGenerateCode();
+        return;
+    }
+
+    const registrationLink = `https://vamoapp.online/driver?ref=${code}`;
+    const shareText = `Sumate a manejar con VamO y ganá más 🚀\nRegistrate desde mi link:\n${registrationLink}`;
+    const shareData = {
+        title: 'VamO Conductor 🚀',
+        text: shareText,
+    };
+
+    if (navigator.share) {
+        try {
+            await navigator.share(shareData);
+        } catch (err: any) {
+            if (err.name !== 'AbortError') {
+                console.error('Share failed', err);
+                copyToClipboard(shareText);
+            }
+        }
+    } else {
+        copyToClipboard(shareText);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+        .then(() => {
+            toast({ title: "Código copiado", description: "Pegalo y compartilo con otros conductores." });
+        })
+        .catch((err) => {
+            console.error('Clipboard copy failed', err);
+            toast({ 
+                variant: 'destructive', 
+                title: "Error al copiar", 
+                description: "No se pudo copiar el código. Intentá seleccionarlo manualmente." 
+            });
+        });
+  };
 
   const handleLogout = async () => {
     if (auth) {
@@ -111,6 +204,7 @@ export default function DriverProfilePage() {
     if (!firestore || !user) return;
     
     const newServices = { 
+      normal: true,
       premium: true,
       express: !services.express 
     };
@@ -131,6 +225,7 @@ export default function DriverProfilePage() {
     }
   }
 
+  const { weeklyRevenue, weeklyRides, loading: statsLoading } = useDriverStats();
   const isLoading = userLoading || !profile;
 
   if (isLoading) {
@@ -151,14 +246,82 @@ export default function DriverProfilePage() {
   const averageRating = profile.averageRating?.toFixed(1) ?? 'N/A';
   const balance = profile.currentBalance ?? 0;
   
+  const matchingScore = profile.matchingScore ?? 100;
   const ridesCompleted = profile.stats?.ridesCompleted ?? 0;
   const PROMO_RIDE_THRESHOLD = 10;
   const isInPromoPeriod = profile.promoCreditGranted && ridesCompleted < PROMO_RIDE_THRESHOLD;
 
   const isPremiumTier = profile.serviceTier === 'premium';
+  const missingPhotos = !profile.photoURL || !profile.vehicleFrontPhotoURL;
 
   return (
     <div className="space-y-6">
+      {missingPhotos && (
+        <Card className="border-amber-500/30 bg-amber-500/10">
+          <CardHeader>
+            <CardTitle className="text-amber-500 text-lg flex gap-2 items-center">
+              <VamoIcon name="alert-triangle" className="w-5 h-5" /> Faltan fotos de perfil
+            </CardTitle>
+            <CardDescription className="text-amber-500/80 font-bold text-xs uppercase tracking-widest mt-1">
+              Tu cuenta no tiene foto de perfil o foto de vehículo. Pronto será obligatorio subir ambas para poder conectarte y recibir viajes.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {/* PERFORMANCE & STATS CARD */}
+      <Card className="border-indigo-500/20 bg-indigo-500/5 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-10">
+            <VamoIcon name="trending-up" className="h-24 w-24 text-indigo-500" />
+        </div>
+        <CardHeader>
+            <div className="flex justify-between items-center">
+                <div className="space-y-1">
+                    <CardTitle className="text-xl">Rendimiento PRO</CardTitle>
+                    <CardDescription>Tu estatus actual en la plataforma</CardDescription>
+                </div>
+                <Badge className={cn("uppercase font-black tracking-widest px-3 py-1", levelBadgeStyle)}>
+                    Nivel {levelKey}
+                </Badge>
+            </div>
+        </CardHeader>
+        <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="bg-background/60 p-4 rounded-2xl border border-indigo-500/10 flex flex-col items-center text-center">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Score de Prioridad</span>
+                    <span className={cn(
+                        "text-3xl font-black tabular-nums",
+                        matchingScore > 80 ? "text-indigo-500" : matchingScore > 50 ? "text-amber-500" : "text-destructive"
+                    )}>
+                        {matchingScore}
+                    </span>
+                    <span className="text-[9px] font-bold text-muted-foreground mt-1 italic">Exacto</span>
+                </div>
+                <div className="bg-background/60 p-4 rounded-2xl border border-indigo-500/10 flex flex-col items-center text-center">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Viajes (7d)</span>
+                    <span className="text-3xl font-black text-white">
+                        {statsLoading ? "..." : weeklyRides}
+                    </span>
+                    <span className="text-[9px] font-bold text-muted-foreground mt-1">Acumulados</span>
+                </div>
+            </div>
+
+            <div className="mt-4 p-4 bg-indigo-500/10 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                        <VamoIcon name="award" className="text-indigo-400 h-5 w-5" />
+                    </div>
+                    <div>
+                        <p className="text-xs font-black text-indigo-400 uppercase tracking-tighter leading-none">Recaudación Semanal</p>
+                        <p className="text-sm font-bold text-white">{statsLoading ? "Cargando..." : formatCurrency(weeklyRevenue)}</p>
+                    </div>
+                </div>
+                <div className="text-[9px] text-indigo-400/60 font-medium text-right max-w-[80px]">
+                    Estimado en efectivo
+                </div>
+            </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <div className="flex flex-col items-center gap-4">
@@ -196,16 +359,10 @@ export default function DriverProfilePage() {
                     <p className="text-xs text-muted-foreground">Estado</p>
                     <Badge variant={verificationInfo.variant}>{verificationInfo.text}</Badge>
                 </div>
-                <div>
-                    <p className="text-xs text-muted-foreground">Nivel</p>
-                    <Badge variant="outline" className={cn("capitalize", levelBadgeStyle)}>{profile.driverLevel || 'Bronce'}</Badge>
-                </div>
             </div>
             <Separator />
             <ProfileInfoRow icon={<VamoIcon name="mail" />} label="Email" value={profile.email} />
             <ProfileInfoRow icon={<VamoIcon name="phone" />} label="Teléfono" value={profile.phone} />
-            <ProfileInfoRow icon={<VamoIcon name="star" />} label="Rating Promedio" value={averageRating} />
-             <ProfileInfoRow icon={<VamoIcon name="award" />} label="Puntos de Recompensa" value={profile.rewardPoints || 0} />
             <ProfileInfoRow 
               icon={<VamoIcon name="wallet" />} 
               label="Crédito de Plataforma"
@@ -225,6 +382,19 @@ export default function DriverProfilePage() {
                 <ProfileInfoRow icon={<VamoIcon name="palette" />} label="Color" value={profile.vehicleColor || 'No especificado'} />
                 <ProfileInfoRow icon={<VamoIcon name="credit-card" />} label="Patente" value={profile.plateNumber || 'No especificada'} />
            </CardContent>
+      </Card>
+
+      <Card className="border-primary/20 bg-background/50">
+          <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                  <VamoIcon name="bell" className="text-primary h-5 w-5" />
+                  Notificaciones
+              </CardTitle>
+              <CardDescription>Asegurate de activarlas para escuchar nuevos viajes en segundo plano.</CardDescription>
+          </CardHeader>
+          <CardContent>
+              <NotificationToggle />
+          </CardContent>
       </Card>
 
       <Card>
@@ -248,6 +418,106 @@ export default function DriverProfilePage() {
                   <Switch id="express-switch" checked={services.express} onCheckedChange={handleServiceToggle} disabled={isSavingServices || !isPremiumTier} />
               </div>
           </CardContent>
+      </Card>
+
+      {/* REFERRAL ENGINE UI */}
+      <Card className="border-green-500/20 bg-green-500/5">
+        <CardHeader className="pb-2">
+            <div className="flex justify-between items-start">
+                <div className="space-y-1">
+                    <CardTitle className="text-xl flex items-center gap-2">
+                        <VamoIcon name="users" className="text-green-500 h-6 w-6"/> Invitá y Ganá $1.000
+                    </CardTitle>
+                    <CardDescription>
+                        Por cada conductor que refieras y complete su primer viaje.
+                    </CardDescription>
+                </div>
+            </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+            <div className="bg-background/80 p-5 rounded-2xl border flex flex-col items-center gap-4 text-center">
+                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Tu código de referido</p>
+                <div className="flex items-center gap-3">
+                    <span className="text-3xl font-black tracking-tight font-mono text-primary">
+                        {isGeneratingCode ? (
+                            <VamoIcon name="loader" className="animate-spin h-6 w-6 text-primary" />
+                        ) : (
+                            profile.referralCode || 'SIN CÓDIGO'
+                        )}
+                    </span>
+                    <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        className="h-10 w-10 text-primary hover:bg-primary/10 rounded-full"
+                        onClick={handleShare}
+                        disabled={isGeneratingCode || !profile.referralCode}
+                    >
+                        <VamoIcon name="share-2" className="h-5 w-5" />
+                    </Button>
+                </div>
+                {!profile.referralCode && !isGeneratingCode ? (
+                    <Button 
+                        variant="default" 
+                        className="w-full h-12 font-bold rounded-xl"
+                        onClick={handleGenerateCode}
+                    >
+                        Generar mi Código
+                    </Button>
+                ) : (
+                    <Button 
+                        variant="default" 
+                        className="w-full h-12 font-bold rounded-xl"
+                        onClick={handleShare}
+                        disabled={isGeneratingCode || !profile.referralCode}
+                    >
+                        {isGeneratingCode ? 'Generando...' : 'Compartir Código'}
+                    </Button>
+                )}
+            </div>
+
+            <div className="space-y-3">
+                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest px-1">Referidos ({referrals.length})</p>
+                
+                {loadingReferrals ? (
+                    <div className="space-y-2">
+                        <Skeleton className="h-12 w-full rounded-xl" />
+                    </div>
+                ) : referrals.length === 0 ? (
+                    <div className="py-8 text-center bg-muted/20 rounded-2xl border border-dashed">
+                        <p className="text-xs text-muted-foreground">Aún no tienes referidos.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {referrals.map((ref) => (
+                            <div key={ref.id} className="flex items-center justify-between p-4 bg-muted/20 rounded-xl border border-border/50">
+                                <div className="flex items-center gap-3">
+                                    <div className={cn(
+                                        "h-8 w-8 rounded-full flex items-center justify-center",
+                                        ref.status === 'rewarded' ? "bg-green-500/20 text-green-500" : "bg-muted text-muted-foreground"
+                                    )}>
+                                        <VamoIcon name="user" className="h-4 w-4" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold truncate max-w-[120px]">
+                                            {ref.referredUserName || `Chofer ${ref.referredId.substring(0,6)}...`}
+                                        </span>
+                                        <span className={cn(
+                                            "text-[10px] font-bold uppercase",
+                                            ref.status === 'rewarded' ? "text-green-500" : "text-amber-500"
+                                        )}>
+                                            {ref.status === 'rewarded' ? '🏆 Acreditado' : '⏳ Pendiente'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">
+                                    {ref.createdAt?.toDate?.().toLocaleDateString() || '...'}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </CardContent>
       </Card>
 
        <Card>

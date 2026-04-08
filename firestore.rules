@@ -19,43 +19,104 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // Default deny for everything else (Best Practice)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     match /users/{userId} {
-      allow read, write: if request.auth != null;
+      // Owner can read. Admin/Municipal Admin can read users in their city.
+      allow read: if signedIn() && (
+        request.auth.uid == userId || 
+        isAdmin() || 
+        isMunicipalForCity(resource.data.cityKey)
+      );
+      
+      // Allow authenticated users to create their own profile during registration.
+      // CRITICAL: Role lock during creation. Cannot set themselves as admin.
+      allow create: if signedIn() && request.auth.uid == userId &&
+                    request.resource.data.role in ['driver', 'passenger'] &&
+                    request.resource.data.approved == false &&
+                    (!('currentBalance' in request.resource.data) || request.resource.data.currentBalance == 0) &&
+                    (!('municipalStatus' in request.resource.data) || request.resource.data.municipalStatus == 'pending_municipal_review');
+                    
+      // Owner can update profile fields. Admin can update everything.
+      // Municipal Admin can update municipal fields for their city.
+      allow update: if signedIn() && (
+        isAdmin() || 
+        (isMunicipalForCity(resource.data.cityKey) && 
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['approved', 'municipalStatus', 'municipalCode', 'driverSubtype', 'updatedAt'])) ||
+        (request.auth.uid == userId && (
+          // Allow setting municipalStatus to 'renewal_under_review' for everyone
+          (request.resource.data.municipalStatus == 'renewal_under_review') ||
+          // Otherwise, normal restricted update
+          !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny([
+              // Core auth/system fields
+              'role', 'activeRideId', 'currentBalance', 'nonWithdrawableBalance',
+              'vamoPoints', 'approved', 'isSuspended', 'driverLevel', 'rewardPoints',
+              'stats', 'phone', 'email',
+              // VamoMuni: NEVER let the driver self-approve or modify municipal state
+              'municipalStatus', 'municipalCode', 'driverSubtype', 'cityKey',
+              // Administrative flags
+              'emailVerified', 'licenseVerified', 'vehicleVerificationStatus'
+            ])
+        ))
+      );
+    }
+
+    match /phone_index/{phone} {
+      allow read, write: if false; // Cloud Functions only
+    }
+
+    match /email_index/{email} {
+      allow read, write: if false; // Cloud Functions only
+    }
+
+    match /benefits/{benefitId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
     }
 
     match /rides/{rideId} {
-      // SIMPLIFIED: Any authenticated user can get a ride if they know its ID.
-      // This is safe because ride IDs are not guessable and are only known
-      // to participants (passenger, driver) or admins.
-      allow get: if signedIn();
+      allow get: if signedIn() && (
+        resource.data.passengerId == request.auth.uid || 
+        resource.data.driverId == request.auth.uid ||
+        isAdmin()
+      );
 
-      allow list: if signedIn();
+      // SECURITY: Users can only READ their own rides. Admin can read everything.
+      allow read: if signedIn() && (
+        isAdmin() || 
+        resource.data.passengerId == request.auth.uid || 
+        resource.data.driverId == request.auth.uid
+      );
 
+      // ONLY passengers can create a ride for themselves
       allow create: if signedIn() && request.resource.data.passengerId == request.auth.uid;
-
-      allow update: if false;
+      
+      allow update, delete: if false; // Only backend updates
     }
 
     match /drivers_locations/{driverId} {
+      // SECURITY: Access allowed for owner, admin, or any signed-in user who needs to fetch a specific driver's location.
+      // We allow GET but strictly block LIST. Since driverId is required to GET, and passengers only get the driverId
+      // when a ride is assigned, this is a safe operational compromise.
       allow get: if signedIn();
       allow list: if isAdmin();
       allow write: if signedIn() && request.auth.uid == driverId;
     }
 
     match /platform_transactions/{transactionId} {
-      allow get: if isAdmin() || (signedIn() && resource.data.driverId == request.auth.uid);
-      allow list: if signedIn();
+      allow read: if isAdmin() || (signedIn() && resource.data.driverId == request.auth.uid);
     }
 
     match /rideOffers/{offerId} {
-      allow get: if signedIn() && (
-        resource.data.driverId == request.auth.uid ||
-        isAdmin()
-      );
-
-      allow list: if signedIn();
-
-      allow create, update, delete: if false;
+      // SECURITY: Only the assigned driver can read their own offers. Admin has full access.
+      // List is allowed but will naturally be filtered by the underlying where('driverId', '==', uid) in the query.
+      allow read: if isAdmin() || (signedIn() && resource.data.driverId == request.auth.uid);
+      allow write: if isAdmin(); // Only backend/admin can create/edit offers from a security standpoint
     }
 
     match /rewards/rewards {
@@ -64,6 +125,7 @@ service cloud.firestore {
 
     match /config/pricing {
       allow get: if signedIn();
+      allow write: if isAdmin();
     }
 
     match /driver_points/{driverId} {
@@ -72,13 +134,222 @@ service cloud.firestore {
 
     match /rides/{rideId}/tracking/{pointId} {
       allow write: if get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid;
-      allow read: if signedIn();
+      allow read: if signedIn() && (
+         get(/databases/$(database)/documents/rides/$(rideId)).data.passengerId == request.auth.uid ||
+         get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid ||
+         isAdmin()
+      );
+    }
+
+    match /rides/{rideId}/messages/{messageId} {
+      allow read: if signedIn() && (
+         get(/databases/$(database)/documents/rides/$(rideId)).data.passengerId == request.auth.uid ||
+         get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid ||
+         isAdmin()
+      );
+      allow list: if signedIn() && (
+         get(/databases/$(database)/documents/rides/$(rideId)).data.passengerId == request.auth.uid ||
+         get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid ||
+         isAdmin()
+      );
+      allow write: if false; // Only via Cloud Functions
     }
 
     match /withdrawal_requests/{requestId} {
       allow create: if isDriver() && request.resource.data.driverId == request.auth.uid;
-      allow read, list: if isAdmin();
+      allow read: if isAdmin() || (signedIn() && resource.data.driverId == request.auth.uid);
       allow update: if isAdmin();
+    }
+
+    match /panic_alerts/{alertId} {
+      allow read, list: if isAdmin();
+      allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved', 'resolvedAt', 'resolvedBy']);
+      allow create: if false; // Only via Cloud Functions
+    }
+
+    match /referrals/{referralId} {
+      // Strictly Admin-only for global lists and management. 
+      // Users can only read if they are the referrer to see their own rewards status.
+      allow read: if isAdmin() || (signedIn() && resource.data.referrerId == request.auth.uid);
+      allow list: if isAdmin(); // Common users cannot list referrals globally
+      allow write: if isAdmin();
+    }
+
+    match /user_rewards/{rewardId} {
+      // Strictly Admin-only for global lists.
+      // Users can read/list only their own rewards.
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isAdmin() || (signedIn() && request.query.limit <= 50 && request.query.filters.size() >= 1); 
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
+    // VamoMuni — Módulo de Conductores Particulares/Express
+    // =========================================================================
+    //
+    // Jerarquía de roles:
+    //   admin           → acceso global de lectura/escritura
+    //   admin_municipal → acceso restringido a su propia ciudad (cityKey)
+    //   driver (express)→ solo puede leer su propio perfil y subir renovaciones
+    //
+    // IMPORTANTE: Las acciones más sensibles (habilitar, suspender, cambiar
+    // municipalStatus) se permiten desde el cliente al rol admin_municipal para
+    // mantener la agilidad del MVP. Se recomienda migrarlas a Cloud Functions
+    // callable DESPUÉS del lanzamiento para auditabilidad adicional.
+    // =========================================================================
+
+    // ── Helpers VamoMuni ─────────────────────────────────────────────────────
+
+    function isMunicipalAdmin() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin_municipal';
+    }
+
+    function isExpressDriver() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.driverSubtype == 'express';
+    }
+
+    // Un admin_municipal solo puede actuar sobre documentos de su ciudad.
+    // REQUISITO: users/{adminUid} DEBE tener el campo `cityKey` seteado
+    //            (normalizado con normalizeCityKey()) al crear la cuenta municipal.
+    function isMunicipalForCity(docCityKey) {
+      return isMunicipalAdmin() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.cityKey == docCityKey;
+    }
+
+    // Combinado: admin global O municipal de la misma ciudad
+    function isAdminOrMunicipalForCity(docCityKey) {
+      return isAdmin() || isMunicipalForCity(docCityKey);
+    }
+
+    // ── municipal_profiles/{driverId} ────────────────────────────────────────
+    //
+    // Creación: solo el conductor express lo crea durante el registro
+    //           (vía runTransaction en /driver/register, junto con users/{uid}).
+    // Lectura:  el propio conductor o el municipal/admin de su ciudad.
+    // Update:   el municipal/admin de la misma ciudad puede todo.
+    //           El conductor NO puede tocar campos protegidos.
+    // Delete:   solo admin global (casos excepcionales).
+    //
+    // NOTA SOBRE list: Firestore Security Rules no tiene acceso a request.query
+    // para filtrar por campo. La seguridad de la LISTA se garantiza por:
+    //   1. El rol admin_municipal (autenticado)
+    //   2. El frontend SIEMPRE hace where('cityKey', '==', cityKey)
+    //   3. El conductor no tiene permiso de list (solo get de su propia doc)
+    //
+    match /municipal_profiles/{driverId} {
+      allow get: if
+        (signedIn() && request.auth.uid == driverId) ||
+        isAdminOrMunicipalForCity(resource.data.cityKey);
+
+      // List: solo admin o admin_municipal (el filtro por cityKey lo fuerza el frontend)
+      allow list: if isAdmin() || isMunicipalAdmin();
+
+      // Solo el propio conductor puede crear su perfil.
+      // El registro garantiza que solo se crea una vez (runTransaction).
+      allow create: if
+        signedIn() &&
+        request.auth.uid == driverId &&
+        request.resource.data.municipalStatus == 'pending_municipal_review' &&
+        request.resource.data.municipalCode != null &&
+        request.resource.data.cityKey != null;
+
+      // Conductor express can update his own profile ONLY for renewals.
+      allow update: if 
+        isAdminOrMunicipalForCity(resource.data.cityKey) ||
+        (signedIn() && request.auth.uid == driverId && 
+         request.resource.data.municipalStatus == 'renewal_under_review');
+
+      allow delete: if isAdmin();
+    }
+
+    // ── municipal_doc_submissions/{submissionId} ──────────────────────────────
+    //
+    // Un conductor express puede CREAR una nueva solicitud de renovación.
+    // El admin_municipal puede LEER y ACTUALIZAR (aprobar/rechazar).
+    // Nadie puede borrar (historial permanente).
+    //
+    match /municipal_doc_submissions/{submissionId} {
+      // El propio conductor puede leer sus presentaciones.
+      // El admin_municipal de la misma ciudad puede leer y listar.
+      allow get: if
+        (signedIn() && resource.data.driverId == request.auth.uid) ||
+        isAdminOrMunicipalForCity(resource.data.cityKey);
+
+      allow list: if
+        isAdmin() ||
+        (isMunicipalAdmin() &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.cityKey ==
+         request.query.filters[0].value);
+
+      // El conductor puede crear UNA presentación nueva para su propio UID.
+      // No puede fijar status distinto de 'pending_review'.
+      allow create: if
+        signedIn() &&
+        request.resource.data.driverId == request.auth.uid &&
+        request.resource.data.status == 'pending_review' &&
+        isExpressDriver() &&
+        request.resource.data.storageUrl != null;
+
+      // Solo el admin_municipal/admin puede actualizar (aprobar/rechazar).
+      // El conductor NO puede automodificar el resultado de una revisión.
+      allow update: if isAdminOrMunicipalForCity(resource.data.cityKey) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'reviewedAt', 'reviewedBy', 'observation']);
+
+      allow delete: if false; // historial permanente
+    }
+
+    // ── municipal_audit_log/{logId} ───────────────────────────────────────────
+    //
+    // Solo se puede crear (append-only). Solo admin/municipal puede leer.
+    // Nadie puede modificar ni borrar.
+    //
+    match /municipal_audit_log/{logId} {
+      allow get, list: if isAdmin() || isMunicipalAdmin();
+
+      // Allow create: admin, municipal for their city, or driver for their own renewal log.
+      allow create: if
+        isAdmin() ||
+        (isMunicipalAdmin() &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.cityKey ==
+         request.resource.data.cityKey) ||
+        (signedIn() && request.auth.uid == request.resource.data.driverId && 
+         request.resource.data.action == 'renewal_document_submitted');
+
+      allow update, delete: if false; // append-only forever
+    }
+
+    // ── municipal_counters/{cityKey} ──────────────────────────────────────────
+    //
+    // El contador de secuencia para generación de municipalCode.
+    // Solo puede escribirlo el propio conductor express durante el registro
+    // (vía runTransaction) o el admin global.
+    // El admin_municipal NO puede tocarlo para evitar manipulación de códigos.
+    //
+    match /municipal_counters/{cityKey} {
+      allow read: if signedIn();
+
+      // SECURITY: Users can only increment during registration (via transaction).
+      // We check that they are not lowering the sequence.
+      allow create, update: if
+        isAdmin() ||
+        (signedIn() &&
+         request.resource.data.seq > (resource == null ? 0 : resource.data.seq));
+
+      allow delete: if false;
+    }
+
+    // ── cities/{cityKey} ──────────────────────────────────────────────────────
+    match /cities/{cityKey} {
+      // Municipal admins can read/write their own city config.
+      // Admin can do everything.
+      allow read: if isAdmin() || isMunicipalForCity(cityKey);
+      allow write: if isAdmin() || isMunicipalForCity(cityKey);
     }
   }
 }

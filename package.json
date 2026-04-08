@@ -2,11 +2,18 @@
   "name": "nextn",
   "version": "0.1.7",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "demo:auth": "tsx scripts/demo/prepare_demo_auth.ts",
+    "demo:register": "tsx scripts/demo/demo_passenger_register.ts",
+    "demo:driver-taxi-register": "tsx scripts/demo/demo_driver_taxi_register.ts",
+    "demo:vamo": "tsx scripts/demo/vamo_playwright_demo.ts",
+    "demo:seed": "tsx scripts/demo/seed_demo_users_web.ts",
+    "demo:seed-data": "tsx scripts/demo/seed_demo_data.ts"
   },
   "engines": {
     "node": "20"
@@ -46,6 +53,7 @@
     "lucide-react": "^0.414.0",
     "next": "14.2.35",
     "next-themes": "^0.3.0",
+    "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-day-picker": "^9.14.0",
     "react-dom": "^18.3.1",
@@ -55,13 +63,18 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
+    "@types/dotenv": "^6.1.1",
     "@types/google.maps": "^3.55.11",
     "@types/node": "^20.14.11",
     "@types/react": "^18.3.6",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.19",
+    "dotenv": "^17.3.1",
+    "firebase-admin": "^13.7.0",
+    "playwright": "^1.59.0",
     "postcss": "^8.4.39",
     "tailwindcss": "3.4.8",
+    "tsx": "^4.21.0",
     "typescript": "5.5.4"
   }
 }

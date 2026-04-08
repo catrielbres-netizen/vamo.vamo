@@ -23,6 +23,7 @@ import { useState, useEffect } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { type WithId } from '@/firebase/firestore/use-collection';
 import { Timestamp } from 'firebase/firestore';
+import { haversineDistance } from '@/lib/geo';
 
 
 const serviceCardStyles: Record<Ride['serviceType'], string> = {
@@ -66,7 +67,7 @@ export default function DriverRideCard({
     setIsAccepting(true);
             
     try {
-        const functions = getFunctions(firebaseApp, 'us-central1');
+        const functions = getFunctions(undefined, 'us-central1');
         const acceptRide = httpsCallable(functions, 'acceptRideV2');
         await acceptRide({ rideId: ride.id });
 
@@ -122,11 +123,11 @@ export default function DriverRideCard({
         <div className="!mt-4 grid grid-cols-2 gap-2 text-center text-xs text-muted-foreground">
             <div className="flex items-center justify-center gap-2">
                 <VamoIcon name="route" className="w-4 h-4" />
-                <span>{formatDistance(ride.pricing?.estimatedDistanceMeters ?? 0)}</span>
+                <span>{formatDistance( ride.origin && ride.destination ? haversineDistance(ride.origin, ride.destination) : 0 )}</span>
             </div>
              <div className="flex items-center justify-center gap-2">
                 <VamoIcon name="clock" className="w-4 h-4" />
-                <span>{formatDuration(ride.pricing?.estimatedDurationSeconds ?? 0)}</span>
+                <span>{formatDuration( ride.origin && ride.destination ? (haversineDistance(ride.origin, ride.destination) / 1000 / 30) * 3600 : 0 )}</span>
             </div>
         </div>
 
@@ -134,7 +135,7 @@ export default function DriverRideCard({
             <p className="font-bold text-base text-center">
             Tarifa Estimada:{' '}
             <span className="text-primary">
-                ${new Intl.NumberFormat('es-AR').format(ride.pricing?.estimatedTotal ?? 0)}
+                ${new Intl.NumberFormat('es-AR').format(ride.pricing?.estimated?.total ?? (ride.pricing as any)?.estimatedTotal ?? 0)}
             </span>
             </p>
         </div>

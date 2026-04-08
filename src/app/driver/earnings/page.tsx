@@ -4,6 +4,7 @@ import React from 'react';
 import { useState, useEffect, useMemo } from 'react';
 import { useUser } from '@/firebase';
 import { useDriverTransactions } from '@/hooks/useDriverTransactions'; 
+import { useDriverStats } from '@/hooks/useDriverStats';
 import { Card, CardContent, CardHeader, CardFooter, CardDescription, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { VamoIcon } from '@/components/VamoIcon';
@@ -12,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
 import { Timestamp } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 import { PaymentForm } from './PaymentForm';
@@ -30,6 +32,7 @@ export default function DriverEarningsPage() {
     const { profile, loading: isUserLoading } = useUser();
     // CORRECTED: Use the dedicated hook for transactions
     const { transactions, loading: isTransactionsLoading, error: transactionsError } = useDriverTransactions();
+    const { weeklyRevenue, weeklyCommissions, weeklyRides, loading: statsLoading } = useDriverStats();
 
     const router = useRouter();
     const { toast } = useToast();
@@ -130,6 +133,35 @@ export default function DriverEarningsPage() {
                         </DialogTrigger>
                     </CardFooter>
                     
+                    {/* WEEKLY LEDGER / RESUMEN DE CAJA */}
+                    <div className="px-6 pb-6 pt-2">
+                        <div className="bg-zinc-900/50 rounded-2xl border border-white/5 p-4 space-y-4">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-xs font-black uppercase tracking-widest text-zinc-500">Resumen (7d)</h3>
+                                {statsLoading && <VamoIcon name="loader" className="h-3 w-3 animate-spin text-zinc-600" />}
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-bold text-zinc-500 uppercase">Recaudado (Efectivo)</p>
+                                    <p className="text-xl font-black text-white">{formatCurrency(weeklyRevenue)}</p>
+                                </div>
+                                <div className="space-y-1 text-right">
+                                    <p className="text-[10px] font-bold text-zinc-500 uppercase">Comisiones</p>
+                                    <p className="text-xl font-black text-destructive-foreground">-{formatCurrency(weeklyCommissions)}</p>
+                                </div>
+                            </div>
+                            
+                            <div className="pt-3 border-t border-white/5 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Actividad Reciente</span>
+                                </div>
+                                <span className="text-[10px] font-black text-zinc-600 uppercase">{weeklyRides} viajes</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <Separator className="my-4" />
                     <CardHeader>
                         <CardTitle className="text-lg">Historial de Movimientos</CardTitle>
@@ -144,14 +176,24 @@ export default function DriverEarningsPage() {
                         {sortedTransactions.length > 0 ? (
                             <ul className="space-y-3">
                                 {sortedTransactions.map(tx => (
-                                    <li key={tx.id} className="flex justify-between items-center text-sm">
-                                        <div>
-                                            <p className={cn("font-medium capitalize", tx.amount > 0 ? 'text-green-500' : 'text-destructive-foreground/80')}>
-                                                {tx.note || tx.type.replace(/_/g, ' ')}
+                                    <li key={tx.id} className="flex justify-between items-start text-sm p-3 rounded-xl bg-white/[0.02] border border-white/[0.02]">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2">
+                                                <p className={cn("font-bold capitalize", tx.amount > 0 ? 'text-green-400' : 'text-indigo-300')}>
+                                                    {tx.note || tx.type.replace(/_/g, ' ')}
+                                                </p>
+                                                {tx.status === 'pending' && (
+                                                    <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[8px] h-4 px-1.5 font-black uppercase">Pendiente</Badge>
+                                                )}
+                                                {tx.status === 'rejected' && (
+                                                    <Badge className="bg-red-500/10 text-red-500 border-red-500/20 text-[8px] h-4 px-1.5 font-black uppercase">Rechazado</Badge>
+                                                )}
+                                            </div>
+                                            <p className="text-[10px] text-zinc-500">
+                                                {tx.createdAt?.toDate ? tx.createdAt.toDate().toLocaleString('es-AR') : 'Cargando fecha...'}
                                             </p>
-                                            <p className="text-xs text-muted-foreground">{(tx.createdAt as Timestamp)?.toDate().toLocaleString('es-AR')}</p>
                                         </div>
-                                        <p className={cn("font-bold", tx.amount > 0 ? 'text-green-600' : 'text-destructive-foreground')}>
+                                        <p className={cn("font-black text-base", tx.amount > 0 ? 'text-green-500' : 'text-white')}>
                                             {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
                                         </p>
                                     </li>

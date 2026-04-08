@@ -10,12 +10,15 @@ import { PassengerHeader } from '@/components/PassengerHeader';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { Ride, UserProfile } from '@/lib/types';
-import { PushNotificationPrompt } from '@/components/PushNotificationPrompt';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
+import { EmailVerificationAlert } from '@/components/EmailVerificationAlert';
 import { PassengerDataProvider } from '@/context/PassengerDataProvider';
 import { VISUALLY_LOCKED_STATUSES } from '@/lib/ride-status';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { NotificationGate } from '@/components/NotificationGate';
+import { EmailVerificationGate } from '@/components/EmailVerificationGate';
+import { TermsGuard } from '@/components/TermsGuard';
 import { useToast } from '@/hooks/use-toast';
 
 // This component contains the actual UI, only rendered when `profile` is guaranteed to exist.
@@ -34,28 +37,26 @@ function PassengerDashboard({ children, profile, user }: { children: React.React
 
   // SELF-HEALING LOGIC: If the user has a stale activeRideId, clear it automatically.
   useEffect(() => {
-    // This condition is now safer. It only triggers if loading is finished, an activeRideId exists,
-    // but the ride document itself was NOT found AND there was NO error during the fetch.
-    // This correctly identifies a stale ID without being triggered by temporary errors.
+    let timer: NodeJS.Timeout | null = null;
+
     if (!isRideLoading && profile.activeRideId && !ride && !rideError && firestore && user) {
-        console.warn(`Stale activeRideId (${profile.activeRideId}) detected for user ${user.uid}. Clearing it to prevent a locked state.`);
-        
-        const userRef = doc(firestore, 'users', user.uid);
-        
-        updateDoc(userRef, { activeRideId: null })
-            .then(() => {
-                console.log("Successfully cleared stale activeRideId.");
-                // The useUser hook will automatically pick up the profile change and re-render the UI.
-            })
-            .catch(err => {
-                console.error("Failed to clear stale activeRideId:", err);
-                toast({
-                    variant: 'destructive',
-                    title: 'Error de Sincronización',
-                    description: 'No pudimos corregir un viaje activo inválido. Por favor, recargá la página.'
+        timer = setTimeout(() => {
+            const userRef = doc(firestore, 'users', user.uid);
+            updateDoc(userRef, { activeRideId: null })
+                .catch(err => {
+                    console.error("Failed to clear stale activeRideId:", err);
+                    toast({
+                        variant: 'destructive',
+                        title: 'Error de Sincronización',
+                        description: 'No pudimos corregir un viaje activo inválido. Por favor, recargá la página.'
+                    });
                 });
-            });
+        }, 10000);
     }
+
+    return () => {
+        if (timer) clearTimeout(timer);
+    };
   }, [isRideLoading, ride, rideError, profile.activeRideId, firestore, user, toast]);
 
 
@@ -80,7 +81,6 @@ function PassengerDashboard({ children, profile, user }: { children: React.React
               <PassengerHeader userName={userName} location="Rawson, Chubut" />
               <div className="space-y-4 my-4">
                   <PWAInstallPrompt />
-                  <PushNotificationPrompt forRole="passenger" />
               </div>
               {!isVisuallyLocked && (
                   <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
@@ -111,6 +111,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { user, profile, loading, error } = useUser();
   const [hostname, setHostname] = useState('');
 
+  // 1. Loading state (Authenticating or Fetching Profile)
+  const isResolvingSession = loading || (!!user && !profile);
+
+  // --- RULES OF HOOKS: All effects MUST be at the top level ---
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setHostname(window.location.hostname);
@@ -118,22 +123,53 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   useEffect(() => {
-    if (loading) return; 
-    if (!user) {
-      router.replace('/login');
-      return;
+    // Stage 1: Wait.
+    if (loading || !profile) return;
+    
+    // Stage 2: Final Resolution.
+    console.log("🛡️ [GUARD_CHECK] Dashboard - User:", user?.uid, "Role:", (profile as any)?.role);
+  }, [loading, user, profile]);
+
+  useEffect(() => {
+    if (error && !isResolvingSession) {
+        console.error('🛡️ [GUARD_ERROR] DashboardLayout - User error:', error.message);
+        // We only redirect if it's not a recoverable permission error (which is handled later)
+        if (error.message && !error.message.includes('Missing or insufficient permissions')) {
+            router.replace('/login');
+        }
     }
-    if (profile && profile.role !== 'passenger') {
-      router.replace('/login');
+  }, [error, isResolvingSession, router]);
+
+  useEffect(() => {
+    // Rescue logic: If after 6 seconds we are still "resolving", go to login to break potential hang
+    if (!isResolvingSession) return;
+
+    const timer = setTimeout(() => {
+        if (!profile && !!user) {
+            console.warn('🛡️ [GUARD_TIMEOUT] DashboardLayout - Profile hang. Redirecting...');
+            router.replace('/login');
+        }
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [user, profile, isResolvingSession, router]);
+
+  useEffect(() => {
+    // Role Rescue: If you end up in passenger layout but you are NOT a passenger
+    if (profile?.role && profile.role !== 'passenger') {
+        console.warn(`🛡️ [GUARD_REDIRECT] DashboardLayout - Wrong Role: ${profile.role}. Heading to continue...`);
+        router.replace('/auth/continue');
     }
-  }, [loading, user, profile, router]);
+  }, [profile?.role, router]);
+
+  // --- CONDITIONAL RENDERS ---
 
   if (error) {
     // If the error is a permission error on a specific document,
     // it's likely a stale reference (e.g., activeRideId) that will be self-healed
     // by a child component. We don't want to block rendering with a fatal error screen.
-    if (error.message && error.message.includes('Missing or insufficient permissions')) {
-        console.warn("Caught a recoverable permission error in DashboardLayout, allowing child components to self-heal:", error.message);
+    const errorMessage = error?.message || 'Error desconocido';
+    if (errorMessage.includes('Missing or insufficient permissions')) {
+        console.warn("Caught a recoverable permission error in DashboardLayout, allowing child components to self-heal:", errorMessage);
         // We render the loader here to wait for the self-healing to complete and trigger a re-render.
         return (
           <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
@@ -172,32 +208,80 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </ol>
                     <p className="mt-4 text-xs"><strong>Si el error persiste, verifica:</strong><br /> - Que las APIs "Identity Toolkit API" y "Cloud Firestore API" estén habilitadas en tu proyecto de Google Cloud.<br /> - Que la `NEXT_PUBLIC_FIREBASE_API_KEY` en tu archivo de configuración de entorno sea la correcta.</p>
                   </>
-                <p className="mt-3 text-xs border-t pt-2"><strong>Detalle del Error:</strong> {error.message}</p>
+                <p className="mt-3 text-xs border-t pt-2"><strong>Detalle del Error:</strong> {errorMessage}</p>
                  <Button onClick={() => router.push('/login')} className="mt-4 w-full">
                     Volver a Iniciar Sesión
                 </Button>
               </AlertDescription>
             </Alert>
           </div>
-       );
+        );
     }
   }
   
-  // Gatekeeper: Show loading screen until session is resolved and authorized.
-  if (loading || !user || !profile || profile.role !== 'passenger') {
+  if (isResolvingSession) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-muted/40">
-        <VamoIcon name="loader" className="h-10 w-10 animate-pulse text-primary" />
-        <p className="mt-4 text-muted-foreground">Verificando acceso...</p>
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-[#121212]">
+        <div className="flex flex-col items-center gap-4">
+           <div className="w-10 h-10 border-4 border-indigo-500/10 border-t-indigo-500 rounded-full animate-spin"></div>
+           <p className="text-zinc-600 font-bold uppercase tracking-widest text-[10px] animate-pulse uppercase">Verificando sesión</p>
+        </div>
       </div>
     );
   }
 
+  // 2. NO SESSION: User is not logged in.
+  if (!user) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#121212] p-4 text-center">
+        <div className="max-w-xs w-full space-y-6">
+          <div className="mx-auto w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+            <VamoIcon name="lock" className="h-8 w-8 text-indigo-500" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-white">Acceso Denegado</h2>
+            <p className="text-zinc-500 text-sm">Debés iniciar sesión para acceder a esta sección.</p>
+          </div>
+          <Button onClick={() => router.push('/login')} className="w-full h-12 bg-indigo-600 hover:bg-indigo-700">
+            Ir al Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. TRANSITION / WRONG ROLE: 
+  // If we have a profile but it's not passenger, we STAY on the loader for a bit
+  // instead of showing a scary "Wrong Role" screen, as it might be a hydration flicker.
+  const isPassenger = (profile as any)?.role === 'passenger';
+  if (!isPassenger) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-[#121212]">
+        <div className="flex flex-col items-center gap-4">
+           <div className="w-10 h-10 border-4 border-indigo-500/10 border-t-indigo-500 rounded-full animate-spin"></div>
+           <p className="text-zinc-600 font-bold uppercase tracking-widest text-[10px] animate-pulse uppercase">Preparando panel</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If we get here: loading=false, user=exists, profile=exists, role='passenger'.
+  const resolvedProfile = profile!;
+  const resolvedUser = user!;
+
   // Handle Incomplete Profile
-  if (!profile.profileCompleted) {
+  if (!resolvedProfile.profileCompleted) {
       return <main>{children}</main>;
   }
   
   // Render the full dashboard for an authenticated, valid passenger
-  return <PassengerDashboard user={user} profile={profile}>{children}</PassengerDashboard>;
+  return (
+    <TermsGuard>
+        <EmailVerificationGate>
+            <NotificationGate>
+              <PassengerDashboard user={resolvedUser} profile={resolvedProfile}>{children}</PassengerDashboard>
+            </NotificationGate>
+        </EmailVerificationGate>
+    </TermsGuard>
+  );
 }

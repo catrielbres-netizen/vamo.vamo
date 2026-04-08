@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from './ui/button';
+import { Progress } from '@/components/ui/progress';
 import { VamoIcon } from './VamoIcon';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Role } from '@/lib/types';
@@ -61,7 +62,7 @@ export default function FinishedRideSummary({
       pointsAwardedRef.current = true;
 
       const awardPoints = async () => {
-        const pointsForThisRide = ride.serviceType === 'premium' ? 5 : 2;
+        const pointsForThisRide = (ride.serviceType === 'premium' || ride.serviceType === 'normal') ? 5 : 2;
         const rideRef = doc(firestore, 'rides', ride.id);
         const userProfileRef = doc(firestore, 'users', ride.passengerId);
 
@@ -107,7 +108,8 @@ export default function FinishedRideSummary({
     fallbackNavigate();
   };
 
-  // Si el backend ya limpió activeRideId, salir automáticamente de esta pantalla.
+  // BUG 2 — Eliminar auto-cierre por activeRideId === null
+  /*
   useEffect(() => {
     if (profile?.activeRideId === null) {
       const timeout = setTimeout(() => {
@@ -117,12 +119,13 @@ export default function FinishedRideSummary({
       return () => clearTimeout(timeout);
     }
   }, [profile?.activeRideId]);
+  */
 
   const handleRatingSubmit = async (rating: number, comments: string) => {
     if (rating === 0 || !firebaseApp) return;
 
     try {
-      const functions = getFunctions(firebaseApp, 'us-central1');
+      const functions = getFunctions(undefined, 'us-central1');
       const submitRating = httpsCallable(functions, 'submitRideRatingV1');
       await submitRating({ rideId: ride.id, score: rating, comment: comments });
 
@@ -172,15 +175,23 @@ export default function FinishedRideSummary({
 
   const { totalFare, baseFare, distanceFare, waitingFare, waitingSeconds } = ride.completedRide;
   const baseAndDistanceFare = baseFare + distanceFare;
-  const discountAmount = ride.pricing?.discountAmount ?? 0;
+  const discountAmount = (ride.pricing as any)?.discountAmount ?? 0;
   const isDriver = userRole === 'driver';
   const hasUserRated = isDriver ? !!ride.passengerRatingByDriver : !!ride.driverRatingByPassenger;
 
+  // Bloque 7: Points Rewards for Drivers
+  const pointsAwarded = ride.completedRide?.pointsAwarded ?? 0;
+  const currentPoints = profile?.rewardPoints || 0;
+  const currentLevel = profile?.driverLevel || 'bronce';
+  
+  const nextThreshold = currentLevel === 'bronce' ? 50 : currentLevel === 'plata' ? 100 : null;
+  const pointsToNext = nextThreshold ? nextThreshold - currentPoints : 0;
+
   return (
-    <Card className="m-4">
-      <CardHeader>
-        <CardTitle className="text-xl text-primary">¡Viaje finalizado!</CardTitle>
-        <CardDescription>{`Recibo de tu viaje del ${rideDate}`}</CardDescription>
+    <Card className="m-4 border-none shadow-2xl rounded-[2.5rem] overflow-hidden">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-2xl font-black text-primary uppercase tracking-tight">¡Viaje finalizado!</CardTitle>
+        <CardDescription className="text-[10px] font-bold uppercase tracking-widest">{`Recibo del ${rideDate}`}</CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -224,12 +235,56 @@ export default function FinishedRideSummary({
           )}
         </div>
 
-        <div className="flex justify-between items-center font-bold text-lg">
-          <span>{isDriver ? 'Total cobrado' : 'Total pagado'}</span>
-          <span className="text-primary">{formatCurrency(totalFare)}</span>
+        <div className="flex flex-col gap-2 pt-2">
+          <div className="flex justify-between items-center font-bold text-lg">
+            <span>{isDriver ? 'Tarifa Total' : 'Total pagado'}</span>
+            <span className={cn(isDriver ? "text-white" : "text-primary")}>{formatCurrency(isDriver ? totalFare : (totalFare - discountAmount))}</span>
+          </div>
+
+          {isDriver && (ride.pricing as any)?.compensationAmount > 0 && (
+            <div className="flex justify-between items-center text-sm font-black text-green-500 bg-green-500/10 p-3 rounded-xl border border-green-500/20 animate-in zoom-in-95 duration-500">
+              <div className="flex items-center gap-2">
+                <VamoIcon name="shield-check" className="h-4 w-4" />
+                <span className="uppercase tracking-widest text-[10px]">Protección VamO</span>
+              </div>
+              <span>+{formatCurrency((ride.pricing as any).compensationAmount)}</span>
+            </div>
+          )}
         </div>
 
-        <p className="text-xs text-center text-muted-foreground pt-2">
+        {isDriver && (
+          <div className="mt-6 pt-6 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2 duration-700">
+             <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center border border-primary/20">
+                        <VamoIcon name="award" className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Recompensa</p>
+                        <p className="text-lg font-black text-white leading-none">+{pointsAwarded} Puntos {ride.serviceType === 'express' ? 'Express' : (ride.serviceType === 'premium' ? 'Premium' : 'Normal')}</p>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Total</p>
+                    <p className="text-lg font-black text-primary leading-none">{currentPoints}</p>
+                </div>
+             </div>
+
+             {nextThreshold && (
+                <div className="space-y-2">
+                    <div className="flex justify-between items-end">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
+                            {pointsToNext <= 0 ? '¡Listo para el próximo nivel!' : `Faltan ${pointsToNext} para ${currentLevel === 'bronce' ? 'Plata' : 'Oro'}`}
+                        </p>
+                        <span className="text-[10px] font-black text-primary uppercase">{Math.round((currentPoints / nextThreshold) * 100)}%</span>
+                    </div>
+                    <Progress value={(currentPoints / nextThreshold) * 100} className="h-1.5 bg-zinc-900 border border-white/5" />
+                </div>
+             )}
+          </div>
+        )}
+
+        <p className="text-xs text-center text-muted-foreground pt-4 mb-2">
           {isDriver
             ? `Pasajero: ${ride.passengerName || 'No disponible'}`
             : `Conductor: ${ride.driverName || 'No disponible'}`}
@@ -244,9 +299,9 @@ export default function FinishedRideSummary({
         submitButtonText={isDriver ? 'Calificar y ver viajes' : 'Calificar y pedir otro viaje'}
       />
 
-      <CardFooter>
-        <Button className="w-full" onClick={handleClose}>
-          {userRole === 'driver' ? 'Volver al panel' : 'Volver a pedir viaje'}
+      <CardFooter className="pt-0 pb-6">
+        <Button className="w-full h-12 rounded-2xl font-black uppercase tracking-widest shadow-lg" onClick={handleClose}>
+          {userRole === 'driver' ? 'Finalizar' : 'Volver a pedir viaje'}
         </Button>
       </CardFooter>
     </Card>

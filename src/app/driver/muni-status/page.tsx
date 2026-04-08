@@ -1,0 +1,549 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useUser, useFirestore } from '@/firebase';
+import { doc, onSnapshot, addDoc, collection, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { cn } from '@/lib/utils';
+import { VamoIcon } from '@/components/VamoIcon';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
+import {
+    MunicipalProfile,
+    MunicipalExpressStatus,
+    MunicipalChecklistKey,
+    DocItemStatus,
+} from '@/lib/types';
+
+// ─── Helpers de UI ────────────────────────────────────────────────────────────
+
+interface StatusConfig {
+    label: string;
+    description: string;
+    color: string;        // Tailwind text color
+    bg: string;           // Tailwind bg color
+    border: string;
+    icon: string;
+    canOperate: boolean;
+}
+
+const STATUS_CONFIG: Record<MunicipalExpressStatus, StatusConfig> = {
+    pending_municipal_review: {
+        label: 'Pendiente de revisión municipal',
+        description: 'Presentá tu documentación en la municipalidad. Una vez recibida, la revisarán y te habilitarán.',
+        color:  'text-amber-400',
+        bg:     'bg-amber-500/10',
+        border: 'border-amber-500/30',
+        icon:   'clock',
+        canOperate: false,
+    },
+    municipal_observed: {
+        label: 'Observado — requiere corrección',
+        description: 'La municipalidad dejó observaciones sobre tu documentación. Revisá el detalle y corregí lo indicado.',
+        color:  'text-orange-400',
+        bg:     'bg-orange-500/10',
+        border: 'border-orange-500/30',
+        icon:   'alert-triangle',
+        canOperate: false,
+    },
+    municipal_approved: {
+        label: 'Aprobado — trámite en proceso',
+        description: 'Tu documentación fue aprobada. La municipalidad está completando tu habilitación. Aguardá la activación final.',
+        color:  'text-blue-400',
+        bg:     'bg-blue-500/10',
+        border: 'border-blue-500/30',
+        icon:   'loader',
+        canOperate: false,
+    },
+    active: {
+        label: '¡Habilitado por la municipalidad!',
+        description: 'Tu habilitación municipal está vigente. Podés operar normalmente.',
+        color:  'text-emerald-400',
+        bg:     'bg-emerald-500/10',
+        border: 'border-emerald-500/30',
+        icon:   'check-circle',
+        canOperate: true,
+    },
+    renewal_under_review: {
+        label: 'Renovación en revisión',
+        description: 'Subiste documentación nueva. La municipalidad la está revisando. Mientras tanto, no podés operar.',
+        color:  'text-blue-400',
+        bg:     'bg-blue-500/10',
+        border: 'border-blue-500/30',
+        icon:   'refresh-cw',
+        canOperate: false,
+    },
+    suspended_expired_license: {
+        label: 'Suspendido — Licencia vencida',
+        description: 'Licencia vencida: no podés operar hasta que la municipalidad apruebe la renovación.',
+        color:  'text-red-400',
+        bg:     'bg-red-500/10',
+        border: 'border-red-500/30',
+        icon:   'shield-off',
+        canOperate: false,
+    },
+    suspended_expired_insurance: {
+        label: 'Suspendido — Seguro vencido',
+        description: 'Seguro vencido: no podés operar hasta que la municipalidad apruebe la renovación.',
+        color:  'text-red-400',
+        bg:     'bg-red-500/10',
+        border: 'border-red-500/30',
+        icon:   'shield-off',
+        canOperate: false,
+    },
+    suspended_unpaid_canon: {
+        label: 'Suspendido — Canon municipal impago',
+        description: 'Regularizá el canon municipal en tu municipalidad para volver a operar.',
+        color:  'text-red-400',
+        bg:     'bg-red-500/10',
+        border: 'border-red-500/30',
+        icon:   'ban',
+        canOperate: false,
+    },
+    suspended_by_municipality: {
+        label: 'Suspendido por la municipalidad',
+        description: 'La municipalidad suspendió tu habilitación. Contactalos directamente para regularizar tu situación.',
+        color:  'text-red-400',
+        bg:     'bg-red-500/10',
+        border: 'border-red-500/30',
+        icon:   'ban',
+        canOperate: false,
+    },
+    rejected_by_municipality: {
+        label: 'Solicitud rechazada',
+        description: 'La municipalidad rechazó tu solicitud de habilitación. Contactalos para conocer los motivos y opciones.',
+        color:  'text-zinc-400',
+        bg:     'bg-zinc-500/10',
+        border: 'border-zinc-500/30',
+        icon:   'x-circle',
+        canOperate: false,
+    },
+};
+
+const CHECKLIST_LABELS: Record<MunicipalChecklistKey, string> = {
+    dniFront:               'DNI — Frente',
+    dniBack:                'DNI — Dorso',
+    driverLicense:          'Licencia de conducir',
+    vehicleInsurance:       'Seguro del vehículo',
+    vehicleRegistrationCard:'Cédula del vehículo',
+    criminalRecord:         'Antecedentes penales vigentes',
+    municipalCanon:         'Canon municipal (arancel)',
+};
+
+const DOC_STATUS_BADGE: Record<DocItemStatus, { label: string; color: string; bg: string }> = {
+    pending:   { label: 'Pendiente',  color: 'text-zinc-400',   bg: 'bg-zinc-500/10' },
+    submitted: { label: 'Presentado', color: 'text-blue-400',   bg: 'bg-blue-500/10' },
+    approved:  { label: 'Aprobado',   color: 'text-emerald-400',bg: 'bg-emerald-500/10' },
+    observed:  { label: 'Observado',  color: 'text-orange-400', bg: 'bg-orange-500/10' },
+};
+
+function formatDate(ts: any): string {
+    if (!ts) return '—';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function daysUntil(ts: any): number | null {
+    if (!ts) return null;
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function ExpiryBadge({ ts, label }: { ts: any; label: string }) {
+    const days = daysUntil(ts);
+    if (days === null) return (
+        <div className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
+            <span className="text-sm text-zinc-500">{label}</span>
+            <span className="text-xs font-bold text-zinc-600 bg-zinc-800/50 px-2 py-0.5 rounded-full">Sin cargar</span>
+        </div>
+    );
+    const isExpired  = days < 0;
+    const isCritical = days >= 0 && days <= 14;
+    return (
+        <div className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
+            <span className="text-sm text-zinc-300">{label}</span>
+            <span className={cn(
+                'text-xs font-bold px-2 py-0.5 rounded-full',
+                isExpired  ? 'text-red-400 bg-red-500/10'
+                           : isCritical ? 'text-amber-400 bg-amber-500/10'
+                                        : 'text-emerald-400 bg-emerald-500/10'
+            )}>
+                {isExpired
+                    ? `Vencido (hace ${Math.abs(days)}d)`
+                    : days === 0 ? 'Vence hoy'
+                                : `Vence ${formatDate(ts)}`}
+            </span>
+        </div>
+    );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+const isExpired = (ts: any) => {
+    if (!ts) return false;
+    const date = ts?.toDate ? ts.toDate() : new Date(ts);
+    return date < new Date();
+};
+
+export default function DriverMuniStatusPage() {
+    const { user, profile } = useUser();
+    const firestore = useFirestore();
+    const { toast } = useToast();
+    const [munProfile, setMunProfile] = useState<MunicipalProfile | null>(null);
+    const [loading, setLoading]       = useState(true);
+
+    const [uploadingDoc, setUploadingDoc] = useState<MunicipalChecklistKey | null>(null);
+    const [fileSelected, setFileSelected] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+
+    useEffect(() => {
+        if (!firestore || !user?.uid) return;
+        const ref = doc(firestore, 'municipal_profiles', user.uid);
+        const unsub = onSnapshot(ref, snap => {
+            setMunProfile(snap.exists() ? (snap.data() as MunicipalProfile) : null);
+            setLoading(false);
+        }, () => setLoading(false));
+        return () => unsub();
+    }, [firestore, user?.uid]);
+
+    // Guardas
+    if (profile?.driverSubtype !== 'express') {
+        return (
+            <div className="py-16 text-center space-y-2">
+                <VamoIcon name="shield" className="h-10 w-10 mx-auto text-zinc-600" />
+                <p className="text-zinc-500 text-sm">Esta sección es solo para conductores particulares/express.</p>
+            </div>
+        );
+    }
+
+    if (loading) {
+        return (
+            <div className="py-16 flex justify-center">
+                <div className="w-8 h-8 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    // Estado desde el perfil base (denormalizado, siempre disponible)
+    const munStatus = (profile?.municipalStatus ?? 'pending_municipal_review') as MunicipalExpressStatus;
+    const cfg       = STATUS_CONFIG[munStatus] ?? STATUS_CONFIG['pending_municipal_review'];
+
+    const checklist = munProfile?.checklist;
+    const CHECKLIST_KEYS = Object.keys(CHECKLIST_LABELS) as MunicipalChecklistKey[];
+
+    const allApproved = checklist ? CHECKLIST_KEYS.every(k => checklist[k]?.status === 'approved') : false;
+
+    const handleUpload = async () => {
+        if (!uploadingDoc || !fileSelected || !user?.uid || !munProfile) return;
+        setIsUploading(true);
+        try {
+            const storage = getStorage(firestore.app);
+            const ext = fileSelected.name.split('.').pop() || 'tmp';
+            const path = `municipal_docs/${munProfile.cityKey}/${user.uid}/${uploadingDoc}_${Date.now()}.${ext}`;
+            const docRef = storageRef(storage, path);
+            
+            await uploadBytes(docRef, fileSelected);
+            const url = await getDownloadURL(docRef);
+
+            // Registrar en Firestore municipal_doc_submissions
+            await addDoc(collection(firestore, 'municipal_doc_submissions'), {
+                driverId: user.uid,
+                municipalCode: munProfile.municipalCode,
+                cityKey: munProfile.cityKey,
+                docType: uploadingDoc,
+                storageUrl: url,
+                storagePath: path,
+                status: 'pending_review',
+                uploadedAt: serverTimestamp()
+            });
+
+            // Actualizar el estado municipal y el checklist (usando setDoc con merge de objetos para máxima compatibilidad)
+            await setDoc(doc(firestore, 'municipal_profiles', user.uid), {
+                municipalStatus: 'renewal_under_review',
+                updatedAt: serverTimestamp(),
+                checklist: {
+                    [uploadingDoc]: {
+                        status: 'submitted',
+                        submittedAt: serverTimestamp(),
+                        storageUrl: url
+                    }
+                }
+            }, { merge: true });
+
+            // Dual update a users table
+            await updateDoc(doc(firestore, 'users', user.uid), {
+                municipalStatus: 'renewal_under_review',
+                updatedAt: serverTimestamp()
+            });
+
+            await addDoc(collection(firestore, 'municipal_audit_log'), {
+                driverId: user.uid,
+                municipalCode: munProfile.municipalCode,
+                cityKey: munProfile.cityKey,
+                actionBy: user.uid,
+                actionByRole: 'driver',
+                action: 'renewal_document_submitted',
+                checklistKey: uploadingDoc,
+                createdAt: serverTimestamp()
+            });
+
+            setUploadingDoc(null);
+            setFileSelected(null);
+            toast({ title: 'Documento enviado a revisión con éxito' });
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Error subiendo archivo', description: err.message });
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    return (
+        <div className="space-y-5 pb-10">
+
+            {/* ── HEADER ──────────────────────────────────────────────────── */}
+            <div className="flex items-center gap-2 mb-1">
+                <VamoIcon name="landmark" className="h-5 w-5 text-amber-400" />
+                <h2 className="text-lg font-black text-white tracking-tight">Habilitación Municipal</h2>
+            </div>
+
+            {/* ── CÓDIGO MUNICIPAL ────────────────────────────────────────── */}
+            {profile?.municipalCode && (
+                <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4 flex items-center justify-between">
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">Tu código municipal</p>
+                        <p className="text-2xl font-black text-white tracking-widest font-mono">
+                            {profile.municipalCode}
+                        </p>
+                        <p className="text-xs text-zinc-600 mt-0.5">Presentalo en la municipalidad de {munProfile?.city ?? profile.city}</p>
+                    </div>
+                    <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                        <VamoIcon name="qr-code" className="h-7 w-7 text-amber-400" />
+                    </div>
+                </div>
+            )}
+
+            {/* ── ESTADO ACTUAL (semáforo visual) ─────────────────────────── */}
+            <div className={cn('rounded-2xl border p-5 space-y-3 relative overflow-hidden', cfg.bg, cfg.border)}>
+                {munStatus === 'active' && (
+                    <div className="absolute top-0 right-0 p-2 opacity-10">
+                        <VamoIcon name="party-popper" className="h-20 w-20 text-emerald-400 rotate-12" />
+                    </div>
+                )}
+                <div className="flex items-start gap-4">
+                    <div className={cn('w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center border shadow-sm', cfg.bg, cfg.border)}>
+                        <VamoIcon name={cfg.icon as any} className={cn('h-6 w-6', cfg.color, munStatus === 'municipal_approved' ? 'animate-spin' : '')} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className={cn('text-lg font-black tracking-tight', cfg.color)}>{cfg.label}</p>
+                        <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{cfg.description}</p>
+                    </div>
+                </div>
+                {!cfg.canOperate ? (
+                    <div className="mt-2 flex items-center gap-2 pt-3 border-t border-white/5">
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-[10px] font-black text-red-400 uppercase tracking-[0.2em]">
+                            No podés ponerte online actualmente
+                        </span>
+                    </div>
+                ) : (
+                    <div className="mt-2 flex items-center gap-2 pt-3 border-t border-white/5">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em]">
+                            Estás habilitado para recibir viajes
+                        </span>
+                    </div>
+                )}
+            </div>
+
+            {/* ── CONDITIONAL CONTENT ─────────────────────────────────────── */}
+            {munStatus === 'active' ? (
+                <div className="space-y-5">
+                    {/* Tarjeta de Éxito / Fiesta */}
+                    <div className="rounded-3xl bg-emerald-500/5 border border-emerald-500/20 p-6 text-center space-y-4">
+                        <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto ring-8 ring-emerald-500/5">
+                            <VamoIcon name="badge-check" className="h-10 w-10 text-emerald-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-black text-white">¡Felicitaciones!</h3>
+                            <p className="text-sm text-zinc-400 mt-1">Tu habilitación municipal está completa y vigente. Trabajá con tranquilidad y seguí las normas locales.</p>
+                        </div>
+                        <Link href="/driver">
+                            <Button className="w-full h-12 bg-emerald-500 hover:bg-emerald-400 text-white font-black uppercase tracking-widest text-xs mt-2 rounded-2xl shadow-lg shadow-emerald-500/20">
+                                Ir al panel principal
+                            </Button>
+                        </Link>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    {/* ── CHECKLIST DOCUMENTAL (solo visible si no está activo) ──── */}
+                    <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
+                        <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Documentación requerida</p>
+                            {allApproved && <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">✓ Todo aprobado</span>}
+                        </div>
+                        <div className="divide-y divide-white/5">
+                            {CHECKLIST_KEYS.map(key => {
+                                const item = checklist?.[key];
+                                const status = (item?.status ?? 'pending') as DocItemStatus;
+                                const badge = DOC_STATUS_BADGE[status];
+                                const obs = item?.observation;
+                                return (
+                                    <div key={key} className="px-4 py-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", badge.bg)}>
+                                                    <VamoIcon 
+                                                        name={status === 'approved' ? 'check' : status === 'observed' ? 'alert-circle' : 'file-text'} 
+                                                        className={cn("h-4 w-4", badge.color)} 
+                                                    />
+                                                </div>
+                                                <span className="text-xs font-semibold text-zinc-200">{CHECKLIST_LABELS[key]}</span>
+                                            </div>
+                                            <div className={cn("text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md", badge.bg, badge.color)}>
+                                                {badge.label}
+                                            </div>
+                                        </div>
+                                        {obs && (
+                                            <p className="ml-11 mt-1 text-[11px] text-orange-400/80 italic leading-relaxed">
+                                                “{obs}”
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* ── VENCIMIENTOS ────────────────────────────────────────────── */}
+            <div className="rounded-2xl bg-white/[0.03] border border-white/5 overflow-hidden">
+                <div className="px-4 py-3 border-b border-white/5">
+                    <p className="text-xs font-black uppercase tracking-widest text-zinc-500">Vencimientos</p>
+                </div>
+                <div className="px-4 py-2">
+                    <ExpiryBadge ts={munProfile?.licenseExpiry}          label="Licencia de conducir" />
+                    <ExpiryBadge ts={munProfile?.insuranceExpiry}         label="Seguro del vehículo" />
+                    <ExpiryBadge ts={munProfile?.backgroundCheckExpiry}   label="Antecedentes penales" />
+                </div>
+            </div>
+
+            {/* ── CANON MUNICIPAL ─────────────────────────────────────────── */}
+            <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4 flex items-center justify-between">
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">Canon municipal</p>
+                    <p className={cn(
+                        'text-sm font-bold',
+                        (munProfile?.canonStatus === 'paid' && !isExpired(munProfile?.canonExpiry)) ? 'text-emerald-400'
+                        : (munProfile?.canonStatus === 'overdue' || isExpired(munProfile?.canonExpiry)) ? 'text-red-400'
+                                                              : 'text-amber-400'
+                    )}>
+                        {(munProfile?.canonStatus === 'paid' && !isExpired(munProfile?.canonExpiry)) ? '✓ Pagado y vigente'
+                         : (munProfile?.canonStatus === 'overdue' || isExpired(munProfile?.canonExpiry)) ? '✗ Deuda o Vencido — Regularizá en la municipalidad'
+                                                                 : '⏳ Pendiente de pago/revisión'}
+                    </p>
+                    {(munProfile?.canonPaidAt || munProfile?.canonExpiry) && (
+                        <div className="mt-2 space-y-0.5">
+                            {munProfile?.canonPaidAt && (
+                                <p className="text-xs text-zinc-400 font-medium">
+                                    Pagado el: <span className="text-zinc-200">{formatDate(munProfile.canonPaidAt)}</span>
+                                </p>
+                            )}
+                            {munProfile?.canonExpiry && (
+                                <p className={cn(
+                                    "text-xs font-medium",
+                                    isExpired(munProfile.canonExpiry) ? "text-red-400" : "text-zinc-400"
+                                )}>
+                                    Vence el: <span className={cn(
+                                        "font-bold",
+                                        isExpired(munProfile.canonExpiry) ? "text-red-400 underline" : "text-zinc-200"
+                                    )}>{formatDate(munProfile.canonExpiry)}</span>
+                                </p>
+                            )}
+                        </div>
+                    )}
+                </div>
+                <VamoIcon
+                    name={munProfile?.canonStatus === 'paid' && !isExpired(munProfile?.canonExpiry) ? 'badge-check' : 'receipt'}
+                    className={cn(
+                        'h-6 w-6',
+                        munProfile?.canonStatus === 'paid' && !isExpired(munProfile?.canonExpiry) ? 'text-emerald-500' : 'text-zinc-600'
+                    )}
+                />
+            </div>
+
+            {/* ── SUBIDA DE RENOVACIONES (solo si no está activo o tiene vencidos) ── */}
+            {munStatus !== 'active' && (
+                <div className="rounded-2xl border border-dashed border-white/10 p-5 space-y-4">
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                            Renovación de documentos
+                        </p>
+                        <p className="text-xs text-zinc-400 leading-relaxed mt-1">
+                            Si un documento está vencido o fue observado por el municipio, podés subir la versión correcta aquí.
+                        </p>
+                    </div>
+
+                    <div className="space-y-4">
+                        <select
+                            value={uploadingDoc || ''}
+                            onChange={e => { setUploadingDoc(e.target.value as MunicipalChecklistKey); setFileSelected(null); }}
+                            className="w-full h-11 text-xs font-medium bg-zinc-900/50 border border-white/10 rounded-xl px-3 text-zinc-300 focus:outline-none focus:border-indigo-500/50"
+                        >
+                            <option value="" disabled className="bg-zinc-900 text-zinc-400">Seleccioná qué documento vas a subir...</option>
+                            {CHECKLIST_KEYS.filter(k => checklist?.[k]?.status !== 'approved').map(k => (
+                                <option key={k} value={k} className="bg-zinc-900 text-white">{CHECKLIST_LABELS[k]}</option>
+                            ))}
+                            {CHECKLIST_KEYS.filter(k => checklist?.[k]?.status === 'approved').length > 0 && (
+                                <optgroup label="Documentos aprobados (Subir para renovar)" className="bg-zinc-900 text-zinc-500 font-bold">
+                                    {CHECKLIST_KEYS.filter(k => checklist?.[k]?.status === 'approved').map(k => (
+                                        <option key={k} value={k} className="bg-zinc-900 text-white">{CHECKLIST_LABELS[k]}</option>
+                                    ))}
+                                </optgroup>
+                            )}
+                        </select>
+
+                        {uploadingDoc && (
+                             <div className="p-3 bg-white/[0.02] rounded-xl border border-white/5">
+                                 <input
+                                     type="file"
+                                     accept="image/*,.pdf"
+                                     onChange={e => setFileSelected(e.target.files?.[0] || null)}
+                                     className="text-xs text-zinc-400 font-medium file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-indigo-500/10 file:text-indigo-400 hover:file:bg-indigo-500/20 w-full cursor-pointer transition-colors"
+                                 />
+                             </div>
+                        )}
+                        
+                        {fileSelected && (
+                            <Button
+                                disabled={isUploading}
+                                onClick={handleUpload}
+                                className={cn(
+                                    'w-full h-12 text-sm font-black uppercase tracking-widest transition-all',
+                                    isUploading ? 'bg-zinc-800 text-zinc-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                                )}
+                            >
+                                {isUploading ? (
+                                    <span className="flex items-center gap-2">
+                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> Subiendo...
+                                    </span>
+                                ) : 'Subir y enviar a revisión'}
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ── AYUDA ───────────────────────────────────────────────────── */}
+            <div className="text-center space-y-1 pt-2">
+                <p className="text-[10px] text-zinc-600 font-medium uppercase tracking-widest">
+                    La habilitación es exclusivamente municipal
+                </p>
+                <p className="text-xs text-zinc-700">
+                    VamO no interviene en la decisión de habilitación. Para consultas, dirigite a la municipalidad de {munProfile?.city ?? profile?.city ?? 'tu ciudad'}.
+                </p>
+            </div>
+        </div>
+    );
+}

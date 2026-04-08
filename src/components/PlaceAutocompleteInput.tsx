@@ -6,13 +6,16 @@ import { useMapsLibrary } from '@vis.gl/react-google-maps';
 import { Input } from '@/components/ui/input';
 import { Place } from '@/lib/types';
 import { VamoIcon } from './VamoIcon';
+import { resolveCity } from '@/lib/city-resolution';
 
 interface PlaceAutocompleteInputProps {
   onPlaceSelect: (place: Place | null) => void;
   defaultValue?: string;
   placeholder?: string;
-  iconName: 'map-pin' | 'flag';
-  iconClassName: string;
+  iconName: string;
+  iconClassName?: string;
+  className?: string;
+  onFocus?: () => void;
 }
 
 // NOTE: This component relies on the Google Maps Places Autocomplete API, which may incur costs.
@@ -23,34 +26,45 @@ export default function PlaceAutocompleteInput({
   defaultValue = '',
   placeholder,
   iconName,
-  iconClassName
+  iconClassName = '',
+  className = '',
+  onFocus,
 }: PlaceAutocompleteInputProps) {
   const places = useMapsLibrary('places');
+  const maps = useMapsLibrary('maps');
   const inputRef = useRef<HTMLInputElement>(null);
   const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+  const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
   const [inputValue, setInputValue] = useState(defaultValue);
 
   useEffect(() => {
-    if (!places || !inputRef.current) return;
+    if (!places || !inputRef.current || !maps) return;
 
     const autocompleteInstance = new places.Autocomplete(inputRef.current, {
-      fields: ['formatted_address', 'geometry.location', 'name'],
+      fields: ['formatted_address', 'geometry.location', 'name', 'address_components'],
       componentRestrictions: { country: 'ar' }, // Restrict to Argentina
     });
     setAutocomplete(autocompleteInstance);
+    setGeocoder(new google.maps.Geocoder());
 
-  }, [places]);
+  }, [places, maps]);
 
   useEffect(() => {
     if (!autocomplete) return;
 
-    const listener = autocomplete.addListener('place_changed', () => {
+    const listener = autocomplete.addListener('place_changed', async () => {
       const place = autocomplete.getPlace();
       if (place.geometry?.location) {
-        const selectedPlace = {
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        
+        const resolution = await resolveCity(lat, lng, (place.address_components as google.maps.GeocoderAddressComponent[]) || undefined, geocoder || undefined);
+
+        const selectedPlace: Place = {
           address: place.formatted_address || place.name || '',
-          lat: place.geometry.location.lat(),
-          lng: place.geometry.location.lng(),
+          lat,
+          lng,
+          city: resolution.city
         };
         setInputValue(selectedPlace.address);
         onPlaceSelect(selectedPlace);
@@ -61,7 +75,7 @@ export default function PlaceAutocompleteInput({
     });
 
     return () => listener.remove();
-  }, [autocomplete, onPlaceSelect]);
+  }, [autocomplete, onPlaceSelect, geocoder]);
   
   // Update internal input value if the parent's default value changes (e.g. on reset or current location)
   useEffect(() => {
@@ -76,14 +90,15 @@ export default function PlaceAutocompleteInput({
   }
 
   return (
-    <div className="relative flex items-center w-full">
+    <div className={`relative flex items-center w-full ${className}`}>
       <VamoIcon name={iconName} className={`absolute left-3 h-4 w-4 ${iconClassName}`} />
       <Input
         ref={inputRef}
         value={inputValue}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full pl-9"
+        className="w-full pl-9 bg-transparent border-none shadow-none focus-visible:ring-0"
+        onFocus={onFocus}
       />
     </div>
   );

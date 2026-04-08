@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState, useMemo } from "react";
-import { collection, query, where, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, limit } from "firebase/firestore";
 import { useFirestore, useUser } from "@/firebase";
 import { type RideOffer } from "@/lib/types";
-import { notificationSoundUri } from "@/lib/sounds";
+import { playOfferSound, announceNewRide } from "@/lib/sounds";
 
 // Define a clear, local type for the offer object that includes the document ID.
 // This removes the ambiguity of the potentially problematic `WithId` utility type.
@@ -31,12 +31,14 @@ export function useDriverRides(shouldListen: boolean) {
     }
 
     setLoading(true);
+    console.log(`[useDriverRides DEBUG] Instando onSnapshot para rideOffers. UID: ${user.uid}. firestore: ${!!firestore}`);
     const driverId = user.uid;
 
     const offersQuery = query(
       collection(firestore, "rideOffers"),
       where("driverId", "==", driverId),
-      where("status", "==", "pending")
+      where("status", "==", "pending"),
+      limit(20)
     );
 
     const unsubscribe = onSnapshot(offersQuery, (snapshot) => {
@@ -44,7 +46,8 @@ export function useDriverRides(shouldListen: boolean) {
       
       const validOffers: OfferWithId[] = snapshot.docs
         .map(doc => ({ ...(doc.data() as RideOffer), id: doc.id }))
-        .filter(offer => offer.expiresAt && offer.expiresAt.toMillis() > now.toMillis());
+        // Relax filter with a 5-minute grace period (up from 1m) to handle substantial client clock skew.
+        .filter(offer => offer.expiresAt && (offer.expiresAt.toMillis() + 300000) > now.toMillis());
 
       setOffers(prevOffers => {
           const prevOfferIds = new Set(prevOffers.map(o => o.id));
@@ -56,10 +59,13 @@ export function useDriverRides(shouldListen: boolean) {
               setNewOfferIds(newIds);
               
               try {
-                const audio = new Audio(notificationSoundUri);
-                audio.play().catch(e => console.warn("Could not play notification sound:", e));
+                // 1. Play attention beep
+                playOfferSound();
+                // 2. Voice announcement (Text-to-Speech)
+                const firstOffer = newOffers[0];
+                announceNewRide(firstOffer?.origin?.address);
               } catch (e) {
-                console.error("Error playing notification sound:", e);
+                console.error("Error playing notification:", e);
               }
 
               setTimeout(() => {

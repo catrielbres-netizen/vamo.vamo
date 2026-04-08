@@ -1,10 +1,10 @@
-
-import React from 'react';
+import React, { Suspense } from 'react';
 import LoginPageClient from './LoginPageClient';
 
-// This is the Server Component for the login page.
 export default function LoginPage() {
   return (
-      <LoginPageClient />
+    <Suspense fallback={<div>Cargando...</div>}>
+      <LoginPageClient fixedRole="passenger" />
+    </Suspense>
   );
 }

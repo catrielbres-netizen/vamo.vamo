@@ -5,17 +5,16 @@ import { onRequest, onCall, HttpsError, CallableRequest } from "firebase-functio
 import * as admin from "firebase-admin";
 import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
 import * as crypto from "crypto";
-import { onDocumentUpdated, onDocumentCreated, FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
+import { onDocumentUpdated, onDocumentCreated, onDocumentWritten, FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
 import { onSchedule, ScheduledEvent } from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
 import { canDriverTakeRide } from "./eligibility";
 import { UserProfile, Ride, DriverLevel, ServiceType, RideStatus, CompletedRide, PricingConfig, WithdrawalRequest, WithId, RideOffer, DriverPoints } from "./types";
-
-// Initialize Firebase Admin SDK
-const db = admin.firestore();
-
+import { getDb } from "./lib/firebaseAdmin";
+import { normalizeCityKey } from "./lib/city";
 // --- NOTIFICATION HELPER ---
-const sendNotification = async (userId: string, title: string, body: string, link: string = '/', additionalData: { [key: string]: any } = {}) => {
+export const sendNotification = async (userId: string, title: string, body: string, link: string = '/', additionalData: { [key: string]: any } = {}) => {
+    const db = getDb();
     const userSnap = await db.collection('users').doc(userId).get();
     if (!userSnap.exists) {
         logger.warn(`User ${userId} not found, cannot send notification.`);
@@ -62,6 +61,22 @@ const sendNotification = async (userId: string, title: string, body: string, lin
     }
 };
 
+/**
+ * [VamO PRO] Service Consistency Invariant
+ * Ensures professional profiles (Premium) always include 'normal' service.
+ */
+export function ensureServiceInvariants(profile: UserProfile): any {
+    const services = profile.servicesOffered || { premium: false, express: false, normal: false };
+    const updates: any = {};
+
+    if (services.premium && !services.normal) {
+        updates['servicesOffered.normal'] = true;
+    }
+
+    return Object.keys(updates).length > 0 ? updates : null;
+}
+
+
 function haversineDistance(coords1: { lat: number; lng: number; }, coords2: { lat: number; lng: number; }): number {
     if (!coords1 || !coords2) return Infinity;
     const toRad = (x: number) => x * Math.PI / 180;
@@ -83,6 +98,7 @@ function haversineDistance(coords1: { lat: number; lng: number; }, coords2: { la
 // --- PRICING & COMMISSION LOGIC (PURE FUNCTIONS) ---
 
 async function getPricingConfig(): Promise<PricingConfig> {
+  const db = getDb();
   const defaultConfig: PricingConfig = {
     version: 1,
     DAY_BASE_FARE: 1400,
@@ -319,6 +335,7 @@ export const createPaymentPreferenceV4 = onCall(
 
 
 export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {rideId: string}>) => {
+    const db = getDb();
     const rideId = event.params.rideId;
     
     if (!event.data) {
@@ -491,6 +508,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
 
 
 export const mercadoPagoWebhookV4 = onRequest({ secrets: ["MERCADOPAGO_WEBHOOK_SECRET", "MERCADOPAGO_ACCESS_TOKEN"] }, async (req, res) => {
+    const db = getDb();
     logger.log("--- INCOMING MERCADOPAGO WEBHOOK V4 ---");
     logger.log("Timestamp:", new Date().toISOString());
     logger.log("Method:", req.method);
@@ -685,7 +703,7 @@ export const distributeWeeklyPoolV5 = onSchedule({
     timeZone: "America/Argentina/Buenos_Aires"
   },
   async (event: ScheduledEvent) => {
-
+    const db = getDb();
     logger.log("V5: Iniciando distribución y reseteo del pozo semanal.");
     
     const rewardsRef = db.doc("rewards/rewards");
@@ -777,6 +795,7 @@ export const distributeWeeklyPoolV5 = onSchedule({
 
 
 export const cleanupStaleDrivers = onSchedule("every 2 minutes", async (event) => {
+    const db = getDb();
     logger.log("Running stale driver cleanup worker.");
     const now = admin.firestore.Timestamp.now();
     const staleThreshold = now.toMillis() - 90 * 1000; // 90 seconds ago
@@ -852,6 +871,7 @@ export const notifyOnRideUpdateV3 = onDocumentUpdated("rides/{rideId}", async (e
 
 
 export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {rideId: string}>) => {
+    const db = getDb();
     if (!event.data) return;
 
     const before = event.data.before.data() as Ride;
@@ -974,6 +994,7 @@ export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (even
 });
 
 export const onOfferFinalized = onDocumentUpdated("rideOffers/{offerId}", async (event) => {
+    const db = getDb();
     if (!event.data) return;
     const before = event.data.before.data() as RideOffer;
     const after = event.data.after.data() as RideOffer;
@@ -998,6 +1019,7 @@ export const onOfferFinalized = onDocumentUpdated("rideOffers/{offerId}", async 
 
 
 export const cancelRideV1 = onCall({cors: true, region: 'us-central1'}, async (request) => {
+    const db = getDb();
     const uid = request.auth?.uid;
     if (!uid) {
       throw new HttpsError("unauthenticated", "Usuario no autenticado.");
@@ -1044,6 +1066,7 @@ export const cancelRideV1 = onCall({cors: true, region: 'us-central1'}, async (r
     
 
 export const driverArrivedV1 = onCall({cors: true, region: 'us-central1'}, async (request) => {
+    const db = getDb();
     const driverId = request.auth?.uid;
     if (!driverId) {
         throw new HttpsError("unauthenticated", "Usuario no autenticado.");
@@ -1092,6 +1115,7 @@ export const driverArrivedV1 = onCall({cors: true, region: 'us-central1'}, async
 
 
 export const startRideV1 = onCall({cors: true, region: 'us-central1'}, async (request) => {
+    const db = getDb();
     const driverId = request.auth?.uid;
     if (!driverId) {
         throw new HttpsError("unauthenticated", "Usuario no autenticado.");
@@ -1156,6 +1180,7 @@ export const startRideV1 = onCall({cors: true, region: 'us-central1'}, async (re
 });
 
 export const finishRideV1 = onCall({cors: true, region: 'us-central1'}, async (request) => {
+    const db = getDb();
     const driverId = request.auth?.uid;
     if (!driverId) {
         throw new HttpsError("unauthenticated", "Usuario no autenticado.");
@@ -1201,6 +1226,7 @@ export const finishRideV1 = onCall({cors: true, region: 'us-central1'}, async (r
 });
 
 export const submitRideRatingV1 = onCall({cors: true, region: 'us-central1'}, async (request) => {
+    const db = getDb();
     const uid = request.auth?.uid;
     if (!uid) {
         throw new HttpsError("unauthenticated", "Usuario no autenticado.");
@@ -1213,7 +1239,7 @@ export const submitRideRatingV1 = onCall({cors: true, region: 'us-central1'}, as
 
     const rideRef = db.doc(`rides/${rideId}`);
 
-    return db.runTransaction(async (transaction) => {
+    return db.runTransaction(async (transaction: admin.firestore.Transaction) => {
         const rideSnap = await transaction.get(rideRef);
         if (!rideSnap.exists) {
             throw new HttpsError("not-found", "El viaje no existe.");
@@ -1254,6 +1280,7 @@ export const submitRideRatingV1 = onCall({cors: true, region: 'us-central1'}, as
 
 
 function assertAdmin(request: any) {
+  const db = getDb();
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError("unauthenticated", "Debes iniciar sesión.");
@@ -1267,6 +1294,7 @@ function assertAdmin(request: any) {
 }
 
 export const approveDriverByAdminV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
+    const db = getDb();
     await assertAdmin(request);
 
     const driverId = request.data?.driverId as string | undefined;
@@ -1324,6 +1352,7 @@ export const approveDriverByAdminV1 = onCall({ cors: true, region: "us-central1"
 });
 
 export const rejectDriverByAdminV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
+    const db = getDb();
     await assertAdmin(request);
     const driverId = request.data?.driverId as string | undefined;
     if (!driverId) { throw new HttpsError("invalid-argument", "Falta driverId."); }
@@ -1345,6 +1374,7 @@ export const rejectDriverByAdminV1 = onCall({ cors: true, region: "us-central1" 
 
 
 export const suspendDriverByAdminV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
+    const db = getDb();
     await assertAdmin(request);
     const driverId = request.data?.driverId as string | undefined;
     const suspend = request.data?.suspend as boolean | undefined;
@@ -1375,6 +1405,7 @@ export const suspendDriverByAdminV1 = onCall({ cors: true, region: "us-central1"
 
 
 export const adjustDriverBalanceByAdminV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
+  const db = getDb();
   const adminUid = await assertAdmin(request);
 
   const driverId = request.data?.driverId as string | undefined;
@@ -1432,6 +1463,7 @@ export const adjustDriverBalanceByAdminV1 = onCall({ cors: true, region: "us-cen
 });
 
 export const sendDriverNotificationByAdminV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
+  const db = getDb();
   await assertAdmin(request);
 
   const driverId = request.data?.driverId as string | undefined;
@@ -1473,6 +1505,7 @@ export const sendDriverNotificationByAdminV1 = onCall({ cors: true, region: "us-
 });
 
 export const deleteDriverByAdminV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
+  const db = getDb();
   const callerUid = request.auth?.uid;
   if (!callerUid) {
     throw new HttpsError("unauthenticated", "Debes iniciar sesión.");
@@ -1550,6 +1583,7 @@ export const deleteDriverByAdminV1 = onCall({ cors: true, region: "us-central1" 
 
 
 export const requestWithdrawalV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    const db = getDb();
     const uid = request.auth?.uid;
     if (!uid) {
       throw new HttpsError("unauthenticated", "Usuario no autenticado.");
@@ -1594,6 +1628,7 @@ export const requestWithdrawalV1 = onCall({ cors: true, region: 'us-central1' },
 });
 
 export const processWithdrawalByAdminV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    const db = getDb();
     const adminUid = await assertAdmin(request);
     const { requestId, action } = request.data;
 
@@ -1603,7 +1638,7 @@ export const processWithdrawalByAdminV1 = onCall({ cors: true, region: 'us-centr
 
     const requestRef = db.doc(`withdrawal_requests/${requestId}`);
 
-    return db.runTransaction(async (tx) => {
+    return db.runTransaction(async (tx: admin.firestore.Transaction) => {
         const requestSnap = await tx.get(requestRef);
         if (!requestSnap.exists) {
             throw new HttpsError("not-found", "La solicitud de retiro no existe.");
@@ -1647,4 +1682,93 @@ export const processWithdrawalByAdminV1 = onCall({ cors: true, region: 'us-centr
             });
         }
     });
+});
+
+export const onUserUpdateV1 = onDocumentWritten("users/{uid}", async (event) => {
+    if (!event.data) return;
+
+    if (!event.data.after.exists) return;
+    const after = event.data.after.data() as UserProfile;
+
+    // Solo nos interesa para roles admin_municipal y driver
+    if (!['admin_municipal', 'driver'].includes(after.role)) {
+        return;
+    }
+
+    // Si no tiene city, no podemos hacer mucho
+    if (!after.city) {
+        return;
+    }
+
+    const expectedCityKey = normalizeCityKey(after.city);
+
+    // Evitar loops infinitos: solo actualizar si el cityKey no coincide con el city
+    if (after.cityKey !== expectedCityKey) {
+        const db = getDb();
+        logger.info(`onUserUpdateV1: Normalizando cityKey para ${event.params.uid}. city: '${after.city}', nuevo cityKey: '${expectedCityKey}'`);
+        
+        await db.doc(`users/${event.params.uid}`).update({
+            cityKey: expectedCityKey,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+    }
+});
+
+export const seedPricingV1 = onCall({ region: 'us-central1' }, async (request: CallableRequest<any>) => {
+    // 1. Validar Autenticación
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Debe estar autenticado para ejecutar esta acción.');
+    }
+
+    const { uid } = request.auth;
+    const db = getDb();
+
+    // 2. Validar Rol (Solo Admin)
+    const userSnap = await db.doc(`users/${uid}`).get();
+    if (!userSnap.exists) {
+        throw new HttpsError('permission-denied', 'Usuario no encontrado.');
+    }
+    const userProfile = userSnap.data() as UserProfile;
+    if (userProfile.role !== 'admin') {
+        throw new HttpsError('permission-denied', 'Permisos insuficientes. Se requiere rol de administrador global.');
+    }
+
+    const batch = db.batch();
+
+    const pricingData = {
+        version: 1,
+        DAY_BASE_FARE: 1483,
+        DAY_PRICE_PER_100M: 152,
+        DAY_WAITING_PER_MIN: 220,
+        NIGHT_BASE_FARE: 1652,
+        NIGHT_PRICE_PER_100M: 189,
+        NIGHT_WAITING_PER_MIN: 277,
+        MINIMUM_FARE: 1500
+    };
+
+    // 3A. Escribir config global haciendo merge
+    const configRef = db.doc('config/pricing');
+    batch.set(configRef, pricingData, { merge: true });
+
+    // 3B. Escribir tarifa de ciudad haciendo merge
+    const rawsonRef = db.doc('cities/rawson');
+    batch.set(rawsonRef, {
+        cityKey: 'rawson',
+        cityName: 'Rawson',
+        enabled: true,
+        pricing: pricingData,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    try {
+        await batch.commit();
+        logger.info(`Pricing seeded successfully by ${uid} (${userProfile.role})`);
+        return { 
+            success: true, 
+            message: 'Firestore seeding completado exitosamente.'
+        };
+    } catch (error: any) {
+        logger.error('Error seeding pricing:', error);
+        throw new HttpsError('internal', 'Error al inyectar tarifas en base de datos.', error.message);
+    }
 });
