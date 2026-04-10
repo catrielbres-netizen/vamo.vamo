@@ -15,25 +15,25 @@ import { cn } from '@/lib/utils';
  * TermsGuard: Intercepta usuarios que no han aceptado la versión vigente de T&C.
  * Bloquea la navegación con un modal forzoso hasta que el usuario acepte.
  */
-export function TermsGuard({ children }: { children: React.ReactNode }) {
+export function TermsGuard({ children, forced, onClose }: { children?: React.ReactNode, forced?: boolean, onClose?: () => void }) {
     const { user, profile, loading } = useUser();
     const { toast } = useToast();
     const [isAccepting, setIsAccepting] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
 
-    // Determinar si falta aceptación
+    // Determinar si falta aceptación (validación reactiva)
     const needsAcceptance = !loading && !!profile && (
         !profile.termsAccepted || 
         profile.termsVersion !== CURRENT_TERMS_VERSION
     );
 
     useEffect(() => {
-        if (needsAcceptance) {
+        if (forced || needsAcceptance) {
             setIsOpen(true);
         } else {
             setIsOpen(false);
         }
-    }, [needsAcceptance]);
+    }, [forced, needsAcceptance]);
 
     const handleAccept = async () => {
         if (!user) return;
@@ -45,8 +45,9 @@ export function TermsGuard({ children }: { children: React.ReactNode }) {
             
             await updateProfile({
                 termsAccepted: true,
-                termsVersion: CURRENT_TERMS_VERSION,
-                termsAcceptedAt: new Date()
+                acceptedDriverTerms: true,
+                acceptedTermsAt: new Date(),
+                termsVersion: CURRENT_TERMS_VERSION
             });
 
             toast({
@@ -73,9 +74,11 @@ export function TermsGuard({ children }: { children: React.ReactNode }) {
         <>
             {children}
             
-            <Dialog open={isOpen} onOpenChange={() => {}}>
+            <Dialog open={isOpen} onOpenChange={(open) => {
+                if (!open && onClose) onClose();
+            }}>
                 <DialogContent 
-                    className="max-w-md h-[90vh] flex flex-col p-0 gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/5 shadow-2xl"
+                    className="max-w-md h-[90vh] flex flex-col gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/5 shadow-2xl"
                     onPointerDownOutside={(e) => e.preventDefault()}
                     onEscapeKeyDown={(e) => e.preventDefault()}
                 >
@@ -114,9 +117,9 @@ export function TermsGuard({ children }: { children: React.ReactNode }) {
                         <section className="space-y-3">
                             <div className="flex items-center gap-2">
                                 <CheckCircle2 className="h-3 w-3 text-indigo-500" />
-                                <h3 className="font-black text-white text-[11px] uppercase tracking-widest">1. Rol de la Plataforma</h3>
+                                <h3 className="font-black text-white text-[11px] uppercase tracking-widest">1. Rol de la Plataforma e Intermediación</h3>
                             </div>
-                            <p className="text-xs">VamO PRO actúa exclusivamente como un <span className="text-white font-bold">intermediario tecnológico</span>. Facilitamos la conexión entre conductores independientes y pasajeros, pero no somos una empresa de transporte ni de logística directa.</p>
+                            <p className="text-xs">VamO actúa exclusivamente como un <span className="text-white font-bold">intermediario tecnológico</span> que conecta conductores independientes con pasajeros. No existiendo relación laboral ni societaria, VamO no presta servicios de transporte ni garantiza la idoneidad o seguridad absoluta de los terceros prestadores.</p>
                         </section>
 
                         <section className="space-y-3">
@@ -124,7 +127,7 @@ export function TermsGuard({ children }: { children: React.ReactNode }) {
                                 <CheckCircle2 className="h-3 w-3 text-indigo-500" />
                                 <h3 className="font-black text-white text-[11px] uppercase tracking-widest">2. Fondo de Asistencia (F.A.P.)</h3>
                             </div>
-                            <p className="text-xs">Para viajes en vehículos particulares (Modalidad Express), el usuario acepta el funcionamiento del <span className="text-white font-bold">Fondo de Asistencia al Pasajero</span>. Este fondo ofrece una asistencia económica limitada por reintegro tras incidentes auditados. No sustituye la responsabilidad civil del conductor ni constituye un contrato de seguro tradicional.</p>
+                            <p className="text-xs">Para la modalidad Express, el usuario acepta el funcionamiento del <span className="text-white font-bold">Fondo de Asistencia VamO</span>. Este constituye un beneficio <span className="text-white font-bold">discrecional, limitado y sujeto a evaluación</span> interna. No implica un contrato de seguro, póliza técnica ni obligación automática de pago ante incidentes.</p>
                         </section>
 
                         <section className="space-y-3">

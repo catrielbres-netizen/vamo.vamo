@@ -28,6 +28,7 @@ import {
 import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
+import { isDriverReadyForReview } from '@/lib/eligibility';
 
 const PAGE_SIZE = 15;
 
@@ -127,17 +128,24 @@ export default function AdminDriversPage() {
     setLoadingMore(false);
   };
 
-  // Client-side search (limited to loaded items or we'd need a backend search engine)
+  // Client-side search & unified pending filtering
   const displayedDrivers = useMemo(() => {
-    if (!searchQuery) return drivers;
+    let list = drivers;
+
+    // Apply strict "Ready for Review" filter if pending is selected
+    if (filterStatus === 'pending') {
+      list = list.filter(d => isDriverReadyForReview(d));
+    }
+
+    if (!searchQuery) return list;
     const q = searchQuery.toLowerCase();
-    return drivers.filter(d => 
+    return list.filter(d => 
         (d.name || '').toLowerCase().includes(q) || 
         (d.phone || '').includes(q) || 
         (d.email || '').toLowerCase().includes(q) ||
         d.id.toLowerCase().includes(q)
     );
-  }, [drivers, searchQuery]);
+  }, [drivers, filterStatus, searchQuery]);
 
   function formatMoney(value?: number) {
     if (typeof value !== 'number') return '$0';

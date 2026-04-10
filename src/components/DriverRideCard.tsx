@@ -29,6 +29,7 @@ import { haversineDistance } from '@/lib/geo';
 const serviceCardStyles: Record<Ride['serviceType'], string> = {
     premium: "border-yellow-400/50",
     express: "border-gray-400/50",
+    normal: "border-gray-400/30",
 };
 
 const formatDistance = (meters: number) => {

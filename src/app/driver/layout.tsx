@@ -13,6 +13,7 @@ import { NotificationGate } from '@/components/NotificationGate';
 import { EmailVerificationAlert } from '@/components/EmailVerificationAlert';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { DriverRidesProvider, useDriverDashboard } from '@/context/DriverRidesProvider';
+import { GlobalOfferOverlay } from '@/components/GlobalOfferOverlay';
 import { useActiveRide } from '@/hooks/useActiveRide';
 import { doc, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -25,6 +26,7 @@ import { geohashForLocation } from 'geofire-common';
 import { Button } from '@/components/ui/button';
 import { canDriverGoOnline } from '@/lib/eligibility';
 import { DriverProgressPanel } from '@/components/DriverProgressPanel';
+import { TermsGuard } from '@/components/TermsGuard';
 
 const MAX_ACCURACY_METERS = 3000;
 const MIN_DISTANCE_UPDATE_METERS = 25;
@@ -146,6 +148,7 @@ function DriverAuthGuard({ children }: { children: React.ReactNode }) {
   return (
     <NotificationGate>
       <DriverRidesProvider>
+        <GlobalOfferOverlay />
         <DriverLayoutInner>{children}</DriverLayoutInner>
       </DriverRidesProvider>
     </NotificationGate>
@@ -169,6 +172,7 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
 
   const lastPositionRef = useRef<{lat: number, lng: number} | null>(null);
   const [isMockingLocation, setIsMockingLocation] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const effectiveMockLocation = RAWSON_MOCK_LOCATION;
 
   useEffect(() => {
@@ -284,18 +288,22 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
        updateDoc(driverLocationRef, { driverStatus: 'offline', updatedAt: serverTimestamp() });
        toast({ title: "Te has desconectado", description: "No recibirás nuevas solicitudes." });
      } else {
-       const eligibility = canDriverGoOnline(profile, user.emailVerified);
-       if (!eligibility.isEligible) {
-           toast({
-               variant: 'destructive',
-               title: 'No podés conectarte',
-               description: eligibility.reason
-           });
-           if (eligibility.code === 'PROFILE_INCOMPLETE' || eligibility.code === 'MISSING_PHONE') {
-               router.push('/driver/complete-profile');
-           }
-           return;
-       }
+        const eligibility = canDriverGoOnline(profile, user.emailVerified);
+        if (!eligibility.isEligible) {
+            if (eligibility.code === 'TERMS_NOT_ACCEPTED') {
+                setShowTerms(true);
+                return;
+            }
+            toast({
+                variant: 'destructive',
+                title: 'No podés conectarte',
+                description: eligibility.reason
+            });
+            if (eligibility.code === 'PROFILE_INCOMPLETE' || eligibility.code === 'MISSING_PHONE') {
+                router.push('/driver/complete-profile');
+            }
+            return;
+        }
 
        toast({ title: "Conectando...", description: isMockingLocation ? "Usando ubicación MOCK (Rawson)..." : "Obteniendo tu ubicación GPS..." });
        
@@ -306,10 +314,6 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
           setCurrentLocation(newLocation);
           try {
             const updates: any = { driverStatus: 'online', updatedAt: serverTimestamp() };
-            // Proactive sync for matching engine eligibility
-            if (user.emailVerified && !profile.emailVerified) {
-                updates.emailVerified = true;
-            }
             await updateDoc(userProfileRef, updates);
             await setDoc(driverLocationRef, { 
                 driverStatus: 'online', 
@@ -351,6 +355,10 @@ function DriverLayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <TermsGuard 
+          forced={showTerms} 
+          onClose={() => setShowTerms(false)} 
+      />
       <CancellationModal />
       <div className="container mx-auto max-w-md p-4">
         <div className="flex justify-between items-center mb-6">

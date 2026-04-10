@@ -43,11 +43,11 @@ export function useFCM() {
 
   const hookRenderCount = useRef(0);
   hookRenderCount.current++;
-  
+
   const { user, profile, loading: authLoading } = useUser();
   const firestore = useFirestore();
   const firebaseApp = useFirebaseApp();
-  
+
   const [localStatus, setLocalStatus] = useState<FCMStatus>(globalStatus);
   const [localError, setLocalError] = useState<string | null>(globalError);
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -56,8 +56,8 @@ export function useFCM() {
   // Sync with global state
   useEffect(() => {
     const handleUpdate = () => {
-        setLocalStatus(globalStatus);
-        setLocalError(globalError);
+      setLocalStatus(globalStatus);
+      setLocalError(globalError);
     };
     statusListeners.add(handleUpdate);
     handleUpdate();
@@ -68,18 +68,18 @@ export function useFCM() {
   useEffect(() => {
     const checkSupport = async () => {
       if (typeof window === 'undefined') return;
-      
+
       const isFCMSupported = await isSupported();
       const hasSW = 'serviceWorker' in navigator;
       const hasPush = 'PushManager' in window;
       const isFeatureSupported = isFCMSupported && hasSW && hasPush;
 
       console.log(`[FCM] Estado inicial:`, {
-          isFCMSupported,
-          hasSW,
-          hasPush,
-          permission: Notification.permission,
-          isFeatureSupported
+        isFCMSupported,
+        hasSW,
+        hasPush,
+        permission: Notification.permission,
+        isFeatureSupported
       });
 
       setSupported(isFeatureSupported);
@@ -114,14 +114,14 @@ export function useFCM() {
 
   const enablePush = useCallback(async (isManual: boolean = false) => {
     // Detailed logs before any early return
-    console.log('[FCM] Ejecutando enablePush:', { 
-        isManual, 
-        supported, 
-        uid: user?.uid, 
-        hasFirestore: !!firestore, 
-        hasApp: !!firebaseApp,
-        vapid: !!process.env.NEXT_PUBLIC_FCM_VAPID_KEY,
-        globalInFlight
+    console.log('[FCM] Ejecutando enablePush:', {
+      isManual,
+      supported,
+      uid: user?.uid,
+      hasFirestore: !!firestore,
+      hasApp: !!firebaseApp,
+      vapid: !!process.env.NEXT_PUBLIC_FCM_VAPID_KEY,
+      globalInFlight
     });
 
     if (supported !== true) {
@@ -131,18 +131,18 @@ export function useFCM() {
     }
 
     if (!user) {
-        console.log('[FCM] Abortando: No hay usuario autenticado.');
-        return;
+      console.log('[FCM] Abortando: No hay usuario autenticado.');
+      return;
     }
 
     if (!firestore || !firebaseApp || !process.env.NEXT_PUBLIC_FCM_VAPID_KEY) {
-        console.log('[FCM] Abortando: Configuración incompleta.');
-        return;
+      console.log('[FCM] Abortando: Configuración incompleta.');
+      return;
     }
 
     if (globalInFlight) {
-        console.log('[FCM] Abortando: Operación ya en curso.');
-        return;
+      console.log('[FCM] Abortando: Operación ya en curso.');
+      return;
     }
 
     // Early exit if permission is already denied
@@ -154,27 +154,27 @@ export function useFCM() {
 
     // Cooldown logic for auto-triggers (non-manual)
     if (!isManual && typeof window !== 'undefined') {
-        const cooldownUntil = sessionStorage.getItem(COOLDOWN_KEY);
-        if (cooldownUntil && Date.now() < parseInt(cooldownUntil, 10)) {
-            console.log('[FCM] Abortando: En periodo de cooldown (auto-trigger).');
-            return;
-        }
+      const cooldownUntil = sessionStorage.getItem(COOLDOWN_KEY);
+      if (cooldownUntil && Date.now() < parseInt(cooldownUntil, 10)) {
+        console.log('[FCM] Abortando: En periodo de cooldown (auto-trigger).');
+        return;
+      }
     }
-    
+
     try {
       globalInFlight = true;
       setGlobalFCMState('loading');
-      
+
       console.log('[FCM] Solicitando permiso (Notification.requestPermission)...');
       const permission = await Notification.requestPermission();
       console.log('[FCM] Resultado del permiso:', permission);
-      
+
       if (permission !== 'granted') {
         setGlobalFCMState('blocked', 'Permiso de notificaciones no otorgado.');
         globalInFlight = false;
         return;
       }
-      
+
       // Get the Messaging instance
       const messaging = getMessaging(firebaseApp);
 
@@ -185,9 +185,9 @@ export function useFCM() {
       }
 
       console.log('[FCM] Intentando generar Token Web Push con VAPID Key...');
-      
+
       // EXPLICIT: Pass serviceWorkerRegistration to getToken
-      const token = await getToken(messaging, { 
+      const token = await getToken(messaging, {
         vapidKey: process.env.NEXT_PUBLIC_FCM_VAPID_KEY,
         serviceWorkerRegistration: swRegistrationRef.current
       });
@@ -200,7 +200,7 @@ export function useFCM() {
 
       // 3. Save to Firestore logic
       const userRef = doc(firestore, 'users', user.uid);
-      
+
       // Update only if necessary to avoid unnecessary writes
       if (profile?.fcmToken !== token) {
         console.log('[FCM] Guardando token en Firestore para el UID:', user.uid);
@@ -213,13 +213,13 @@ export function useFCM() {
       } else {
         console.log('[FCM] El token actual coincide con el de Firestore. No se requiere actualización.');
       }
-      
+
       setGlobalFCMState('enabled');
     } catch (err: any) {
       console.error('[FCM] ERROR CRÍTICO CAPTURADO:', err);
-      
+
       const message = err?.message || String(err);
-      
+
       // Diagnostic for 401 errors
       if (message.includes('401') || message.includes('unauthorized') || message.includes('authentication')) {
         console.error('[FCM] DIAGNÓSTICO: Error de autorización (401). Revisar VAPID Key, FCM Registration API y configuración de Firebase.');
@@ -247,22 +247,22 @@ export function useFCM() {
       const needsToken = !profile?.fcmToken;
       const isIdle = globalStatus === 'idle' || globalStatus === 'failed';
 
-      console.log('[FCM] Evaluación de auto-trigger:', { 
-          hasPermission, 
-          needsToken, 
-          globalStatus,
-          isIdle,
-          isProfileLoaded: !!profile
+      console.log('[FCM] Evaluación de auto-trigger:', {
+        hasPermission,
+        needsToken,
+        globalStatus,
+        isIdle,
+        isProfileLoaded: !!profile
       });
 
       if (hasPermission && needsToken && isIdle) {
-          const cooldownUntil = sessionStorage.getItem(COOLDOWN_KEY);
-          if (!cooldownUntil || Date.now() > parseInt(cooldownUntil, 10)) {
-              console.log('[FCM] Auto-trigger disparado: Generando token faltante...');
-              enablePush(false);
-          } else {
-              console.log('[FCM] Auto-trigger omitido por COOLDOWN.');
-          }
+        const cooldownUntil = sessionStorage.getItem(COOLDOWN_KEY);
+        if (!cooldownUntil || Date.now() > parseInt(cooldownUntil, 10)) {
+          console.log('[FCM] Auto-trigger disparado: Generando token faltante...');
+          enablePush(false);
+        } else {
+          console.log('[FCM] Auto-trigger omitido por COOLDOWN.');
+        }
       }
     }
   }, [user, authLoading, profile, supported, enablePush]);
@@ -275,3 +275,4 @@ export function useFCM() {
     isLoading: localStatus === 'loading',
   };
 }
+

@@ -131,6 +131,7 @@ exports.createFapClaimV1 = (0, https_1.onCall)({ cors: true, region: 'us-central
                 rideId,
                 passengerId,
                 driverId,
+                cityKey: rideData.operatingAreaId || 'unknown', // [VamO PRO v1.4]
                 status: 'pending',
                 type: type,
                 description,
@@ -142,7 +143,9 @@ exports.createFapClaimV1 = (0, https_1.onCall)({ cors: true, region: 'us-central
                     totalFare: rideData.completedRide?.totalFare || 0,
                     completedAt: rideData.completedAt,
                     driverSubtype: driverSubtype,
-                    city: rideData.city
+                    city: rideData.city,
+                    cityKey: rideData.operatingAreaId,
+                    serviceType: rideData.serviceType
                 },
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -201,6 +204,7 @@ exports.reviewFapClaimV1 = (0, https_1.onCall)({ cors: true, region: 'us-central
                 if (adminNotes)
                     updates.adminNotes = adminNotes;
                 updates.resolvedAt = admin.firestore.FieldValue.serverTimestamp();
+                updates.resolvedBy = request.auth?.uid; // [VamO PRO v1.4]
             }
             else if (action === 'reject') {
                 if (!rejectionReason)
@@ -208,6 +212,7 @@ exports.reviewFapClaimV1 = (0, https_1.onCall)({ cors: true, region: 'us-central
                 updates.status = 'rejected';
                 updates.rejectionReason = rejectionReason;
                 updates.resolvedAt = admin.firestore.FieldValue.serverTimestamp();
+                updates.resolvedBy = request.auth?.uid; // [VamO PRO v1.4]
             }
             tx.update(claimRef, updates);
         });

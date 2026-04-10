@@ -34,7 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.seedPricingV1 = exports.onUserUpdateV1 = exports.processWithdrawalByAdminV1 = exports.requestWithdrawalV1 = exports.deleteDriverByAdminV1 = exports.sendDriverNotificationByAdminV1 = exports.adjustDriverBalanceByAdminV1 = exports.suspendDriverByAdminV1 = exports.rejectDriverByAdminV1 = exports.approveDriverByAdminV1 = exports.submitRideRatingV1 = exports.finishRideV1 = exports.startRideV1 = exports.driverArrivedV1 = exports.cancelRideV1 = exports.onOfferFinalized = exports.onRideCancelledV3 = exports.notifyOnRideUpdateV3 = exports.cleanupStaleDrivers = exports.distributeWeeklyPoolV5 = exports.mercadoPagoWebhookV4 = exports.onRideSettlementV6 = exports.createPaymentPreferenceV4 = exports.sendNotification = void 0;
+exports.updateProfileV1 = exports.seedPricingV1 = exports.onUserUpdateV1 = exports.processWithdrawalByAdminV1 = exports.requestWithdrawalV1 = exports.deleteDriverByAdminV1 = exports.sendDriverNotificationByAdminV1 = exports.adjustDriverBalanceByAdminV1 = exports.suspendDriverByAdminV1 = exports.rejectDriverByAdminV1 = exports.approveDriverByAdminV1 = exports.submitRideRatingV1 = exports.finishRideV1 = exports.startRideV1 = exports.driverArrivedV1 = exports.cancelRideV1 = exports.onOfferFinalized = exports.onRideCancelledV3 = exports.notifyOnRideUpdateV3 = exports.cleanupStaleDrivers = exports.distributeWeeklyPoolV5 = exports.mercadoPagoWebhookV4 = exports.onRideSettlementV6 = exports.createPaymentPreferenceV4 = exports.sendNotification = void 0;
 exports.ensureServiceInvariants = ensureServiceInvariants;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
@@ -121,7 +121,7 @@ function haversineDistance(coords1, coords2) {
     return R * c;
 }
 // --- PRICING & COMMISSION LOGIC (PURE FUNCTIONS) ---
-async function getPricingConfig() {
+async function getPricingConfig(cityKey) {
     const db = (0, firebaseAdmin_1.getDb)();
     const defaultConfig = {
         version: 1,
@@ -133,17 +133,28 @@ async function getPricingConfig() {
         NIGHT_WAITING_PER_MIN: 277,
     };
     try {
+        if (cityKey) {
+            const citySnap = await db.doc(`cities/${cityKey}`).get();
+            const cityPricing = citySnap.data()?.pricing;
+            if (cityPricing) {
+                logger.info(`Using city-specific pricing for ${cityKey}`);
+                return cityPricing;
+            }
+        }
         const configSnap = await db.doc('config/pricing').get();
         if (configSnap.exists) {
             logger.info("Using dynamic pricing config from Firestore.");
             return configSnap.data();
         }
-        logger.warn("Pricing config not found in Firestore (config/pricing). Using default hardcoded values. You can create this document to enable dynamic pricing.");
-        return defaultConfig;
+        if (cityKey === 'rawson' || !cityKey) {
+            logger.warn("Pricing config not found. Using default hardcoded values.");
+            return defaultConfig;
+        }
+        throw new Error(`Pricing config UNREACHABLE for city: ${cityKey}. No silent fallback allowed.`);
     }
     catch (error) {
-        logger.error("Error fetching pricing config, falling back to defaults.", error);
-        return defaultConfig;
+        logger.error("Error fetching pricing config:", error);
+        throw error;
     }
 }
 function calculatePointsAwarded(driverProfile, rideData) {
@@ -235,8 +246,16 @@ function calculateSettlement(rideData, driverData, trackingPoints, pricing) {
     }
     const totalFare = Math.ceil(serviceAdjustedSubtotal / 50) * 50;
     // D. Commission Calculation (SIMPLIFIED)
+    // We calculate commission BEFORE adding the F.A.P. fee to be fair to the driver.
     const finalCommissionRate = 0.08; // Flat 8% commission for all rides.
     const commissionAmount = totalFare * finalCommissionRate;
+    // --- BLOQUE 6: F.A.P. FEE (+400 for Express) ---
+    let finalTotalFare = totalFare;
+    let fapFee = 0;
+    if (rideData.serviceType === 'express') {
+        finalTotalFare += 400;
+        fapFee = 400;
+    }
     const settlement = {
         pricingVersion: pricing.version,
         calculationSource,
@@ -246,8 +265,9 @@ function calculateSettlement(rideData, driverData, trackingPoints, pricing) {
         baseFare,
         distanceFare,
         waitingFare,
-        totalFare,
-        baseCommissionRate: finalCommissionRate, // base and final are now the same
+        totalFare: finalTotalFare,
+        fapFee,
+        baseCommissionRate: finalCommissionRate,
         finalCommissionRate,
         commissionAmount,
         trackingStats,
@@ -360,7 +380,12 @@ exports.onRideSettlementV6 = (0, firestore_1.onDocumentUpdated)("rides/{rideId}"
     try {
         const trackingSnapshot = await rideRef.collection('tracking').orderBy('timestamp', 'asc').get();
         const trackingPoints = trackingSnapshot.docs.map(doc => doc.data());
-        const pricingConfig = await getPricingConfig();
+        const cityKey = after.cityKey;
+        if (!cityKey) {
+            logger.error(`Ride ${rideId} missing cityKey. Settlement ABORTED.`);
+            return;
+        }
+        const pricingConfig = await getPricingConfig(cityKey);
         await db.runTransaction(async (tx) => {
             const driverSnap = await tx.get(driverRef);
             const rideSnap = await tx.get(rideRef);
@@ -399,9 +424,30 @@ exports.onRideSettlementV6 = (0, firestore_1.onDocumentUpdated)("rides/{rideId}"
                 note: `Comisión por viaje a ${rideData.destination.address}`,
                 previousBalance: previousBalance,
                 newBalance: newBalance,
+                cityKey: cityKey,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 systemVersion: 'v5_simple_commission',
             });
+            // --- BLOQUE 6: F.A.P. ASSISTANCE CONTRIBUTION ---
+            if (rideData.serviceType === 'express') {
+                const fapTransactionRef = db.collection('platform_transactions').doc();
+                const fapAmount = 400;
+                tx.set(fapTransactionRef, {
+                    rideId,
+                    driverId,
+                    passengerId,
+                    amount: -fapAmount,
+                    type: 'assistance_contribution',
+                    reason: 'assistance_contribution',
+                    note: 'Aporte al Fondo de Asistencia VamO (F.A.P.) por viaje Express',
+                    previousBalance: newBalance,
+                    newBalance: newBalance - fapAmount,
+                    cityKey: cityKey,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    systemVersion: 'v5_fap_integration',
+                });
+                tx.update(driverRef, { currentBalance: newBalance - fapAmount });
+            }
             // --- REWARD POINTS & LEVEL UP LOGIC ---
             const currentPoints = driverData.rewardPoints || 0;
             const newPoints = currentPoints + pointsAwarded;
@@ -643,80 +689,87 @@ exports.distributeWeeklyPoolV5 = (0, scheduler_1.onSchedule)({
     timeZone: "America/Argentina/Buenos_Aires"
 }, async (event) => {
     const db = (0, firebaseAdmin_1.getDb)();
-    logger.log("V5: Iniciando distribución y reseteo del pozo semanal.");
-    const rewardsRef = db.doc("rewards/rewards");
-    const configSnap = await rewardsRef.get();
-    const config = configSnap.data();
-    const currentPoolAmount = config?.weeklyPoolAmount ?? 0;
-    const basePoolAmount = 2000;
-    const minPointsToQualify = config?.minPointsToQualify ?? 20;
-    logger.log(`Pozo actual: ${currentPoolAmount}. Puntos para calificar: ${minPointsToQualify}. Pozo base para la próxima semana: ${basePoolAmount}.`);
-    // Simplified query to include all approved drivers
-    const driversSnap = await db.collection("users")
-        .where("role", "==", "driver")
-        .where("approved", "==", true)
-        .get();
-    if (driversSnap.empty) {
-        logger.log("No hay conductores, reseteando pozo y omitiendo distribución.");
-        await rewardsRef.update({ weeklyPoolAmount: basePoolAmount });
+    logger.log("V5: Iniciando distribución multiciudad del pozo semanal.");
+    // 1. Obtener todas las ciudades activas
+    const citiesSnap = await db.collection("cities").where("enabled", "==", true).get();
+    if (citiesSnap.empty) {
+        logger.warn("No hay ciudades activas para procesar pozo semanal.");
         return;
     }
-    const eligibleDrivers = [];
-    const driversToReset = [];
-    for (const docSnap of driversSnap.docs) {
-        const pointsSnap = await db.collection("driver_points").doc(docSnap.id).get();
-        const weeklyPoints = pointsSnap.data()?.weeklyPoints ?? 0;
-        if (weeklyPoints > 0) {
-            driversToReset.push(pointsSnap.ref);
-            if (weeklyPoints >= minPointsToQualify) {
-                eligibleDrivers.push({ id: docSnap.id, points: weeklyPoints });
-            }
+    for (const cityDoc of citiesSnap.docs) {
+        const cityKey = cityDoc.id;
+        const cityData = cityDoc.data();
+        // Configuración de pozo por ciudad (prioriza config de la ciudad, fallback a global solo para Rawson o por compatibilidad inicial)
+        const rewardsConfig = cityData.rewardsConfig || {};
+        const currentPoolAmount = rewardsConfig.weeklyPoolAmount ?? 0;
+        const basePoolAmount = rewardsConfig.basePoolAmount ?? 2000;
+        const minPointsToQualify = rewardsConfig.minPointsToQualify ?? 20;
+        logger.log(`Procesando Ciudad: ${cityKey}. Pozo: ${currentPoolAmount}. Califica con: ${minPointsToQualify} pts.`);
+        // 2. Buscar conductores de ESTA ciudad
+        const driversSnap = await db.collection("users")
+            .where("role", "==", "driver")
+            .where("cityKey", "==", cityKey)
+            .where("approved", "==", true)
+            .get();
+        if (driversSnap.empty) {
+            logger.log(`Ciudad ${cityKey}: Sin conductores, reseteando pozo.`);
+            await cityDoc.ref.update({ "rewardsConfig.weeklyPoolAmount": basePoolAmount });
+            continue;
         }
-    }
-    const totalEligiblePoints = eligibleDrivers.reduce((sum, d) => sum + d.points, 0);
-    try {
-        await db.runTransaction(async (tx) => {
-            // 1. Distribute the pool if there are eligible drivers
-            if (eligibleDrivers.length > 0 && totalEligiblePoints > 0 && currentPoolAmount > 0) {
-                logger.log(`${eligibleDrivers.length} conductores calificaron para un pozo de ${currentPoolAmount}.`);
-                for (const driver of eligibleDrivers) {
-                    const share = (driver.points / totalEligiblePoints) * currentPoolAmount;
-                    if (share <= 0)
-                        continue;
-                    const driverRef = db.doc(`users/${driver.id}`);
-                    const transactionRef = db.collection('platform_transactions').doc();
-                    tx.update(driverRef, {
-                        currentBalance: admin.firestore.FieldValue.increment(share)
-                    });
-                    tx.set(transactionRef, {
-                        driverId: driver.id,
-                        amount: share,
-                        type: 'credit_promo',
-                        source: 'system',
-                        referenceId: `pool_${event.scheduleTime}`,
-                        note: `Bono del pozo semanal por ${driver.points} puntos.`,
-                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                        systemVersion: 'v4_progressive_pool',
-                    });
+        const eligibleDrivers = [];
+        const driversToReset = [];
+        // 3. Evaluar puntos semanales (usando cityKey en driver_points si existiera, pero por ahora driver_points es por driverId)
+        for (const userSnap of driversSnap.docs) {
+            const pointsSnap = await db.collection("driver_points").doc(userSnap.id).get();
+            const weeklyPoints = pointsSnap.data()?.weeklyPoints ?? 0;
+            if (weeklyPoints > 0) {
+                driversToReset.push(pointsSnap.ref);
+                if (weeklyPoints >= minPointsToQualify) {
+                    eligibleDrivers.push({ id: userSnap.id, points: weeklyPoints });
                 }
             }
-            else {
-                logger.log("Nadie calificó para el pozo, o el pozo era 0. No se distribuirá nada.");
-            }
-            // 2. Reset points for all drivers who had them
-            logger.log(`Reseteando puntos para ${driversToReset.length} conductores.`);
-            for (const pointsRef of driversToReset) {
-                tx.update(pointsRef, { weeklyPoints: 0 });
-            }
-            // 3. Reset the main pool amount for the next week
-            logger.log(`Reseteando el pozo a su base de ${basePoolAmount}.`);
-            tx.update(rewardsRef, { weeklyPoolAmount: basePoolAmount });
-        });
-        logger.log("V5: Proceso de pozo semanal completado exitosamente.");
+        }
+        const totalEligiblePoints = eligibleDrivers.reduce((sum, d) => sum + d.points, 0);
+        try {
+            await db.runTransaction(async (tx) => {
+                if (eligibleDrivers.length > 0 && totalEligiblePoints > 0 && currentPoolAmount > 0) {
+                    logger.log(`Ciudad ${cityKey}: ${eligibleDrivers.length} conductores calificaron.`);
+                    for (const driver of eligibleDrivers) {
+                        const share = (driver.points / totalEligiblePoints) * currentPoolAmount;
+                        if (share <= 0)
+                            continue;
+                        const driverRef = db.doc(`users/${driver.id}`);
+                        const transactionRef = db.collection('platform_transactions').doc();
+                        tx.update(driverRef, {
+                            currentBalance: admin.firestore.FieldValue.increment(share)
+                        });
+                        tx.set(transactionRef, {
+                            driverId: driver.id,
+                            amount: share,
+                            cityKey: cityKey,
+                            type: 'credit_promo',
+                            source: 'system',
+                            referenceId: `pool_${cityKey}_${event.scheduleTime}`,
+                            note: `Bono del pozo semanal (${cityKey}) por ${driver.points} puntos.`,
+                            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                            systemVersion: 'v5_multicity_pool',
+                        });
+                    }
+                }
+                // Reseteo de puntos
+                for (const pointsRef of driversToReset) {
+                    tx.update(pointsRef, { weeklyPoints: 0 });
+                }
+                // Reseteo del pozo de la ciudad
+                tx.update(cityDoc.ref, { "rewardsConfig.weeklyPoolAmount": basePoolAmount });
+            });
+            logger.log(`Ciudad ${cityKey}: Distribución completada.`);
+        }
+        catch (error) {
+            logger.error(`Ciudad ${cityKey}: Error en transacción de pozo semanal:`, error);
+        }
     }
-    catch (error) {
-        logger.error("V5: Error catastrófico durante la transacción del pozo semanal:", error);
-    }
+    logger.log("V5: Proceso de pozos multiciudad finalizado.");
 });
 exports.cleanupStaleDrivers = (0, scheduler_1.onSchedule)("every 2 minutes", async (event) => {
     const db = (0, firebaseAdmin_1.getDb)();
@@ -1386,6 +1439,7 @@ exports.requestWithdrawalV1 = (0, https_1.onCall)({ cors: true, region: 'us-cent
             cbuOrAlias: bankInfo.cbuOrAlias,
         },
         status: 'pending',
+        cityKey: driverData.cityKey || (0, city_1.normalizeCity)(driverData.city),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     return { success: true, requestId: requestRef.id };
@@ -1432,6 +1486,7 @@ exports.processWithdrawalByAdminV1 = (0, https_1.onCall)({ cors: true, region: '
                 note: 'Retiro de saldo aprobado por admin.',
                 previousBalance,
                 newBalance,
+                cityKey: requestData.cityKey,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 systemVersion: 'v1_withdrawal',
             });
@@ -1513,6 +1568,62 @@ exports.seedPricingV1 = (0, https_1.onCall)({ region: 'us-central1' }, async (re
     catch (error) {
         logger.error('Error seeding pricing:', error);
         throw new https_1.HttpsError('internal', 'Error al inyectar tarifas en base de datos.', error.message);
+    }
+});
+/**
+ * [VamO PRO] Unified Profile Update with Legal Traceability
+ * Handles profile completion and T&C acceptance with IP/UserAgent logging.
+ */
+exports.updateProfileV1 = (0, https_1.onCall)({ cors: true, region: "us-central1" }, async (request) => {
+    const auth = request.auth;
+    if (!auth) {
+        throw new https_1.HttpsError("unauthenticated", "User must be logged in.");
+    }
+    const { name, surname, displayName, phone, gender, photoURL, profileCompleted, termsAccepted, termsVersion } = request.data;
+    const db = (0, firebaseAdmin_1.getDb)();
+    const userRef = db.collection("users").doc(auth.uid);
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const updates = {
+        updatedAt: now
+    };
+    if (name)
+        updates.name = name;
+    if (surname)
+        updates.surname = surname;
+    if (displayName)
+        updates.displayName = displayName;
+    if (phone)
+        updates.phone = phone;
+    if (gender)
+        updates.gender = gender;
+    if (photoURL)
+        updates.photoURL = photoURL;
+    if (profileCompleted !== undefined)
+        updates.profileCompleted = profileCompleted;
+    if (termsAccepted !== undefined)
+        updates.termsAccepted = termsAccepted;
+    // Legal Traceability Logic
+    if (termsAccepted && termsVersion) {
+        updates.termsAccepted = true;
+        updates.termsVersion = termsVersion;
+        updates.termsAcceptedAt = now;
+        const logEntry = {
+            termsVersion,
+            acceptedAt: admin.firestore.Timestamp.now(), // Real-time client timestamp for the log
+            userAgent: request.rawRequest.headers['user-agent'] || 'unknown',
+            ip: request.rawRequest.headers['x-forwarded-for'] || request.rawRequest.socket.remoteAddress || 'unknown'
+        };
+        // Push to audit log
+        updates.legalAcceptanceLog = admin.firestore.FieldValue.arrayUnion(logEntry);
+    }
+    try {
+        await userRef.update(updates);
+        logger.info(`Profile updated for user ${auth.uid} with legal acceptance ${termsVersion}`);
+        return { success: true };
+    }
+    catch (error) {
+        logger.error(`Error updating profile for ${auth.uid}:`, error);
+        throw new https_1.HttpsError("internal", error.message);
     }
 });
 //# sourceMappingURL=handlers.js.map

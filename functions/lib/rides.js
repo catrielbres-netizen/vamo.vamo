@@ -41,9 +41,11 @@ const scheduler_1 = require("firebase-functions/v2/scheduler");
 const tasks_1 = require("firebase-functions/v2/tasks");
 const admin = __importStar(require("firebase-admin"));
 const logger = __importStar(require("firebase-functions/logger"));
+const uuid_1 = require("uuid");
 const geofire = __importStar(require("geofire-common"));
 const firebaseAdmin_1 = require("./lib/firebaseAdmin");
 const city_1 = require("./lib/city");
+const territoryResolver_1 = require("./lib/territoryResolver");
 const eligibility_1 = require("./eligibility");
 const pricing_1 = require("./lib/pricing");
 const OFFER_DURATION_SECONDS = 20;
@@ -132,8 +134,18 @@ async function findNextDriverAndCreateOffer(rideId) {
             logger.warn(`[MATCH_DEBUG] Matching system is DISABLED globally. Stopping search.`);
             return;
         }
-        const cityKey = normalizeCityKey(rideData.city || rideData.origin?.city || rideData.destination?.city || "");
-        const isRawsonBroadcast = (await isRawsonBroadcastEnabled(db)) || cityKey === "rawson";
+        const { pricingMunicipalityKey, method } = (0, territoryResolver_1.resolvePricingMunicipality)({
+            cityKey: rideData.cityKey,
+            city: rideData.city,
+            lat: rideData.origin?.lat,
+            lng: rideData.origin?.lng,
+        });
+        logger.info(`[MATCH_DEBUG] City resolution method: ${method}`);
+        if (!pricingMunicipalityKey) {
+            logger.error(`[MATCH_DEBUG] CRITICAL: Ride ${rideId} unable to resolve pricing municipality. Cannot match.`);
+            return;
+        }
+        const isRawsonBroadcast = (await isRawsonBroadcastEnabled(db)) || pricingMunicipalityKey === "rawson";
         if (isRawsonBroadcast) {
             const hasPending = await hasPendingOffersInRound(db, rideId, (rideData.matchingAttempts || 0) + 1);
             if (hasPending) {
@@ -141,25 +153,29 @@ async function findNextDriverAndCreateOffer(rideId) {
                 return;
             }
         }
-        const center = [rideData.origin.lat, rideData.origin.lng];
+        const center = [rideData.origin.lat, rideData.origin.lng]; // origin location
         // Progressive radii based on matching attempts
         const currentAttempts = (rideData.matchingAttempts || 0);
         const radiusInM = getMatchingRadiusByAttempt(currentAttempts + 1);
         const bounds = geofire.geohashQueryBounds(center, radiusInM);
         logger.info(`[MATCH_DEBUG] Geohash query: attempt=${currentAttempts + 1}, center=[${center}], radius=${radiusInM}m, boundsCount=${bounds.length}`);
-        const promises = bounds.map(b => {
+        const snapshots = await Promise.all(bounds.map(b => {
             return db.collection('drivers_locations')
                 .where('geohash', '>=', b[0])
                 .where('geohash', '<=', b[1])
                 .get();
-        });
-        const snapshots = await Promise.all(promises);
+        }));
         const geoCandidates = [];
         snapshots.forEach((snap, index) => {
             snap.forEach(doc => {
                 const data = doc.data();
                 if (!data.currentLocation)
                     return;
+                // [VamO PRO] Move cityKey isolation to memory to avoid Index requirements
+                if (data.cityKey !== pricingMunicipalityKey) {
+                    logger.info(`[MATCH_DEBUG] Candidate ${doc.id} discarded: City mismatch (${data.cityKey} vs ${pricingMunicipalityKey})`);
+                    return;
+                }
                 const distanceKm = geofire.distanceBetween([data.currentLocation.lat, data.currentLocation.lng], center);
                 if (distanceKm <= radiusInM / 1000) {
                     if (data.driverStatus === 'online' && data.approved === true && data.isSuspended === false) {
@@ -261,12 +277,19 @@ async function findNextDriverAndCreateOffer(rideId) {
             for (const winner of winners) {
                 const offerId = `${rideId}_${winner.id}_round_${round}`;
                 const offerData = {
-                    rideId, driverId: winner.id, passengerId: rideData.passengerId,
-                    status: 'pending', sentAt: admin.firestore.FieldValue.serverTimestamp(),
-                    expiresAt, round,
-                    origin: rideData.origin, destination: rideData.destination,
-                    serviceType: rideData.serviceType, estimatedTotal: rideData.pricing?.estimated?.total ?? 0,
-                    passengerName
+                    rideId,
+                    driverId: winner.id,
+                    passengerId: rideData.passengerId,
+                    status: 'pending',
+                    sentAt: admin.firestore.FieldValue.serverTimestamp(),
+                    expiresAt,
+                    round,
+                    origin: rideData.origin,
+                    destination: rideData.destination,
+                    serviceType: rideData.serviceType,
+                    estimatedTotal: rideData.pricing?.estimated?.total ?? 0,
+                    passengerName,
+                    cityKey: pricingMunicipalityKey
                 };
                 batch.set(db.collection('rideOffers').doc(offerId), offerData);
             }
@@ -297,12 +320,19 @@ async function findNextDriverAndCreateOffer(rideId) {
                 const passengerName = passengerSnap.data()?.name || "Pasajero";
                 const offerId = `${rideId}_${nextDriverId}_round_${round}`;
                 const offerData = {
-                    rideId, driverId: nextDriverId, passengerId: rideData.passengerId,
-                    status: 'pending', sentAt: admin.firestore.FieldValue.serverTimestamp(),
-                    expiresAt, round,
-                    origin: rideData.origin, destination: rideData.destination,
-                    serviceType: rideData.serviceType, estimatedTotal: rideData.pricing?.estimated?.total ?? 0,
-                    passengerName
+                    rideId,
+                    driverId: nextDriverId,
+                    passengerId: rideData.passengerId,
+                    status: 'pending',
+                    sentAt: admin.firestore.FieldValue.serverTimestamp(),
+                    expiresAt,
+                    round,
+                    origin: rideData.origin,
+                    destination: rideData.destination,
+                    serviceType: rideData.serviceType,
+                    estimatedTotal: rideData.pricing?.estimated?.total ?? 0,
+                    passengerName,
+                    cityKey: pricingMunicipalityKey
                 };
                 tx.set(db.collection('rideOffers').doc(offerId), offerData);
                 tx.update(rideRef, {
@@ -326,14 +356,19 @@ exports.createRideV1 = (0, https_1.onCall)({ cors: true, region: 'us-central1' }
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const db = (0, firebaseAdmin_1.getDb)();
-    const { origin, destination, serviceType, dryRun, promotionId, preferredDriverGender } = request.data;
+    const { origin, destination, serviceType, dryRun, promotionId, preferredDriverGender, clientRequestId } = request.data;
     const passengerId = request.auth.uid;
+    // Log request receipt and payload
+    logger.info(`[createRideV1] Request received from passenger ${passengerId}`);
+    logger.debug('[RIDE_REQUEST] payload', { origin, destination, serviceType, clientRequestId });
+    // Generate fallback clientRequestId if not provided by frontend
+    const effectiveClientRequestId = clientRequestId || (0, uuid_1.v4)();
     const userRef = db.doc(`users/${passengerId}`);
     const userSnap = await userRef.get();
     if (!userSnap.exists)
         throw new https_1.HttpsError('not-found', 'Perfil de usuario no encontrado.');
     const passengerProfile = userSnap.data();
-    const CURRENT_TERMS_V = 'v1.2';
+    const CURRENT_TERMS_V = 'v1.3';
     if (!dryRun && (!passengerProfile.termsAccepted || passengerProfile.termsVersion !== CURRENT_TERMS_V)) {
         throw new https_1.HttpsError('failed-precondition', 'Debes aceptar los Términos y Condiciones actualizados.');
     }
@@ -342,67 +377,85 @@ exports.createRideV1 = (0, https_1.onCall)({ cors: true, region: 'us-central1' }
     const systemConfig = await getSystemConfig();
     if (systemConfig.globalMaintenance)
         throw new https_1.HttpsError('unavailable', 'Sistema en mantenimiento.');
+    // Validate coordinates
+    const isValidCoord = (v) => typeof v === 'number' && !isNaN(v) && v >= -90 && v <= 90;
+    if (!isValidCoord(origin.lat) || !isValidCoord(origin.lng) || !isValidCoord(destination.lat) || !isValidCoord(destination.lng)) {
+        console.error('[ERROR][createRideV1] Invalid coordinates');
+        throw new https_1.HttpsError('invalid-argument', 'Coordenadas inválidas');
+    }
     const distKm = distanceInKm(origin.lat, origin.lng, destination.lat, destination.lng);
-    const durationMin = (distKm / 30) * 60;
-    const resolvedCity = origin.city || passengerProfile.city || null;
-    // Determine city for pricing (origin.city preferred)
-    let cityKey;
-    if (origin.city) {
-        cityKey = (0, city_1.normalizeCity)(origin.city);
-        console.log("CITY INITIAL (origin.city):", cityKey);
+    const MAX_DISTANCE_KM = 200;
+    const effectiveDistKm = Math.min(distKm, MAX_DISTANCE_KM);
+    if (distKm > MAX_DISTANCE_KM) {
+        console.warn('[WARN][createRideV1] Distance capped from', distKm, 'to', MAX_DISTANCE_KM);
     }
-    else if (passengerProfile.city) {
-        cityKey = (0, city_1.normalizeCity)(passengerProfile.city);
-        console.log("CITY INITIAL (passengerProfile.city):", cityKey);
+    const durationMin = (effectiveDistKm / 30) * 60;
+    // Resolve pricing municipality using territorial resolver
+    const { pricingMunicipalityKey, method } = (0, territoryResolver_1.resolvePricingMunicipality)({
+        cityKey: origin.cityKey,
+        city: origin.city,
+        lat: origin.lat,
+        lng: origin.lng,
+    });
+    logger.info(`[createRideV1] Pricing resolution method: ${method}, key: ${pricingMunicipalityKey}`);
+    if (!pricingMunicipalityKey) {
+        logger.error(`[createRideV1] Unable to resolve pricing municipality for origin`);
+        throw new https_1.HttpsError('failed-precondition', 'Ciudad no reconocida. Verifique su ubicación.');
     }
-    else {
-        cityKey = "rawson";
-        console.log("CITY INITIAL (fallback):", cityKey);
+    const pricingSnap = await db.doc(`municipal_pricing/${pricingMunicipalityKey}`).get();
+    if (!pricingSnap.exists) {
+        logger.error(`[createRideV1] Pricing config missing for municipality ${pricingMunicipalityKey}`);
+        throw new https_1.HttpsError('failed-precondition', 'Tarifa municipal no encontrada para la localidad solicitada.');
     }
-    let pricingConfig = null;
-    // Try city-specific pricing
+    const pricingConfig = pricingSnap.data();
+    // Removed duplicate pricePerKmFactor declaration; using cityPricingConfig later
+    // Use pricingMunicipalityKey as the city identifier
+    const finalCity = pricingMunicipalityKey;
+    const cityKey = (0, city_1.normalizeCity)(finalCity);
+    logger.info(`[createRideV1] Resolved cityKey: ${cityKey}`);
     const citySnap = await db.doc(`cities/${cityKey}`).get();
-    pricingConfig = citySnap.data()?.pricing || null;
-    if (pricingConfig) {
-        console.log("PRICING SOURCE: city document", cityKey);
+    if (!citySnap.exists || !citySnap.data()?.enabled) {
+        logger.error(`[createRideV1] City ${cityKey} is not active or not found.`);
+        throw new https_1.HttpsError('failed-precondition', `VamO aún no está disponible en ${finalCity}.`);
     }
-    else {
-        console.log("PRICING NOT FOUND for city", cityKey, "- falling back to global config");
-        const globalPricingSnap = await db.doc('config/pricing').get();
-        pricingConfig = globalPricingSnap.data();
-        if (pricingConfig) {
-            console.log("PRICING SOURCE: global config");
-        }
-        else {
-            console.log("GLOBAL PRICING NOT FOUND - falling back to rawson city pricing");
-            const rawsonSnap = await db.doc('cities/rawson').get();
-            pricingConfig = rawsonSnap.data()?.pricing || null;
-            if (pricingConfig) {
-                console.log("PRICING SOURCE: rawson city fallback");
-                cityKey = "rawson";
-            }
-        }
-    }
+    const cityConfig = citySnap.data();
+    const cityPricingConfig = cityConfig.pricing;
+    const pricePerKmFactor = cityPricingConfig.NIGHT_PRICE_PER_100M > 1000 ? 1 : 10;
+    cityPricingConfig._pricePerKmFactor = pricePerKmFactor;
     if (!pricingConfig) {
-        console.error("PRICING CONFIGURATION UNAVAILABLE after all fallbacks");
-        throw new https_1.HttpsError('failed-precondition', 'La configuración de tarifas no está disponible. Contacte a soporte.');
+        logger.error(`[createRideV1] Pricing config missing for city ${cityKey}`);
+        throw new https_1.HttpsError('failed-precondition', 'La configuración de tarifas para esta ciudad no está disponible.');
     }
+    // Fixed municipal pricing: base fare + distance * price per 100m (no dynamic factors)
     let total = 0;
     let breakdown = null;
-    try {
-        const argentinaHour = parseInt(new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: 'numeric', hour12: false }).format(new Date()), 10);
-        const isNight = argentinaHour >= 23 || argentinaHour < 6;
-        const pricingInput = { distanceKm: distKm, durationMin, waitingSeconds: 0, serviceType, isNight, isUrgent: false };
-        const priceResult = (0, pricing_1.calculateRidePrice)(pricingInput, pricingConfig);
-        total = priceResult.total;
-        breakdown = priceResult.breakdown;
+    // Use DAY pricing regardless of time
+    const baseFare = pricingConfig.DAY_BASE_FARE;
+    const pricePer100m = pricingConfig.DAY_PRICE_PER_100M;
+    // Convert km to number of 100m units (1 km = 10 * 100m)
+    const distanceUnits = Math.round(effectiveDistKm * 10);
+    total = baseFare + distanceUnits * pricePer100m;
+    // Simple breakdown object for consistency
+    breakdown = { baseFare, distanceUnits, pricePer100m, total };
+    // Express rides have a fixed extra fee
+    if (serviceType === 'express') {
+        total += 400;
+        breakdown.fapFee = 400;
     }
-    catch (error) {
-        logger.error(`[createRideV1] Error calculating price:`, error);
-        throw new https_1.HttpsError('internal', 'Ocurrió un error interno al calcular la tarifa.');
-    }
-    if (dryRun) {
-        return { estimatedTotal: total, breakdown };
+    // DEBUG: Log estimation details before proceeding
+    console.log('[DEBUG][createRideV1][dryRun] origin:', origin, 'destination:', destination, 'distKm:', distKm, 'effectiveDistKm:', effectiveDistKm, 'pricePerKmFactor:', cityPricingConfig._pricePerKmFactor, 'estimatedTotal:', total);
+    const userAgent = request.rawRequest.headers['user-agent'] || 'unknown';
+    const ip = request.rawRequest.ip || request.rawRequest.headers['x-forwarded-for'] || '0.0.0.0';
+    // Idempotency: check if a ride with the same clientRequestId already exists for this passenger
+    const existingSnap = await db.collection('rides')
+        .where('passengerId', '==', passengerId)
+        .where('clientRequestId', '==', effectiveClientRequestId)
+        .limit(1)
+        .get();
+    if (!existingSnap.empty) {
+        const existingRide = existingSnap.docs[0];
+        logger.info(`[createRideV1] Idempotent ride found: ${existingRide.id}`);
+        return { rideId: existingRide.id, resolvedCity: finalCity };
     }
     try {
         const result = await db.runTransaction(async (tx) => {
@@ -429,19 +482,30 @@ exports.createRideV1 = (0, https_1.onCall)({ cors: true, region: 'us-central1' }
             };
             tx.set(newRideRef, {
                 passengerId, origin, destination, serviceType,
-                status: 'searching', city: resolvedCity,
+                status: 'searching', city: finalCity,
+                cityKey, // mandatory field
+                clientRequestId: effectiveClientRequestId,
                 pricing: pricingModel,
+                legalAcceptance: {
+                    termsVersion: passengerProfile.termsVersion || 'v1.2',
+                    acceptedAt: admin.firestore.Timestamp.now(),
+                    userAgent,
+                    ip: typeof ip === 'string' ? ip : ip[0]
+                },
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 passengerName: passengerData.name || 'Pasajero',
             });
             tx.update(userRef, { activeRideId: newRideRef.id });
-            return { rideId: newRideRef.id, resolvedCity };
+            logger.info(`[createRideV1] Ride created with ID ${newRideRef.id}`);
+            return { rideId: newRideRef.id, resolvedCity: finalCity };
         });
         findNextDriverAndCreateOffer(result.rideId).catch(e => logger.error(`Proactive matching failed`, e));
+        logger.info(`[createRideV1] Success response sent for ride ${result.rideId}`);
         return { success: true, rideId: result.rideId };
     }
     catch (error) {
+        logger.error(`[createRideV1] Fatal error creating ride`, error);
         throw new https_1.HttpsError('internal', 'No se pudo crear el viaje.');
     }
 });
@@ -564,8 +628,8 @@ exports.onRideOfferUpdatedV1 = (0, firestore_1.onDocumentUpdated)({ document: 'r
     const afterData = event.data?.after.data();
     if (!afterData || afterData.status === 'pending')
         return;
-    if (afterData.status === 'rejected' || afterData.status === 'expired') {
-        findNextDriverAndCreateOffer(afterData.rideId).catch(e => logger.error(`Triggered matching failed`, e));
+    if (afterData.status === 'rejected' || afterData.status === 'expired' || afterData.status === 'cancelled') {
+        findNextDriverAndCreateOffer(afterData.rideId).catch(e => logger.error(`Triggered matching failed for ride ${afterData.rideId}`, e));
     }
 });
 exports.expireRideOfferTaskV1 = (0, tasks_1.onTaskDispatched)({

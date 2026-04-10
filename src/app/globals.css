@@ -39,7 +39,7 @@
     --secondary: 240 3.7% 15.9%;   /* zinc-800 */
     --secondary-foreground: 0 0% 98%; /* zinc-50 */
     --muted: 240 3.7% 15.9%;       /* zinc-800 */
-    --muted-foreground: 240 5% 64.9%; /* zinc-400 */
+    --muted-foreground: 240 10% 70%; /* HIGHER CONTRAST zinc-400ish */
     --accent: 239 84% 67%;         /* indigo-500 */
     --accent-foreground: 0 0% 100%;/* white text on accent */
     --destructive: 0 62.8% 30.6%;
@@ -47,6 +47,9 @@
     --border: 240 3.7% 15.9%;      /* zinc-800 */
     --input: 240 3.7% 15.9%;       /* zinc-800 */
     --ring: 240 4.9% 83.9%;        /* zinc-300 focus ring */
+    
+    --font-sans: var(--font-inter);
+    --font-display: var(--font-archivo);
   }
 }
 
@@ -101,5 +104,11 @@
 
   body {
     @apply bg-background text-foreground overscroll-none;
+    font-size: 15px; /* Slightly larger base for mobile */
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display), var(--font-inter), sans-serif;
   }
 }

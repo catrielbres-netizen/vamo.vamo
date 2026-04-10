@@ -39,6 +39,15 @@ const levelBadgeStyles: Record<DriverLevel | 'default', string> = {
     default: "bg-gray-400/20 text-gray-500 border-gray-400/30",
 };
 
+const DOC_LABELS: Record<string, string> = {
+    dni: 'DNI (Frente y Dorso)',
+    licencia: 'Licencia de Conducir',
+    cedula: 'Cédula del Vehículo',
+    habilitacion: 'Habilitación Taxi/Remis',
+    seguro: 'Póliza de Seguro',
+    antecedentes: 'Certificado Antecedentes',
+};
+
 
 function formatCurrency(value: number) {
     if (typeof value !== 'number' || isNaN(value)) return '$...';
@@ -200,6 +209,39 @@ export default function DriverProfilePage() {
     }
   };
 
+  const [isUploadingDoc, setIsUploadingDoc] = useState<string | null>(null);
+
+  const handleDocUpload = async (docId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0 || !user || !firebaseApp || !firestore) return;
+    const file = event.target.files[0];
+    const storage = getStorage(firebaseApp);
+    const storageRef = ref(storage, `driver_documents/${user.uid}/${docId}_${Date.now()}.jpg`);
+
+    setIsUploadingDoc(docId);
+    try {
+        const uploadResult = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(uploadResult.ref);
+
+        const userDocRef = doc(firestore, 'users', user.uid);
+        const currentSubmitted = profile?.documentsSubmitted || {};
+        
+        await updateDoc(userDocRef, {
+            [`documentsSubmitted.${docId}`]: {
+                url: downloadURL,
+                uploadedAt: new Date(),
+            },
+            manualReviewStatus: 'docs_submitted'
+        });
+
+        toast({ title: "Documento subido", description: `${DOC_LABELS[docId] || docId} se guardó correctamente.` });
+    } catch (error: any) {
+        console.error("Error uploading doc:", error);
+        toast({ variant: 'destructive', title: "Error al subir documento", description: error.message });
+    } finally {
+        setIsUploadingDoc(null);
+    }
+  };
+
   const handleServiceToggle = async () => {
     if (!firestore || !user) return;
     
@@ -267,6 +309,99 @@ export default function DriverProfilePage() {
             </CardDescription>
           </CardHeader>
         </Card>
+      )}
+
+      {/* MANUAL DOCUMENTATION REVIEW CARD */}
+      {profile.requiresManualReview && (
+          <Card className={cn(
+              "border-indigo-500/30",
+              profile.manualReviewStatus === 'approved' ? "bg-green-500/5 border-green-500/30" : "bg-indigo-500/5"
+          )}>
+              <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-indigo-500 text-lg flex gap-2 items-center">
+                        <VamoIcon name="file-text" className="w-5 h-5" /> 
+                        {profile.manualReviewStatus === 'approved' ? 'Verificación Aprobada' : 'Verificación Manual de Documentos'}
+                    </CardTitle>
+                    {profile.manualReviewStatus && (
+                        <Badge variant={profile.manualReviewStatus === 'approved' ? 'default' : 'secondary'} className="uppercase font-black text-[9px]">
+                            {profile.manualReviewStatus === 'approved' ? 'Aprobado' :
+                             profile.manualReviewStatus === 'docs_submitted' ? 'En Revisión' :
+                             profile.manualReviewStatus === 'rejected' ? 'Rechazado' : 'Pendiente'}
+                        </Badge>
+                    )}
+                  </div>
+                  <CardDescription className="text-indigo-400 font-medium text-xs">
+                      {profile.manualReviewStatus === 'approved' 
+                        ? 'Tu documentación profesional ha sido validada por administración.'
+                        : 'Como conductor de Taxi/Remis, necesitamos validar tu documentación adicional antes de la habilitación completa.'
+                      }
+                  </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                  {profile.adminReviewNote && (
+                      <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                          <p className="text-[10px] font-black uppercase text-indigo-400 mb-1">Nota de Administración:</p>
+                          <p className="text-xs text-white italic">"{profile.adminReviewNote}"</p>
+                      </div>
+                  )}
+
+                  {profile.manualReviewStatus !== 'approved' && (
+                      <div className="space-y-3">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Documentos Solicitados</p>
+                          <div className="grid gap-2">
+                              {(profile.documentsRequested || []).map((docId: string) => {
+                                  const isUploaded = !!profile.documentsSubmitted?.[docId];
+                                  return (
+                                      <div key={docId} className="flex items-center justify-between p-3 bg-background/40 rounded-xl border border-border/50">
+                                          <div className="flex items-center gap-3">
+                                              <div className={cn(
+                                                  "h-8 w-8 rounded-full flex items-center justify-center",
+                                                  isUploaded ? "bg-green-500/20 text-green-500" : "bg-indigo-500/20 text-indigo-400"
+                                              )}>
+                                                  {isUploaded ? <VamoIcon name="check" className="h-4 w-4" /> : <VamoIcon name="upload" className="h-4 w-4" />}
+                                              </div>
+                                              <div>
+                                                  <p className="text-xs font-bold">{DOC_LABELS[docId] || docId}</p>
+                                                  <p className="text-[9px] text-muted-foreground">{isUploaded ? 'Documento recibido' : 'Pendiente de subida'}</p>
+                                              </div>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                              {isUploaded && profile.documentsSubmitted?.[docId]?.url && (
+                                                   <Button size="icon" variant="ghost" className="h-8 w-8 text-indigo-400" onClick={() => window.open(profile.documentsSubmitted?.[docId]?.url, '_blank')}>
+                                                        <VamoIcon name="eye" className="h-4 w-4" />
+                                                   </Button>
+                                              )}
+                                              <input
+                                                  type="file"
+                                                  id={`doc-input-${docId}`}
+                                                  className="hidden"
+                                                  accept="image/*"
+                                                  onChange={(e) => handleDocUpload(docId, e)}
+                                              />
+                                              <Button 
+                                                  size="sm" 
+                                                  variant={isUploaded ? "outline" : "default"} 
+                                                  className="h-8 text-[10px] font-bold uppercase"
+                                                  disabled={isUploadingDoc === docId}
+                                                  onClick={() => document.getElementById(`doc-input-${docId}`)?.click()}
+                                              >
+                                                  {isUploadingDoc === docId ? "Subiendo..." : isUploaded ? "Cambiar" : "Subir Foto"}
+                                              </Button>
+                                          </div>
+                                      </div>
+                                  );
+                              })}
+                              {(!profile.documentsRequested || profile.documentsRequested.length === 0) && (
+                                  <p className="text-xs text-muted-foreground italic p-4 text-center bg-muted/20 rounded-xl">
+                                      Administración aún no ha especificado qué documentos requiere.
+                                  </p>
+                              )}
+                          </div>
+                      </div>
+                  )}
+              </CardContent>
+          </Card>
       )}
 
       {/* PERFORMANCE & STATS CARD */}

@@ -47,12 +47,16 @@ export default function MunicipalPricingPage() {
                         // 3. Last resort fallback (in memory defaults)
                         setConfig({
                             version: 1,
-                            DAY_BASE_FARE: 0,
-                            DAY_PRICE_PER_100M: 0,
-                            DAY_WAITING_PER_MIN: 0,
-                            NIGHT_BASE_FARE: 0,
-                            NIGHT_PRICE_PER_100M: 0,
-                            NIGHT_WAITING_PER_MIN: 0,
+                            DAY_BASE_FARE: 1483,
+                            DAY_PRICE_PER_100M: 152,
+                            DAY_WAITING_PER_MIN: 220,
+                            NIGHT_BASE_FARE: 1652,
+                            NIGHT_PRICE_PER_100M: 189,
+                            NIGHT_WAITING_PER_MIN: 277,
+                            MINIMUM_FARE: 1500,
+                            PLATFORM_COMMISSION_RATE: 200, // $200 example
+                            ASSISTANCE_FEE: 400, // $400 FAP
+                            assistanceEnabled: true
                         });
                     }
                 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useUser, useFirestore, useDoc, useMemoFirebase, useFirebaseApp } from '@/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -50,6 +50,7 @@ function RidePageContent() {
   const [isCalculatingFare, setIsCalculatingFare] = useState(false);
   const [localRideId, setLocalRideId] = useState<string | null>(null);
   const [pendingRideRequest, setPendingRideRequest] = useState(false);
+  const [isLocalResetting, setIsLocalResetting] = useState(false);
   const [lastCompletedRide, setLastCompletedRide] = useState<Ride | null>(null);
   const [sheetState, setSheetState] = useState<'collapsed' | 'expanded'>('collapsed');
   const [selectedPromoId, setSelectedPromoId] = useState<string | null>(null);
@@ -57,6 +58,12 @@ function RidePageContent() {
   const fareRequestId = useRef<number>(0);
 
   const { promotions: ridePromos, bestPromo, isLoading: isPromosLoading } = usePromotions('ride');
+
+  // PROACTIVE UX: Calculate eligibility beforehand to block button if needed
+  const eligibility = useMemo(() => {
+    if (!profile) return { isEligible: true }; // Let it pass if still loading profile
+    return canPassengerRequestRide(profile, user?.emailVerified);
+  }, [profile, user?.emailVerified]);
 
   // Auto-select best promo if none selected
   useEffect(() => {
@@ -127,7 +134,19 @@ function RidePageContent() {
   const { data: localRide } = useDoc<Ride>(localRideRef);
 
   const effectiveRide = ride || localRide;
+  // hasActiveRide should be true if we have any indicator of an ongoing or requested ride
+  // PRIORITY: Firestore is the single source of truth. Local states are only bridges.
   const hasActiveRide = !!(profile?.activeRideId || localRideId || pendingRideRequest);
+
+  // Sync effect: Reset pending/local states once Firestore profile catch up with the active ride
+  useEffect(() => {
+    if (profile?.activeRideId && (localRideId === profile.activeRideId || pendingRideRequest)) {
+       console.log('🔄 [SYNC] Profile updated with activeRideId. Clearing local pending states.', { rideId: profile.activeRideId });
+       setLocalRideId(null);
+       setPendingRideRequest(false);
+       setIsLocalResetting(false);
+    }
+  }, [profile?.activeRideId, localRideId, pendingRideRequest]);
 
   // BUG 2 — Robust Capture: Ensure we capture completed rides even if the backend clears activeRideId quickly
   useEffect(() => {
@@ -143,11 +162,6 @@ function RidePageContent() {
     }
   }, [effectiveRide]);
 
-  useEffect(() => {
-    if (profile?.activeRideId && localRideId && profile.activeRideId === localRideId) {
-      setLocalRideId(null);
-    }
-  }, [profile?.activeRideId, localRideId]);
 
   const getRidePayload = async (isDryRun: boolean) => {
       if (!origin || !destination) throw new Error("Faltan origen o destino");
@@ -215,7 +229,7 @@ function RidePageContent() {
     return () => {
         clearTimeout(timerId);
     };
-  }, [destination, origin, useExpress, selectedPromoId, firebaseApp]);
+  }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng, useExpress, selectedPromoId, firebaseApp]);
 
   const handleRequestRide = async () => {
     if (isRequesting || !firebaseApp || !user || !profile) return;
@@ -248,9 +262,12 @@ function RidePageContent() {
 
         const result = await createRide(payload);
         
-        console.log('✅ [RIDE_REQUEST] Server Response:', result.data);
         const data = result.data as any;
+        console.log('✅ [RIDE_REQUEST] Server Response:', data);
+
         if (data.success && data.rideId) {
+            // CRITICAL: Set localRideId first, then release pending so hasActiveRide stays true
+            console.log('🚀 [RIDE_UI] Transitioning to searching with rideId:', data.rideId);
             setLocalRideId(data.rideId);
             setPendingRideRequest(false);
             toast({ title: '¡Buscando conductor!' });
@@ -258,6 +275,7 @@ function RidePageContent() {
             throw new Error(data.error || 'Error al crear el viaje');
         }
     } catch (error: any) {
+      console.error('❌ [RIDE_REQUEST] Error:', error);
       setLocalRideId(null);
       setPendingRideRequest(false);
       toast({ variant: 'destructive', title: 'Error al pedir viaje', description: error.message });
@@ -282,13 +300,14 @@ function RidePageContent() {
   const handleReset = useCallback(() => { 
       console.log('🏁 [RECEIPT_CLOSE] Resetting ride state and clearing lastCompletedRide');
       console.log('🏁 [RIDE_PAGE_RESET] Clearing all local trip state');
+      setIsLocalResetting(true);
       setOrigin(null);
       setDestination(null); 
       setEstimatedPrice(null);
       setLocalRideId(null);
       setPendingRideRequest(false);
       setIsCancelling(false);
-      setLastCompletedRide(null); // Clear the persisted receipt
+      setLastCompletedRide(null); 
   }, []);
 
   const handleEmergencyReset = async () => {
@@ -341,6 +360,15 @@ function RidePageContent() {
 
   if (userError) return <div className="p-4"><VamoIcon name="alert-triangle" /> Error: {userError.message}</div>;
 
+  // UX: Block initial form flash while profile is loading
+  if (userIsLoading && !hasActiveRide) {
+    return (
+        <div className="h-[100dvh] w-full flex items-center justify-center bg-[#121212]">
+            <VamoIcon name="loader" className="h-8 w-8 animate-spin text-indigo-500/50" />
+        </div>
+    );
+  }
+
   // Use the persisted completed ride to render the receipt
   if (lastCompletedRide) {
     console.log('🏁 [RIDE_PAGE_BRANCH] Branch: PERSISTENT_RECEIPT', { id: lastCompletedRide.id });
@@ -360,11 +388,11 @@ function RidePageContent() {
     );
   }
 
-  if (hasActiveRide && effectiveRide) {
-    console.log('🏁 [RIDE_PAGE_BRANCH] Branch: ACTIVE_RIDE', { id: effectiveRide.id, status: effectiveRide.status });
+  if (hasActiveRide) {
+    console.log('🏁 [RIDE_PAGE_BRANCH] Branch: ACTIVE_RIDE', { id: effectiveRide?.id || 'pending', status: effectiveRide?.status || 'searching' });
   } else {
     // If no active ride and no receipt, we MUST land here (Initial Form)
-    console.log('🏁 [RIDE_PAGE_BRANCH] Branch: INITIAL_FORM (Fallback)');
+    console.log('🏁 [RIDE_PAGE_BRANCH] Branch: INITIAL_FORM');
   }
 
   const isSearching = hasActiveRide && (!effectiveRide || effectiveRide.status === 'searching');
@@ -628,11 +656,16 @@ function RidePageContent() {
                                     
                                     <Button 
                                         onClick={handleRequestRide} 
-                                        disabled={!origin || !destination || isRequesting} 
-                                        className={`w-full h-16 rounded-2xl font-bold text-lg transition-all active:scale-[0.98] mt-4 ${(!origin || !destination || isRequesting) ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed opacity-50' : 'bg-gradient-to-br from-indigo-500 via-indigo-600 to-indigo-800 text-white shadow-[0_12px_40px_rgba(79,70,229,0.3)] border-t border-white/10'}`}
+                                        disabled={!origin || !destination || isRequesting || !eligibility.isEligible} 
+                                        className={cn(
+                                            "w-full h-16 rounded-2xl font-bold text-lg transition-all active:scale-[0.98] mt-4",
+                                            (!origin || !destination || isRequesting || !eligibility.isEligible)
+                                                ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed opacity-50' 
+                                                : 'bg-gradient-to-br from-indigo-500 via-indigo-600 to-indigo-800 text-white shadow-[0_12px_40px_rgba(79,70,229,0.3)] border-t border-white/10'
+                                        )}
                                     >
                                         {isRequesting ? <VamoIcon name="loader" className="animate-spin mr-2" /> : null}
-                                        {isRequesting ? 'Procesando...' : 'Pedir Viaje'}
+                                        {isRequesting ? 'Procesando...' : (!eligibility.isEligible ? eligibility.reason : 'Pedir Viaje')}
                                     </Button>
                                 </div>
                             )}

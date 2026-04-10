@@ -16,7 +16,10 @@ import { useToast } from '@/hooks/use-toast';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Loader2 } from 'lucide-react';
+import { Loader2, FileText, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { updateDoc } from 'firebase/firestore';
 
 type DriverProfile = {
   id: string;
@@ -36,6 +39,12 @@ type DriverProfile = {
   driverStatus?: string;
   photoURL?: string;
   vehicleFrontPhotoURL?: string;
+  driverSubtype?: string;
+  requiresManualReview?: boolean;
+  manualReviewStatus?: 'none' | 'pending_docs' | 'docs_submitted' | 'approved' | 'rejected';
+  documentsRequested?: string[];
+  documentsSubmitted?: Record<string, { url: string; uploadedAt: any }>;
+  adminReviewNote?: string;
 };
 
 function formatCurrency(value: number) {
@@ -63,6 +72,20 @@ export default function AdminDriverDetailPage() {
   const [pushTitle, setPushTitle] = useState('');
   const [pushBody, setPushBody] = useState('');
   const [isSendingPush, setIsSendingPush] = useState(false);
+
+  // Manual Review State
+  const [reviewNote, setReviewNote] = useState('');
+  const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
+  const [isUpdatingReview, setIsUpdatingReview] = useState(false);
+
+  const DOC_OPTIONS = [
+    { id: 'dni', label: 'DNI (Frente y Dorso)' },
+    { id: 'licencia', label: 'Licencia de Conducir' },
+    { id: 'cedula', label: 'Cédula del Vehículo' },
+    { id: 'habilitacion', label: 'Habilitación Taxi/Remis' },
+    { id: 'seguro', label: 'Póliza de Seguro' },
+    { id: 'antecedentes', label: 'Certificado Antecedentes' },
+  ];
 
   const driverId = useMemo(() => searchParams.get('id'), [searchParams]);
 
@@ -165,6 +188,50 @@ export default function AdminDriverDetailPage() {
       router.push('/admin/drivers');
     }
   }
+
+  const handleRequestDocs = async () => {
+    if (!firestore || !driverId) return;
+    setIsUpdatingReview(true);
+    try {
+        const userRef = doc(firestore, 'users', driverId);
+        await updateDoc(userRef, {
+            requiresManualReview: true,
+            manualReviewStatus: 'pending_docs',
+            documentsRequested: selectedDocs,
+            adminReviewNote: reviewNote,
+        });
+        toast({ title: 'Solicitud enviada', description: 'El conductor verá el pedido en su perfil.' });
+    } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Error', description: e.message });
+    } finally {
+        setIsUpdatingReview(false);
+    }
+  };
+
+  const toggleManualReview = async (enabled: boolean) => {
+    if (!firestore || !driverId) return;
+    try {
+        const userRef = doc(firestore, 'users', driverId);
+        await updateDoc(userRef, { requiresManualReview: enabled });
+        toast({ title: 'Estado actualizado', description: `Revisión manual ${enabled ? 'activada' : 'desactivada'}.` });
+    } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Error', description: e.message });
+    }
+  };
+
+  const updateManualReviewStatus = async (status: 'approved' | 'rejected') => {
+    if (!firestore || !driverId) return;
+    setIsUpdatingReview(true);
+    try {
+        const userRef = doc(firestore, 'users', driverId);
+        await updateDoc(userRef, { manualReviewStatus: status });
+        toast({ title: 'Estado de revisión actualizado', description: `El conductor ha sido ${status === 'approved' ? 'aprobado' : 'rechazado'} manualment.` });
+    } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Error', description: e.message });
+    } finally {
+        setIsUpdatingReview(false);
+    }
+  };
 
   if (authLoading || isLoading) {
     return <div className="p-6 space-y-6 max-w-5xl mx-auto"><Skeleton className="h-64 w-full rounded-2xl" /><Skeleton className="h-96 w-full rounded-2xl" /></div>;
@@ -338,6 +405,119 @@ export default function AdminDriverDetailPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* MANUAL VERIFICATION & DOCUMENTATION */}
+            <Card className="border-indigo-500/30 bg-indigo-500/5 backdrop-blur-xl">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <div className="space-y-1">
+                        <CardTitle className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Verificación de Documentación Manual</CardTitle>
+                        <CardDescription className="text-[10px]">Especial para conductores de Taxi y Remis.</CardDescription>
+                    </div>
+                    <Switch 
+                        checked={driver.requiresManualReview} 
+                        onCheckedChange={toggleManualReview}
+                    />
+                </CardHeader>
+                <CardContent className="space-y-6 pt-4">
+                    {/* ESTADO ACTUAL */}
+                    <div className="flex items-center gap-4 p-3 bg-black/40 rounded-xl border border-indigo-500/10">
+                        <div className={cn(
+                            "h-10 w-10 rounded-full flex items-center justify-center",
+                            driver.manualReviewStatus === 'approved' ? "bg-green-500/20 text-green-500" :
+                            driver.manualReviewStatus === 'rejected' ? "bg-red-500/20 text-red-500" :
+                            driver.manualReviewStatus === 'docs_submitted' ? "bg-blue-500/20 text-blue-500" :
+                            "bg-zinc-500/20 text-zinc-500"
+                        )}>
+                            {driver.manualReviewStatus === 'approved' ? <CheckCircle2 className="h-5 w-5" /> :
+                             driver.manualReviewStatus === 'rejected' ? <AlertCircle className="h-5 w-5" /> :
+                             driver.manualReviewStatus === 'docs_submitted' ? <Clock className="h-5 w-5" /> :
+                             <FileText className="h-5 w-5" />}
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Estado de Revisión</p>
+                            <p className="text-sm font-bold uppercase tracking-tight">
+                                {driver.manualReviewStatus === 'approved' ? 'Aprobado Manualmente' :
+                                 driver.manualReviewStatus === 'rejected' ? 'Rechazado' :
+                                 driver.manualReviewStatus === 'docs_submitted' ? 'Documentos Enviados (REVISAR)' :
+                                 driver.manualReviewStatus === 'pending_docs' ? 'Esperando Documentos' :
+                                 'Sin Iniciar'}
+                            </p>
+                        </div>
+                        {driver.requiresManualReview && (
+                            <div className="flex gap-2">
+                                <Button size="sm" variant="outline" className="border-green-500 text-green-500 hover:bg-green-500/10 h-8" onClick={() => updateManualReviewStatus('approved')} disabled={isUpdatingReview}>
+                                    Aprobar
+                                </Button>
+                                <Button size="sm" variant="outline" className="border-red-500 text-red-500 hover:bg-red-500/10 h-8" onClick={() => updateManualReviewStatus('rejected')} disabled={isUpdatingReview}>
+                                    Rechazar
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* SOLICITUD DE DOCUMENTOS */}
+                    <div className="space-y-4">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Solicitar Documentos Específicos</Label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {DOC_OPTIONS.map((opt) => (
+                                <div key={opt.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-white/5 transition-colors">
+                                    <Checkbox 
+                                        id={opt.id} 
+                                        checked={selectedDocs.includes(opt.id) || driver.documentsRequested?.includes(opt.id)}
+                                        onCheckedChange={(checked) => {
+                                            if (checked) setSelectedDocs(prev => [...prev, opt.id]);
+                                            else setSelectedDocs(prev => prev.filter(x => x !== opt.id));
+                                        }}
+                                    />
+                                    <label htmlFor={opt.id} className="text-xs font-medium cursor-pointer">{opt.label}</label>
+                                </div>
+                            ))}
+                        </div>
+                        
+                        <div className="space-y-2">
+                             <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nota para el Conductor</Label>
+                             <Input 
+                                placeholder="Ej: Las fotos del carnet están borrosas..." 
+                                value={reviewNote || driver.adminReviewNote || ''} 
+                                onChange={e => setReviewNote(e.target.value)}
+                                className="bg-black/40 border-zinc-800 text-xs"
+                             />
+                        </div>
+
+                        <Button 
+                            onClick={handleRequestDocs} 
+                            disabled={isUpdatingReview}
+                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl h-10 text-[10px] uppercase tracking-widest"
+                        >
+                            {isUpdatingReview ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <FileText className="h-4 w-4 mr-2" />}
+                            Actualizar Solicitud de Docs
+                        </Button>
+                    </div>
+
+                    {/* VISUALIZADOR DE DOCUMENTOS SUBIDOS */}
+                    {(driver.documentsSubmitted && Object.keys(driver.documentsSubmitted).length > 0) && (
+                        <div className="space-y-3 pt-2 border-t border-indigo-500/10">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Documentación Presentada</Label>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                {Object.entries(driver.documentsSubmitted).map(([key, data]) => (
+                                    <div key={key} className="group relative rounded-lg overflow-hidden aspect-square border border-zinc-800 bg-black">
+                                        <img src={data.url} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                                        <div className="absolute inset-x-0 bottom-0 p-2 bg-black/80">
+                                            <p className="text-[8px] font-black uppercase truncate text-indigo-400">{DOC_OPTIONS.find(o => o.id === key)?.label || key}</p>
+                                        </div>
+                                        <button 
+                                            onClick={() => window.open(data.url, '_blank')}
+                                            className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <VamoIcon name="external-link" className="h-5 w-5" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* DANGER ZONE */}
             <div className="p-6 border border-red-950/30 bg-red-950/10 rounded-2xl">

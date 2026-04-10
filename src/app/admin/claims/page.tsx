@@ -202,6 +202,7 @@ export default function AdminClaimsPage() {
                         <thead className="bg-zinc-900/50 border-b border-zinc-800 text-[10px] font-black uppercase tracking-widest text-zinc-500">
                             <tr>
                                 <th className="px-6 py-4">Caso ID</th>
+                                <th className="px-6 py-4">Ciudad</th>
                                 <th className="px-6 py-4">Fecha</th>
                                 <th className="px-6 py-4">Incidente</th>
                                 <th className="px-6 py-4">Estado</th>
@@ -213,6 +214,7 @@ export default function AdminClaimsPage() {
                             {claims.map((claim) => (
                                 <tr key={claim.id} className="hover:bg-white/[0.02] transition-colors">
                                     <td className="px-6 py-4 font-mono font-bold text-emerald-500">{claim.caseId}</td>
+                                    <td className="px-6 py-4 uppercase text-[10px] font-bold text-zinc-500 tracking-tight">{claim.cityKey || 'Global'}</td>
                                     <td className="px-6 py-4 text-zinc-400">
                                         {claim.createdAt && new Date((claim.createdAt as any).seconds * 1000).toLocaleDateString('es-AR')}
                                     </td>
@@ -287,13 +289,27 @@ export default function AdminClaimsPage() {
                                     <p className="text-sm text-zinc-300 leading-relaxed italic">"{selectedClaim.description}"</p>
                                 </div>
 
+                                {selectedClaim.evidenceUrls && selectedClaim.evidenceUrls.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] text-zinc-500 uppercase font-black">Evidencia (Fotos)</Label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {selectedClaim.evidenceUrls.map((url, i) => (
+                                                <a key={i} href={url} target="_blank" rel="noreferrer" className="aspect-square rounded-lg overflow-hidden border border-zinc-800 hover:border-emerald-500/50 transition-colors">
+                                                    <img src={url} alt="Evidencia" className="object-cover w-full h-full" />
+                                                </a>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="space-y-2">
                                     <Label className="text-[10px] text-zinc-500 uppercase font-black">Detalles del Viaje (Snapshot)</Label>
-                                    <div className="bg-black/40 border border-zinc-800 rounded-xl p-4 grid grid-cols-2 gap-4 text-xs">
-                                        <div><span className="text-zinc-500">Origen:</span> {selectedClaim.rideSnapshot.origin}</div>
-                                        <div><span className="text-zinc-500">Destino:</span> {selectedClaim.rideSnapshot.destination}</div>
-                                        <div><span className="text-zinc-500">Tarifa:</span> {formatMoney(selectedClaim.rideSnapshot.totalFare)}</div>
-                                        <div><span className="text-zinc-500">Servicio:</span> {selectedClaim.rideSnapshot.driverSubtype.toUpperCase()}</div>
+                                    <div className="bg-black/40 border border-zinc-800 rounded-xl p-4 grid grid-cols-2 gap-4 text-xs text-zinc-300">
+                                        <div><span className="text-zinc-500 uppercase font-bold text-[9px] block">Origen</span> {selectedClaim.rideSnapshot.origin}</div>
+                                        <div><span className="text-zinc-500 uppercase font-bold text-[9px] block">Destino</span> {selectedClaim.rideSnapshot.destination}</div>
+                                        <div><span className="text-zinc-500 uppercase font-bold text-[9px] block">Pasajero Pays</span> {formatMoney(selectedClaim.rideSnapshot.totalFare)}</div>
+                                        <div><span className="text-zinc-500 uppercase font-bold text-[9px] block">Categoría</span> {selectedClaim.rideSnapshot.driverSubtype.toUpperCase()} ({selectedClaim.rideSnapshot.serviceType || 'NORMAL'})</div>
+                                        <div><span className="text-zinc-500 uppercase font-bold text-[9px] block">Ciudad</span> {selectedClaim.rideSnapshot.city || selectedClaim.cityKey}</div>
                                     </div>
                                 </div>
 

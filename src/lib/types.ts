@@ -52,52 +52,11 @@ export type AssistanceCaseStatus =
 
 export type AssistanceLevel = "T1" | "T2" | "T3" | "T4" | "T5";
 
+/**
+ * @deprecated Use FapClaim instead
+ */
 export interface AssistanceCase {
-    id?: string;
-    caseId: string; // FAP-2026-000001
-    rideId: string;
-    passengerId: string;
-    driverId: string;
-    city: string;
-    
-    status: AssistanceCaseStatus;
-    level: AssistanceLevel | null;
-    
-    // Financials
-    requestedAmount: number;
-    approvedAmount: number;
-    currency: "ARS";
-    
-    // Incident Info
-    incidentType: string;
-    incidentDescription: string;
-    evidence: string[]; // Links or Storage paths
-    
-    // Timeline
-    submittedAt: FirestoreTimestamp | FirestoreFieldValue;
-    reviewedAt?: FirestoreTimestamp | FirestoreFieldValue;
-    resolvedAt?: FirestoreTimestamp | FirestoreFieldValue;
-    paidAt?: FirestoreTimestamp | FirestoreFieldValue;
-    createdAt: FirestoreTimestamp | FirestoreFieldValue;
-    updatedAt: FirestoreTimestamp | FirestoreFieldValue;
-    
-    // Administration
-    adminNotes?: string;
-    rejectionReason?: string;
-    resolvedBy?: string; // Admin UID
-    
-    // Inmutable Snapshots (Auditoria)
-    rideSnapshot: {
-        completedAt: FirestoreTimestamp | FirestoreFieldValue;
-        serviceType: ServiceType;
-        driverSubtype: string;
-        origin: Place;
-        destination: Place;
-        totalFare: number;
-        assistanceFeeApplied: number;
-    };
-    
-    fraudFlags?: string[];
+    // ... logic remains for backward compatibility if needed, but FapClaim is the new standard
 }
 
 
@@ -171,16 +130,6 @@ export interface TrackingStats {
     distanceSource: string;
 }
 
-export interface PricingConfig {
-  version: number;
-  DAY_BASE_FARE: number;
-  DAY_PRICE_PER_100M: number;
-  DAY_WAITING_PER_MIN: number;
-  NIGHT_BASE_FARE: number;
-  NIGHT_PRICE_PER_100M: number;
-  NIGHT_WAITING_PER_MIN: number;
-}
-
 export interface CompletedRide {
     pricingVersion: number;
     calculationSource: string;
@@ -249,6 +198,7 @@ export interface Ride {
   // --- GEOGRAFÍA ---
   origin: Place;
   destination: Place;
+  cityKey?: string;
 
   // --- CANCELACIÓN ---
   cancelReason?: string | null;
@@ -281,6 +231,7 @@ export interface Ride {
   driverPlate?: string | null;
   driverVehiclePhoto?: string | null;
   driverPhotoUrl?: string | null;
+  passengerPhotoUrl?: string | null;
 
   // --- PRICING ---
   pricing?: {
@@ -426,6 +377,16 @@ export type UserProfile = {
     blockedUntil?: FirestoreTimestamp | null;
     emergencyContacts?: EmergencyContact[];
     
+    // --- CONDUCTOR (Manual Review) ---
+    requiresManualReview?: boolean;
+    manualReviewStatus?: 'none' | 'pending_docs' | 'docs_submitted' | 'approved' | 'rejected';
+    documentsRequested?: string[]; // IDs de documentos solicitados
+    documentsSubmitted?: Record<string, {
+        url: string;
+        uploadedAt: any;
+    }>;
+    adminReviewNote?: string;
+
     // --- PASAJERO (VamO PRO Unlock System) ---
     passengerProgress?: {
         level: number;
@@ -460,6 +421,8 @@ export type UserProfile = {
     licenseVerified?: boolean;
     vehicleVerificationStatus?: VerificationStatus;
     vehicleFrontPhotoURL?: string | null;
+    /** @deprecated Use vehicleFrontPhotoURL */
+    vehicleFrontPhotoUrl?: string | null;
     serviceTier?: 'premium' | 'express';
     servicesOffered?: {
         normal: boolean;
@@ -514,7 +477,8 @@ export type UserProfile = {
 
     // --- LEGAL & T&C (Centralizado) ---
     termsAccepted?: boolean;
-    termsAcceptedAt?: any;
+    acceptedDriverTerms?: boolean; // VamO PRO
+    acceptedTermsAt?: any;
     termsVersion?: string;
 };
 
@@ -548,6 +512,7 @@ export interface RideOffer {
     serviceType: ServiceType;
     estimatedTotal: number;
     passengerName: string;
+    cityKey?: string;
     
     // Express / Promo metadata (VamO PRO)
     isDiscountApplied?: boolean;
@@ -739,9 +704,6 @@ export interface Referral {
  *
  * Transiciones válidas:
  *   pending_municipal_review → municipal_observed | municipal_approved | rejected_by_municipality
- *   municipal_observed       → pending_municipal_review | rejected_by_municipality
- *   municipal_approved       → active | suspended_expired_license | suspended_expired_insurance
- *                              | suspended_unpaid_canon | suspended_by_municipality
  *   active                   → renewal_under_review | suspended_* | rejected_by_municipality
  *   renewal_under_review     → active | municipal_observed
  *   suspended_*              → active (cuando la muni resuelve el problema)
@@ -805,6 +767,14 @@ export interface MunicipalProfile {
     driverId: string;                          // uid del conductor (FK a users)
     driverName?: string;                       // denormalizado para listados rápidos
     driverEmail?: string;                      // denormalizado
+    driverPhone?: string;                      // denormalizado
+    photoURL?: string;                         // Nueva fuente de verdad
+    vehicleFrontPhotoURL?: string;             // Nueva fuente de verdad
+    /** @deprecated Use photoURL */
+    profilePhotoUrl?: string;                  // denormalizado del usuario
+    /** @deprecated Use vehicleFrontPhotoURL */
+    vehicleFrontPhotoUrl?: string;             // denormalizado del usuario
+    acceptedTerms?: boolean;                    // denormalizado del usuario
     chatSummary?: string;
     
     // ── Localidad ──────────────────────────────────────────────────────────
@@ -944,6 +914,41 @@ export function buildMunicipalCode(cityKey: string, sequence: number): string {
     return `${prefix}-EXP-${seq}`;
 }
 
+export type CityStatus = "invited" | "onboarding" | "active" | "suspended";
+
+export interface RewardsConfig {
+    weeklyPoolAmount: number;
+    basePoolAmount?: number;
+    minPointsToQualify: number;
+}
+
+export interface City {
+    id?: string; 
+    cityKey: string;
+    name: string;
+    province: string;
+    country: string;
+
+    status: CityStatus;
+
+    invitedBy: string;
+    invitedAt: any;
+
+    adminEmail?: string;
+    adminUserId?: string;
+
+    config: {
+        pricingModel?: string;
+        fapEnabled: boolean;
+        broadcastEnabled: boolean;
+        pricing?: PricingConfig;
+        rewardsConfig?: RewardsConfig;
+    };
+
+    createdAt: any;
+    updatedAt?: any;
+}
+
 export interface PricingConfig {
   version: number;
   DAY_BASE_FARE: number;
@@ -952,6 +957,7 @@ export interface PricingConfig {
   NIGHT_BASE_FARE: number;
   NIGHT_PRICE_PER_100M: number;
   NIGHT_WAITING_PER_MIN: number;
+  MINIMUM_FARE: number;
   PLATFORM_COMMISSION_RATE: number;
   /** [Vamo PRO v1.2] Aporte al Fondo de Asistencia al Pasajero (Solo Express) */
   ASSISTANCE_FEE: number;
@@ -997,6 +1003,7 @@ export interface FapClaim {
     rideId: string;
     passengerId: string;
     driverId: string;
+    cityKey: string; // [VamO PRO v1.4] Obligatorio para filtros admin
     
     status: FapStatus;
     type: FapType;
@@ -1014,12 +1021,15 @@ export interface FapClaim {
         totalFare: number;
         completedAt: FirestoreTimestamp;
         driverSubtype: string;
-        city?: string;
+        city?: string; // Nombre legible
+        cityKey?: string;
+        serviceType?: string;
     };
     
     createdAt: FirestoreTimestamp;
     updatedAt: FirestoreTimestamp;
     resolvedAt?: FirestoreTimestamp;
     paidAt?: FirestoreTimestamp;
+    resolvedBy?: string; // Admin UID
     paymentTxId?: string;
 }

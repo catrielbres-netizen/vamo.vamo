@@ -15,8 +15,11 @@ export const canPassengerRequestRide = (profile: UserProfile | null | undefined,
   if (profile.isSuspended) return { isEligible: false, reason: "La cuenta está suspendida", code: "SUSPENDED" };
   if (!profile.profileCompleted) return { isEligible: false, reason: "Debés completar tu perfil", code: "PROFILE_INCOMPLETE" };
 
-  // T&C Check
-  if (!profile.termsAccepted || profile.termsVersion !== CURRENT_TERMS_VERSION) {
+  // T&C Check (Centralized Version)
+  const hasAccepted = profile.termsAccepted || profile.acceptedDriverTerms;
+  const isCorrectVersion = profile.termsVersion === CURRENT_TERMS_VERSION;
+
+  if (!hasAccepted || !isCorrectVersion) {
     return { isEligible: false, reason: "Aceptación de términos requerida", code: "TERMS_NOT_ACCEPTED" };
   }
   
@@ -48,48 +51,53 @@ export const canDriverGoOnline = (profile: UserProfile | null | undefined, isEma
   if (profile.isSuspended) return { isEligible: false, reason: "Tu cuenta está suspendida", code: "SUSPENDED" };
 
   // ── VamoMuni: conductores express requieren habilitación municipal ─────────
-  // El ÚNICO estado que permite operar es "active".
-  // "municipal_approved" es un estado INTERMEDIO (documentación en trámite) y NO habilita operación.
   if (profile.driverSubtype === 'express') {
     const ms = profile.municipalStatus;
     if (!ms || ms !== 'active') {
       const messages: Partial<Record<string, string>> = {
-        pending_municipal_review:    "Pendiente de aprobación municipal. Presentá tu documentación en la municipalidad.",
-        municipal_observed:          "Tu habilitación tiene observaciones. Revisá las indicaciones de la municipalidad.",
-        municipal_approved:          "Tu habilitación está en proceso. La municipalidad está verificando tu documentación.",
+        pending_municipal_review:    "Pendiente de aprobación municipal. Pasá por la municipalidad para activar tu cuenta.",
+        municipal_observed:          "Tu habilitación tiene observaciones que requieren tu atención.",
+        municipal_approved:          "Tu habilitación está aprobada. Se activará cuando tu documentación esté vigente.",
         renewal_under_review:        "Tu renovación de documentos está siendo revisada por la municipalidad.",
-        suspended_expired_license:   "Licencia vencida: no podés operar hasta que la municipalidad apruebe la renovación.",
-        suspended_expired_insurance: "Seguro vencido: no podés operar hasta que la municipalidad apruebe la renovación.",
-        suspended_unpaid_canon:      "Canon municipal impago: regularizá el pago en tu municipalidad para volver a operar.",
-        suspended_by_municipality:   "Tu habilitación fue suspendida por la municipalidad. Contactalos para más información.",
-        rejected_by_municipality:    "Tu solicitud de habilitación fue rechazada por la municipalidad.",
+        suspended_expired_license:   "Licencia vencida: no podés operar hasta renovarla en la municipalidad.",
+        suspended_expired_insurance: "Seguro vencido: no podés operar hasta renovarlo en la municipalidad.",
+        suspended_unpaid_canon:      "Canon municipal impago: regularizá el pago para volver a operar.",
+        suspended_by_municipality:   "Tu habilitación fue suspendida por la municipalidad.",
+        rejected_by_municipality:    "Tu solicitud de habilitación fue rechazada definitivamente.",
       };
       const reason = messages[ms ?? ''] ?? "Habilitación municipal requerida para operar.";
       return { isEligible: false, reason, code: "MUNICIPAL_BLOCKED" };
     }
   }
 
-  if (!profile.approved) return { isEligible: false, reason: "Tu cuenta está pendiente de aprobación", code: "NOT_APPROVED" };
-  if (!profile.profileCompleted) return { isEligible: false, reason: "Debés completar tu perfil", code: "PROFILE_INCOMPLETE" };
+  if (!profile.approved) return { isEligible: false, reason: "Tu cuenta está pendiente de aprobación inicial", code: "NOT_APPROVED" };
+  if (!profile.profileCompleted) return { isEligible: false, reason: "Debés completar tu perfil (fotos y datos)", code: "PROFILE_INCOMPLETE" };
 
-  // T&C Check
-  if (!profile.termsAccepted || profile.termsVersion !== CURRENT_TERMS_VERSION) {
-    return { isEligible: false, reason: "Aceptación de términos requerida", code: "TERMS_NOT_ACCEPTED" };
+  // MANDATORY LEGAL CHECK (Unified Flags + Centralized Version)
+  const hasAccepted = profile.termsAccepted || profile.acceptedDriverTerms;
+  const isCorrectVersion = profile.termsVersion === CURRENT_TERMS_VERSION;
+
+  if (!hasAccepted || !isCorrectVersion) {
+      return { 
+          isEligible: false, 
+          reason: `Debés aceptar los términos y condiciones actualizados (${CURRENT_TERMS_VERSION})`, 
+          code: "TERMS_NOT_ACCEPTED" 
+      };
   }
 
   if (!profile.phone || profile.phone.trim() === "") {
-    return { isEligible: false, reason: "Debés agregar un teléfono a tu perfil", code: "MISSING_PHONE" };
+    return { isEligible: false, reason: "Debés agregar un teléfono de contacto", code: "MISSING_PHONE" };
   }
 
-  const isDemoUser = profile.email?.includes('demo_') && profile.email?.endsWith('@vamo.com');
+  const isDemoUser = profile.email?.includes('demo_') || profile.email?.endsWith('@demo.com');
   const verified = isEmailVerified !== undefined ? isEmailVerified : profile.emailVerified;
   if (verified === false && !isDemoUser) {
-    return { isEligible: false, reason: "Debés verificar tu cuenta de email", code: "UNVERIFIED_EMAIL" };
+    return { isEligible: false, reason: "Debés verificar tu cuenta para operar", code: "UNVERIFIED_EMAIL" };
   }
 
   const balance = profile.currentBalance ?? 0;
   if (balance < MIN_BALANCE_ARS) {
-    return { isEligible: false, reason: "Tu saldo en billetera VamO es negativo. Recargá para seguir recibiendo viajes.", code: "LOW_BALANCE" };
+    return { isEligible: false, reason: "Tu saldo es negativo. Recargá crédito para recibir viajes.", code: "LOW_BALANCE" };
   }
 
   return { isEligible: true };
@@ -120,4 +128,31 @@ export const canDriverReceiveOffers = (profile: UserProfile | null | undefined, 
   }
 
   return { isEligible: true };
+};
+
+/**
+ * [VamO PRO] Determina si un conductor ha completado el alta mínima y está
+ * listo para ser revisado y aprobado por un administrador.
+ */
+export const isDriverReadyForReview = (profile: any): boolean => {
+  if (!profile) return false;
+  // Si tiene role, debe ser driver. Si no lo tiene (ej. MunicipalProfile), asumimos que es conductor.
+  if (profile.role && profile.role !== 'driver') return false;
+  
+  if (profile.approved === true) return false;
+  
+  // En MunicipalProfile el campo es municipalStatus. 
+  // Si está aprobado municipalmente, tampoco es "pendiente".
+  if (profile.municipalStatus === 'active') return false; 
+  if (profile.isSuspended === true) return false;
+  
+  // Alta mínima requerida para aparecer en "Pendientes":
+  // Unificamos a photoURL y vehicleFrontPhotoURL
+  const hasProfilePhoto  = !!(profile.photoURL || profile.profilePhotoUrl);
+  const hasVehiclePhoto  = !!(profile.vehicleFrontPhotoURL || profile.vehicleFrontPhotoUrl);
+  
+  // Backward compatibility check for review
+  const hasAcceptedTerms = profile.termsAccepted === true || profile.acceptedDriverTerms === true || !!profile.termsAcceptedAt;
+  
+  return hasProfilePhoto && hasVehiclePhoto && hasAcceptedTerms;
 };

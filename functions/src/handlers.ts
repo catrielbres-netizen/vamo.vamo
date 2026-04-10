@@ -11,7 +11,8 @@ import * as logger from "firebase-functions/logger";
 import { canDriverTakeRide } from "./eligibility";
 import { UserProfile, Ride, DriverLevel, ServiceType, RideStatus, CompletedRide, PricingConfig, WithdrawalRequest, WithId, RideOffer, DriverPoints } from "./types";
 import { getDb } from "./lib/firebaseAdmin";
-import { normalizeCityKey } from "./lib/city";
+import { normalizeCityKey, normalizeCity } from "./lib/city";
+import { City, CityStatus } from "./types";
 // --- NOTIFICATION HELPER ---
 export const sendNotification = async (userId: string, title: string, body: string, link: string = '/', additionalData: { [key: string]: any } = {}) => {
     const db = getDb();
@@ -38,13 +39,13 @@ export const sendNotification = async (userId: string, title: string, body: stri
         const message = {
             token: fcmToken,
             data: {
-              title,
-              body,
-              link,
-              ...processedData
+                title,
+                body,
+                link,
+                ...processedData
             },
         };
-        
+
         try {
             await admin.messaging().send(message);
             logger.info(`Successfully sent data-only notification to user ${userId}.`);
@@ -88,8 +89,8 @@ function haversineDistance(coords1: { lat: number; lng: number; }, coords2: { la
     const lat2 = toRad(coords2.lat);
 
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1) * Math.cos(lat2) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        Math.cos(lat1) * Math.cos(lat2) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 }
@@ -97,58 +98,72 @@ function haversineDistance(coords1: { lat: number; lng: number; }, coords2: { la
 
 // --- PRICING & COMMISSION LOGIC (PURE FUNCTIONS) ---
 
-async function getPricingConfig(): Promise<PricingConfig> {
-  const db = getDb();
-  const defaultConfig: PricingConfig = {
-    version: 1,
-    DAY_BASE_FARE: 1400,
-    DAY_PRICE_PER_100M: 152,
-    DAY_WAITING_PER_MIN: 220,
-    NIGHT_BASE_FARE: 1652,
-    NIGHT_PRICE_PER_100M: 189,
-    NIGHT_WAITING_PER_MIN: 277,
-  };
+async function getPricingConfig(cityKey?: string): Promise<PricingConfig> {
+    const db = getDb();
+    const defaultConfig: PricingConfig = {
+        version: 1,
+        DAY_BASE_FARE: 1400,
+        DAY_PRICE_PER_100M: 152,
+        DAY_WAITING_PER_MIN: 220,
+        NIGHT_BASE_FARE: 1652,
+        NIGHT_PRICE_PER_100M: 189,
+        NIGHT_WAITING_PER_MIN: 277,
+    };
 
-  try {
-    const configSnap = await db.doc('config/pricing').get();
-    if (configSnap.exists) {
-      logger.info("Using dynamic pricing config from Firestore.");
-      return configSnap.data() as PricingConfig;
+    try {
+        if (cityKey) {
+            const citySnap = await db.doc(`cities/${cityKey}`).get();
+            const cityPricing = (citySnap.data() as any)?.pricing;
+            if (cityPricing) {
+                logger.info(`Using city-specific pricing for ${cityKey}`);
+                return cityPricing as PricingConfig;
+            }
+        }
+
+        const configSnap = await db.doc('config/pricing').get();
+        if (configSnap.exists) {
+            logger.info("Using dynamic pricing config from Firestore.");
+            return configSnap.data() as PricingConfig;
+        }
+
+        if (cityKey === 'rawson' || !cityKey) {
+            logger.warn("Pricing config not found. Using default hardcoded values.");
+            return defaultConfig;
+        }
+
+        throw new Error(`Pricing config UNREACHABLE for city: ${cityKey}. No silent fallback allowed.`);
+    } catch (error: any) {
+        logger.error("Error fetching pricing config:", error);
+        throw error;
     }
-    logger.warn("Pricing config not found in Firestore (config/pricing). Using default hardcoded values. You can create this document to enable dynamic pricing.");
-    return defaultConfig;
-  } catch (error) {
-    logger.error("Error fetching pricing config, falling back to defaults.", error);
-    return defaultConfig;
-  }
 }
 
 function calculatePointsAwarded(
-  driverProfile: UserProfile,
-  rideData: Ride
+    driverProfile: UserProfile,
+    rideData: Ride
 ): number {
-  const ridesCompleted = driverProfile.stats?.ridesCompleted ?? 0;
+    const ridesCompleted = driverProfile.stats?.ridesCompleted ?? 0;
 
-  const PROMO_RIDE_THRESHOLD = 10;
-  if (ridesCompleted < PROMO_RIDE_THRESHOLD) return 0;
+    const PROMO_RIDE_THRESHOLD = 10;
+    if (ridesCompleted < PROMO_RIDE_THRESHOLD) return 0;
 
-  let basePoints = 0;
-  if (rideData.serviceType === "express") basePoints = 3;
-  if (rideData.serviceType === "premium") basePoints = 1;
+    let basePoints = 0;
+    if (rideData.serviceType === "express") basePoints = 3;
+    if (rideData.serviceType === "premium") basePoints = 1;
 
-  return basePoints;
+    return basePoints;
 }
 
 function getDriverLevel(points: number): DriverLevel {
-  if (points >= 100) return "oro";
-  if (points >= 50) return "plata";
-  return "bronce";
+    if (points >= 100) return "oro";
+    if (points >= 50) return "plata";
+    return "bronce";
 }
 
 
 function calculateSettlement(rideData: Ride, driverData: UserProfile, trackingPoints: admin.firestore.DocumentData[], pricing: PricingConfig) {
     const isNight = false; // TODO: Implement night-time logic based on completedAt
-    
+
     const completedAt = rideData.completedAt as admin.firestore.Timestamp | null;
     const startedAt = rideData.startedAt as admin.firestore.Timestamp | null;
 
@@ -162,7 +177,7 @@ function calculateSettlement(rideData: Ride, driverData: UserProfile, trackingPo
     let distanceMeters = 0;
     let calculationSource = "backend_v2_haversine_direct"; // Default fallback
     const trackingStats: CompletedRide['trackingStats'] = { totalPoints: 0, validSegments: 0, discardedSegments: 0, maxSpeedDetected: 0, distanceSource: calculationSource };
-    
+
     if (trackingPoints && trackingPoints.length > 1) {
         trackingStats.totalPoints = trackingPoints.length;
 
@@ -175,8 +190,8 @@ function calculateSettlement(rideData: Ride, driverData: UserProfile, trackingPo
             const prevPoint = prevPointData as TrackingPoint;
 
             if (completedAt && point.timestamp.toMillis() > completedAt.toMillis()) {
-                 trackingStats.discardedSegments++;
-                 return totalDistance;
+                trackingStats.discardedSegments++;
+                return totalDistance;
             }
 
             const pointTimestamp = point.timestamp.toMillis();
@@ -187,22 +202,22 @@ function calculateSettlement(rideData: Ride, driverData: UserProfile, trackingPo
 
             if (timeDiffSeconds <= 0) {
                 trackingStats.discardedSegments++;
-                return totalDistance; 
+                return totalDistance;
             }
 
             const speedKph = (segmentDist / timeDiffSeconds) * 3.6;
-            if(speedKph > trackingStats.maxSpeedDetected) trackingStats.maxSpeedDetected = speedKph;
+            if (speedKph > trackingStats.maxSpeedDetected) trackingStats.maxSpeedDetected = speedKph;
 
             if (speedKph > 160) {
                 trackingStats.discardedSegments++;
-                return totalDistance; 
+                return totalDistance;
             }
             if (segmentDist < 3) {
                 trackingStats.discardedSegments++;
                 return totalDistance;
             }
             if ((point.accuracy || 0) > 50) {
-                 trackingStats.discardedSegments++;
+                trackingStats.discardedSegments++;
                 return totalDistance;
             }
 
@@ -223,7 +238,7 @@ function calculateSettlement(rideData: Ride, driverData: UserProfile, trackingPo
     const distanceFare = Math.ceil(distanceMeters / 100) * pricePer100m;
     const waitingFare = Math.ceil(waitingSeconds / 60) * waitingPerMin;
     const subtotal = baseFare + distanceFare + waitingFare;
-    
+
     let serviceAdjustedSubtotal = subtotal;
     if (rideData.serviceType === 'express') {
         serviceAdjustedSubtotal *= 0.90; // 10% discount for Express
@@ -232,8 +247,17 @@ function calculateSettlement(rideData: Ride, driverData: UserProfile, trackingPo
     const totalFare = Math.ceil(serviceAdjustedSubtotal / 50) * 50;
 
     // D. Commission Calculation (SIMPLIFIED)
+    // We calculate commission BEFORE adding the F.A.P. fee to be fair to the driver.
     const finalCommissionRate = 0.08; // Flat 8% commission for all rides.
     const commissionAmount = totalFare * finalCommissionRate;
+
+    // --- BLOQUE 6: F.A.P. FEE (+400 for Express) ---
+    let finalTotalFare = totalFare;
+    let fapFee = 0;
+    if (rideData.serviceType === 'express') {
+        finalTotalFare += 400;
+        fapFee = 400;
+    }
 
     const settlement: Omit<CompletedRide, 'calculatedAt' | 'pointsAwarded'> = {
         pricingVersion: pricing.version,
@@ -244,8 +268,9 @@ function calculateSettlement(rideData: Ride, driverData: UserProfile, trackingPo
         baseFare,
         distanceFare,
         waitingFare,
-        totalFare,
-        baseCommissionRate: finalCommissionRate, // base and final are now the same
+        totalFare: finalTotalFare,
+        fapFee,
+        baseCommissionRate: finalCommissionRate,
         finalCommissionRate,
         commissionAmount,
         trackingStats,
@@ -263,7 +288,7 @@ export const createPaymentPreferenceV4 = onCall(
         try {
             const { amount } = request.data;
             if (typeof amount !== 'number' || amount < 500) {
-                 throw new HttpsError('invalid-argument', 'El monto debe ser un número mayor a $500.');
+                throw new HttpsError('invalid-argument', 'El monto debe ser un número mayor a $500.');
             }
 
             const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
@@ -307,11 +332,11 @@ export const createPaymentPreferenceV4 = onCall(
                 notification_url: notificationUrl,
                 binary_mode: true,
             };
-            
+
             logger.log("--- CREATING MERCADOPAGO PREFERENCE (CALLABLE) ---");
             logger.log("Driver ID:", driverId);
             logger.log("Amount:", amount);
-            
+
             const preferenceClient = new Preference(serverMpClient);
             const response = await preferenceClient.create({ body: preferenceRequest });
 
@@ -334,10 +359,10 @@ export const createPaymentPreferenceV4 = onCall(
 );
 
 
-export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {rideId: string}>) => {
+export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, { rideId: string }>) => {
     const db = getDb();
     const rideId = event.params.rideId;
-    
+
     if (!event.data) {
         logger.info(`onRideSettlementV6 for ${rideId}: no event data found.`);
         return;
@@ -380,8 +405,14 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
     try {
         const trackingSnapshot = await rideRef.collection('tracking').orderBy('timestamp', 'asc').get();
         const trackingPoints = trackingSnapshot.docs.map(doc => doc.data());
-        
-        const pricingConfig = await getPricingConfig();
+
+        const cityKey = after.cityKey;
+        if (!cityKey) {
+            logger.error(`Ride ${rideId} missing cityKey. Settlement ABORTED.`);
+            return;
+        }
+
+        const pricingConfig = await getPricingConfig(cityKey);
 
         await db.runTransaction(async (tx) => {
             const driverSnap = await tx.get(driverRef);
@@ -400,7 +431,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
 
             const driverData = driverSnap.data() as UserProfile;
             if (!driverData) throw new Error(`Driver data for ${driverId} is missing.`);
-            
+
             const previousBalance = driverData.currentBalance || 0;
 
             const settlementData = calculateSettlement(rideData, driverData, trackingPoints, pricingConfig);
@@ -428,22 +459,44 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 note: `Comisión por viaje a ${rideData.destination.address}`,
                 previousBalance: previousBalance,
                 newBalance: newBalance,
+                cityKey: cityKey,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 systemVersion: 'v5_simple_commission',
             });
+
+            // --- BLOQUE 6: F.A.P. ASSISTANCE CONTRIBUTION ---
+            if (rideData.serviceType === 'express') {
+                const fapTransactionRef = db.collection('platform_transactions').doc();
+                const fapAmount = 400;
+                tx.set(fapTransactionRef, {
+                    rideId,
+                    driverId,
+                    passengerId,
+                    amount: -fapAmount,
+                    type: 'assistance_contribution',
+                    reason: 'assistance_contribution',
+                    note: 'Aporte al Fondo de Asistencia VamO (F.A.P.) por viaje Express',
+                    previousBalance: newBalance,
+                    newBalance: newBalance - fapAmount,
+                    cityKey: cityKey,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    systemVersion: 'v5_fap_integration',
+                });
+                tx.update(driverRef, { currentBalance: newBalance - fapAmount });
+            }
 
             // --- REWARD POINTS & LEVEL UP LOGIC ---
             const currentPoints = driverData.rewardPoints || 0;
             const newPoints = currentPoints + pointsAwarded;
             const newLevel = getDriverLevel(newPoints);
-            
+
             const now = admin.firestore.FieldValue.serverTimestamp();
 
             tx.update(driverRef, {
                 activeRideId: null, // CLEAR ACTIVE RIDE
                 currentBalance: newBalance,
                 'stats.ridesCompleted': admin.firestore.FieldValue.increment(1),
-                driverStatus: 'inactive', 
+                driverStatus: 'inactive',
                 updatedAt: now,
                 lastRideCompletedAt: now,
                 rewardPoints: newPoints,
@@ -454,7 +507,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 activeRideId: null, // CLEAR ACTIVE RIDE
                 updatedAt: now,
             });
-            
+
             tx.update(driverLocationRef, {
                 driverStatus: 'inactive',
                 updatedAt: now,
@@ -596,9 +649,9 @@ export const mercadoPagoWebhookV4 = onRequest({ secrets: ["MERCADOPAGO_WEBHOOK_S
             }
             logger.info(`Firma de Webhook para pago ${paymentId} validada correctamente.`);
         } catch (e: any) {
-             logger.error("Error catastrófico validando la firma del webhook:", e.message);
-             res.status(403).send("Invalid signature on processing.");
-             return;
+            logger.error("Error catastrófico validando la firma del webhook:", e.message);
+            res.status(403).send("Invalid signature on processing.");
+            return;
         }
     } else {
         logger.warn(`No signature found for payment ${paymentId}. Proceeding without validation. Consider enabling signatures in MercadoPago.`);
@@ -650,7 +703,7 @@ export const mercadoPagoWebhookV4 = onRequest({ secrets: ["MERCADOPAGO_WEBHOOK_S
             const txDoc = await tx.get(transactionRef);
             if (txDoc.exists) {
                 logger.warn(`[Step 3/4 SKIPPED] Idempotency check failed. Transaction mp_${paymentId} already processed.`);
-                return; 
+                return;
             }
 
             const driverDoc = await tx.get(driverRef);
@@ -701,96 +754,106 @@ export const mercadoPagoWebhookV4 = onRequest({ secrets: ["MERCADOPAGO_WEBHOOK_S
 export const distributeWeeklyPoolV5 = onSchedule({
     schedule: "every monday 03:00",
     timeZone: "America/Argentina/Buenos_Aires"
-  },
-  async (event: ScheduledEvent) => {
-    const db = getDb();
-    logger.log("V5: Iniciando distribución y reseteo del pozo semanal.");
-    
-    const rewardsRef = db.doc("rewards/rewards");
-    const configSnap = await rewardsRef.get();
-    const config = configSnap.data();
+},
+    async (event: ScheduledEvent) => {
+        const db = getDb();
+        logger.log("V5: Iniciando distribución multiciudad del pozo semanal.");
 
-    const currentPoolAmount = config?.weeklyPoolAmount ?? 0;
-    const basePoolAmount = 2000;
-    const minPointsToQualify = config?.minPointsToQualify ?? 20;
+        // 1. Obtener todas las ciudades activas
+        const citiesSnap = await db.collection("cities").where("enabled", "==", true).get();
 
-    logger.log(`Pozo actual: ${currentPoolAmount}. Puntos para calificar: ${minPointsToQualify}. Pozo base para la próxima semana: ${basePoolAmount}.`);
+        if (citiesSnap.empty) {
+            logger.warn("No hay ciudades activas para procesar pozo semanal.");
+            return;
+        }
 
-    // Simplified query to include all approved drivers
-    const driversSnap = await db.collection("users")
-      .where("role", "==", "driver")
-      .where("approved", "==", true)
-      .get();
-      
-    if (driversSnap.empty) {
-      logger.log("No hay conductores, reseteando pozo y omitiendo distribución.");
-      await rewardsRef.update({ weeklyPoolAmount: basePoolAmount });
-      return;
-    }
+        for (const cityDoc of citiesSnap.docs) {
+            const cityKey = cityDoc.id;
+            const cityData = cityDoc.data();
 
-    const eligibleDrivers: { id: string; points: number }[] = [];
-    const driversToReset: admin.firestore.DocumentReference[] = [];
+            // Configuración de pozo por ciudad (prioriza config de la ciudad, fallback a global solo para Rawson o por compatibilidad inicial)
+            const rewardsConfig = cityData.rewardsConfig || {};
+            const currentPoolAmount = rewardsConfig.weeklyPoolAmount ?? 0;
+            const basePoolAmount = rewardsConfig.basePoolAmount ?? 2000;
+            const minPointsToQualify = rewardsConfig.minPointsToQualify ?? 20;
 
-    for (const docSnap of driversSnap.docs) {
-      const pointsSnap = await db.collection("driver_points").doc(docSnap.id).get();
-      const weeklyPoints = pointsSnap.data()?.weeklyPoints ?? 0;
+            logger.log(`Procesando Ciudad: ${cityKey}. Pozo: ${currentPoolAmount}. Califica con: ${minPointsToQualify} pts.`);
 
-      if (weeklyPoints > 0) {
-          driversToReset.push(pointsSnap.ref);
-          if (weeklyPoints >= minPointsToQualify) {
-              eligibleDrivers.push({ id: docSnap.id, points: weeklyPoints });
-          }
-      }
-    }
+            // 2. Buscar conductores de ESTA ciudad
+            const driversSnap = await db.collection("users")
+                .where("role", "==", "driver")
+                .where("cityKey", "==", cityKey)
+                .where("approved", "==", true)
+                .get();
 
-    const totalEligiblePoints = eligibleDrivers.reduce((sum, d) => sum + d.points, 0);
+            if (driversSnap.empty) {
+                logger.log(`Ciudad ${cityKey}: Sin conductores, reseteando pozo.`);
+                await cityDoc.ref.update({ "rewardsConfig.weeklyPoolAmount": basePoolAmount });
+                continue;
+            }
 
-    try {
-        await db.runTransaction(async (tx) => {
-            // 1. Distribute the pool if there are eligible drivers
-            if (eligibleDrivers.length > 0 && totalEligiblePoints > 0 && currentPoolAmount > 0) {
-                logger.log(`${eligibleDrivers.length} conductores calificaron para un pozo de ${currentPoolAmount}.`);
-                for (const driver of eligibleDrivers) {
-                    const share = (driver.points / totalEligiblePoints) * currentPoolAmount;
-                    if (share <= 0) continue;
+            const eligibleDrivers: { id: string; points: number }[] = [];
+            const driversToReset: admin.firestore.DocumentReference[] = [];
 
-                    const driverRef = db.doc(`users/${driver.id}`);
-                    const transactionRef = db.collection('platform_transactions').doc();
+            // 3. Evaluar puntos semanales (usando cityKey en driver_points si existiera, pero por ahora driver_points es por driverId)
+            for (const userSnap of driversSnap.docs) {
+                const pointsSnap = await db.collection("driver_points").doc(userSnap.id).get();
+                const weeklyPoints = pointsSnap.data()?.weeklyPoints ?? 0;
 
-                    tx.update(driverRef, {
-                      currentBalance: admin.firestore.FieldValue.increment(share)
-                    });
-
-                    tx.set(transactionRef, {
-                      driverId: driver.id,
-                      amount: share,
-                      type: 'credit_promo',
-                      source: 'system',
-                      referenceId: `pool_${event.scheduleTime}`,
-                      note: `Bono del pozo semanal por ${driver.points} puntos.`,
-                      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                      systemVersion: 'v4_progressive_pool',
-                    });
+                if (weeklyPoints > 0) {
+                    driversToReset.push(pointsSnap.ref);
+                    if (weeklyPoints >= minPointsToQualify) {
+                        eligibleDrivers.push({ id: userSnap.id, points: weeklyPoints });
+                    }
                 }
-            } else {
-                 logger.log("Nadie calificó para el pozo, o el pozo era 0. No se distribuirá nada.");
-            }
-            
-            // 2. Reset points for all drivers who had them
-            logger.log(`Reseteando puntos para ${driversToReset.length} conductores.`);
-            for (const pointsRef of driversToReset) {
-                tx.update(pointsRef, { weeklyPoints: 0 });
             }
 
-            // 3. Reset the main pool amount for the next week
-            logger.log(`Reseteando el pozo a su base de ${basePoolAmount}.`);
-            tx.update(rewardsRef, { weeklyPoolAmount: basePoolAmount });
-        });
-        logger.log("V5: Proceso de pozo semanal completado exitosamente.");
-    } catch(error: any) {
-        logger.error("V5: Error catastrófico durante la transacción del pozo semanal:", error);
-    }
-  });
+            const totalEligiblePoints = eligibleDrivers.reduce((sum, d) => sum + d.points, 0);
+
+            try {
+                await db.runTransaction(async (tx) => {
+                    if (eligibleDrivers.length > 0 && totalEligiblePoints > 0 && currentPoolAmount > 0) {
+                        logger.log(`Ciudad ${cityKey}: ${eligibleDrivers.length} conductores calificaron.`);
+                        for (const driver of eligibleDrivers) {
+                            const share = (driver.points / totalEligiblePoints) * currentPoolAmount;
+                            if (share <= 0) continue;
+
+                            const driverRef = db.doc(`users/${driver.id}`);
+                            const transactionRef = db.collection('platform_transactions').doc();
+
+                            tx.update(driverRef, {
+                                currentBalance: admin.firestore.FieldValue.increment(share)
+                            });
+
+                            tx.set(transactionRef, {
+                                driverId: driver.id,
+                                amount: share,
+                                cityKey: cityKey,
+                                type: 'credit_promo',
+                                source: 'system',
+                                referenceId: `pool_${cityKey}_${event.scheduleTime}`,
+                                note: `Bono del pozo semanal (${cityKey}) por ${driver.points} puntos.`,
+                                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                                systemVersion: 'v5_multicity_pool',
+                            });
+                        }
+                    }
+
+                    // Reseteo de puntos
+                    for (const pointsRef of driversToReset) {
+                        tx.update(pointsRef, { weeklyPoints: 0 });
+                    }
+
+                    // Reseteo del pozo de la ciudad
+                    tx.update(cityDoc.ref, { "rewardsConfig.weeklyPoolAmount": basePoolAmount });
+                });
+                logger.log(`Ciudad ${cityKey}: Distribución completada.`);
+            } catch (error: any) {
+                logger.error(`Ciudad ${cityKey}: Error en transacción de pozo semanal:`, error);
+            }
+        }
+        logger.log("V5: Proceso de pozos multiciudad finalizado.");
+    });
 
 
 
@@ -831,9 +894,9 @@ export const cleanupStaleDrivers = onSchedule("every 2 minutes", async (event) =
 });
 
 
-export const notifyOnRideUpdateV3 = onDocumentUpdated("rides/{rideId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {rideId: string}>) => {
+export const notifyOnRideUpdateV3 = onDocumentUpdated("rides/{rideId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, { rideId: string }>) => {
     logger.info(`notifyOnRideUpdate triggered for rideId: ${event.params.rideId}`);
-    
+
     if (!event.data) {
         logger.info("No data associated with the event, exiting.");
         return;
@@ -853,7 +916,7 @@ export const notifyOnRideUpdateV3 = onDocumentUpdated("rides/{rideId}", async (e
         );
         return;
     }
-    
+
     if (before.status === 'driver_assigned' && after.status === 'driver_arrived') {
         if (!after.passengerId || !after.driverName) return;
         logger.info(`Driver arrived for ride ${event.params.rideId}. Notifying passenger ${after.passengerId}.`);
@@ -865,12 +928,12 @@ export const notifyOnRideUpdateV3 = onDocumentUpdated("rides/{rideId}", async (e
         );
         return;
     }
-    
+
     logger.info(`No notification condition met for ride ${event.params.rideId} status change from '${before.status}' to '${after.status}'.`);
 });
 
 
-export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {rideId: string}>) => {
+export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, { rideId: string }>) => {
     const db = getDb();
     if (!event.data) return;
 
@@ -898,7 +961,7 @@ export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (even
                     logger.error(`Passenger ${passengerId} not found.`);
                     return;
                 }
-                
+
                 const passengerData = passengerSnap.data() as UserProfile;
                 const now = admin.firestore.Timestamp.now();
                 const lastCancel = passengerData.lastCancellationAt as admin.firestore.Timestamp | null;
@@ -907,7 +970,7 @@ export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (even
                 if (lastCancel && (now.seconds - lastCancel.seconds > 60 * 60 * 24 * 7)) {
                     weeklyCount = 0;
                 }
-                
+
                 const newWeeklyCount = weeklyCount + 1;
                 const updates: { [key: string]: any } = {
                     activeRideId: null,
@@ -919,7 +982,7 @@ export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (even
                     updates.blockedUntil = admin.firestore.Timestamp.fromMillis(now.toMillis() + 72 * 60 * 60 * 1000);
                     logger.warn(`Passenger ${passengerId} suspended for 72 hours.`);
                 }
-                
+
                 tx.update(passengerRef, updates);
 
                 if (driverId) {
@@ -944,7 +1007,7 @@ export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (even
                         });
                         logger.info(`Compensated driver ${driverId} with ${compensationAmount}.`);
                     }
-                    
+
                     notificationPromise = sendNotification(driverId, "Viaje Cancelado", "El pasajero canceló el viaje.", '/', { event: 'PASSENGER_CANCELLATION', rideId: rideId, compensation: String(compensationAmount) });
                 }
             });
@@ -962,10 +1025,10 @@ export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (even
             await passengerRef.update({ activeRideId: null }).catch(e => logger.error(`Failed to clear passenger active ride:`, e));
         }
         if (after.driverId) {
-             const driverRef = db.collection('users').doc(after.driverId);
-             await driverRef.update({ activeRideId: null, driverStatus: 'inactive' }).catch(e => logger.error(`Failed to clear driver active ride:`, e));
-             const driverLocationRef = db.collection('drivers_locations').doc(after.driverId);
-             await driverLocationRef.update({ driverStatus: 'inactive' }).catch(e => logger.error(`Failed to clear driver active ride in locations:`, e));
+            const driverRef = db.collection('users').doc(after.driverId);
+            await driverRef.update({ activeRideId: null, driverStatus: 'inactive' }).catch(e => logger.error(`Failed to clear driver active ride:`, e));
+            const driverLocationRef = db.collection('drivers_locations').doc(after.driverId);
+            await driverLocationRef.update({ driverStatus: 'inactive' }).catch(e => logger.error(`Failed to clear driver active ride in locations:`, e));
         }
     } else if (after.cancelledBy === 'system') {
         if (after.passengerId) {
@@ -975,21 +1038,21 @@ export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (even
     }
 
     const pendingOffersSnap = await db
-      .collection('rideOffers')
-      .where('rideId', '==', rideId)
-      .where('status', '==', 'pending')
-      .get();
-    
+        .collection('rideOffers')
+        .where('rideId', '==', rideId)
+        .where('status', '==', 'pending')
+        .get();
+
     if (!pendingOffersSnap.empty) {
-      const batch = db.batch();
-      pendingOffersSnap.forEach((offerDoc) => {
-        batch.update(offerDoc.ref, {
-          status: 'cancelled',
-          finalizedAt: admin.firestore.FieldValue.serverTimestamp(),
+        const batch = db.batch();
+        pendingOffersSnap.forEach((offerDoc) => {
+            batch.update(offerDoc.ref, {
+                status: 'cancelled',
+                finalizedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
         });
-      });
-      await batch.commit();
-      logger.info(`Cancelled ${pendingOffersSnap.size} pending offers for ride ${rideId}.`);
+        await batch.commit();
+        logger.info(`Cancelled ${pendingOffersSnap.size} pending offers for ride ${rideId}.`);
     }
 });
 
@@ -1005,7 +1068,7 @@ export const onOfferFinalized = onDocumentUpdated("rideOffers/{offerId}", async 
         if (!driverId) return;
 
         const driverLocationRef = db.collection('drivers_locations').doc(driverId);
-        
+
         try {
             await driverLocationRef.update({
                 pendingOffers: admin.firestore.FieldValue.increment(-1)
@@ -1018,54 +1081,54 @@ export const onOfferFinalized = onDocumentUpdated("rideOffers/{offerId}", async 
 });
 
 
-export const cancelRideV1 = onCall({cors: true, region: 'us-central1'}, async (request) => {
+export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     const db = getDb();
     const uid = request.auth?.uid;
     if (!uid) {
-      throw new HttpsError("unauthenticated", "Usuario no autenticado.");
+        throw new HttpsError("unauthenticated", "Usuario no autenticado.");
     }
-  
+
     const { rideId, reason } = request.data;
     if (!rideId) {
-      throw new HttpsError("invalid-argument", "Se requiere el ID del viaje.");
+        throw new HttpsError("invalid-argument", "Se requiere el ID del viaje.");
     }
-  
-    const rideRef = db.doc(`rides/${rideId}`);
-  
-    await db.runTransaction(async (transaction) => {
-      const rideSnap = await transaction.get(rideRef);
-      if (!rideSnap.exists) {
-        throw new HttpsError("not-found", "El viaje especificado no existe.");
-      }
-      
-      const rideData = rideSnap.data() as Ride;
-      
-      const isPassenger = rideData.passengerId === uid;
-      const isDriver = rideData.driverId === uid;
 
-      if (!isPassenger && !isDriver) {
-        throw new HttpsError("permission-denied", "No sos parte de este viaje.");
-      }
-  
-      if (['completed', 'cancelled'].includes(rideData.status)) {
-        throw new HttpsError("failed-precondition", `No se puede cancelar un viaje que ya está '${rideData.status}'.`);
-      }
-      
-      const cancelledByRole = isDriver ? 'driver' : 'passenger';
-      
-      transaction.update(rideRef, {
-        status: 'cancelled',
-        cancelledBy: cancelledByRole,
-        cancelReason: reason || 'Sin motivo especificado',
-        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+    const rideRef = db.doc(`rides/${rideId}`);
+
+    await db.runTransaction(async (transaction) => {
+        const rideSnap = await transaction.get(rideRef);
+        if (!rideSnap.exists) {
+            throw new HttpsError("not-found", "El viaje especificado no existe.");
+        }
+
+        const rideData = rideSnap.data() as Ride;
+
+        const isPassenger = rideData.passengerId === uid;
+        const isDriver = rideData.driverId === uid;
+
+        if (!isPassenger && !isDriver) {
+            throw new HttpsError("permission-denied", "No sos parte de este viaje.");
+        }
+
+        if (['completed', 'cancelled'].includes(rideData.status)) {
+            throw new HttpsError("failed-precondition", `No se puede cancelar un viaje que ya está '${rideData.status}'.`);
+        }
+
+        const cancelledByRole = isDriver ? 'driver' : 'passenger';
+
+        transaction.update(rideRef, {
+            status: 'cancelled',
+            cancelledBy: cancelledByRole,
+            cancelReason: reason || 'Sin motivo especificado',
+            cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
     });
-  
+
     return { success: true };
 });
-    
 
-export const driverArrivedV1 = onCall({cors: true, region: 'us-central1'}, async (request) => {
+
+export const driverArrivedV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     const db = getDb();
     const driverId = request.auth?.uid;
     if (!driverId) {
@@ -1084,7 +1147,7 @@ export const driverArrivedV1 = onCall({cors: true, region: 'us-central1'}, async
             if (!rideSnap.exists) {
                 throw new HttpsError("not-found", "El viaje especificado no existe.");
             }
-            
+
             const rideData = rideSnap.data() as Ride;
 
             if (rideData.driverId !== driverId) {
@@ -1114,7 +1177,7 @@ export const driverArrivedV1 = onCall({cors: true, region: 'us-central1'}, async
 });
 
 
-export const startRideV1 = onCall({cors: true, region: 'us-central1'}, async (request) => {
+export const startRideV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     const db = getDb();
     const driverId = request.auth?.uid;
     if (!driverId) {
@@ -1135,7 +1198,7 @@ export const startRideV1 = onCall({cors: true, region: 'us-central1'}, async (re
             if (!rideSnap.exists) {
                 throw new HttpsError("not-found", "El viaje especificado no existe.");
             }
-            
+
             const rideData = rideSnap.data() as Ride;
 
             // --- VALIDATIONS ---
@@ -1147,12 +1210,12 @@ export const startRideV1 = onCall({cors: true, region: 'us-central1'}, async (re
                 throw new HttpsError("failed-precondition", `No se puede iniciar el viaje. Estado actual: '${rideData.status}'. Se esperaba 'driver_arrived'.`);
             }
             // --- END VALIDATIONS ---
-            
+
             const arrivedAt = rideData.arrivedAt as admin.firestore.Timestamp | null;
             const initialWaitSeconds = arrivedAt
-              ? (admin.firestore.Timestamp.now().seconds - arrivedAt.seconds)
-              : 0;
-            
+                ? (admin.firestore.Timestamp.now().seconds - arrivedAt.seconds)
+                : 0;
+
             const updatePayload: { [key: string]: any } = {
                 status: 'in_progress',
                 startedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1160,7 +1223,7 @@ export const startRideV1 = onCall({cors: true, region: 'us-central1'}, async (re
             };
 
             if (initialWaitSeconds > 10) { // Only log significant waits
-                updatePayload.pauseHistory = admin.firestore.FieldValue.arrayUnion({ 
+                updatePayload.pauseHistory = admin.firestore.FieldValue.arrayUnion({
                     duration: initialWaitSeconds,
                     reason: 'initial_wait'
                 });
@@ -1179,7 +1242,7 @@ export const startRideV1 = onCall({cors: true, region: 'us-central1'}, async (re
     }
 });
 
-export const finishRideV1 = onCall({cors: true, region: 'us-central1'}, async (request) => {
+export const finishRideV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     const db = getDb();
     const driverId = request.auth?.uid;
     if (!driverId) {
@@ -1189,9 +1252,9 @@ export const finishRideV1 = onCall({cors: true, region: 'us-central1'}, async (r
     if (!rideId) {
         throw new HttpsError("invalid-argument", "Falta el ID del viaje.");
     }
-    
+
     const rideRef = db.doc(`rides/${rideId}`);
-    
+
     try {
         await db.runTransaction(async (transaction) => {
             const rideSnap = await transaction.get(rideRef);
@@ -1225,7 +1288,7 @@ export const finishRideV1 = onCall({cors: true, region: 'us-central1'}, async (r
     }
 });
 
-export const submitRideRatingV1 = onCall({cors: true, region: 'us-central1'}, async (request) => {
+export const submitRideRatingV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     const db = getDb();
     const uid = request.auth?.uid;
     if (!uid) {
@@ -1249,7 +1312,7 @@ export const submitRideRatingV1 = onCall({cors: true, region: 'us-central1'}, as
         if (rideData.status !== 'completed') {
             throw new HttpsError("failed-precondition", "Solo se pueden calificar viajes completados.");
         }
-        
+
         const isPassenger = rideData.passengerId === uid;
         const isDriver = rideData.driverId === uid;
 
@@ -1271,7 +1334,7 @@ export const submitRideRatingV1 = onCall({cors: true, region: 'us-central1'}, as
             updates.passengerRatingByDriver = score;
             if (comment) updates.passengerComments = comment;
         }
-        
+
         transaction.update(rideRef, updates);
 
         return { success: true };
@@ -1280,17 +1343,17 @@ export const submitRideRatingV1 = onCall({cors: true, region: 'us-central1'}, as
 
 
 function assertAdmin(request: any) {
-  const db = getDb();
-  const uid = request.auth?.uid;
-  if (!uid) {
-    throw new HttpsError("unauthenticated", "Debes iniciar sesión.");
-  }
-  return db.doc(`users/${uid}`).get().then((snap) => {
-    if (!snap.exists || snap.data()?.role !== "admin") {
-      throw new HttpsError("permission-denied", "Solo un admin puede ejecutar esta acción.");
+    const db = getDb();
+    const uid = request.auth?.uid;
+    if (!uid) {
+        throw new HttpsError("unauthenticated", "Debes iniciar sesión.");
     }
-    return uid;
-  });
+    return db.doc(`users/${uid}`).get().then((snap) => {
+        if (!snap.exists || snap.data()?.role !== "admin") {
+            throw new HttpsError("permission-denied", "Solo un admin puede ejecutar esta acción.");
+        }
+        return uid;
+    });
 }
 
 export const approveDriverByAdminV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
@@ -1308,13 +1371,13 @@ export const approveDriverByAdminV1 = onCall({ cors: true, region: "us-central1"
     if (!driverSnap.exists) {
         throw new HttpsError("not-found", "El conductor no existe.");
     }
-    
+
     const driverData = driverSnap.data();
 
     if (!driverData || driverData.role !== "driver") {
         throw new HttpsError("failed-precondition", "El usuario no es un conductor válido.");
     }
-    
+
     const batch = db.batch();
 
     const updates: { [key: string]: any } = {
@@ -1323,7 +1386,7 @@ export const approveDriverByAdminV1 = onCall({ cors: true, region: "us-central1"
         licenseVerified: true,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
-    
+
     if (driverData && !driverData.promoCreditGranted) {
         const promoAmount = 2000;
         updates.promoCreditGranted = true;
@@ -1340,12 +1403,12 @@ export const approveDriverByAdminV1 = onCall({ cors: true, region: "us-central1"
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
     }
-    
+
     batch.update(driverRef, updates);
-    
+
     const driverLocationRef = db.doc(`drivers_locations/${driverId}`);
     batch.set(driverLocationRef, { approved: true, isSuspended: false }, { merge: true });
-    
+
     await batch.commit();
 
     return { success: true };
@@ -1356,10 +1419,10 @@ export const rejectDriverByAdminV1 = onCall({ cors: true, region: "us-central1" 
     await assertAdmin(request);
     const driverId = request.data?.driverId as string | undefined;
     if (!driverId) { throw new HttpsError("invalid-argument", "Falta driverId."); }
-    
+
     const driverRef = db.doc(`users/${driverId}`);
     const driverLocationRef = db.doc(`drivers_locations/${driverId}`);
-    
+
     const batch = db.batch();
     batch.update(driverRef, {
         approved: false,
@@ -1405,180 +1468,180 @@ export const suspendDriverByAdminV1 = onCall({ cors: true, region: "us-central1"
 
 
 export const adjustDriverBalanceByAdminV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
-  const db = getDb();
-  const adminUid = await assertAdmin(request);
+    const db = getDb();
+    const adminUid = await assertAdmin(request);
 
-  const driverId = request.data?.driverId as string | undefined;
-  const amount = Number(request.data?.amount);
-  const reason = String(request.data?.reason || "").trim();
+    const driverId = request.data?.driverId as string | undefined;
+    const amount = Number(request.data?.amount);
+    const reason = String(request.data?.reason || "").trim();
 
-  if (!driverId) {
-    throw new HttpsError("invalid-argument", "Falta driverId.");
-  }
-  if (!reason) {
-    throw new HttpsError("invalid-argument", "Falta el motivo.");
-  }
-  if (!Number.isFinite(amount) || amount === 0) {
-    throw new HttpsError("invalid-argument", "Monto inválido.");
-  }
+    if (!driverId) {
+        throw new HttpsError("invalid-argument", "Falta driverId.");
+    }
+    if (!reason) {
+        throw new HttpsError("invalid-argument", "Falta el motivo.");
+    }
+    if (!Number.isFinite(amount) || amount === 0) {
+        throw new HttpsError("invalid-argument", "Monto inválido.");
+    }
 
-  const driverRef = db.doc(`users/${driverId}`);
-  const driverSnap = await driverRef.get();
+    const driverRef = db.doc(`users/${driverId}`);
+    const driverSnap = await driverRef.get();
 
-  if (!driverSnap.exists) {
-    throw new HttpsError("not-found", "El conductor no existe.");
-  }
-  
-  const userData = driverSnap.data();
+    if (!driverSnap.exists) {
+        throw new HttpsError("not-found", "El conductor no existe.");
+    }
 
-  if (!userData || userData.role !== "driver") {
-    throw new HttpsError("failed-precondition", "El usuario no es un conductor válido.");
-  }
+    const userData = driverSnap.data();
 
-  const batch = db.batch();
-  
-  const previousBalance = userData.currentBalance || 0;
-  const newBalance = previousBalance + amount;
+    if (!userData || userData.role !== "driver") {
+        throw new HttpsError("failed-precondition", "El usuario no es un conductor válido.");
+    }
 
-  batch.update(driverRef, {
-    currentBalance: admin.firestore.FieldValue.increment(amount),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+    const batch = db.batch();
 
-  const txRef = db.collection("platform_transactions").doc();
-  batch.set(txRef, {
-    type: 'admin_balance_adjustment',
-    driverId: driverId,
-    amount,
-    reason,
-    previousBalance,
-    newBalance,
-    createdBy: adminUid,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+    const previousBalance = userData.currentBalance || 0;
+    const newBalance = previousBalance + amount;
 
-  await batch.commit();
+    batch.update(driverRef, {
+        currentBalance: admin.firestore.FieldValue.increment(amount),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
-  return { success: true };
+    const txRef = db.collection("platform_transactions").doc();
+    batch.set(txRef, {
+        type: 'admin_balance_adjustment',
+        driverId: driverId,
+        amount,
+        reason,
+        previousBalance,
+        newBalance,
+        createdBy: adminUid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    return { success: true };
 });
 
 export const sendDriverNotificationByAdminV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
-  const db = getDb();
-  await assertAdmin(request);
+    const db = getDb();
+    await assertAdmin(request);
 
-  const driverId = request.data?.driverId as string | undefined;
-  const title = String(request.data?.title || "").trim();
-  const body = String(request.data?.body || "").trim();
+    const driverId = request.data?.driverId as string | undefined;
+    const title = String(request.data?.title || "").trim();
+    const body = String(request.data?.body || "").trim();
 
-  if (!driverId || !title || !body) {
-    throw new HttpsError("invalid-argument", "Faltan datos para enviar la notificación.");
-  }
+    if (!driverId || !title || !body) {
+        throw new HttpsError("invalid-argument", "Faltan datos para enviar la notificación.");
+    }
 
-  const driverSnap = await db.doc(`users/${driverId}`).get();
-  if (!driverSnap.exists) {
-    throw new HttpsError("not-found", "Conductor no encontrado.");
-  }
+    const driverSnap = await db.doc(`users/${driverId}`).get();
+    if (!driverSnap.exists) {
+        throw new HttpsError("not-found", "Conductor no encontrado.");
+    }
 
-  const driverData = driverSnap.data() as UserProfile | undefined;
-  
-  if (!driverData) {
-    throw new HttpsError("not-found", "No se encontraron datos del conductor.");
-  }
+    const driverData = driverSnap.data() as UserProfile | undefined;
 
-  const token = driverData.fcmToken;
+    if (!driverData) {
+        throw new HttpsError("not-found", "No se encontraron datos del conductor.");
+    }
 
-  if (!token) {
-    throw new HttpsError("failed-precondition", "El conductor no tiene fcmToken para recibir notificaciones.");
-  }
+    const token = driverData.fcmToken;
 
-  await admin.messaging().send({
-    token,
-    data: {
-      title,
-      body,
-      type: "admin_message",
-      link: "/driver/rides"
-    },
-  });
+    if (!token) {
+        throw new HttpsError("failed-precondition", "El conductor no tiene fcmToken para recibir notificaciones.");
+    }
 
-  return { success: true };
+    await admin.messaging().send({
+        token,
+        data: {
+            title,
+            body,
+            type: "admin_message",
+            link: "/driver/rides"
+        },
+    });
+
+    return { success: true };
 });
 
 export const deleteDriverByAdminV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
-  const db = getDb();
-  const callerUid = request.auth?.uid;
-  if (!callerUid) {
-    throw new HttpsError("unauthenticated", "Debes iniciar sesión.");
-  }
-
-  const driverId = request.data?.driverId as string | undefined;
-  if (!driverId || typeof driverId !== "string") {
-    throw new HttpsError("invalid-argument", "Falta driverId.");
-  }
-
-  // Verificar admin
-  const callerSnap = await db.doc(`users/${callerUid}`).get();
-  if (!callerSnap.exists) {
-    throw new HttpsError("permission-denied", "Perfil de administrador no encontrado.");
-  }
-
-  const callerData = callerSnap.data() as any;
-  if (callerData?.role !== "admin") {
-    throw new HttpsError("permission-denied", "Solo un administrador puede eliminar conductores.");
-  }
-
-  // Verificar conductor
-  const driverRef = db.doc(`users/${driverId}`);
-  const driverSnap = await driverRef.get();
-
-  if (!driverSnap.exists) {
-    throw new HttpsError("not-found", "El conductor no existe.");
-  }
-
-  const driverData = driverSnap.data() as any;
-  if (driverData?.role !== "driver") {
-    throw new HttpsError("failed-precondition", "El usuario indicado no es un conductor.");
-  }
-
-  if (driverData?.activeRideId) {
-    throw new HttpsError(
-      "failed-precondition",
-      "No se puede eliminar un conductor con un viaje activo."
-    );
-  }
-
-  // Borrado en Firestore
-  const batch = db.batch();
-
-  batch.delete(driverRef);
-  batch.delete(db.doc(`drivers_locations/${driverId}`));
-
-  // Opcional: si querés limpiar puntos/logs simples, descomentá según tus colecciones reales
-  // batch.delete(db.doc(`driver_points/${driverId}`));
-
-  await batch.commit();
-
-  // Intentar borrar usuario de Firebase Auth
-  let authDeleted = false;
-  try {
-    await admin.auth().deleteUser(driverId);
-    authDeleted = true;
-  } catch (error: any) {
-    // Si no existe en Auth, no frenamos el proceso
-    if (error?.code !== "auth/user-not-found") {
-      console.error("Error deleting auth user:", error);
-      throw new HttpsError(
-        "internal",
-        "Se borró Firestore pero falló el borrado en Authentication."
-      );
+    const db = getDb();
+    const callerUid = request.auth?.uid;
+    if (!callerUid) {
+        throw new HttpsError("unauthenticated", "Debes iniciar sesión.");
     }
-  }
 
-  return {
-    success: true,
-    driverId,
-    authDeleted,
-  };
+    const driverId = request.data?.driverId as string | undefined;
+    if (!driverId || typeof driverId !== "string") {
+        throw new HttpsError("invalid-argument", "Falta driverId.");
+    }
+
+    // Verificar admin
+    const callerSnap = await db.doc(`users/${callerUid}`).get();
+    if (!callerSnap.exists) {
+        throw new HttpsError("permission-denied", "Perfil de administrador no encontrado.");
+    }
+
+    const callerData = callerSnap.data() as any;
+    if (callerData?.role !== "admin") {
+        throw new HttpsError("permission-denied", "Solo un administrador puede eliminar conductores.");
+    }
+
+    // Verificar conductor
+    const driverRef = db.doc(`users/${driverId}`);
+    const driverSnap = await driverRef.get();
+
+    if (!driverSnap.exists) {
+        throw new HttpsError("not-found", "El conductor no existe.");
+    }
+
+    const driverData = driverSnap.data() as any;
+    if (driverData?.role !== "driver") {
+        throw new HttpsError("failed-precondition", "El usuario indicado no es un conductor.");
+    }
+
+    if (driverData?.activeRideId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "No se puede eliminar un conductor con un viaje activo."
+        );
+    }
+
+    // Borrado en Firestore
+    const batch = db.batch();
+
+    batch.delete(driverRef);
+    batch.delete(db.doc(`drivers_locations/${driverId}`));
+
+    // Opcional: si querés limpiar puntos/logs simples, descomentá según tus colecciones reales
+    // batch.delete(db.doc(`driver_points/${driverId}`));
+
+    await batch.commit();
+
+    // Intentar borrar usuario de Firebase Auth
+    let authDeleted = false;
+    try {
+        await admin.auth().deleteUser(driverId);
+        authDeleted = true;
+    } catch (error: any) {
+        // Si no existe en Auth, no frenamos el proceso
+        if (error?.code !== "auth/user-not-found") {
+            console.error("Error deleting auth user:", error);
+            throw new HttpsError(
+                "internal",
+                "Se borró Firestore pero falló el borrado en Authentication."
+            );
+        }
+    }
+
+    return {
+        success: true,
+        driverId,
+        authDeleted,
+    };
 });
 
 
@@ -1586,9 +1649,9 @@ export const requestWithdrawalV1 = onCall({ cors: true, region: 'us-central1' },
     const db = getDb();
     const uid = request.auth?.uid;
     if (!uid) {
-      throw new HttpsError("unauthenticated", "Usuario no autenticado.");
+        throw new HttpsError("unauthenticated", "Usuario no autenticado.");
     }
-    
+
     const { amount, bankInfo } = request.data;
     if (typeof amount !== 'number' || amount <= 0 || !bankInfo?.accountHolder || !bankInfo?.cbuOrAlias) {
         throw new HttpsError("invalid-argument", "Faltan datos para la solicitud (monto, CBU/Alias, titular).");
@@ -1621,9 +1684,10 @@ export const requestWithdrawalV1 = onCall({ cors: true, region: 'us-central1' },
             cbuOrAlias: bankInfo.cbuOrAlias,
         },
         status: 'pending',
+        cityKey: driverData.cityKey || normalizeCity(driverData.city),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    
+
     return { success: true, requestId: requestRef.id };
 });
 
@@ -1649,7 +1713,7 @@ export const processWithdrawalByAdminV1 = onCall({ cors: true, region: 'us-centr
         }
 
         const finalStatus = action === 'approve' ? 'approved' : 'rejected';
-        
+
         tx.update(requestRef, {
             status: finalStatus,
             processedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1662,11 +1726,11 @@ export const processWithdrawalByAdminV1 = onCall({ cors: true, region: 'us-centr
             const driverData = driverSnap.data() as UserProfile;
             const previousBalance = driverData.currentBalance || 0;
             const newBalance = previousBalance - requestData.amount;
-            
+
             tx.update(driverRef, {
                 currentBalance: admin.firestore.FieldValue.increment(-requestData.amount),
             });
-            
+
             const transactionRef = db.collection('platform_transactions').doc();
             tx.set(transactionRef, {
                 driverId: requestData.driverId,
@@ -1677,6 +1741,7 @@ export const processWithdrawalByAdminV1 = onCall({ cors: true, region: 'us-centr
                 note: 'Retiro de saldo aprobado por admin.',
                 previousBalance,
                 newBalance,
+                cityKey: requestData.cityKey,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 systemVersion: 'v1_withdrawal',
             });
@@ -1706,7 +1771,7 @@ export const onUserUpdateV1 = onDocumentWritten("users/{uid}", async (event) => 
     if (after.cityKey !== expectedCityKey) {
         const db = getDb();
         logger.info(`onUserUpdateV1: Normalizando cityKey para ${event.params.uid}. city: '${after.city}', nuevo cityKey: '${expectedCityKey}'`);
-        
+
         await db.doc(`users/${event.params.uid}`).update({
             cityKey: expectedCityKey,
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -1763,12 +1828,71 @@ export const seedPricingV1 = onCall({ region: 'us-central1' }, async (request: C
     try {
         await batch.commit();
         logger.info(`Pricing seeded successfully by ${uid} (${userProfile.role})`);
-        return { 
-            success: true, 
+        return {
+            success: true,
             message: 'Firestore seeding completado exitosamente.'
         };
     } catch (error: any) {
         logger.error('Error seeding pricing:', error);
         throw new HttpsError('internal', 'Error al inyectar tarifas en base de datos.', error.message);
+    }
+});
+
+/**
+ * [VamO PRO] Unified Profile Update with Legal Traceability
+ * Handles profile completion and T&C acceptance with IP/UserAgent logging.
+ */
+export const updateProfileV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
+    const auth = request.auth;
+    if (!auth) {
+        throw new HttpsError("unauthenticated", "User must be logged in.");
+    }
+
+    const {
+        name, surname, displayName, phone, gender, photoURL,
+        profileCompleted, termsAccepted, termsVersion
+    } = request.data;
+
+    const db = getDb();
+    const userRef = db.collection("users").doc(auth.uid);
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    const updates: any = {
+        updatedAt: now
+    };
+
+    if (name) updates.name = name;
+    if (surname) updates.surname = surname;
+    if (displayName) updates.displayName = displayName;
+    if (phone) updates.phone = phone;
+    if (gender) updates.gender = gender;
+    if (photoURL) updates.photoURL = photoURL;
+    if (profileCompleted !== undefined) updates.profileCompleted = profileCompleted;
+    if (termsAccepted !== undefined) updates.termsAccepted = termsAccepted;
+
+    // Legal Traceability Logic
+    if (termsAccepted && termsVersion) {
+        updates.termsAccepted = true;
+        updates.termsVersion = termsVersion;
+        updates.termsAcceptedAt = now;
+
+        const logEntry = {
+            termsVersion,
+            acceptedAt: admin.firestore.Timestamp.now(), // Real-time client timestamp for the log
+            userAgent: request.rawRequest.headers['user-agent'] || 'unknown',
+            ip: request.rawRequest.headers['x-forwarded-for'] || request.rawRequest.socket.remoteAddress || 'unknown'
+        };
+
+        // Push to audit log
+        updates.legalAcceptanceLog = admin.firestore.FieldValue.arrayUnion(logEntry);
+    }
+
+    try {
+        await userRef.update(updates);
+        logger.info(`Profile updated for user ${auth.uid} with legal acceptance ${termsVersion}`);
+        return { success: true };
+    } catch (error: any) {
+        logger.error(`Error updating profile for ${auth.uid}:`, error);
+        throw new HttpsError("internal", error.message);
     }
 });

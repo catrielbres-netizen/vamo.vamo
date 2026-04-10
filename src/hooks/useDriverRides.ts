@@ -58,16 +58,6 @@ export function useDriverRides(shouldListen: boolean) {
               const newIds = new Set(newOffers.map(o => o.id));
               setNewOfferIds(newIds);
               
-              try {
-                // 1. Play attention beep
-                playOfferSound();
-                // 2. Voice announcement (Text-to-Speech)
-                const firstOffer = newOffers[0];
-                announceNewRide(firstOffer?.origin?.address);
-              } catch (e) {
-                console.error("Error playing notification:", e);
-              }
-
               setTimeout(() => {
                   setNewOfferIds(currentNewIds => {
                       const updatedIds = new Set(currentNewIds);

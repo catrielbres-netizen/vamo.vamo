@@ -9,6 +9,7 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { useSearchParams } from 'next/navigation';
+import { isDriverReadyForReview } from '@/lib/eligibility';
 
 // ─── Types & Helpers ──────────────────────────────────────────────────────────
 type FilterStatus = 'all' | 'pending' | 'active' | 'suspended' | 'expired';
@@ -103,6 +104,8 @@ export default function MunicipalDriversPage() {
                     isExpired(d.backgroundCheckExpiry) || 
                     isExpired(d.canonExpiry)
                 );
+            } else if (filter === 'pending') {
+                list = list.filter(isDriverReadyForReview);
             } else {
                 const statuses = STATUS_FILTER_MAP[filter];
                 list = list.filter(d => statuses.includes(d.municipalStatus));

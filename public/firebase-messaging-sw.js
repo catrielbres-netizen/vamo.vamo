@@ -48,7 +48,7 @@ if (firebaseConfig) {
 
     messaging.onBackgroundMessage((payload) => {
       console.log('[FCM_SW] Mensaje en segundo plano recibido:', payload);
-      
+
       const title = payload.data?.title || payload.notification?.title || 'Nueva Notificación';
       const body = payload.data?.body || payload.notification?.body || 'VamO tiene una actualización para vos.';
 
@@ -58,7 +58,7 @@ if (firebaseConfig) {
         requireInteraction: true,
         vibrate: [200, 100, 200, 100, 200, 100, 200],
         data: {
-            link: payload.data?.link || '/'
+          link: payload.data?.link || '/'
         }
       };
 
@@ -70,7 +70,7 @@ if (firebaseConfig) {
     console.error("[FCM_SW] Error during initialization:", error);
   }
 } else {
-    console.error("[FCM_SW] Critical: No Firebase configuration found. Notifications will not work.");
+  console.error("[FCM_SW] Critical: No Firebase configuration found. Notifications will not work.");
 }
 
 
@@ -79,7 +79,7 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   const link = event.notification.data.link || '/';
-  
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       // If a window is already open, focus it

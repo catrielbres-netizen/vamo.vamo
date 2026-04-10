@@ -1,14 +1,15 @@
 
 import React from 'react';
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Archivo } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import ClientProviders from './ClientProviders';
 
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const archivo = Archivo({ subsets: ['latin'], variable: '--font-archivo', weight: ['400', '600', '800', '900'] });
 
 export const metadata: Metadata = {
   title: 'VamO',
@@ -43,6 +44,8 @@ export default function RootLayout({
       <body
         className={cn(
           'min-h-screen bg-background bg-morphic font-sans antialiased selection:bg-indigo-500/30',
+          inter.variable,
+          archivo.variable,
           inter.className
         )}
       >

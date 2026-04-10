@@ -32,7 +32,12 @@ export default function DriverEarningsPage() {
     const { profile, loading: isUserLoading } = useUser();
     // CORRECTED: Use the dedicated hook for transactions
     const { transactions, loading: isTransactionsLoading, error: transactionsError } = useDriverTransactions();
-    const { weeklyRevenue, weeklyCommissions, weeklyRides, loading: statsLoading } = useDriverStats();
+    const { 
+        todayRevenue, todayRides,
+        weeklyRevenue, weeklyCommissions, weeklyRides, 
+        monthlyRevenue, monthlyRides,
+        loading: statsLoading 
+    } = useDriverStats();
 
     const router = useRouter();
     const { toast } = useToast();
@@ -133,31 +138,46 @@ export default function DriverEarningsPage() {
                         </DialogTrigger>
                     </CardFooter>
                     
-                    {/* WEEKLY LEDGER / RESUMEN DE CAJA */}
-                    <div className="px-6 pb-6 pt-2">
-                        <div className="bg-zinc-900/50 rounded-2xl border border-white/5 p-4 space-y-4">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-xs font-black uppercase tracking-widest text-zinc-500">Resumen (7d)</h3>
-                                {statsLoading && <VamoIcon name="loader" className="h-3 w-3 animate-spin text-zinc-600" />}
+                    {/* PERFORMANCE STATS - BLOQUE 8 */}
+                    <div className="px-6 pb-6 pt-2 space-y-4">
+                        <div className="grid grid-cols-3 gap-2">
+                            <div className="bg-zinc-900/50 rounded-2xl border border-white/5 p-3 text-center">
+                                <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Hoy</p>
+                                <p className="text-lg font-black text-white">{formatCurrency(todayRevenue)}</p>
+                                <p className="text-[8px] text-zinc-600 font-bold uppercase">{todayRides} viajes</p>
                             </div>
-                            
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-bold text-zinc-500 uppercase">Recaudado (Efectivo)</p>
-                                    <p className="text-xl font-black text-white">{formatCurrency(weeklyRevenue)}</p>
+                            <div className="bg-indigo-600/10 rounded-2xl border border-indigo-500/20 p-3 text-center ring-1 ring-indigo-500/20">
+                                <p className="text-[8px] font-black text-indigo-400 uppercase mb-1">Semana</p>
+                                <p className="text-lg font-black text-white">{formatCurrency(weeklyRevenue)}</p>
+                                <p className="text-[8px] text-indigo-400/60 font-bold uppercase">{weeklyRides} viajes</p>
+                            </div>
+                            <div className="bg-zinc-900/50 rounded-2xl border border-white/5 p-3 text-center">
+                                <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Mes</p>
+                                <p className="text-lg font-black text-white">{formatCurrency(monthlyRevenue)}</p>
+                                <p className="text-[8px] text-zinc-600 font-bold uppercase">{monthlyRides} viajes</p>
+                            </div>
+                        </div>
+
+                        {/* WEEKLY POOL / POINTS - BLOQUE 7 */}
+                        <div className="bg-gradient-to-br from-amber-500/20 to-orange-600/10 rounded-2xl border border-amber-500/20 p-4 space-y-3 relative overflow-hidden">
+                            <div className="absolute -right-4 -bottom-4 opacity-10">
+                                <VamoIcon name="award" className="w-24 h-24 text-amber-500" />
+                            </div>
+                            <div className="flex justify-between items-center relative z-10">
+                                <div className="flex flex-col">
+                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-500 leading-none mb-1">Puntos VamO</h3>
+                                    <p className="text-xl font-black text-white leading-none">{profile?.vamoPoints || 0}</p>
                                 </div>
-                                <div className="space-y-1 text-right">
-                                    <p className="text-[10px] font-bold text-zinc-500 uppercase">Comisiones</p>
-                                    <p className="text-xl font-black text-destructive-foreground">-{formatCurrency(weeklyCommissions)}</p>
+                                <div className="text-right">
+                                    <p className="text-[8px] font-black text-zinc-500 uppercase leading-none mb-1">Pozo Semanal</p>
+                                    <p className="text-sm font-black text-amber-400">{profile?.weeklyPoints || 0} pts</p>
                                 </div>
                             </div>
-                            
-                            <div className="pt-3 border-t border-white/5 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Actividad Reciente</span>
-                                </div>
-                                <span className="text-[10px] font-black text-zinc-600 uppercase">{weeklyRides} viajes</span>
+                            <div className="pt-2 flex items-center gap-2 relative z-10">
+                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                <span className="text-[9px] font-bold text-amber-500/80 uppercase tracking-widest leading-none">
+                                    Sumás puntos por cada viaje completado (Recaudación: {formatCurrency(weeklyRevenue)})
+                                </span>
                             </div>
                         </div>
                     </div>

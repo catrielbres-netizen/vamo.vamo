@@ -36,9 +36,19 @@ service cloud.firestore {
       // CRITICAL: Role lock during creation. Cannot set themselves as admin.
       allow create: if signedIn() && request.auth.uid == userId &&
                     request.resource.data.role in ['driver', 'passenger'] &&
-                    request.resource.data.approved == false &&
-                    (!('currentBalance' in request.resource.data) || request.resource.data.currentBalance == 0) &&
-                    (!('municipalStatus' in request.resource.data) || request.resource.data.municipalStatus == 'pending_municipal_review');
+                    (
+                      // CASE 1: Passenger (Minimal Payload Validation)
+                      (request.resource.data.role == 'passenger' && 
+                       request.resource.data.keys().hasOnly(['uid', 'role', 'name', 'email', 'createdAt', 'profileCompleted', 'emailVerified']) &&
+                       (request.resource.data.profileCompleted == true || request.resource.data.profileCompleted == false) &&
+                       request.resource.data.name is string) ||
+                      
+                      // CASE 2: Driver (Detailed Payload with Safety Guards)
+                      (request.resource.data.role == 'driver' &&
+                       request.resource.data.approved == false &&
+                       (!('currentBalance' in request.resource.data) || request.resource.data.currentBalance == 0) &&
+                       (!('municipalStatus' in request.resource.data) || request.resource.data.municipalStatus == 'pending_municipal_review'))
+                    );
                     
       // Owner can update profile fields. Admin can update everything.
       // Municipal Admin can update municipal fields for their city.
@@ -87,8 +97,10 @@ service cloud.firestore {
       );
 
       // SECURITY: Users can only READ their own rides. Admin can read everything.
+      // Municipal admins can read rides from their city.
       allow read: if signedIn() && (
         isAdmin() || 
+        isMunicipalForCity(resource.data.cityKey) ||
         resource.data.passengerId == request.auth.uid || 
         resource.data.driverId == request.auth.uid
       );
@@ -109,7 +121,7 @@ service cloud.firestore {
     }
 
     match /platform_transactions/{transactionId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.driverId == request.auth.uid);
+      allow read: if isAdmin() || isMunicipalForCity(resource.data.cityKey) || (signedIn() && resource.data.driverId == request.auth.uid);
     }
 
     match /rideOffers/{offerId} {
@@ -157,8 +169,8 @@ service cloud.firestore {
 
     match /withdrawal_requests/{requestId} {
       allow create: if isDriver() && request.resource.data.driverId == request.auth.uid;
-      allow read: if isAdmin() || (signedIn() && resource.data.driverId == request.auth.uid);
-      allow update: if isAdmin();
+      allow read: if isAdmin() || isMunicipalForCity(resource.data.cityKey) || (signedIn() && resource.data.driverId == request.auth.uid);
+      allow update: if isAdmin() || isMunicipalForCity(resource.data.cityKey);
     }
 
     match /panic_alerts/{alertId} {
@@ -342,6 +354,12 @@ service cloud.firestore {
          request.resource.data.seq > (resource == null ? 0 : resource.data.seq));
 
       allow delete: if false;
+    }
+
+    // ── fap_claims/{claimId} ──────────────────────────────────────────────────
+    match /fap_claims/{claimId} {
+      allow read: if isAdmin() || isMunicipalForCity(resource.data.cityKey) || (signedIn() && resource.data.passengerId == request.auth.uid);
+      allow write: if false; // Solo vía Cloud Functions
     }
 
     // ── cities/{cityKey} ──────────────────────────────────────────────────────

@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useAuth, useFirestore } from '@/firebase';
+import { useAuth, useFirestore, useStorage } from '@/firebase';
 import { createUserWithEmailAndPassword, signOut, deleteUser } from 'firebase/auth';
 import { doc, setDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +22,15 @@ import {
     normalizeCityKey,
     buildMunicipalCode,
 } from '@/lib/types';
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogHeader, 
+    DialogTitle, 
+    DialogDescription,
+    DialogFooter
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const years = Array.from({ length: 2026 - 2008 + 1 }, (_, i) => (2008 + i).toString()).reverse();
@@ -59,6 +69,7 @@ function buildEmptyChecklist(): MunicipalChecklist {
 export default function DriverRegisterClient() {
     const auth       = useAuth();
     const firestore  = useFirestore();
+    const storage    = useStorage();
     const router     = useRouter();
     const { toast }  = useToast();
 
@@ -80,6 +91,14 @@ export default function DriverRegisterClient() {
 
     // --- EXPRESS ---
     const [city, setCity] = useState('');
+    
+    // --- NUEVOS CAMPOS (BLOQUE 1) ---
+    const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
+    const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
+    const [vehiclePhoto, setVehiclePhoto] = useState<File | null>(null);
+    const [vehiclePhotoPreview, setVehiclePhotoPreview] = useState<string | null>(null);
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
+    const [showTerms, setShowTerms] = useState(false);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -109,6 +128,22 @@ export default function DriverRegisterClient() {
         // Validaciones específicas por subtype
         if (isClassic && (!vehicleType || !licenseNumber)) {
             toast({ variant: 'destructive', title: 'Campos requeridos', description: 'Completá el tipo de vehículo y número de licencia.' });
+            return;
+        }
+
+        // Validación de Fotos (Obligatorias Bloque 1)
+        if (!profilePhoto) {
+            toast({ variant: 'destructive', title: 'Foto requerida', description: 'Por favor subí tu foto de perfil.' });
+            return;
+        }
+        if (!vehiclePhoto) {
+            toast({ variant: 'destructive', title: 'Foto requerida', description: 'Por favor subí la foto del vehículo (frente).' });
+            return;
+        }
+
+        // Validación de Términos
+        if (!acceptedTerms) {
+            toast({ variant: 'destructive', title: 'Términos y Condiciones', description: 'Debés aceptar los términos para continuar.' });
             return;
         }
 
@@ -142,6 +177,21 @@ export default function DriverRegisterClient() {
             const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password);
             newUserCreated = newUser;
 
+            // 1.5 Subir fotos a Storage
+            let photoURL = '';
+            let vehicleFrontPhotoURL = '';
+            
+            if (profilePhoto) {
+                const profileRef = ref(storage, `drivers/${newUser.uid}/profile_${Date.now()}`);
+                const profileSnap = await uploadBytes(profileRef, profilePhoto);
+                photoURL = await getDownloadURL(profileSnap.ref);
+            }
+            if (vehiclePhoto) {
+                const vehicleRef = ref(storage, `drivers/${newUser.uid}/vehicle_${Date.now()}`);
+                const vehicleSnap = await uploadBytes(vehicleRef, vehiclePhoto);
+                vehicleFrontPhotoURL = await getDownloadURL(vehicleSnap.ref);
+            }
+
             // ─── FLUJO TAXI / REMIS (sin cambios respecto al original) ─────────
             if (isClassic) {
                 const userRef = doc(firestore, 'users', newUser.uid);
@@ -165,6 +215,11 @@ export default function DriverRegisterClient() {
                     licenseNumber:    licenseNumber.trim(),
                     servicesOffered:  { normal: true, premium: true, express: true, pets: false, scheduled: false, shared: false },
                     currentBalance:   0,
+                    photoURL,
+                    vehicleFrontPhotoURL,
+                    acceptedTerms:    true,
+                    acceptedTermsAt:  serverTimestamp(),
+                    termsVersion:     'v1.3',
                     createdAt:        serverTimestamp(),
                     updatedAt:        serverTimestamp(),
                 });
@@ -235,6 +290,11 @@ export default function DriverRegisterClient() {
                     municipalCode:   generatedCode,
                     servicesOffered: { normal: false, premium: false, express: true, pets: false, scheduled: false, shared: false },
                     currentBalance:  0,
+                    photoURL,
+                    vehicleFrontPhotoURL,
+                    acceptedTerms:    true,
+                    acceptedTermsAt:  serverTimestamp(),
+                    termsVersion:     'v1.3',
                     createdAt:       serverTimestamp(),
                     updatedAt:       serverTimestamp(),
                 });
@@ -259,6 +319,9 @@ export default function DriverRegisterClient() {
                     canonPaidBy:            null,
                     municipalObservation:   null,
                     checklist:              buildEmptyChecklist(),
+                    photoURL,
+                    vehicleFrontPhotoURL,
+                    acceptedTerms:          true,
                     createdAt:              serverTimestamp(),
                     updatedAt:              serverTimestamp(),
                 });
@@ -300,8 +363,19 @@ export default function DriverRegisterClient() {
             else if (error.code === 'permission-denied')    description = 'Error de permisos. Contactá a soporte.';
 
             toast({ variant: 'destructive', title: 'Error de registro', description });
-        } finally {
-            setIsSubmitting(false);
+        }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'profile' | 'vehicle') => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (type === 'profile') {
+            setProfilePhoto(file);
+            setProfilePhotoPreview(URL.createObjectURL(file));
+        } else {
+            setVehiclePhoto(file);
+            setVehiclePhotoPreview(URL.createObjectURL(file));
         }
     };
 
@@ -384,6 +458,15 @@ export default function DriverRegisterClient() {
                                     </div>
                                 )}
                             </div>
+
+                                 {isClassic && (
+                                     <div className="mt-3 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center gap-3 animate-in fade-in zoom-in duration-300">
+                                         <VamoIcon name="shield-check" className="w-6 h-6 text-indigo-400 shrink-0" />
+                                         <p className="text-xs font-bold text-indigo-300 leading-tight">
+                                             VamO podrá solicitar documentación adicional para validar tu identidad y habilitación profesional antes de activar tu cuenta.
+                                         </p>
+                                     </div>
+                                 )}
 
                             {/* Solo mostrar el formulario si se eligió subtype */}
                             {driverSubtype && (
@@ -507,7 +590,82 @@ export default function DriverRegisterClient() {
                                                 />
                                             )}
                                         </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                            {/* FOTO PERFIL */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">
+                                                    Foto de perfil del conductor
+                                                </Label>
+                                                <div 
+                                                    className="relative h-32 rounded-2xl bg-white/[0.03] border-2 border-dashed border-white/10 hover:border-primary/50 transition-all flex flex-col items-center justify-center cursor-pointer overflow-hidden"
+                                                    onClick={() => document.getElementById('profile-input')?.click()}
+                                                >
+                                                    {profilePhotoPreview ? (
+                                                        <img src={profilePhotoPreview} alt="Preview" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <>
+                                                            <VamoIcon name="user" className="w-8 h-8 text-zinc-700 mb-1" />
+                                                            <span className="text-[10px] font-bold text-zinc-600 uppercase">Subí tu rostro</span>
+                                                        </>
+                                                    )}
+                                                    <input id="profile-input" type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'profile')} />
+                                                </div>
+                                            </div>
+
+                                            {/* FOTO VEHÍCULO */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">
+                                                    Foto frontal del vehículo
+                                                </Label>
+                                                <div 
+                                                    className="relative h-32 rounded-2xl bg-white/[0.03] border-2 border-dashed border-white/10 hover:border-primary/50 transition-all flex flex-col items-center justify-center cursor-pointer overflow-hidden"
+                                                    onClick={() => document.getElementById('vehicle-input')?.click()}
+                                                >
+                                                    {vehiclePhotoPreview ? (
+                                                        <img src={vehiclePhotoPreview} alt="Preview" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <>
+                                                            <VamoIcon name="car" className="w-8 h-8 text-zinc-700 mb-1" />
+                                                            <span className="text-[10px] font-bold text-zinc-600 uppercase">Patente clara</span>
+                                                        </>
+                                                    )}
+                                                    <input id="vehicle-input" type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'vehicle')} />
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
+
+                                    <div className="flex items-center space-x-3 p-4 bg-white/[0.03] rounded-2xl border border-white/5">
+                                        <Checkbox 
+                                            id="terms" 
+                                            checked={acceptedTerms} 
+                                            onCheckedChange={(checked) => setAcceptedTerms(!!checked)} 
+                                            className="border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                                        />
+                                        <label htmlFor="terms" className="text-[10px] font-bold text-zinc-400 leading-tight uppercase tracking-tight">
+                                            Acepto los{" "}
+                                            <button 
+                                                type="button"
+                                                onClick={() => setShowTerms(true)}
+                                                className="text-primary hover:underline underline-offset-4"
+                                            >
+                                                términos y condiciones
+                                            </button> de VamO
+                                        </label>
+                                    </div>
+
+                                    {isClassic && (
+                                        <div className="rounded-2xl border-2 border-indigo-500/30 bg-indigo-500/10 p-5 space-y-3 shadow-lg shadow-indigo-500/5">
+                                            <p className="text-base font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                                                <VamoIcon name="shield-check" className="w-5 h-5 shrink-0" />
+                                                Verificación Profesional
+                                            </p>
+                                            <p className="text-[10px] font-bold text-indigo-300/80 leading-relaxed uppercase tracking-wider">
+                                                Como conductor de Taxi o Remis, VamO podrá requerir documentación adicional para verificar tu identidad y habilitación antes de activar tu cuenta. Asegurate de tener tus comprobantes legales a mano.
+                                            </p>
+                                        </div>
+                                    )}
 
                                     {/* ── AVISO EXPRESS ──────────────────────────── */}
                                     {isExpress && (
@@ -553,6 +711,60 @@ export default function DriverRegisterClient() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* ── MODAL DE TÉRMINOS ────────────────────────────────────────── */}
+            <Dialog open={showTerms} onOpenChange={setShowTerms}>
+                <DialogContent className="bg-zinc-950 border-white/10 text-white max-w-2xl max-h-[80vh] overflow-y-auto rounded-[2rem]">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-black uppercase tracking-tight text-white flex items-center gap-3">
+                            <VamoIcon name="shield-check" className="w-8 h-8 text-primary" />
+                            Términos y Condiciones
+                        </DialogTitle>
+                        <DialogDescription className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">
+                            VamO - Gestión de Movilidad
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="space-y-6 py-4 text-sm text-zinc-300 leading-relaxed font-medium">
+                        <section>
+                            <h3 className="text-white font-black uppercase text-xs tracking-widest mb-2 border-l-4 border-primary pl-3">1. Naturaleza del Servicio</h3>
+                            <p>VamO es un <strong>intermediario tecnológico</strong> que pone en contacto a pasajeros con conductores independientes. VamO NO presta servicios de transporte ni es una empresa de logística.</p>
+                        </section>
+
+                        <section>
+                            <h3 className="text-white font-black uppercase text-xs tracking-widest mb-2 border-l-4 border-primary pl-3">2. Independencia del Conductor</h3>
+                            <p>El Conductor actúa como un <strong>profesional independiente</strong>. No existe relación de dependencia laboral, subordinación jurídica ni técnica entre el Conductor y VamO.</p>
+                        </section>
+
+                        <section>
+                            <h3 className="text-white font-black uppercase text-xs tracking-widest mb-2 border-l-4 border-primary pl-3">3. Fondo de Asistencia VamO (F.A.P.)</h3>
+                            <p>El Fondo de Asistencia VamO constituye un <strong>beneficio discrecional y limitado</strong> destinado única y exclusivamente a la asistencia económica ante imprevistos operativos. NO constituye un contrato de seguro. La asistencia consiste en el reintegro de gastos documentados bajo las reglas vigentes en la plataforma.</p>
+                        </section>
+
+                        <section>
+                            <h3 className="text-white font-black uppercase text-xs tracking-widest mb-2 border-l-4 border-primary pl-3">4. Verificación de Identidad y Documentación</h3>
+                            <p>VamO se reserva el derecho de solicitar documentación adicional (DNI, Licencia, Cédula del vehículo, Certificados de Antecedentes, etc.) para verificar la identidad del Conductor y su condición legal/profesional declarada, especialmente en registros como Taxi o Remis.</p>
+                        </section>
+
+                        <section>
+                            <h3 className="text-white font-black uppercase text-xs tracking-widest mb-2 border-l-4 border-primary pl-3">5. Limitación de Responsabilidad</h3>
+                            <p>Debido a su naturaleza de intermediario, VamO no garantiza la seguridad, puntualidad ni veracidad de los datos de los usuarios. Cualquier conflicto derivado del servicio se rige bajo la <strong>jurisdicción de Rawson, Provincia del Chubut</strong>.</p>
+                        </section>
+                    </div>
+
+                    <DialogFooter className="pt-4 border-t border-white/5">
+                        <Button 
+                            className="w-full bg-primary text-primary-foreground font-black uppercase h-12 rounded-2xl"
+                            onClick={() => {
+                                setAcceptedTerms(true);
+                                setShowTerms(false);
+                            }}
+                        >
+                            Comprendo y Acepto
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

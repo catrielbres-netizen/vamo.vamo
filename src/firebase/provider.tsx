@@ -5,6 +5,7 @@ import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
 import { getFirestore, doc, setDoc, type Firestore } from 'firebase/firestore';
 import { getFunctions, type Functions } from 'firebase/functions';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { firebaseConfig } from './config';
 
 // Define the shape of the context
@@ -13,6 +14,7 @@ interface FirebaseContextValue {
   auth: Auth;
   firestore: Firestore;
   functions: Functions;
+  storage: FirebaseStorage;
   user: User | null;
   isInitializing: boolean;
   error: Error | null;
@@ -38,7 +40,8 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     const auth = getAuth(app);
     const firestore = getFirestore(app);
     const functions = getFunctions(app, 'us-central1');
-    return { app, auth, firestore, functions };
+    const storage = getStorage(app);
+    return { app, auth, firestore, functions, storage };
   }, []);
 
   // Set up the auth state listener
@@ -112,4 +115,9 @@ export const useFirebaseApp = (): FirebaseApp => {
 // Convenience hook to get Functions instance
 export const useFunctions = (): Functions => {
   return useFirebase().functions;
+};
+
+// Convenience hook to get Storage instance
+export const useStorage = (): FirebaseStorage => {
+  return useFirebase().storage;
 };

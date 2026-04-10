@@ -1,0 +1,14 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3002",
+      "localStorage": [
+        {
+          "name": "firebase:authUser:AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA:[DEFAULT]",
+          "value": "{\"uid\":\"mN1J7hMAOebtdG2kvq5pMCHs6Kl1\",\"email\":\"demo_driver@vamo.com\",\"emailVerified\":true,\"isAnonymous\":false,\"providerData\":[{\"providerId\":\"password\",\"uid\":\"demo_driver@vamo.com\",\"displayName\":null,\"email\":\"demo_driver@vamo.com\",\"phoneNumber\":null,\"photoURL\":null}],\"stsTokenManager\":{\"refreshToken\":\"AMf-vBzV27BCKN04kuoEFSUQo8I7_EiO3UCqWZXIg2ejpmNGtKBUvFKN-yy9YF3DMqGySyz4044uNF3JiyFDdT1sqeJ0LR2Nq99qqOwYiPXyOWH7xciOC43BYU4zvYXlGu5ja25yzZMpwjs9bE6T_yiX4W-CkS3M2YLop_2vxogrrPT7BigcRwXue7i6TitDLwEKX-5LI0gJyH75uHXM33_xAPXZb1m0yeZQbrUWhSNLekZDRqBvWCs\",\"accessToken\":\"eyJhbGciOiJSUzI1NiIsImtpZCI6IjcwZmM5YzU0YjhiMjQyMWZmMTgyOTgxNTQyZmQ0NjRlOWJlYzM1NDUiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vc3R1ZGlvLTY2OTcxNjA4NDAtN2M2N2YiLCJhdWQiOiJzdHVkaW8tNjY5NzE2MDg0MC03YzY3ZiIsImF1dGhfdGltZSI6MTc3NTc1OTU1NiwidXNlcl9pZCI6Im1OMUo3aE1BT2VidGRHMmt2cTVwTUNIczZLbDEiLCJzdWIiOiJtTjFKN2hNQU9lYnRkRzJrdnE1cE1DSHM2S2wxIiwiaWF0IjoxNzc1NzU5NTU2LCJleHAiOjE3NzU3NjMxNTYsImVtYWlsIjoiZGVtb19kcml2ZXJAdmFtby5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJlbWFpbCI6WyJkZW1vX2RyaXZlckB2YW1vLmNvbSJdfSwic2lnbl9pbl9wcm92aWRlciI6InBhc3N3b3JkIn19.dzX2GPdrAhyObcT_wfSLxQYO229EGom7gJ_zw7degzadoC8gdqA7-OYcMWzOI-5-TaGeIQ0ieyf0A7H7dwUQWIxTelxeV2gh2A7TKSmQZn8K1Npp9yPaUtBVFYQR7e4H-nVILljqfE4rdLcq-P69Htxma9EIv4k7Mwo5P1-63L1Itmp8ZpcfMN2qjhQUFJZkunIyy5RrGyjVQt2K6nHnYm8ZvZjXMOiUD7MSsYosQyMXjYktj19_xdiM1ojSiob9W1MFgd4gAwHGrWxqm-I4IwBMdcOUnpu9qXCW4nR9ldEVuWlExAj3B_QREGsG5zC54heuxI8027DzjyEaxF4bGg\",\"expirationTime\":1775763156640},\"createdAt\":\"1775756976582\",\"lastLoginAt\":\"1775759556765\",\"apiKey\":\"AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA\",\"appName\":\"[DEFAULT]\"}"
+        }
+      ]
+    }
+  ]
+}

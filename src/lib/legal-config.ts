@@ -4,4 +4,4 @@
  * Al incrementar esta versión, el sistema solicitará una nueva aceptación 
  * forzosa a todos los usuarios (pasajeros y conductores).
  */
-export const CURRENT_TERMS_VERSION = "v1.2";
+export const CURRENT_TERMS_VERSION = "v1.3";

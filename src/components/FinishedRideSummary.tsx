@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import RatingForm from './RatingForm';
 import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useRef, useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -294,6 +295,7 @@ export default function FinishedRideSummary({
       <RatingForm
         participantName={isDriver ? ride.passengerName || 'Pasajero' : ride.driverName || 'Conductor'}
         participantRole={isDriver ? 'pasajero' : 'conductor'}
+        photoURL={isDriver ? ride.passengerPhotoUrl : ride.driverPhotoUrl}
         onSubmit={handleRatingSubmit}
         isSubmitted={hasUserRated || isRatingSubmitted}
         submitButtonText={isDriver ? 'Calificar y ver viajes' : 'Calificar y pedir otro viaje'}

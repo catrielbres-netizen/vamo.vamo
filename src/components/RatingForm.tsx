@@ -14,10 +14,18 @@ interface RatingFormProps {
   participantRole: 'conductor' | 'pasajero';
   onSubmit: (rating: number, comments: string) => void;
   isSubmitted: boolean;
+  photoURL?: string | null;
   submitButtonText?: string;
 }
 
-export default function RatingForm({ participantName, participantRole, onSubmit, isSubmitted, submitButtonText = "Enviar Calificación" }: RatingFormProps) {
+export default function RatingForm({ 
+  participantName, 
+  participantRole, 
+  onSubmit, 
+  isSubmitted, 
+  photoURL,
+  submitButtonText = "Enviar Calificación" 
+}: RatingFormProps) {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comments, setComments] = useState('');
@@ -41,26 +49,37 @@ export default function RatingForm({ participantName, participantRole, onSubmit,
 
   return (
     <>
-      <CardHeader className="pt-6">
-        <CardTitle className='text-base'>Calificá a tu {participantRole}</CardTitle>
-        <CardDescription>{participantName}</CardDescription>
+      <CardHeader className="pt-6 flex flex-col items-center text-center">
+        {photoURL ? (
+            <img src={photoURL} alt={participantName} className="w-20 h-20 rounded-full object-cover mb-4 border-4 border-primary/20 shadow-xl" />
+        ) : (
+            <div className="w-20 h-20 rounded-full bg-zinc-800 flex items-center justify-center mb-4 border-4 border-white/5 shadow-xl">
+                <VamoIcon name={participantRole === 'conductor' ? 'user' : 'user'} className="w-10 h-10 text-zinc-600" />
+            </div>
+        )}
+        <CardTitle className='text-xl font-black uppercase tracking-tight'>¿Cómo fue tu viaje?</CardTitle>
+        <CardDescription className="text-xs font-bold uppercase tracking-widest text-zinc-500">con {participantName}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex justify-center items-center space-x-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-            <VamoIcon
-            name="star"
-            key={star}
-            className={cn(
-                'w-8 h-8 cursor-pointer transition-colors',
-                star <= (hoverRating || rating)
-                ? 'text-yellow-400 fill-yellow-400'
-                : 'text-muted-foreground/50'
-            )}
-            onClick={() => setRating(star)}
-            onMouseEnter={() => setHoverRating(star)}
-            onMouseLeave={() => setHoverRating(0)}
-            />
+         {[1, 2, 3, 4, 5].map((star) => (
+            <div 
+              key={star}
+              className="relative p-1"
+              onMouseEnter={() => setHoverRating(star)}
+              onMouseLeave={() => setHoverRating(0)}
+              onClick={() => setRating(star)}
+            >
+                <VamoIcon
+                    name="star"
+                    className={cn(
+                        'w-10 h-10 cursor-pointer transition-all duration-200 transform',
+                        star <= (hoverRating || rating)
+                        ? 'text-yellow-400 fill-yellow-400 scale-110 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]'
+                        : 'text-zinc-800 scale-100'
+                    )}
+                />
+            </div>
         ))}
         </div>
         <Textarea

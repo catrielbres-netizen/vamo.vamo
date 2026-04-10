@@ -25,7 +25,7 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 
-dotenv.config();
+dotenv.config({ path: '.env.local' });
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 const BASE_URL    = (process.env.VAMO_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -88,16 +88,28 @@ async function waitVisible(page: Page, selector: string, timeout = 25000): Promi
 
 async function goToTab(page: Page, tabText: string, role: string) {
     console.log(`    [${role}] → Tab "${tabText}"`);
-    const tab = page.locator(
-        `[role="tab"]:has-text("${tabText}"), button:has-text("${tabText}")`
-    ).first();
-    if (await tab.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await tab.hover();
-        await beat(350);
-        await tab.click();
-        await beat(1200);
-    } else {
-        console.warn(`    ⚠  Tab "${tabText}" no visible para [${role}].`);
+    // Try to find the tab by role and text, then fallback to button text
+    const selectors = [
+        `[role="tab"]:has-text("${tabText}")`,
+        `button:has-text("${tabText}")`,
+        `a:has-text("${tabText}")`
+    ];
+
+    let found = false;
+    for (const sel of selectors) {
+        const locator = page.locator(sel).first();
+        if (await locator.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await locator.hover();
+            await beat(350);
+            await locator.click();
+            await beat(1500);
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        console.warn(`    ⚠  Tab "${tabText}" no visible para [${role}]. Intentando click por coordenadas si es posible…`);
     }
 }
 
@@ -169,19 +181,25 @@ async function runDemo() {
         // ══════════════════════════════════════════════════════════════════════
         console.log('📍 Cargando dashboards (ya autenticados)…');
         await Promise.all([
-            pPage.goto(`${BASE_URL}/dashboard/ride`,  { waitUntil: 'domcontentloaded', timeout: 25000 }),
-            dPage.goto(`${BASE_URL}/driver/rides`,    { waitUntil: 'domcontentloaded', timeout: 25000 }),
+            pPage.goto(`${BASE_URL}/dashboard/ride`,  { waitUntil: 'load', timeout: 45000 }),
+            dPage.goto(`${BASE_URL}/driver/rides`,    { waitUntil: 'load', timeout: 45000 }),
         ]);
 
         // Esperar que la UI esté completamente renderizada antes de mostrar nada
         // Si Firebase redirige a /login (sesión expirada), lo detectamos.
         await Promise.all([
-            pPage.waitForURL(/\/dashboard/, { timeout: 15000 }).catch(() => {
-                throw new Error('PASAJERO fue redirigido al login. Ejecutá: npm run demo:auth');
+            pPage.waitForURL(/\/dashboard/, { timeout: 20000 }).catch(() => {
+                throw new Error('PASAJERO fue redirigido al login o no cargó. Ejecutá: npm run demo:auth');
             }),
-            dPage.waitForURL(/\/driver/, { timeout: 15000 }).catch(() => {
-                throw new Error('CONDUCTOR fue redirigido al login. Ejecutá: npm run demo:auth');
+            dPage.waitForURL(/\/driver/, { timeout: 20000 }).catch(() => {
+                throw new Error('CONDUCTOR fue redirigido al login o no cargó. Ejecutá: npm run demo:auth');
             }),
+        ]);
+
+        // Asegurar que el loader se haya ido en ambos
+        await Promise.all([
+            pPage.waitForSelector('button[role="tab"]', { timeout: 15000 }).catch(() => console.warn('⚠ Tabs de pasajero no detectados')),
+            dPage.waitForSelector('#online-toggle', { timeout: 15000 }).catch(() => console.warn('⚠ Toggle de conductor no detectado')),
         ]);
 
         console.log('  ✅ Ambos dashboards cargados. Punto de inicio sincronizado.\n');

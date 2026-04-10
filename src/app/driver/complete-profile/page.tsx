@@ -135,6 +135,7 @@ function CompleteDriverProfileContent() {
                 vehicleType,
                 licenseNumber,
                 vehicleFrontPhotoURL: finalPhotoURL,
+                photoURL: profile?.photoURL || null, // Preserve profile photo if exists
                 licenseVerified: false,
                 servicesOffered: { normal: true, express: true, premium: true },
                 profileCompleted: true,

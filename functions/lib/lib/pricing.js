@@ -3,7 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.calculateRidePrice = calculateRidePrice;
 function calculateRidePrice(input, config) {
     const baseFare = input.isNight ? config.NIGHT_BASE_FARE : config.DAY_BASE_FARE;
-    const pricePerKm = (input.isNight ? config.NIGHT_PRICE_PER_100M : config.DAY_PRICE_PER_100M) * 10;
+    const factor = config._pricePerKmFactor ?? 10;
+    const pricePerKm = (input.isNight ? config.NIGHT_PRICE_PER_100M : config.DAY_PRICE_PER_100M) * factor;
     const waitingPerMin = input.isNight ? config.NIGHT_WAITING_PER_MIN : config.DAY_WAITING_PER_MIN;
     // Use dynamically from config if defined, else 0
     const timePerMin = config.DAY_PRICE_PER_MIN

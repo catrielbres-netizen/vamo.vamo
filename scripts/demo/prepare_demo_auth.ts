@@ -21,9 +21,9 @@ import { chromium } from 'playwright';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 
-dotenv.config();
+dotenv.config({ path: '.env.local' });
 
-const BASE_URL        = (process.env.VAMO_BASE_URL        || 'http://localhost:3000').replace(/\/$/, '');
+const BASE_URL        = (process.env.VAMO_BASE_URL        || 'http://localhost:3002').replace(/\/$/, '');
 const PASSENGER_EMAIL = process.env.DEMO_PASSENGER_EMAIL  || 'demo_passenger@vamo.com';
 const PASSENGER_PASS  = process.env.DEMO_PASSENGER_PASS   || 'vamo2024pass';
 const DRIVER_EMAIL    = process.env.DEMO_DRIVER_EMAIL     || 'demo_driver@vamo.com';
@@ -40,17 +40,68 @@ async function saveSession(email: string, password: string, outputPath: string, 
     await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(1500);
 
-    await page.locator('input[type="email"], input[name="email"]').first().fill(email);
-    await page.locator('input[type="password"]').first().fill(password);
-    await page.locator('button[type="submit"]').first().click();
+    await page.locator('#email').fill(email);
+    await page.locator('#password').fill(password);
+    await page.locator('button:has-text("Iniciar Sesión")').click();
 
-    // Esperar hasta estar dentro del dashboard
-    await page.waitForURL(/\/(dashboard|driver)/, { timeout: 25000 });
-    // Dejar que Firebase persista el token en localStorage
-    await page.waitForTimeout(3000);
+    // 1. Esperar redirección al dashboard/driver
+    await page.waitForURL(/\/(dashboard|driver)/, { timeout: 30000, waitUntil: 'load' });
 
-    await ctx.storageState({ path: outputPath });
+    // 2. Manejar modal de Términos si aparece (bloqueante post-login)
+    try {
+        const termsBtn = page.locator('button:has-text("Acepto y Continuar")');
+        if (await termsBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await termsBtn.click();
+            console.log(`[${label}] Modal de términos aceptado.`);
+            await page.waitForTimeout(1000);
+        }
+    } catch (e) { }
+
+    // 3. SEÑAL REAL: Esperar a que el loader se vaya y la UI esté lista
+    await page.waitForSelector('h1, button[role="tab"], #online-toggle', { timeout: 20000 });
+    
+    // Dejar que Firebase persista el token en localStorage y cookies
+    console.log(`[${label}] Esperando persistencia de Firebase…`);
+    await page.waitForTimeout(6000);
+
+    // BRIDGE: Copiar de IndexedDB a LocalStorage (Playwright no captura IndexedDB por defecto)
+    await page.evaluate(async () => {
+        try {
+            const dbName = 'firebaseLocalStorageDb';
+            const storeName = 'firebaseLocalStorage';
+            const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                const req = indexedDB.open(dbName);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            
+            const keys: any[] = await new Promise(r => { const req = store.getAllKeys(); req.onsuccess = () => r(req.result); });
+            const records: any[] = await new Promise(r => { const req = store.getAll(); req.onsuccess = () => r(req.result); });
+            
+            keys.forEach((key, i) => {
+                // Firebase guarda un objeto envuelto, tomamos el .f || .value
+                const val = records[i].f || records[i].value || records[i];
+                localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
+            });
+            db.close();
+            console.log("✅ IndexedDB bridged to LocalStorage");
+        } catch (e) {
+            console.error("❌ Bridge failed:", e);
+        }
+    });
+
+    const state = await ctx.storageState({ path: outputPath });
+    const hasCookies = state.cookies.length > 0;
+    const hasStorage = state.origins.some(o => o.localStorage.length > 0);
+
+    if (!hasCookies && !hasStorage) {
+        throw new Error(`[${label}] Error: storageState se guardó VACÍO. Reintentá.`);
+    }
+
     await browser.close();
+    console.log(`[${label}] ✅ Sesión guardada (${state.cookies.length} cookies, ${state.origins[0]?.localStorage.length || 0} items) → ${outputPath}`);
 
     console.log(`[${label}] ✅ Sesión guardada → ${outputPath}`);
 }

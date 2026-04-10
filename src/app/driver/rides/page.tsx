@@ -17,8 +17,8 @@ const statusMessages: Record<VerificationStatus, {title: string, description: st
         icon: 'loader'
     },
     pending_review: {
-        title: 'Cuenta en Revisión',
-        description: 'Nuestro equipo está verificando tu documentación. Recibirás una notificación cuando tu cuenta sea aprobada. Esto puede demorar hasta 24hs.',
+        title: 'Perfil en revisión',
+        description: 'Tu información fue enviada correctamente. Nuestro equipo está evaluando tu solicitud. Pronto te notificaremos si fuiste aprobado o si necesitamos documentación adicional.',
         icon: 'clock'
     },
     rejected: {
@@ -37,89 +37,27 @@ export default function DriverRidesPage() {
   const { profile, user } = useUser();
   const { rides: availableOffers, loading: isLoading, error, newRideIds } = useDriverDashboard();
 
-  // --- "Nextel" Sound Alert Logic ---
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const isPlayingRef = useRef(false);
-
-  useEffect(() => {
-    // Only play if there are offers and driver is online
-    const shouldPlay = availableOffers.length > 0 && profile?.driverStatus === 'online';
-
-    if (shouldPlay && !isPlayingRef.current) {
-        isPlayingRef.current = true;
-        
-        const playNextelSound = async () => {
-            if (!isPlayingRef.current) return;
-
-            try {
-                if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-                    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-                }
-                
-                const ctx = audioContextRef.current;
-                
-                // Handle autoplay policy
-                if (ctx.state === 'suspended') {
-                    await ctx.resume();
-                }
-
-                const playBip = (freq: number, start: number, duration: number) => {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(freq, start);
-                    gain.gain.setValueAtTime(0.1, start);
-                    gain.gain.exponentialRampToValueAtTime(0.01, start + duration);
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.start(start);
-                    osc.stop(start + duration);
-                };
-
-                const now = ctx.currentTime;
-                // Radio "pipi" pattern
-                playBip(900, now, 0.05);
-                playBip(700, now + 0.06, 0.05);
-                
-                // Loop every 2 seconds if still playing
-                setTimeout(() => {
-                    if (isPlayingRef.current) playNextelSound();
-                }, 2000);
-
-            } catch (err) {
-                console.error("Audio playback failed (Nextel Alert):", err);
-                isPlayingRef.current = false;
-            }
-        };
-
-        playNextelSound();
-    } else if (!shouldPlay && isPlayingRef.current) {
-        isPlayingRef.current = false;
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.close().catch(() => {});
-        }
-    }
-
-    return () => {
-        isPlayingRef.current = false;
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.close().catch(() => {});
-        }
-    };
-  }, [availableOffers.length, profile?.driverStatus]);
+  // Sound logic and global alerts are now handled by GlobalOfferOverlay 
+  // in the layout to ensure they work across all dashboard pages.
 
   if (!profile) {
       return null; 
   }
   
   if (!profile.approved) {
-    const statusKey = profile.vehicleVerificationStatus || 'unverified';
+    let statusKey = profile.vehicleVerificationStatus || 'unverified';
+    
+    // Si ya completó el alta pero no está aprobado, forzar "pending_review" si no hay otro estado terminal
+    if (profile.profileCompleted && statusKey === 'unverified') {
+        statusKey = 'pending_review';
+    }
+
     const message = statusMessages[statusKey] || statusMessages.unverified;
     return (
         <Alert variant="default" className="border-yellow-400 bg-yellow-50 dark:bg-yellow-900/30">
             <VamoIcon name={message.icon} className="h-4 w-4 text-yellow-500" />
             <AlertTitle className="text-yellow-700 dark:text-yellow-300">{message.title}</AlertTitle>
-            <AlertDescription className="text-yellow-600 dark:text-yellow-500">
+            <AlertDescription className="text-yellow-600 dark:text-yellow-500 font-medium">
                 {message.description}
             </AlertDescription>
         </Alert>

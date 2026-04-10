@@ -61,6 +61,13 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
   const waitSecs = completedRide?.waitingSeconds ?? 0;
   const distanceKm = completedRide?.distanceMeters ? (completedRide.distanceMeters / 1000).toFixed(2) : '—';
   const durationStr = formatDuration(completedRide?.durationSeconds);
+  
+  // ETA estimation from pricing
+  const estDurationSecs = pricing?.estimated?.duration || 0;
+  const estDurationStr = estDurationSecs > 0 ? formatDuration(estDurationSecs) : null;
+  
+  // Unique Receipt ID
+  const receiptNumber = id ? `REC-${id.substring(0, 4).toUpperCase()}-${id.substring(id.length - 4).toUpperCase()}` : 'REC-PENDING';
 
   return (
     <div className={cn("w-full animate-in fade-in zoom-in-95 duration-500", className)}>
@@ -130,8 +137,11 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
                 <p className="text-lg font-black text-white">{distanceKm} <span className="text-xs text-zinc-500">km</span></p>
             </div>
             <div className="bg-zinc-900/40 p-4 rounded-2xl border border-white/5">
-                <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">Duración</p>
+                <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1">Tiempo Real</p>
                 <p className="text-lg font-black text-white">{durationStr}</p>
+                {estDurationStr && (
+                  <p className="text-[8px] font-bold text-zinc-600 uppercase mt-1">Est: {estDurationStr}</p>
+                )}
             </div>
           </div>
 
@@ -155,6 +165,16 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
                 <span>-{formatCurrency((ride as any).pricing.discountAmount)}</span>
               </div>
             )}
+
+            {completedRide?.fapFee > 0 && (
+              <div className="flex justify-between items-center text-[10px] font-bold text-primary uppercase tracking-wider">
+                <div className="flex items-center gap-1.5 underline decoration-primary/30 underline-offset-4 cursor-help group" title="El F.A.P. es un beneficio discrecional de asistencia económica. Ver términos.">
+                  <span onClick={() => window.open('/legal/terms-passenger', '_blank')}>Cuota Fondo Asistencia (F.A.P.)</span>
+                  <VamoIcon name="shield-check" className="h-2.5 w-2.5 opacity-50 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <span>{formatCurrency(completedRide.fapFee)}</span>
+              </div>
+            )}
           </div>
 
           <Separator className="bg-white/5" />
@@ -170,9 +190,10 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
                     <p className="text-sm font-bold text-white">{driverName || 'Conductor VamO'}</p>
                 </div>
              </div>
-             {id && (
-                 <p className="text-[8px] font-mono text-zinc-700 uppercase">{id.substring(0, 8)}</p>
-             )}
+             <div className="text-right">
+                 <p className="text-[7px] font-black text-zinc-700 uppercase tracking-widest leading-none mb-1">Comprobante N°</p>
+                 <p className="text-[10px] font-mono font-black text-zinc-600 uppercase tracking-tighter">{receiptNumber}</p>
+             </div>
           </div>
         </CardContent>
 

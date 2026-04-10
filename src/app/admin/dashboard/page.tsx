@@ -6,9 +6,11 @@ import {
     query, 
     where, 
     getCountFromServer, 
+    getDocs,
     Timestamp
 } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
+import { isDriverReadyForReview } from '@/lib/eligibility';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { VamoIcon } from '@/components/VamoIcon';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -74,7 +76,7 @@ export default function AdminDashboardPage() {
                 activeRidesSnap,
                 completedTodaySnap
             ] = await Promise.all([
-                getCountFromServer(pendingDriversQuery),
+                getDocs(pendingDriversQuery),
                 getCountFromServer(approvedDriversQuery),
                 getCountFromServer(onlineDriversQuery),
                 getCountFromServer(pendingWithdrawalsQuery),
@@ -82,8 +84,10 @@ export default function AdminDashboardPage() {
                 getCountFromServer(completedTodayQuery)
             ]);
 
+            const realPendingCount = pendingSnap.docs.filter(d => isDriverReadyForReview(d.data())).length;
+
             setMetrics({
-                pendingDrivers: pendingSnap.data().count,
+                pendingDrivers: realPendingCount,
                 approvedDrivers: approvedSnap.data().count,
                 onlineDrivers: onlineDriversQuery ? onlineSnap.data().count : 0, // Safeguard
                 pendingWithdrawals: withdrawalsSnap.data().count,

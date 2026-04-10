@@ -11,9 +11,11 @@ const canPassengerRequestRide = (profile, isEmailVerified) => {
         return { isEligible: false, reason: "La cuenta está suspendida", code: "SUSPENDED" };
     if (!profile.profileCompleted)
         return { isEligible: false, reason: "Debés completar tu perfil", code: "PROFILE_INCOMPLETE" };
-    // MANDATORY LEGAL CHECK (v1.2)
-    const CURRENT_TERMS_V = 'v1.2';
-    if (!profile.termsAccepted || profile.termsVersion !== CURRENT_TERMS_V) {
+    // MANDATORY LEGAL CHECK (v1.3)
+    const CURRENT_TERMS_V = 'v1.3';
+    const hasAccepted = profile.termsAccepted || profile.acceptedDriverTerms;
+    const isCorrectVersion = profile.termsVersion === CURRENT_TERMS_V;
+    if (!hasAccepted || !isCorrectVersion) {
         return { isEligible: false, reason: "Debés aceptar los nuevos Términos y Condiciones", code: "TERMS_NOT_ACCEPTED" };
     }
     // Strict validations
@@ -68,9 +70,11 @@ const canDriverGoOnline = (profile, isEmailVerified) => {
         return { isEligible: false, reason: "Tu cuenta está pendiente de aprobación", code: "NOT_APPROVED" };
     if (!profile.profileCompleted)
         return { isEligible: false, reason: "Debés completar tu perfil", code: "PROFILE_INCOMPLETE" };
-    // MANDATORY LEGAL CHECK (v1.2)
-    const CURRENT_TERMS_V = 'v1.2';
-    if (!profile.termsAccepted || profile.termsVersion !== CURRENT_TERMS_V) {
+    // MANDATORY LEGAL CHECK (v1.3)
+    const CURRENT_TERMS_V = 'v1.3';
+    const hasAccepted = profile.termsAccepted || profile.acceptedDriverTerms;
+    const isCorrectVersion = profile.termsVersion === CURRENT_TERMS_V;
+    if (!hasAccepted || !isCorrectVersion) {
         return { isEligible: false, reason: "Debés aceptar los nuevos Términos y Condiciones", code: "TERMS_NOT_ACCEPTED" };
     }
     if (!profile.phone || profile.phone.trim() === "") {

@@ -15,6 +15,8 @@ const navLinks = [
     { href: '/municipal/pricing',    label: 'Tarifas',     icon: 'banknote' },
 ]
 
+const HUB_CITY_KEY = 'rawson';
+
 export function MunicipalNavbar() {
   const pathname  = usePathname()
   const auth      = useAuth()
@@ -53,6 +55,21 @@ export function MunicipalNavbar() {
                     <span className="hidden sm:inline">{link.label}</span>
                 </Link>
             ))}
+            {profile?.cityKey === HUB_CITY_KEY && (
+                <Link
+                    href={'/municipal/expansion'}
+                    prefetch={false}
+                    className={cn(
+                        "flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-bold transition-colors",
+                        pathname.startsWith('/municipal/expansion')
+                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
+                            : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+                    )}
+                >
+                    <VamoIcon name="map" className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline text-[9px] uppercase tracking-tighter">Expansión HUB</span>
+                </Link>
+            )}
         </div>
         <Button variant="ghost" size="sm" onClick={handleLogout} className="text-zinc-600 hover:text-zinc-300 text-xs h-8">
             <VamoIcon name="log-out" className="h-3.5 w-3.5 mr-1.5" />

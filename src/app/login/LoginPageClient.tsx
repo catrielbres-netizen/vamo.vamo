@@ -138,21 +138,39 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
             const isDriver = role === 'driver';
             
             console.log('📝 [SIGNUP] Creating user document in Firestore...');
-            await setDoc(doc(firestore, 'users', newUser.uid), {
-                uid: newUser.uid,
-                email: newUser.email,
-                name: '',
-                role,
-                profileCompleted: false,
-                referredByCode: refParam ? refParam.toUpperCase().trim() : null,
-                campaign: campaignParam ? campaignParam.trim() : null,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                isSuspended: false,
-                approved: !isDriver,
-                currentBalance: 0,
-                serviceTier: 'premium',
-            });
+            
+            let userPayload: any;
+            
+            if (role === 'passenger') {
+                // Minimal payload for passengers as requested
+                userPayload = {
+                    uid: newUser.uid,
+                    role: 'passenger',
+                    name: '',
+                    email: newUser.email,
+                    createdAt: serverTimestamp(),
+                    profileCompleted: false
+                };
+            } else {
+                // Detailed payload for drivers (required for vetting)
+                userPayload = {
+                    uid: newUser.uid,
+                    email: newUser.email,
+                    name: '',
+                    role,
+                    profileCompleted: false,
+                    referredByCode: refParam ? refParam.toUpperCase().trim() : null,
+                    campaign: campaignParam ? campaignParam.trim() : null,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                    isSuspended: false,
+                    approved: false,
+                    currentBalance: 0,
+                    serviceTier: 'premium',
+                };
+            }
+
+            await setDoc(doc(firestore, 'users', newUser.uid), userPayload);
             console.log('✅ [SIGNUP] Firestore user document created.');
             
             // --- NEW: Email Verification ---

@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
+import { isDriverReadyForReview } from '@/lib/eligibility';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function isExpired(ts: any): boolean {
@@ -103,11 +104,7 @@ export default function MunicipalDashboardPage() {
 
     // ── Métricas ───────────────────────────────────────────────────────────────
     const total       = drivers.length;
-    const pending     = drivers.filter(d => 
-        d.municipalStatus === 'pending_municipal_review' || 
-        d.municipalStatus === 'municipal_observed' ||
-        d.municipalStatus === 'renewal_under_review'
-    ).length;
+    const pending     = drivers.filter(isDriverReadyForReview).length;
     const active      = drivers.filter(d => d.municipalStatus === 'active').length;
     const suspended   = drivers.filter(d => BLOCKED_STATUSES.includes(d.municipalStatus)).length;
     const expired     = drivers.filter(d => 
@@ -119,11 +116,7 @@ export default function MunicipalDashboardPage() {
     const canonPend   = drivers.filter(d => d.canonStatus !== 'paid' || isExpired(d.canonExpiry)).length;
 
     const recentPending = drivers
-        .filter(d => 
-            d.municipalStatus === 'pending_municipal_review' || 
-            d.municipalStatus === 'municipal_observed' || 
-            d.municipalStatus === 'renewal_under_review'
-        )
+        .filter(isDriverReadyForReview)
         .slice(0, 5);
 
     const handleQuickSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {

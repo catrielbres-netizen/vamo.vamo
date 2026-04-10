@@ -31,12 +31,13 @@ export default function AdminConfigPage() {
     // PRICING CONFIG
     const [pricingConfig, setPricingConfig] = useState<PricingConfig>({
         version: 1,
-        DAY_BASE_FARE: 500,
-        DAY_PRICE_PER_100M: 50,
-        DAY_WAITING_PER_MIN: 100,
-        NIGHT_BASE_FARE: 700,
-        NIGHT_PRICE_PER_100M: 70,
-        NIGHT_WAITING_PER_MIN: 150,
+        DAY_BASE_FARE: 1483,
+        DAY_PRICE_PER_100M: 152,
+        DAY_WAITING_PER_MIN: 220,
+        NIGHT_BASE_FARE: 1652,
+        NIGHT_PRICE_PER_100M: 189,
+        NIGHT_WAITING_PER_MIN: 277,
+        MINIMUM_FARE: 1500,
         PLATFORM_COMMISSION_RATE: 0.15,
         ASSISTANCE_FEE: 400,
         assistanceEnabled: true
