@@ -99,14 +99,10 @@ export default function ActiveDriverRide({ ride }: { ride: WithId<Ride> }) {
 
   useEffect(() => {
     if (profile?.role === 'driver' && profile.activeRideId === null && ride.status === 'completed') {
-      const timeout = setTimeout(() => {
-        router.replace('/driver');
-        router.refresh();
-      }, 1200);
-
-      return () => clearTimeout(timeout);
+      // Forzar redirección inmediata y reset de estado garantizado
+      window.location.href = '/driver/rides';
     }
-  }, [profile?.activeRideId, profile?.role, ride.status, router]);
+  }, [profile?.activeRideId, profile?.role, ride.status]);
 
   // --- ETA UPDATE LOGIC (Bloque 2) ---
   const [lastEta, setLastEta] = useState<number | null>(null);

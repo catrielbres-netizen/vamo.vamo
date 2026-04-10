@@ -10,6 +10,11 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { useFirebaseApp } from '@/firebase/provider';
+import { useState } from 'react';
+import RatingForm from './RatingForm';
 
 interface RideReceiptProps {
   ride: WithId<Ride> | Ride;
@@ -36,6 +41,30 @@ function formatDuration(seconds?: number) {
 
 export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceiptProps) {
   const { completedRide, origin, destination, driverName, serviceType, completedAt, id, pricing } = ride as any;
+  const firebaseApp = useFirebaseApp();
+  const { toast } = useToast();
+  const [isRatingSubmitted, setIsRatingSubmitted] = useState(false);
+  const hasUserRated = !!(ride as any).driverRatingByPassenger;
+
+  const handleRatingSubmit = async (rating: number, comments: string) => {
+    if (isRatingSubmitted || !firebaseApp) {
+        console.warn('[RATING_UI] disabled duplicate');
+        return;
+    }
+    console.log('[RATING_UI] submit click');
+    try {
+      setIsRatingSubmitted(true);
+      const functions = getFunctions(firebaseApp, 'us-central1');
+      const submitRating = httpsCallable(functions, 'submitRideRatingV1');
+      await submitRating({ rideId: ride.id, score: rating, comment: comments });
+      console.log('[RATING_UI] submit success');
+      toast({ title: 'Calificación enviada', description: 'Gracias por evaluar a tu conductor.' });
+    } catch (error: any) {
+      setIsRatingSubmitted(false);
+      console.error('[RATING_UI] submit error:', error);
+      toast({ variant: 'destructive', title: 'Error al enviar calificación', description: error.message });
+    }
+  };
 
   const dateStr = completedAt instanceof Timestamp 
     ? format(completedAt.toDate(), "d 'de' MMMM, HH:mm'hs'", { locale: es })
@@ -53,8 +82,13 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
   
   const discountAmount = pricing?.discountAmount || 0;
   const netTotal = grossTotal - discountAmount;
-
   const isProcessing = !completedRide || (!completedRide.finalTotal && !completedRide.totalFare);
+
+  if (isProcessing) {
+      console.log('[RECEIPT_UI] summary fallback used due to missing completedRide');
+  } else {
+      console.log('[RECEIPT_UI] pricing source: completedRide');
+  }
 
   const baseAndDist = (completedRide?.baseFare ?? 0) + (completedRide?.distanceFare ?? 0);
   const waitFare = completedRide?.waitingFare ?? 0;
@@ -195,7 +229,16 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
                  <p className="text-[10px] font-mono font-black text-zinc-600 uppercase tracking-tighter">{receiptNumber}</p>
              </div>
           </div>
-        </CardContent>
+         </CardContent>
+
+        <RatingForm
+          participantName={driverName || 'Conductor'}
+          participantRole={'conductor'}
+          photoURL={(ride as any).driverPhotoUrl}
+          onSubmit={handleRatingSubmit}
+          isSubmitted={hasUserRated || isRatingSubmitted}
+          submitButtonText={'Enviar calificación'}
+        />
 
         <CardFooter className="pt-2 pb-8">
           <Button 

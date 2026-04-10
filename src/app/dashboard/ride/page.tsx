@@ -232,6 +232,7 @@ function RidePageContent() {
   }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng, useExpress, selectedPromoId, firebaseApp]);
 
   const handleRequestRide = async () => {
+    console.log('[RIDE_REQUEST] click received');
     if (isRequesting || !firebaseApp || !user || !profile) return;
     if (!origin || !destination) return;
 
@@ -249,7 +250,12 @@ function RidePageContent() {
         return;
     }
 
+    console.log('[RIDE_REQUEST] validations passed');
+    console.log('[RIDE_REQUEST] origin final', origin);
+    console.log('[RIDE_REQUEST] destination final', destination);
+
     setIsRequesting(true);
+    console.log('[PASSENGER_BRANCH] pending state');
     setPendingRideRequest(true);
 
     try {
@@ -257,17 +263,19 @@ function RidePageContent() {
         const createRide = httpsCallable(functions, 'createRideV1');
         
         const payload = await getRidePayload(false);
+        const requestPayload = { ...payload, clientRequestId: Math.random().toString(36).substring(7) };
 
-        console.log('🚀 [RIDE_REQUEST] Parameters:', payload);
+        console.log('[RIDE_REQUEST] clientRequestId', requestPayload.clientRequestId);
+        console.log('[RIDE_REQUEST] payload', requestPayload);
+        console.log('[RIDE_REQUEST] calling createRideV1');
 
-        const result = await createRide(payload);
+        const result = await createRide(requestPayload);
         
         const data = result.data as any;
-        console.log('✅ [RIDE_REQUEST] Server Response:', data);
+        console.log('[RIDE_REQUEST] response exacta', data);
 
         if (data.success && data.rideId) {
-            // CRITICAL: Set localRideId first, then release pending so hasActiveRide stays true
-            console.log('🚀 [RIDE_UI] Transitioning to searching with rideId:', data.rideId);
+            console.log(`[PASSENGER_BRANCH] rideId source: ${data.rideId}`);
             setLocalRideId(data.rideId);
             setPendingRideRequest(false);
             toast({ title: '¡Buscando conductor!' });
@@ -275,7 +283,7 @@ function RidePageContent() {
             throw new Error(data.error || 'Error al crear el viaje');
         }
     } catch (error: any) {
-      console.error('❌ [RIDE_REQUEST] Error:', error);
+      console.error('❌ [PASSENGER_BRANCH] ghost prevention error:', error);
       setLocalRideId(null);
       setPendingRideRequest(false);
       toast({ variant: 'destructive', title: 'Error al pedir viaje', description: error.message });

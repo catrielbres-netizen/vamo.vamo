@@ -1,9 +1,4 @@
 "use strict";
-/**
- * VamO Cloud Functions - Entrypoint
- * Structure: Clean bootstrap + Secure Exports
- * No business logic should reside here.
- */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -37,21 +32,34 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __exportStar = (this && this.__exportStar) || function(m, exports) {
-    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
-};
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.ensureMunicipalPricingV1 = void 0;
+const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
-// 1. Initialize Firebase Admin (MUST be first)
-admin.initializeApp();
-// 2. Export functions from specialized modules
-// This pattern prevents circular dependencies and cold-start initialization crashes.
-__exportStar(require("./handlers"), exports);
-__exportStar(require("./rides"), exports);
-__exportStar(require("./claims"), exports);
-__exportStar(require("./chat"), exports);
-__exportStar(require("./promotions"), exports);
-__exportStar(require("./ensureMunicipalPricing"), exports);
-// Note: Ensure all sub-modules use getDb() from ./lib/firebaseAdmin 
-// to avoid "default Firebase app does not exist" errors.
-//# sourceMappingURL=index.js.map
+const firebaseAdmin_1 = require("./lib/firebaseAdmin");
+/**
+ * Callable that ensures a municipal pricing document exists.
+ * If the document does not exist, it creates it with default fixed tariff values.
+ */
+exports.ensureMunicipalPricingV1 = (0, https_1.onCall)({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth)
+        throw new https_1.HttpsError('unauthenticated', 'Debes iniciar sesión.');
+    const { pricingMunicipalityKey } = request.data;
+    if (!pricingMunicipalityKey)
+        throw new https_1.HttpsError('invalid-argument', 'pricingMunicipalityKey es requerido');
+    const db = (0, firebaseAdmin_1.getDb)();
+    const docRef = db.doc(`municipal_pricing/${pricingMunicipalityKey}`);
+    const snap = await docRef.get();
+    if (!snap.exists) {
+        const defaultPricing = {
+            DAY_BASE_FARE: 300,
+            DAY_PRICE_PER_100M: 110,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+        await docRef.set(defaultPricing, { merge: true });
+        return { success: true, created: true, pricingMunicipalityKey };
+    }
+    return { success: true, created: false, pricingMunicipalityKey };
+});
+//# sourceMappingURL=ensureMunicipalPricing.js.map

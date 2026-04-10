@@ -123,21 +123,27 @@ export default function FinishedRideSummary({
   */
 
   const handleRatingSubmit = async (rating: number, comments: string) => {
-    if (rating === 0 || !firebaseApp) return;
+    if (rating === 0 || !firebaseApp || isRatingSubmitted) {
+        console.warn('[RATING_UI] disabled duplicate');
+        return;
+    }
+    console.log('[RATING_UI] submit click');
 
     try {
+      setIsRatingSubmitted(true);
       const functions = getFunctions(undefined, 'us-central1');
       const submitRating = httpsCallable(functions, 'submitRideRatingV1');
       await submitRating({ rideId: ride.id, score: rating, comment: comments });
 
+      console.log('[RATING_UI] submit success');
       toast({ title: '¡Calificación enviada!', description: 'Gracias por tu opinión.' });
-      setIsRatingSubmitted(true);
 
       setTimeout(() => {
         handleClose();
       }, 1500);
     } catch (e: any) {
-      console.error('Could not submit rating via function', e);
+      console.error('[RATING_UI] submit error:', e);
+      setIsRatingSubmitted(false);
       toast({
         variant: 'destructive',
         title: 'Error al calificar',
@@ -150,31 +156,26 @@ export default function FinishedRideSummary({
     }
   };
 
-  if (!ride.completedRide) {
-    return (
-      <Card className="m-4">
-        <CardHeader>
-          <CardTitle>Viaje terminado</CardTitle>
-          <CardDescription>El viaje ha sido completado o cancelado.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-center text-muted-foreground">No hay un resumen disponible.</p>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={handleClose} className="w-full">
-            {userRole === 'driver' ? 'Ver viajes disponibles' : 'Pedir un nuevo viaje'}
-          </Button>
-        </CardFooter>
-      </Card>
-    );
+  const isProcessing = !ride.completedRide;
+  if (isProcessing) {
+      console.log('[RECEIPT_UI] summary fallback used due to missing completedRide');
+  } else {
+      console.log('[RECEIPT_UI] pricing source: completedRide');
   }
 
   const rideDate =
     ride.completedAt instanceof Timestamp
       ? format((ride.completedAt as Timestamp).toDate(), "d 'de' MMMM, HH:mm'hs'", { locale: es })
-      : 'Fecha no disponible';
+      : ride.completedAt 
+        ? format(new Date(ride.completedAt as any), "d 'de' MMMM, HH:mm'hs'", { locale: es }) 
+        : 'Cargando fecha...';
 
-  const { totalFare, baseFare, distanceFare, waitingFare, waitingSeconds } = ride.completedRide;
+  const totalFare = ride.completedRide?.totalFare || (ride.pricing as any)?.finalTotal || (ride.pricing as any)?.estimatedTotal || 0;
+  const baseFare = ride.completedRide?.baseFare || 0;
+  const distanceFare = ride.completedRide?.distanceFare || 0;
+  const waitingFare = ride.completedRide?.waitingFare || 0;
+  const waitingSeconds = ride.completedRide?.waitingSeconds || 0;
+
   const baseAndDistanceFare = baseFare + distanceFare;
   const discountAmount = (ride.pricing as any)?.discountAmount ?? 0;
   const isDriver = userRole === 'driver';

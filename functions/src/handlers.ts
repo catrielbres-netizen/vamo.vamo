@@ -381,7 +381,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
     }
 
     if (after.settledAt) {
-        logger.log(`Ride ${rideId} is already settled. Skipping.`);
+        logger.info(`[SETTLEMENT_GUARD] already settled. Ride ${rideId}. Skipping.`);
         return;
     }
 
@@ -425,7 +425,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             const rideData = rideSnap.data() as Ride;
 
             if (rideData.settledAt) {
-                logger.log(`Ride ${rideId} was settled by another process. Skipping.`);
+                logger.info(`[SETTLEMENT_GUARD] already settled in tx. Ride ${rideId} was settled by another process. Skipping.`);
                 return;
             }
 
@@ -492,11 +492,12 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
 
             const now = admin.firestore.FieldValue.serverTimestamp();
 
+            logger.info(`[SETTLEMENT_GUARD] keeping driver online. Finalizing settlement.`);
             tx.update(driverRef, {
                 activeRideId: null, // CLEAR ACTIVE RIDE
                 currentBalance: newBalance,
                 'stats.ridesCompleted': admin.firestore.FieldValue.increment(1),
-                driverStatus: 'inactive',
+                driverStatus: 'online',
                 updatedAt: now,
                 lastRideCompletedAt: now,
                 rewardPoints: newPoints,
@@ -509,7 +510,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             });
 
             tx.update(driverLocationRef, {
-                driverStatus: 'inactive',
+                driverStatus: 'online',
                 updatedAt: now,
             });
 
@@ -531,6 +532,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             }
         });
 
+        logger.info(`[SETTLEMENT_GUARD] final driver state committed for driver ${driverId}`);
         logger.log(`Successfully settled ride ${rideId}.`);
 
         // --- NEW: Increment the weekly rewards pool ---
@@ -1310,6 +1312,7 @@ export const submitRideRatingV1 = onCall({ cors: true, region: 'us-central1' }, 
         const rideData = rideSnap.data() as Ride;
 
         if (rideData.status !== 'completed') {
+            logger.warn(`[RATING_GUARD] invalid ride status: ${rideData.status}`);
             throw new HttpsError("failed-precondition", "Solo se pueden calificar viajes completados.");
         }
 
@@ -1317,18 +1320,21 @@ export const submitRideRatingV1 = onCall({ cors: true, region: 'us-central1' }, 
         const isDriver = rideData.driverId === uid;
 
         if (!isPassenger && !isDriver) {
+            logger.warn(`[RATING_GUARD] unauthorized rater: ${uid}`);
             throw new HttpsError("permission-denied", "No sos parte de este viaje.");
         }
 
         const updates: { [key: string]: any } = {};
         if (isPassenger) {
             if (rideData.driverRatingByPassenger) {
+                logger.warn(`[RATING_GUARD] duplicate prevented for passenger ${uid}`);
                 throw new HttpsError("already-exists", "Ya calificaste a este conductor.");
             }
             updates.driverRatingByPassenger = score;
             if (comment) updates.driverComments = comment;
         } else { // isDriver
             if (rideData.passengerRatingByDriver) {
+                logger.warn(`[RATING_GUARD] duplicate prevented for driver ${uid}`);
                 throw new HttpsError("already-exists", "Ya calificaste a este pasajero.");
             }
             updates.passengerRatingByDriver = score;
@@ -1336,7 +1342,7 @@ export const submitRideRatingV1 = onCall({ cors: true, region: 'us-central1' }, 
         }
 
         transaction.update(rideRef, updates);
-
+        logger.info(`[RATING_GUARD] rating saved para ride ${rideId}`);
         return { success: true };
     });
 });

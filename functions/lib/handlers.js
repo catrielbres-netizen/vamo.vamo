@@ -457,7 +457,7 @@ exports.onRideSettlementV6 = (0, firestore_1.onDocumentUpdated)("rides/{rideId}"
                 activeRideId: null, // CLEAR ACTIVE RIDE
                 currentBalance: newBalance,
                 'stats.ridesCompleted': admin.firestore.FieldValue.increment(1),
-                driverStatus: 'inactive',
+                driverStatus: 'online',
                 updatedAt: now,
                 lastRideCompletedAt: now,
                 rewardPoints: newPoints,
@@ -468,7 +468,7 @@ exports.onRideSettlementV6 = (0, firestore_1.onDocumentUpdated)("rides/{rideId}"
                 updatedAt: now,
             });
             tx.update(driverLocationRef, {
-                driverStatus: 'inactive',
+                driverStatus: 'online',
                 updatedAt: now,
             });
             // --- WEEKLY POINTS LOGIC ---

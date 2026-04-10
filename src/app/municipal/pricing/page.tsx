@@ -33,17 +33,21 @@ export default function MunicipalPricingPage() {
         }
 
         const loadPricing = async () => {
+            console.log("Iniciando carga de tarifas para:", cityKey);
             try {
                 // 1. Try to load city-specific pricing
                 const citySnap = await getDoc(doc(firestore, 'cities', cityKey));
                 if (citySnap.exists() && citySnap.data().pricing) {
+                    console.log("Tarifas específicas de ciudad encontradas");
                     setConfig(citySnap.data().pricing);
                 } else {
+                    console.log("No se encontraron tarifas específicas, cargando globales");
                     // 2. Fallback to global pricing for default values
                     const globalSnap = await getDoc(doc(firestore, 'config', 'pricing'));
                     if (globalSnap.exists()) {
                         setConfig(globalSnap.data() as PricingConfig);
                     } else {
+                        console.log("Usando valores por defecto en memoria");
                         // 3. Last resort fallback (in memory defaults)
                         setConfig({
                             version: 1,

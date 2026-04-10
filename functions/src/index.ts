@@ -18,6 +18,6 @@ export * from "./rides";
 export * from "./claims";
 export * from "./chat";
 export * from "./promotions";
-
+export * from "./ensureMunicipalPricing";
 // Note: Ensure all sub-modules use getDb() from ./lib/firebaseAdmin 
 // to avoid "default Firebase app does not exist" errors.

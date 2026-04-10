@@ -31,8 +31,9 @@ export function useDriverRides(shouldListen: boolean) {
     }
 
     setLoading(true);
-    console.log(`[useDriverRides DEBUG] Instando onSnapshot para rideOffers. UID: ${user.uid}. firestore: ${!!firestore}`);
     const driverId = user.uid;
+    console.log(`[DRIVER_OFFERS] listener attached`);
+    console.log(`[DRIVER_OFFERS] query params`, { driverId, status: "pending", limit: 20 });
 
     const offersQuery = query(
       collection(firestore, "rideOffers"),
@@ -43,11 +44,22 @@ export function useDriverRides(shouldListen: boolean) {
 
     const unsubscribe = onSnapshot(offersQuery, (snapshot) => {
       const now = Timestamp.now();
+      console.log(`[DRIVER_OFFERS] snapshot count:`, snapshot.docs.length);
       
       const validOffers: OfferWithId[] = snapshot.docs
-        .map(doc => ({ ...(doc.data() as RideOffer), id: doc.id }))
+        .map(doc => {
+            const data = doc.data() as RideOffer;
+            console.log(`[DRIVER_OFFERS] offer received:`, doc.id, data);
+            return { ...data, id: doc.id };
+        })
         // Relax filter with a 5-minute grace period (up from 1m) to handle substantial client clock skew.
-        .filter(offer => offer.expiresAt && (offer.expiresAt.toMillis() + 300000) > now.toMillis());
+        .filter(offer => {
+            const isValid = offer.expiresAt && (offer.expiresAt.toMillis() + 300000) > now.toMillis();
+            if (!isValid) {
+                console.log(`[DRIVER_OFFERS] filtered out reason: expired locally. expiresAt=${offer.expiresAt?.toMillis()}, now=${now.toMillis()}`);
+            }
+            return isValid;
+        });
 
       setOffers(prevOffers => {
           const prevOfferIds = new Set(prevOffers.map(o => o.id));
