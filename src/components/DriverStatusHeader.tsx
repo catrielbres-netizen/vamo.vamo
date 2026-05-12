@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
+import { VamoLogo } from '@/components/branding/VamoLogo';
 
 interface DriverStatusHeaderProps {
   profile: UserProfile;
@@ -77,6 +78,7 @@ export function DriverStatusHeader({ profile }: DriverStatusHeaderProps) {
 
       <div className="flex items-center justify-between mb-5 relative z-10">
         <div className="flex items-center gap-4">
+          <VamoLogo variant="navbar" />
           <div className={cn(
               "w-14 h-14 rounded-[1.25rem] flex items-center justify-center border shadow-inner", 
               config.color

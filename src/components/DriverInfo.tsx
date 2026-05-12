@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import { VamoIcon } from "./VamoIcon";
+import { formatRating } from '@/lib/formatters';
 
 export function DriverInfo({ driver }: { driver: any }) {
   if (!driver) return null;
@@ -16,7 +17,7 @@ export function DriverInfo({ driver }: { driver: any }) {
                 <p className="font-bold text-lg leading-none">{driver.name}</p>
                 <div className="flex items-center gap-1 mt-1.5 text-sm text-muted-foreground">
                    <VamoIcon name="star" className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-                   <span className="font-medium">{driver.rating ? Number(driver.rating).toFixed(1) : '5.0'}</span>
+                   <span className="font-medium">{formatRating(driver.rating)}</span>
                 </div>
             </div>
         </div>

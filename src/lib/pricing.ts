@@ -5,7 +5,7 @@
 // Este archivo se mantiene por ahora para evitar errores de importación,
 // pero su contenido ya no se utiliza para el cálculo real de tarifas.
 
-export type ServiceType = "premium" | "express";
+export type ServiceType = "professional" | "express";
 
 // --- Constantes de Referencia ---
 // Estas constantes pueden ser útiles para mostrar información en la UI,
@@ -29,7 +29,7 @@ export function calculateFare({
 }) {
   console.warn("La función `calculateFare` del cliente está obsoleta y no debe usarse.");
   // Devuelve una estimación muy básica y no confiable solo como fallback visual.
-  const base = service === "premium" ? 1500 : 1350;
+  const base = service === "professional" ? 1500 : 1350;
   const cost = (distanceMeters / 100) * 150;
   return base + cost;
 }

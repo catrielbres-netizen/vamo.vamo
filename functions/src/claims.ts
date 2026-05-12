@@ -1,31 +1,107 @@
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
-import { Ride, UserProfile, FapClaim, FapCounter, FapType } from "./types";
+import { Ride, UserProfile, FapClaim, FapCounter, FapType, FapTimelineEvent } from "./types";
 
 import { getDb } from "./lib/firebaseAdmin";
-
-// Module-level db removed to prevent initialization errors.
+import { addFunds } from "./lib/wallet";
+import { sendNotification } from "./handlers";
 
 /**
- * [VamO PRO v1.0] Reportar un incidente al Fondo de Asistencia (F.A.P.)
- * 24h Max window, Express Drivers only, Unique claim per ride.
+ * [VamO PRO] Professional Antifraud Helper for F.A.P.
+ * Sophisticated weighted scoring model.
  */
-export const createFapClaimV1 = onCall({ cors: true, region: 'us-central1' }, async (request: CallableRequest<any>) => {
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Debes iniciar sesión para reportar un incidente.');
+async function validateFapAntifraud(db: admin.firestore.Firestore, rideData: Ride, passengerId: string) {
+    const flags: string[] = [];
+    let score = 0;
+
+    // 1. RIDE CONTEXT (Weight: 50)
+    const fraudIncidentsSnap = await db.collection('fraud_incidents')
+        .where('rideId', '==', rideData.id)
+        .get();
+    
+    if (!fraudIncidentsSnap.empty) {
+        flags.push("RIDE_HAS_FRAUD_INCIDENT");
+        score += 50;
     }
 
-    const { rideId, type, description, evidenceUrls, requestedAmount } = request.data;
+    // 2. VELOCITY & METRICS (Weight: 30)
+    const comp = rideData.completedRide;
+    if (comp) {
+        if ((comp.distanceMeters || 0) < 500 && (comp.durationSeconds || 0) < 120) {
+            flags.push("SUSPICIOUS_SHORT_TRIP");
+            score += 30;
+        }
+    }
+
+    // 3. RECURRENCE (Weight: 20 per incident)
+    const lastMonth = Timestamp.fromDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    const recentClaimsSnap = await db.collection('fap_claims')
+        .where('passengerId', '==', passengerId)
+        .where('createdAt', '>=', lastMonth)
+        .get();
+
+    if (recentClaimsSnap.size >= 1) {
+        flags.push(`RECURRENCE_PASSENGER: ${recentClaimsSnap.size} recently`);
+        score += Math.min(40, 20 * recentClaimsSnap.size);
+    }
+
+    // 4. COLLUSION CHECK (Weight: 40)
+    const samePairClaimsSnap = await db.collection('fap_claims')
+        .where('passengerId', '==', passengerId)
+        .where('driverId', '==', rideData.driverId)
+        .get();
+    
+    if (samePairClaimsSnap.size >= 1) {
+        flags.push("REPEATED_DRIVER_PASSENGER_PAIR");
+        score += 40;
+    }
+
+    // 5. IDENTITY VERIFICATION (Weight: 30 if NOT verified)
+    const passengerSnap = await db.collection('users').doc(passengerId).get();
+    const passenger = passengerSnap.data() as UserProfile;
+    
+    if (passenger?.identityStatus === 'approved') {
+        flags.push("IDENTITY_VERIFIED_TRUST");
+        score -= 20; // Bonus for verified users
+    } else {
+        flags.push("IDENTITY_NOT_VERIFIED");
+        score += 30; // Risk for unverified users
+    }
+
+    return { flags, score: Math.max(0, Math.min(100, score)) };
+}
+
+/**
+ * [VamO PRO v3.0] Multi-Level F.A.P. Claim System
+ * Progressive validation by risk level.
+ */
+export const createFapClaimV1 = onCall({ cors: true, region: 'us-central1' }, async (request: CallableRequest<any>) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
+
+    const { 
+        rideId, 
+        type, 
+        description, 
+        evidenceUrls = [], 
+        requestedAmount = 0,
+        deviceInfo = {}
+    } = request.data;
 
     if (!rideId || !type || !description) {
-        throw new HttpsError('invalid-argument', 'Datos de reclamo incompletos. Se requiere rideId, tipo y descripción.');
+        throw new HttpsError('invalid-argument', 'rideId, type y descripción son obligatorios.');
     }
 
     const passengerId = request.auth.uid;
+    const db = getDb();
+
+    // 1. DETECTAR NIVEL DE RIESGO
+    let level: 1 | 2 | 3 = 1;
+    if (["overcharge", "vandalism"].includes(type)) level = 2;
+    if (["accident", "robbery", "medical"].includes(type)) level = 3;
 
     try {
-        const db = getDb();
         const result = await db.runTransaction(async (tx: admin.firestore.Transaction) => {
             const rideRef = db.collection('rides').doc(rideId);
             const rideSnap = await tx.get(rideRef);
@@ -33,246 +109,379 @@ export const createFapClaimV1 = onCall({ cors: true, region: 'us-central1' }, as
             if (!rideSnap.exists) throw new Error('Viaje no encontrado.');
             const rideData = rideSnap.data() as Ride;
 
-            // 1. VALIDACIÓN: El usuario debe ser el pasajero del viaje
-            if (rideData.passengerId !== passengerId) {
-                throw new Error('Solo el pasajero del viaje puede iniciar un reclamo F.A.P.');
-            }
+            if (rideData.passengerId !== passengerId) throw new Error('Usuario no autorizado para este viaje.');
+            if (rideData.status !== 'completed') throw new Error('Solo viajes completados.');
 
-            // 2. VALIDACIÓN: El viaje debe estar completado
-            if (rideData.status !== 'completed' || !rideData.completedAt) {
-                throw new Error('Solo se pueden reportar incidentes de viajes completados.');
-            }
-
-            // 3. VALIDACIÓN: Ventana de 24 horas (ESTRICTA)
-            const completedAt = (rideData.completedAt as admin.firestore.Timestamp).toMillis();
-            const now = Date.now();
-            const hoursSinceCompletion = (now - completedAt) / (1000 * 60 * 60);
-
-            if (hoursSinceCompletion > 24) {
-                throw new Error('La ventana para reportar incidentes F.A.P. ha expirado (máximo 24 horas).');
-            }
-
-            // 4. VALIDACIÓN: Solo para conductores particulares / Express (v1.4)
-            // Priorizamos los datos persistidos en el comprobante final
-            const isFapEligible = rideData.completedRide?.fapEligible ?? false;
-            let driverId = rideData.driverId;
-            let driverSubtype = rideData.completedRide?.driverSubtype;
-
-            if (rideData.completedRide) {
-                if (!isFapEligible) {
-                    throw new Error('Este viaje no es elegible para el Fondo de Asistencia VamO (ej: Conductor Profesional/Premium).');
-                }
-            } else {
-                // Fallback para viajes legacy o si aún no se persistió (no debería pasar post-asistencia)
-                if (!driverId) throw new Error('El viaje no tiene un conductor registrado.');
-
-                const driverSnap = await tx.get(db.collection('users').doc(driverId));
-                const driverData = driverSnap.data() as UserProfile;
-                
-                if (driverData.driverSubtype !== 'express') {
-                    throw new Error('El Fondo de Asistencia VamO solo aplica a viajes realizados con conductores particulares (Express).');
-                }
-                const driverSubtype = driverData.driverSubtype || 'premium';
-            }
-
-            if (!driverId) throw new Error('No se pudo identificar al conductor del viaje.');
-            if (!driverSubtype) throw new Error('No se pudo identificar la categoría del conductor.');
-
-            // 5. VALIDACIÓN: Un solo reclamo por viaje
-            const existingClaimsSnap = await tx.get(
-                db.collection('fap_claims').where('rideId', '==', rideId).limit(1)
-            );
+            // [VamO PRO] Prevent Duplicate Claims
+            const existingClaimsSnap = await db.collection('fap_claims')
+                .where('rideId', '==', rideId)
+                .limit(1)
+                .get();
             if (!existingClaimsSnap.empty) {
-                throw new Error('Ya existe un reclamo en proceso o resuelto para este viaje.');
+                throw new Error('Ya existe un reclamo activo o resuelto para este viaje.');
             }
 
-            // 6. VALIDACIÓN: Un solo reclamo activo por pasajero
-            const activeClaimsSnap = await tx.get(
-                db.collection('fap_claims')
-                    .where('passengerId', '==', passengerId)
-                    .where('status', 'in', ['pending', 'reviewing', 'approved'])
-                    .limit(1)
-            );
-            if (!activeClaimsSnap.empty) {
-                throw new Error('Ya tienes un reclamo F.A.P. activo. Debes resolver el caso actual antes de abrir uno nuevo.');
+            // 2. VALIDAR VENTANA 24H (Solo para Nivel 1 y 2, Nivel 3 permite flexibilidad manual)
+            const completedAt = (rideData.completedAt as Timestamp).toMillis();
+            const hoursSinceCompletion = (Date.now() - completedAt) / (1000 * 60 * 60);
+            if (hoursSinceCompletion > 24 && level < 3) {
+                throw new Error('La ventana de 24h ha expirado.');
             }
 
-            // 7. GENERAR CASE ID ATÓMICO (FAP-YYYY-XXXXXX)
+            // [VamO PRO] REQUIRE IDENTITY FOR LEVEL 3
+            const passengerSnap = await tx.get(db.collection('users').doc(passengerId));
+            const passengerData = passengerSnap.data() as UserProfile;
+
+            if (level === 3 && passengerData.identityStatus !== 'approved') {
+                throw new Error('La verificación de identidad es obligatoria para reportar incidentes de Nivel 3 (Accidentes/Robos). Por favor, verifícate en tu perfil primero.');
+            }
+
+            // 3. IDENTIFICAR REQUISITOS FALTANTES
+            const missingRequirements: string[] = [];
+            if (level === 3) {
+                if (evidenceUrls.length < 1) missingRequirements.push('evidence_photos');
+                if (description.length < 50) missingRequirements.push('detailed_description');
+            }
+
+            const requirementsMet = missingRequirements.length === 0;
+            const status: any = requirementsMet ? 'pending' : 'pending_info';
+
+            // 4. GENERAR CASE ID
             const currentYear = new Date().getFullYear();
             const counterRef = db.collection('config').doc(`fap_counter_${currentYear}`);
             const counterSnap = await tx.get(counterRef);
-            
-            let lastNumber = 0;
-            if (counterSnap.exists) {
-                lastNumber = (counterSnap.data() as FapCounter).lastNumber;
-            }
+            const nextNumber = (counterSnap.exists ? (counterSnap.data() as any).lastNumber : 0) + 1;
+            const caseNumber = `FAP-${currentYear}-${nextNumber.toString().padStart(6, '0')}`;
 
-            const nextNumber = lastNumber + 1;
-            const caseId = `FAP-${currentYear}-${nextNumber.toString().padStart(6, '0')}`;
+            // 5. ANTIFRAUDE
+            const { flags, score } = await validateFapAntifraud(db, { ...rideData, id: rideId }, passengerId);
 
-            // 8. CREAR EL RECLAMO
+            // 6. SNAPSHOTS
+            const driverSnap = await tx.get(db.collection('users').doc(rideData.driverId!));
+            const driverData = driverSnap.data() as UserProfile;
+
             const claimRef = db.collection('fap_claims').doc();
-            const newClaim: FapClaim = {
+            const newClaim: any = {
                 id: claimRef.id,
-                caseId,
+                caseId: caseNumber,
                 rideId,
                 passengerId,
-                driverId,
-                cityKey: rideData.operatingAreaId || 'unknown', // [VamO PRO v1.4]
-                status: 'pending',
-                type: type as FapType,
+                passengerNameSnapshot: passengerData.name || 'Pasajero',
+                driverId: rideData.driverId,
+                driverNameSnapshot: driverData.name || 'Conductor',
+                driverSubtypeSnapshot: rideData.completedRide?.driverSubtype || 'express',
+                cityKey: rideData.cityKey || rideData.operatingAreaId || 'global',
+                status,
+                level,
+                type,
                 description,
-                evidenceUrls: evidenceUrls || [],
-                requestedAmount: requestedAmount || 0,
-                rideSnapshot: {
-                    origin: rideData.origin.address,
-                    destination: rideData.destination.address,
-                    totalFare: rideData.completedRide?.totalFare || 0,
-                    completedAt: rideData.completedAt,
-                    driverSubtype: driverSubtype,
-                    city: rideData.city,
-                    cityKey: rideData.operatingAreaId,
-                    serviceType: rideData.serviceType
+                evidenceUrls,
+                evidenceIsPrivate: level === 3,
+                requestedAmount,
+                fraudFlags: flags,
+                validationScore: score,
+                compliance: {
+                    requirementsMet,
+                    missingRequirements,
+                    submittedAt: requirementsMet ? Timestamp.now() : null
                 },
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                deviceInfo: {
+                    userAgent: deviceInfo.userAgent || 'unknown',
+                    ip: deviceInfo.ip || 'unknown',
+                    platform: deviceInfo.platform || 'unknown'
+                },
+                timeline: [{
+                    id: 'event_0',
+                    action: 'CASE_CREATED',
+                    actorId: passengerId,
+                    actorName: passengerData.name || 'Pasajero',
+                    actorRole: 'passenger',
+                    timestamp: Timestamp.now(),
+                    note: `Reclamo Nivel ${level} iniciado. Estado: ${status}`
+                }],
+                rideSnapshot: {
+                    origin: rideData.origin?.address || 'N/A',
+                    destination: rideData.destination?.address || 'N/A',
+                    totalFare: rideData.completedRide?.totalFare || 0,
+                    completedAt: rideData.completedAt || null,
+                    driverSubtype: rideData.completedRide?.driverSubtype || 'express',
+                    city: rideData.city || 'N/A',
+                    cityKey: rideData.cityKey || rideData.operatingAreaId || 'global',
+                    serviceType: rideData.serviceType || 'express',
+                    distanceMeters: rideData.completedRide?.distanceMeters || 0,
+                    durationSeconds: rideData.completedRide?.durationSeconds || 0
+                },
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                systemVersion: 'v3.0_progressive'
             };
 
             tx.set(claimRef, newClaim);
             tx.set(counterRef, { year: currentYear, lastNumber: nextNumber }, { merge: true });
 
-            return { success: true, caseId, id: claimRef.id };
+            return { success: true, caseId: caseNumber, id: claimRef.id, status };
         });
 
         return result;
-
     } catch (error: any) {
-        logger.error(`[createFapClaimV1] Error para pasajero ${passengerId}:`, error.message);
-        throw new HttpsError('internal', error.message || 'Error al procesar el reclamo.');
+        logger.error(`[createFapClaimV1] Error:`, error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', error.message || 'Error al crear el reclamo.');
     }
 });
 
 /**
- * [VamO PRO v1.0] Revisión Administrativa de Reclamo F.A.P.
+ * [VamO PRO v2.0] Revisión Administrativa de Reclamo F.A.P.
  * Solo Administradores.
  */
-export const reviewFapClaimV1 = onCall({ cors: true, region: 'us-central1' }, async (request: CallableRequest<any>) => {
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Acceso denegado.');
+export const reviewAssistanceCaseV1 = onCall({ cors: true, region: 'us-central1' }, async (request: CallableRequest<any>) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Acceso denegado.');
+    const db = getDb();
+    const uid = request.auth.uid;
+    const { claimId, action, adminNotes } = request.data;
+    
+    if (!claimId || !['review', 'escalate'].includes(action)) {
+        throw new HttpsError('invalid-argument', 'Parámetros de revisión inválidos.');
     }
-    
-    const { claimId, action, approvedAmount, adminNotes, rejectionReason } = request.data;
-    
-    if (!claimId || !['review', 'approve', 'reject'].includes(action)) {
-        throw new HttpsError('invalid-argument', 'Párametros de revisión inválidos.');
+
+    const userSnap = await db.doc(`users/${uid}`).get();
+    const user = userSnap.data() as UserProfile;
+
+    await db.runTransaction(async (tx) => {
+        const claimRef = db.collection('fap_claims').doc(claimId);
+        const claimSnap = await tx.get(claimRef);
+        if (!claimSnap.exists) throw new Error('Caso no encontrado.');
+        const claim = claimSnap.data() as FapClaim;
+
+        if (['paid', 'rejected', 'cancelled'].includes(claim.status)) {
+            throw new Error('El caso ya está cerrado.');
+        }
+
+        const newStatus: FapClaim['status'] = action === 'escalate' ? 'escalated' : 'reviewing';
+        
+        const timelineCount = (claim.timeline || []).length;
+        const event: FapTimelineEvent = {
+            id: `event_${timelineCount}`,
+            action: action === 'escalate' ? 'CASE_ESCALATED' : 'CASE_REVIEWED',
+            actorId: uid,
+            actorName: user.name || 'Admin',
+            actorRole: user.role,
+            timestamp: Timestamp.now(),
+            note: adminNotes || (action === 'escalate' ? 'Caso escalado para revisión superior.' : 'Caso en revisión manual.')
+        };
+
+        tx.update(claimRef, {
+            status: newStatus,
+            adminNotes: adminNotes || claim.adminNotes,
+            timeline: FieldValue.arrayUnion(event),
+            updatedAt: FieldValue.serverTimestamp()
+        });
+    });
+
+    return { success: true };
+});
+
+/**
+ * [VamO PRO v2.0] Resolución Final de Reclamo F.A.P.
+ * Ejecuta pagos o créditos y cierra el caso.
+ */
+export const resolveAssistanceCaseV1 = onCall({ cors: true, region: 'us-central1' }, async (request: CallableRequest<any>) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Acceso denegado.');
+    const db = getDb();
+    const uid = request.auth.uid;
+    const { claimId, resolutionType, amount, reason, note } = request.data;
+
+    if (!claimId || !resolutionType) {
+        throw new HttpsError('invalid-argument', 'Faltan parámetros de resolución.');
+    }
+
+    const userSnap = await db.doc(`users/${uid}`).get();
+    const user = userSnap.data() as UserProfile;
+
+    if (user.role !== 'admin') {
+        throw new HttpsError('permission-denied', 'Solo administradores pueden resolver casos F.A.P.');
     }
 
     try {
-        const db = getDb();
-        await db.runTransaction(async (tx: admin.firestore.Transaction) => {
+        await db.runTransaction(async (tx) => {
             const claimRef = db.collection('fap_claims').doc(claimId);
             const claimSnap = await tx.get(claimRef);
-            
-            if (!claimSnap.exists) throw new Error('Reclamo no encontrado.');
-            const claimData = claimSnap.data() as FapClaim;
+            if (!claimSnap.exists) throw new Error('Caso no encontrado.');
+            const claim = claimSnap.data() as FapClaim;
 
-            if (['paid', 'cancelled'].includes(claimData.status)) {
-                throw new Error('El reclamo ya está cerrado y no se puede modificar.');
+            if (['paid', 'rejected', 'cancelled'].includes(claim.status)) {
+                throw new Error('El caso ya está resuelto.');
             }
 
             const updates: Partial<FapClaim> = {
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                resolvedAt: FieldValue.serverTimestamp(),
+                resolvedBy: uid,
+                resolvedByName: user.name || 'Admin',
+                resolutionType,
+                updatedAt: FieldValue.serverTimestamp()
             };
 
-            if (action === 'review') {
-                updates.status = 'reviewing';
-                if (adminNotes) updates.adminNotes = adminNotes;
-            } else if (action === 'approve') {
-                if (typeof approvedAmount !== 'number' || approvedAmount <= 0) {
-                    throw new Error('Se requiere un monto de aprobación válido.');
-                }
-                if (approvedAmount > 150000) {
-                    throw new Error('El monto excede el tope máximo permitido por el fondo ($150.000).');
-                }
-                updates.status = 'approved';
-                updates.approvedAmount = approvedAmount;
-                if (adminNotes) updates.adminNotes = adminNotes;
-                updates.resolvedAt = admin.firestore.FieldValue.serverTimestamp();
-                updates.resolvedBy = request.auth?.uid; // [VamO PRO v1.4]
-            } else if (action === 'reject') {
-                if (!rejectionReason) throw new Error('Se requiere un motivo de rechazo.');
+            let eventAction = 'CASE_RESOLVED';
+            let eventNote = note || `Resolución: ${resolutionType}`;
+
+            if (resolutionType === 'rejection') {
+                if (!reason) throw new Error('Se requiere motivo de rechazo.');
                 updates.status = 'rejected';
-                updates.rejectionReason = rejectionReason;
-                updates.resolvedAt = admin.firestore.FieldValue.serverTimestamp();
-                updates.resolvedBy = request.auth?.uid; // [VamO PRO v1.4]
+                updates.rejectionReason = reason;
+                eventAction = 'CASE_REJECTED';
+                eventNote = reason;
+            } else if (resolutionType === 'economic' || resolutionType === 'credit') {
+                if (!amount || amount <= 0) throw new Error('Monto de compensación inválido.');
+                if (amount > 150000) throw new Error('Monto excede el tope de $150.000.');
+
+                updates.status = resolutionType === 'economic' ? 'approved' : 'paid';
+                updates.approvedAmount = amount;
+
+                // 1. Registrar en Ledger de Plataforma
+                const platformTxRef = db.collection('platform_transactions').doc(`fap_res_${claimId}`);
+                tx.set(platformTxRef, {
+                    claimId,
+                    caseId: claim.caseId,
+                    amount: -amount,
+                    type: 'fap_claim_payout',
+                    cityKey: claim.cityKey || 'global',
+                    note: `Compensación F.A.P. ${resolutionType}: ${claim.caseId}`,
+                    createdAt: FieldValue.serverTimestamp(),
+                    systemVersion: 'v2.0_fap'
+                });
+
+                // 2. Si es crédito VamO Pay, acreditar inmediatamente
+                if (resolutionType === 'credit') {
+                    await addFunds(
+                        claim.passengerId, 
+                        amount, 
+                        'fap_compensation', 
+                        `Crédito Asistencia F.A.P. Caso ${claim.caseId}`, 
+                        tx, 
+                        `fap_credit_${claimId}`
+                    );
+                    updates.paymentTxId = `fap_credit_${claimId}`;
+                    updates.paidAt = FieldValue.serverTimestamp();
+                }
+            } else {
+                // Asistencia operativa
+                updates.status = 'paid'; // Marcamos como cerrado/completado
             }
 
-            tx.update(claimRef, updates);
+            const timelineCount = (claim.timeline || []).length;
+            const event: FapTimelineEvent = {
+                id: `event_${timelineCount}`,
+                action: eventAction,
+                actorId: uid,
+                actorName: user.name || 'Admin',
+                actorRole: user.role,
+                timestamp: Timestamp.now(),
+                note: eventNote,
+                metadata: { 
+                    resolutionType, 
+                    amount: amount || 0 
+                }
+            };
+
+            tx.update(claimRef, {
+                ...updates,
+                timeline: FieldValue.arrayUnion(event)
+            });
         });
+
+        // 3. NOTIFICAR AL PASAJERO (Fuera de la transacción para no bloquear)
+        try {
+            const db = getDb();
+            const claimSnap = await db.collection('fap_claims').doc(claimId).get();
+            const claim = claimSnap.data() as FapClaim;
+
+            if (resolutionType === 'rejection') {
+                await sendNotification(
+                    claim.passengerId,
+                    "Novedades sobre tu reclamo",
+                    `El equipo de auditoría ha finalizado la revisión de tu caso ${claim.caseId}.`,
+                    `/dashboard/history`
+                );
+            } else {
+                await sendNotification(
+                    claim.passengerId,
+                    "¡Reclamo Aprobado!",
+                    `Se han acreditado $${amount} en tu billetera VamO Pay por el caso ${claim.caseId}.`,
+                    `/dashboard/wallet`
+                );
+            }
+        } catch (error) {
+            logger.error("Error al enviar notificación de resolución FAP:", error);
+        }
 
         return { success: true };
     } catch (error: any) {
-        logger.error(`[reviewFapClaimV1] Error en revisión:`, error.message);
-        throw new HttpsError('internal', error.message);
+        logger.error(`[resolveAssistanceCaseV1] Error:`, error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', error.message || 'Error al resolver el reclamo.');
     }
 });
 
 /**
- * [VamO PRO v1.0] Procesar Pago de Reclamo F.A.P.
- * Solo Administradores. Registra el movimiento en el Ledger.
+ * [VamO PRO v3.0] Submit evidence for an existing F.A.P. claim.
+ * Moves claim from pending_info to pending if requirements are met.
  */
-export const processFapPaymentV1 = onCall({ cors: true, region: 'us-central1' }, async (request: CallableRequest<any>) => {
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Acceso denegado.');
-    }
-    
-    const { claimId } = request.data;
-    if (!claimId) throw new HttpsError('invalid-argument', 'Falta el ID del reclamo.');
+export const submitFapEvidenceV1 = onCall({ cors: true, region: 'us-central1' }, async (request: CallableRequest<any>) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Acceso denegado.');
+    const db = getDb();
+    const uid = request.auth.uid;
+    const { claimId, evidenceUrls, detailedDescription } = request.data;
 
-    try {
-        const db = getDb();
-        await db.runTransaction(async (tx: admin.firestore.Transaction) => {
-            const claimRef = db.collection('fap_claims').doc(claimId);
-            const claimSnap = await tx.get(claimRef);
-            
-            if (!claimSnap.exists) throw new Error('Reclamo no encontrado.');
-            const claimData = claimSnap.data() as FapClaim;
+    if (!claimId) throw new HttpsError('invalid-argument', 'claimId es obligatorio.');
 
-            if (claimData.status !== 'approved') {
-                throw new Error('Solo se pueden procesar pagos para reclamos en estado "approved".');
-            }
-            
-            if (!claimData.approvedAmount || claimData.approvedAmount <= 0) {
-                throw new Error('El reclamo no tiene un monto aprobado válido.');
-            }
+    await db.runTransaction(async (tx) => {
+        const claimRef = db.collection('fap_claims').doc(claimId);
+        const claimSnap = await tx.get(claimRef);
+        if (!claimSnap.exists) throw new Error('Reclamo no encontrado.');
+        const claim = claimSnap.data() as FapClaim;
 
-            // 1. REGISTRAR TRANSACCIÓN EN EL LEDGER
-            const txRef = db.collection('platform_transactions').doc(`fap_payout_${claimId}`);
-            
-            tx.set(txRef, {
-                claimId,
-                caseId: claimData.caseId,
-                rideId: claimData.rideId,
-                passengerId: claimData.passengerId,
-                amount: -claimData.approvedAmount, // Débito a la reserva FAP de la plataforma
-                type: 'fap_claim_payout',
-                note: `Pago Asistencia F.A.P. Caso ${claimData.caseId}`,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                systemVersion: 'v1.0_fap_claims',
-            });
+        if (claim.passengerId !== uid) throw new Error('No autorizado.');
+        if (claim.status !== 'pending_info') throw new Error('Este reclamo no requiere más información.');
 
-            // 2. ACTUALIZAR ESTADO DEL RECLAMO
-            tx.update(claimRef, {
-                status: 'paid',
-                paidAt: admin.firestore.FieldValue.serverTimestamp(),
-                paymentTxId: txRef.id,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
+        const updatedEvidence = [...(claim.evidenceUrls || []), ...(evidenceUrls || [])];
+        const updatedDescription = detailedDescription || claim.description;
+
+        // Re-evaluar requisitos
+        const missingRequirements: string[] = [];
+        if (claim.level === 3) {
+            if (updatedEvidence.length < 1) missingRequirements.push('evidence_photos');
+            if (updatedDescription.length < 50) missingRequirements.push('detailed_description');
+        }
+
+        const requirementsMet = missingRequirements.length === 0;
+        const newStatus = requirementsMet ? 'pending' : 'pending_info';
+
+        const event: FapTimelineEvent = {
+            id: `event_${claim.timeline.length}`,
+            action: 'EVIDENCE_SUBMITTED',
+            actorId: uid,
+            actorName: claim.passengerNameSnapshot,
+            actorRole: 'passenger',
+            timestamp: Timestamp.now(),
+            note: requirementsMet ? 'Requisitos cumplidos. Pasando a revisión.' : 'Información adicional enviada. Faltan requisitos.'
+        };
+
+        tx.update(claimRef, {
+            evidenceUrls: updatedEvidence,
+            description: updatedDescription,
+            status: newStatus,
+            compliance: {
+                requirementsMet,
+                missingRequirements,
+                submittedAt: requirementsMet ? Timestamp.now() : claim.compliance?.submittedAt
+            },
+            timeline: FieldValue.arrayUnion(event),
+            updatedAt: FieldValue.serverTimestamp()
         });
+    });
 
-        return { success: true };
-    } catch (error: any) {
-        logger.error(`[processFapPaymentV1] Error en pago:`, error.message);
-        throw new HttpsError('internal', error.message);
-    }
+    return { success: true };
 });
+
+export const reviewFapClaimV1 = reviewAssistanceCaseV1;
+export const processFapPaymentV1 = resolveAssistanceCaseV1;

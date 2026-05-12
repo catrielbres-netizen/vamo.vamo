@@ -32,10 +32,10 @@ export const canPassengerRequestRide = (profile: UserProfile | null | undefined,
   }
   
   const isDemoUser = profile.email?.includes('demo_') && profile.email?.endsWith('@vamo.com');
-  const verified = isEmailVerified !== undefined ? isEmailVerified : profile.emailVerified;
-  if (verified === false && !isDemoUser) {
-    return { isEligible: false, reason: "Debés verificar tu cuenta de email", code: "UNVERIFIED_EMAIL" };
-  }
+  // const verified = isEmailVerified !== undefined ? isEmailVerified : profile.emailVerified;
+  // if (verified === false && !isDemoUser) {
+  //   return { isEligible: false, reason: "Debés verificar tu cuenta de email", code: "UNVERIFIED_EMAIL" };
+  // }
 
   // Active ride check
   if (profile.activeRideId) {
@@ -50,28 +50,39 @@ export const canDriverGoOnline = (profile: UserProfile | null | undefined, isEma
   if (profile.role !== "driver") return { isEligible: false, reason: "El usuario no es conductor", code: "INVALID_ROLE" };
   if (profile.isSuspended) return { isEligible: false, reason: "Tu cuenta está suspendida", code: "SUSPENDED" };
 
-  // ── VamoMuni: conductores express requieren habilitación municipal ─────────
-  if (profile.driverSubtype === 'express') {
-    const ms = profile.municipalStatus;
-    if (!ms || ms !== 'active') {
-      const messages: Partial<Record<string, string>> = {
-        pending_municipal_review:    "Pendiente de aprobación municipal. Pasá por la municipalidad para activar tu cuenta.",
-        municipal_observed:          "Tu habilitación tiene observaciones que requieren tu atención.",
-        municipal_approved:          "Tu habilitación está aprobada. Se activará cuando tu documentación esté vigente.",
-        renewal_under_review:        "Tu renovación de documentos está siendo revisada por la municipalidad.",
-        suspended_expired_license:   "Licencia vencida: no podés operar hasta renovarla en la municipalidad.",
-        suspended_expired_insurance: "Seguro vencido: no podés operar hasta renovarlo en la municipalidad.",
-        suspended_unpaid_canon:      "Canon municipal impago: regularizá el pago para volver a operar.",
-        suspended_by_municipality:   "Tu habilitación fue suspendida por la municipalidad.",
-        rejected_by_municipality:    "Tu solicitud de habilitación fue rechazada definitivamente.",
-      };
-      const reason = messages[ms ?? ''] ?? "Habilitación municipal requerida para operar.";
-      return { isEligible: false, reason, code: "MUNICIPAL_BLOCKED" };
-    }
+  // [AUDIT] All drivers (pro or express) MUST have an active municipal status to go online.
+  const ms = profile.municipalStatus;
+  
+  const hasGracePeriod = ms === 'municipal_observed' && profile.observationGraceUntil;
+  const isWithinGrace = hasGracePeriod && (
+    profile.observationGraceUntil.toDate ? profile.observationGraceUntil.toDate() : new Date(profile.observationGraceUntil)
+  ) > new Date();
+
+  if (ms !== 'active' && !isWithinGrace) {
+    const messages: Partial<Record<string, string>> = {
+      municipal_observed:          "El plazo de gracia para corregir observaciones ha vencido. Regularizá tu situación para operar.",
+      suspended_expired_license:   "Licencia vencida: no podés operar hasta renovarla en la municipalidad.",
+      suspended_expired_insurance: "Seguro vencido: no podés operar hasta renovarlo en la municipalidad.",
+      suspended_unpaid_canon:      "Canon municipal impago: regularizá el pago para volver a operar.",
+      suspended_by_municipality:   "Tu habilitación fue suspendida por la municipalidad.",
+      rejected_by_municipality:    "Tu solicitud de habilitación fue rechazada definitivamente.",
+      pending_municipal_review:    "Habilitación municipal pendiente.",
+    };
+    const reason = messages[ms ?? ''] ?? "Debés completar tu habilitación municipal para operar.";
+    return { isEligible: false, reason, code: "MUNICIPAL_REQUIRED" };
   }
 
-  if (!profile.approved) return { isEligible: false, reason: "Tu cuenta está pendiente de aprobación inicial", code: "NOT_APPROVED" };
+  if (!profile.approved) {
+    return { isEligible: false, reason: "Tu cuenta está pendiente de aprobación final del sistema.", code: "NOT_APPROVED" };
+  }
   if (!profile.profileCompleted) return { isEligible: false, reason: "Debés completar tu perfil (fotos y datos)", code: "PROFILE_INCOMPLETE" };
+
+  // Vehicle data check (using individual fields for type safety)
+  const hasVehicleData = profile.vehicleBrand && profile.vehicleModel && profile.plateNumber && profile.vehicleColor;
+  
+  if (!hasVehicleData) {
+      return { isEligible: false, reason: "Completá los datos de tu vehículo para poder recibir viajes.", code: "VEHICLE_INCOMPLETE" };
+  }
 
   // MANDATORY LEGAL CHECK (Unified Flags + Centralized Version)
   const hasAccepted = profile.termsAccepted || profile.acceptedDriverTerms;
@@ -95,9 +106,25 @@ export const canDriverGoOnline = (profile: UserProfile | null | undefined, isEma
     return { isEligible: false, reason: "Debés verificar tu cuenta para operar", code: "UNVERIFIED_EMAIL" };
   }
 
+  // [VamO PRO] Negative Balance Control
   const balance = profile.currentBalance ?? 0;
-  if (balance < MIN_BALANCE_ARS) {
-    return { isEligible: false, reason: "Tu saldo es negativo. Recargá crédito para recibir viajes.", code: "LOW_BALANCE" };
+  const negativeLimit = profile.driverSubtype === 'professional' ? -15000 : -8000;
+
+  if (balance <= negativeLimit) {
+    return { 
+      isEligible: false, 
+      reason: "Necesitás regularizar tu saldo para seguir recibiendo viajes.", 
+      code: "NEGATIVE_BALANCE_LIMIT" 
+    };
+  }
+
+  // [VamO PRO] Driver Risk Guard
+  if (profile.driverRiskLevel === 'blocked') {
+    return {
+      isEligible: false,
+      reason: "Tu cuenta requiere regularización para seguir operando.",
+      code: "DRIVER_RISK_BLOCKED"
+    };
   }
 
   return { isEligible: true };
@@ -117,15 +144,8 @@ export const canDriverReceiveOffers = (profile: UserProfile | null | undefined, 
 
   if (profile.activeRideId) return { isEligible: false, reason: "Ya estás en un viaje", code: "ACTIVE_RIDE" };
 
-  if (rideService) {
-    const services = profile.servicesOffered || { premium: false, express: false };
-    if ((rideService === 'premium' || rideService === 'normal') && !services.premium) {
-        return { isEligible: false, reason: "No ofrecés servicio profesional", code: "SERVICE_MISMATCH" };
-    }
-    if (rideService === 'express' && !services.express) {
-        return { isEligible: false, reason: "No ofrecés servicio Express", code: "SERVICE_MISMATCH" };
-    }
-  }
+  // [VamO PRO] All drivers are equal and can receive any ride type
+  // No service-type mismatch check here anymore
 
   return { isEligible: true };
 };

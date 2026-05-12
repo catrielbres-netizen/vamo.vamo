@@ -29,6 +29,7 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { isDriverReadyForReview } from '@/lib/eligibility';
+import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 
 const PAGE_SIZE = 15;
 
@@ -58,19 +59,22 @@ export default function AdminDriversPage() {
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
   
   // UI State
+  const { cityKey: activeCityKey, loading: loadingContext } = useMunicipalContext();
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    if (!firestore || profile?.role !== 'admin') return;
+    if (!firestore || profile?.role !== 'admin' || loadingContext) return;
     initialLoad();
-  }, [firestore, profile, filterStatus]);
+  }, [firestore, profile, filterStatus, activeCityKey, loadingContext]);
 
   const initialLoad = async () => {
     setLoading(true);
+    setError(null);
     setDrivers([]);
     setLastDoc(null);
     setHasMore(true);
@@ -87,6 +91,10 @@ export default function AdminDriversPage() {
         orderBy('createdAt', 'desc'),
         limit(PAGE_SIZE)
       );
+
+      if (activeCityKey) {
+        q = query(q, where('cityKey', '==', activeCityKey));
+      }
 
       if (filterStatus === 'pending') {
         q = query(q, where('approved', '==', false));
@@ -116,8 +124,13 @@ export default function AdminDriversPage() {
       } else {
         setDrivers(newList);
       }
-    } catch (error) {
-      console.error("Error fetching drivers:", error);
+    } catch (err: any) {
+      console.error("Error fetching drivers:", err);
+      if (err?.message?.includes('index')) {
+          setError("Falta un índice en la base de datos para este filtro. Por favor, contacte a soporte.");
+      } else {
+          setError("Error al cargar conductores. Por favor, intente de nuevo.");
+      }
     }
   };
 
@@ -233,7 +246,24 @@ export default function AdminDriversPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800">
-                        {displayedDrivers.length > 0 ? (
+                        {error ? (
+                            <tr>
+                                <td colSpan={5} className="px-6 py-20 text-center">
+                                    <div className="flex flex-col items-center gap-2">
+                                        <VamoIcon name="alert-circle" className="h-8 w-8 text-rose-500" />
+                                        <p className="text-zinc-400 font-medium">{error}</p>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            onClick={initialLoad}
+                                            className="text-primary hover:text-primary/80"
+                                        >
+                                            Reintentar
+                                        </Button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ) : displayedDrivers.length > 0 ? (
                             displayedDrivers.map((driver) => (
                                 <tr key={driver.id} className="hover:bg-white/[0.02] transition-colors">
                                     <td className="px-6 py-4">

@@ -16,12 +16,14 @@ interface DriverProgressPanelProps {
 
 export function DriverProgressPanel({ profile, className }: DriverProgressPanelProps) {
   const db = useFirestore();
-  const configRef = useMemo(() => doc(db, 'rewards/rewards'), [db]);
-  const { data: config } = useDoc<RewardsConfig>(configRef);
+  const cityKey = profile?.operatingAreaId || profile?.cityKey || 'rawson';
+  const configRef = useMemo(() => doc(db, `cities/${cityKey}`), [db, cityKey]);
+  const { data: config } = useDoc<any>(configRef);
 
-  const points = profile.weeklyPoints ?? 0; // Guard against undefined for migrated users
+  const points = profile.weeklyPoints ?? 0;
+  
   const poolBaseAmount = 2000;
-  const poolAmount = config?.weeklyPoolAmount ?? poolBaseAmount;
+  const poolAmount = config?.rewardsConfig?.weeklyPoolAmount ?? poolBaseAmount;
 
   // Level thresholds (VamO PRO Weekly Rules)
   const BRONCE_MIN = 20;
@@ -41,8 +43,8 @@ export function DriverProgressPanel({ profile, className }: DriverProgressPanelP
     currentLevel = 'Oro';
     nextLevel = '';
     progress = 100;
-    motivationalMessage = 'Estás en nivel máximo';
-    rewardMessage = 'Pozo x3 + Prioridad';
+    motivationalMessage = '¡Felicidades! Sos un conductor de élite.';
+    rewardMessage = 'Prioridad Alta + Multiplicador'; 
   } else if (points >= PLATA_MIN) {
     currentLevel = 'Plata';
     nextLevel = 'Oro';
@@ -50,7 +52,7 @@ export function DriverProgressPanel({ profile, className }: DriverProgressPanelP
     neededPointsInLevel = ORO_MIN - PLATA_MIN; // 50
     progress = (currentPointsInLevel / neededPointsInLevel) * 100;
     targetPoints = ORO_MIN;
-    rewardMessage = 'Pozo semanal x3 + Prioridad';
+    rewardMessage = 'Prioridad + Beneficio x3';
     motivationalMessage = `Te faltan ${ORO_MIN - points} pts para Oro`;
   } else if (points >= BRONCE_MIN) {
     currentLevel = 'Bronce';
@@ -59,7 +61,7 @@ export function DriverProgressPanel({ profile, className }: DriverProgressPanelP
     neededPointsInLevel = PLATA_MIN - BRONCE_MIN; // 30
     progress = (currentPointsInLevel / neededPointsInLevel) * 100;
     targetPoints = PLATA_MIN;
-    rewardMessage = 'Pozo semanal x2';
+    rewardMessage = 'Beneficio Semanal x2';
     motivationalMessage = `Te faltan ${PLATA_MIN - points} pts para Plata`;
   } else {
     // Below Bronce (Still Bronce level by type, but showing progress to qualify)
@@ -69,7 +71,7 @@ export function DriverProgressPanel({ profile, className }: DriverProgressPanelP
     neededPointsInLevel = BRONCE_MIN;
     progress = (currentPointsInLevel / neededPointsInLevel) * 100;
     targetPoints = BRONCE_MIN;
-    rewardMessage = 'Acceso al pozo base';
+    rewardMessage = 'A las puertas del pozo';
     motivationalMessage = points === 0 
       ? '¡Empezá la semana! Completá viajes para sumar puntos.'
       : `Te faltan ${BRONCE_MIN - points} pts para Bronce`;
@@ -77,48 +79,51 @@ export function DriverProgressPanel({ profile, className }: DriverProgressPanelP
 
   const isMaxLevel = points >= ORO_MIN;
   const isFemale = profile?.gender === 'female';
+  
+  // High Scoring Logic (Matching backend logic from onRideSettlementV6)
+  const hasHighScoring = (profile.averageRating || 5) >= 4.8 && (profile.stats?.acceptanceRate || 100) >= 90;
 
   return (
     <div className={cn(
       "p-4 rounded-xl border shadow-sm space-y-4", 
-      isFemale ? "bg-pink-900/10 border-pink-500/20" : "bg-card border-border",
+      isFemale ? "bg-pink-900/10 border-pink-500/20" : "bg-card border-border shadow-indigo-500/5",
       className
     )}>
       {/* 1. Estado actual y puntos */}
       <div className="flex justify-between items-start">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
              <span className={cn(
-               "text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full",
-               currentLevel === 'Oro' ? "bg-amber-500/10 text-amber-500" :
-               currentLevel === 'Plata' ? "bg-zinc-400/10 text-zinc-400" :
+               "text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded-full",
+               currentLevel === 'Oro' ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" :
+               currentLevel === 'Plata' ? "bg-zinc-100 text-zinc-900" :
                currentLevel === 'Bronce' ? "bg-orange-500/10 text-orange-500" :
                "bg-muted text-muted-foreground"
              )}>
                 Nivel {currentLevel}
              </span>
-             {points >= BRONCE_MIN && (
-               <span className="flex items-center text-emerald-500 text-[10px] font-bold">
-                 <VamoIcon name="check" className="h-3 w-3 mr-0.5" />
-                 Clasificado
+             {hasHighScoring && (
+               <span className="flex items-center gap-1 bg-indigo-500/10 text-indigo-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-indigo-500/20 animate-pulse">
+                 <VamoIcon name="award" className="h-3 w-3" />
+                 Bono 1.2x Activo
                </span>
              )}
           </div>
           <p className="text-sm font-medium">
              {isMaxLevel ? (
-                <span className="text-amber-500">✔ Clasificado a Oro</span>
+                <span className="text-zinc-500">Manteniendo el estatus de élite</span>
              ) : points === 0 ? (
-                <span className="text-primary italic font-semibold">¡Semana Iniciada!</span>
+                <span className="text-primary italic font-semibold">¡Comenzá la semana y sumá!</span>
              ) : (
                 <span className="text-muted-foreground">
-                  +{points} pts <span className="text-foreground">avanzando a {nextLevel}</span>
+                  +{points} pts <span className="text-foreground">hacia {nextLevel}</span>
                 </span>
              )}
           </p>
         </div>
         <div className="text-right">
            <span className="text-2xl font-black">{points}</span>
-           <span className="text-[10px] block text-muted-foreground uppercase tracking-tighter">puntos totales</span>
+           <span className="text-[10px] block text-muted-foreground uppercase tracking-tighter">pts totales</span>
         </div>
       </div>
 
@@ -147,16 +152,6 @@ export function DriverProgressPanel({ profile, className }: DriverProgressPanelP
             <span className="text-xs font-semibold leading-none">{rewardMessage}</span>
           </div>
         </div>
-
-        {/* 3.1. Pool Info (Integrated) */}
-        <div className="flex flex-col items-end text-right">
-            <span className="text-[10px] uppercase text-muted-foreground font-bold leading-none mb-1">
-              Pozo Semanal
-            </span>
-            <span className="text-sm font-black text-primary leading-none">
-                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(poolAmount)}
-            </span>
-        </div>
       </div>
       {/* 4. Footer info */}
       <div className="pt-2 flex flex-col gap-1">
@@ -166,11 +161,11 @@ export function DriverProgressPanel({ profile, className }: DriverProgressPanelP
            </div>
            <div className="text-[9px] text-muted-foreground font-medium bg-secondary/30 px-2 py-0.5 rounded-md flex items-center gap-1">
               <VamoIcon name="clock" className="h-3 w-3" />
-              Reset: Lun 00:00
+              Reset: Lun 03:00
            </div>
         </div>
         <p className="text-[8px] text-muted-foreground/60 text-center uppercase tracking-tighter mt-1">
-          * Los puntos se reinician cada semana. El pozo se reparte entre niveles calificados.
+          * Los puntos se reinician después de la distribución semanal. El pozo se reparte entre niveles calificados.
         </p>
       </div>
     </div>

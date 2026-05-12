@@ -9,6 +9,14 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { QRCodeCanvas } from 'qrcode.react';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 import {
     MunicipalProfile,
     MunicipalExpressStatus,
@@ -31,7 +39,7 @@ interface StatusConfig {
 const STATUS_CONFIG: Record<MunicipalExpressStatus, StatusConfig> = {
     pending_municipal_review: {
         label: 'Pendiente de revisión municipal',
-        description: 'Presentá tu documentación en la municipalidad. Una vez recibida, la revisarán y te habilitarán.',
+        description: 'La municipalidad está revisando la documentación que subiste. Podés presentarte físicamente con tu código si es requerido por tu localidad.',
         color:  'text-amber-400',
         bg:     'bg-amber-500/10',
         border: 'border-amber-500/30',
@@ -92,6 +100,15 @@ const STATUS_CONFIG: Record<MunicipalExpressStatus, StatusConfig> = {
         icon:   'shield-off',
         canOperate: false,
     },
+    suspended_expired_itv: {
+        label: 'Suspendido — ITV/VTV vencido',
+        description: 'La inspección técnica de tu vehículo ha vencido. No podés operar hasta que la municipalidad apruebe la renovación.',
+        color:  'text-red-400',
+        bg:     'bg-red-500/10',
+        border: 'border-red-500/30',
+        icon:   'shield-off',
+        canOperate: false,
+    },
     suspended_unpaid_canon: {
         label: 'Suspendido — Canon municipal impago',
         description: 'Regularizá el canon municipal en tu municipalidad para volver a operar.',
@@ -126,9 +143,11 @@ const CHECKLIST_LABELS: Record<MunicipalChecklistKey, string> = {
     dniBack:                'DNI — Dorso',
     driverLicense:          'Licencia de conducir',
     vehicleInsurance:       'Seguro del vehículo',
+    passengerCoverageInsurance: 'Cobertura pasajeros — Seguros Rivadavia',
     vehicleRegistrationCard:'Cédula del vehículo',
     criminalRecord:         'Antecedentes penales vigentes',
     municipalCanon:         'Canon municipal (arancel)',
+    disinfectionReceipt:    'Certificado de Desinfección',
 };
 
 const DOC_STATUS_BADGE: Record<DocItemStatus, { label: string; color: string; bg: string }> = {
@@ -203,19 +222,14 @@ export default function DriverMuniStatusPage() {
             setMunProfile(snap.exists() ? (snap.data() as MunicipalProfile) : null);
             setLoading(false);
         }, () => setLoading(false));
+
+        // [VamO PRO] Public profile is synced automatically via Cloud Functions
+        // when users or municipal_profiles documents are updated.
+
         return () => unsub();
     }, [firestore, user?.uid]);
 
-    // Guardas
-    if (profile?.driverSubtype !== 'express') {
-        return (
-            <div className="py-16 text-center space-y-2">
-                <VamoIcon name="shield" className="h-10 w-10 mx-auto text-zinc-600" />
-                <p className="text-zinc-500 text-sm">Esta sección es solo para conductores particulares/express.</p>
-            </div>
-        );
-    }
-
+    // All drivers use this page to manage their municipal status
     if (loading) {
         return (
             <div className="py-16 flex justify-center">
@@ -226,7 +240,26 @@ export default function DriverMuniStatusPage() {
 
     // Estado desde el perfil base (denormalizado, siempre disponible)
     const munStatus = (profile?.municipalStatus ?? 'pending_municipal_review') as MunicipalExpressStatus;
-    const cfg       = STATUS_CONFIG[munStatus] ?? STATUS_CONFIG['pending_municipal_review'];
+    let cfg       = STATUS_CONFIG[munStatus] ?? STATUS_CONFIG['pending_municipal_review'];
+
+    // [VamO PRO] Grace Period Check for Observations
+    const graceUntil = profile?.observationGraceUntil;
+    const isInsideGrace = graceUntil && (graceUntil.toDate ? graceUntil.toDate() : new Date(graceUntil)) > new Date();
+    
+    if ((munStatus === 'municipal_observed' || munStatus === 'renewal_under_review') && isInsideGrace) {
+        const timeStr = graceUntil.toDate ? graceUntil.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date(graceUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        cfg = {
+            ...cfg,
+            canOperate: true,
+            label: munStatus === 'renewal_under_review' ? 'Revisión (En Plazo de Gracia)' : 'Observaciones (En Plazo de Gracia)',
+            description: munStatus === 'renewal_under_review' 
+                ? `Subiste tu corrección. Podés seguir operando mientras la revisan hasta las ${timeStr}.`
+                : `Tenés observaciones pendientes. Podés seguir operando hasta las ${timeStr}. Corregilas antes de ese horario para evitar la inhabilitación.`,
+            color:  'text-amber-400',
+            bg:     'bg-amber-500/10',
+            border: 'border-amber-500/30',
+        };
+    }
 
     const checklist = munProfile?.checklist;
     const CHECKLIST_KEYS = Object.keys(CHECKLIST_LABELS) as MunicipalChecklistKey[];
@@ -258,7 +291,7 @@ export default function DriverMuniStatusPage() {
             });
 
             // Actualizar el estado municipal y el checklist (usando setDoc con merge de objetos para máxima compatibilidad)
-            await setDoc(doc(firestore, 'municipal_profiles', user.uid), {
+            const updatePayload: any = {
                 municipalStatus: 'renewal_under_review',
                 updatedAt: serverTimestamp(),
                 checklist: {
@@ -268,12 +301,26 @@ export default function DriverMuniStatusPage() {
                         storageUrl: url
                     }
                 }
-            }, { merge: true });
+            };
 
-            // Dual update a users table
-            await updateDoc(doc(firestore, 'users', user.uid), {
-                municipalStatus: 'renewal_under_review',
-                updatedAt: serverTimestamp()
+            // Si el documento que sube es el que pidió tránsito, marcamos el pedido como cumplido
+            if (munProfile?.lastTrafficRequest?.documentType === uploadingDoc) {
+                updatePayload.lastTrafficRequest = {
+                    ...munProfile.lastTrafficRequest,
+                    status: 'submitted',
+                    submittedAt: serverTimestamp()
+                };
+            }
+
+            await setDoc(doc(firestore, 'municipal_profiles', user.uid), updatePayload, { merge: true });
+
+            // Dual update a users table (Locked to Backend)
+            const { getFunctions, httpsCallable } = await import('firebase/functions');
+            const functions = getFunctions(undefined, 'us-central1');
+            const updateProfile = httpsCallable(functions, 'updateProfileV1');
+            
+            await updateProfile({
+                municipalStatus: 'renewal_under_review'
             });
 
             await addDoc(collection(firestore, 'municipal_audit_log'), {
@@ -316,8 +363,85 @@ export default function DriverMuniStatusPage() {
                         </p>
                         <p className="text-xs text-zinc-600 mt-0.5">Presentalo en la municipalidad de {munProfile?.city ?? profile.city}</p>
                     </div>
-                    <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                        <VamoIcon name="qr-code" className="h-7 w-7 text-amber-400" />
+                    <Dialog>
+                        <DialogTrigger asChild>
+                            <button className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center hover:bg-amber-500/20 transition-all active:scale-95 group">
+                                <VamoIcon name="qr-code" className="h-7 w-7 text-amber-400 group-hover:scale-110 transition-transform" />
+                            </button>
+                        </DialogTrigger>
+                        <DialogContent className="bg-zinc-950 border-white/10 text-white rounded-[2rem] max-w-[320px]">
+                            <DialogHeader>
+                                <DialogTitle className="text-xl font-black italic uppercase tracking-tighter text-center">
+                                    Credencial Digital
+                                </DialogTitle>
+                            </DialogHeader>
+                            <div className="flex flex-col items-center gap-6 py-6">
+                                <div className="p-4 bg-white rounded-3xl shadow-2xl">
+                                    <QRCodeCanvas 
+                                        value={`${typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.online'}/verify/driver/${user?.uid}`}
+                                        size={180}
+                                        level="H"
+                                        marginSize={2}
+                                    />
+                                </div>
+                                <div className="text-center space-y-1">
+                                    <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Código: {profile?.municipalCode}</p>
+                                    <p className="text-xs text-zinc-500">Presentá este QR ante la autoridad de tránsito.</p>
+                                </div>
+                                <div className="w-full space-y-2">
+                                    <Button 
+                                        className="w-full h-12 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold"
+                                        onClick={() => window.open(`/verify/driver/${user?.uid}`, '_blank')}
+                                    >
+                                        Previsualizar Credencial Pública
+                                    </Button>
+                                    <Button 
+                                        variant="outline"
+                                        className="w-full h-10 rounded-xl border-white/5 bg-white/5 text-[10px] uppercase font-black tracking-widest"
+                                        onClick={() => {
+                                            toast({ title: 'Credencial Sincronizada', description: 'Tus datos públicos se actualizan automáticamente con el servidor.' });
+                                        }}
+                                    >
+                                        Sincronizar Datos QR
+                                    </Button>
+                                </div>
+                            </div>
+                        </DialogContent>
+                    </Dialog>
+                </div>
+            )}
+
+            {/* ── PEDIDOS DE TRÁNSITO ─────────────────────────────────────── */}
+            {munProfile?.lastTrafficRequest && munProfile.lastTrafficRequest.status === 'requested' && (
+                <div className="rounded-3xl border-2 border-indigo-500/50 bg-indigo-500/10 p-6 space-y-4 shadow-2xl shadow-indigo-500/10">
+                    <div className="flex items-start gap-5">
+                        <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/40 shrink-0">
+                            <VamoIcon name="file-warning" className="h-7 w-7 text-white" />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="text-xl font-black text-white italic tracking-tight">Documentación Solicitada</h3>
+                            <p className="text-sm text-indigo-300 mt-1 font-medium">
+                                El área de Tránsito requiere: <span className="text-white font-black underline decoration-indigo-400">{CHECKLIST_LABELS[munProfile.lastTrafficRequest.documentType as MunicipalChecklistKey]}</span>
+                            </p>
+                            
+                            <div className="mt-4 p-4 bg-zinc-950/60 rounded-[1.5rem] border border-white/5">
+                                <p className="text-xs text-zinc-300 italic leading-relaxed">"{munProfile.lastTrafficRequest.reason}"</p>
+                                <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+                                    <span className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">Solicitado por {munProfile.lastTrafficRequest.requestedByName}</span>
+                                    <span className="text-[9px] text-indigo-400 font-bold">REQUERIDO</span>
+                                </div>
+                            </div>
+
+                            <Button 
+                                className="mt-5 w-full bg-white text-indigo-600 font-black uppercase tracking-widest text-xs h-12 rounded-2xl hover:bg-zinc-100 transition-all active:scale-[0.98] shadow-lg"
+                                onClick={() => {
+                                    setUploadingDoc(munProfile.lastTrafficRequest!.documentType as MunicipalChecklistKey);
+                                    document.getElementById('upload-section')?.scrollIntoView({ behavior: 'smooth' });
+                                }}
+                            >
+                                Subir Documentación Ahora
+                            </Button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -425,6 +549,7 @@ export default function DriverMuniStatusPage() {
                 <div className="px-4 py-2">
                     <ExpiryBadge ts={munProfile?.licenseExpiry}          label="Licencia de conducir" />
                     <ExpiryBadge ts={munProfile?.insuranceExpiry}         label="Seguro del vehículo" />
+                    <ExpiryBadge ts={munProfile?.itvExpiry}               label="ITV / VTV del vehículo" />
                     <ExpiryBadge ts={munProfile?.backgroundCheckExpiry}   label="Antecedentes penales" />
                 </div>
             </div>
@@ -475,7 +600,7 @@ export default function DriverMuniStatusPage() {
 
             {/* ── SUBIDA DE RENOVACIONES (solo si no está activo o tiene vencidos) ── */}
             {munStatus !== 'active' && (
-                <div className="rounded-2xl border border-dashed border-white/10 p-5 space-y-4">
+                <div id="upload-section" className="rounded-2xl border border-dashed border-white/10 p-5 space-y-4">
                     <div>
                         <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
                             Renovación de documentos

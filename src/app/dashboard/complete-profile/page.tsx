@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, useFirebase } from '@/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -15,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
 import { Suspense } from 'react';
 import { Checkbox } from "@/components/ui/checkbox";
 import { CURRENT_TERMS_VERSION } from "@/lib/legal-config";
@@ -22,11 +23,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ShieldCheck, Scale } from 'lucide-react';
 
 function CompletePassengerProfileContent() {
-    const { user, profile } = useUser();
+    const { user, profile, loading: isAuthInitializing } = useUser();
+    // Use user.uid for storage path to ensure we use the actual Auth identity
+    const authUid = user?.uid;
+    const { storage } = useFirebase();
     const searchParams = useSearchParams();
     const router = useRouter();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
+
 
     const [name, setName] = useState('');
     const [surname, setSurname] = useState('');
@@ -34,12 +39,21 @@ function CompletePassengerProfileContent() {
     const [phone, setPhone] = useState('');
     const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>('');
     const [photoURL, setPhotoURL] = useState<string | null>(null);
+    const [cityKey, setCityKey] = useState<'rawson' | 'trelew' | 'comodoro' | ''>('rawson');
     const [referralCodeInput, setReferralCodeInput] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+
+    useEffect(() => {
+        // [ONBOARDING_GUARD] If profile is already active, escape to dashboard
+        if (!isAuthInitializing && profile?.registrationStatus === 'active') {
+            console.log("[ONBOARDING_GUARD] Profile already active. Redirecting to dashboard.");
+            router.replace('/dashboard');
+        }
+    }, [profile, isAuthInitializing, router]);
 
     // DEEP LINK / CAPTURA: Leer ref=CODE y campaign de la URL o del storage
     useEffect(() => {
@@ -70,6 +84,7 @@ function CompletePassengerProfileContent() {
             if (profile.phone) setPhone(profile.phone);
             if (profile.gender) setGender(profile.gender as any);
             if (profile.photoURL) setPhotoURL(profile.photoURL);
+            if (profile.cityKey) setCityKey(profile.cityKey as any);
             
             // Auto-completar referido guardado en el paso anterior (login/signup)
             if (profile.referredByCode && !referralCodeInput) {
@@ -80,38 +95,101 @@ function CompletePassengerProfileContent() {
 
     const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !user) return;
+        if (!file) return;
 
-        // Validation
+        // GUARDIA FUERTE: Bloquear si no hay UID de Auth listo
+        if (!authUid) {
+            console.error("📸 [PHOTO_UPLOAD_BLOCKED_NO_AUTH] Attempted upload without resolved Auth UID.");
+            toast({ 
+                variant: 'destructive', 
+                title: 'Sesión no lista', 
+                description: 'Tu sesión todavía no está lista. Esperá unos segundos e intentá de nuevo.' 
+            });
+            return;
+        }
+
+        console.log("📸 [PHOTO_UPLOAD] Audit Start:", {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            uid: authUid
+        });
+
+        if (!storage) {
+            toast({ variant: 'destructive', title: 'Error de Sistema', description: 'El servicio de almacenamiento no está disponible.' });
+            return;
+        }
+
+        // 1. Instant Preview (UX Improvement)
+        const localPreview = URL.createObjectURL(file);
+        setPhotoURL(localPreview);
+
+        // 2. Validation
         if (!file.type.startsWith('image/')) {
-            toast({ variant: 'destructive', title: 'Archivo inválido', description: 'Por favor, subí una imagen.' });
+            toast({ variant: 'destructive', title: 'Formato Inválido', description: 'Por favor, seleccioná una imagen (JPG, PNG o WebP).' });
+            setPhotoURL(profile?.photoURL || null); // Revert
+            return;
+        }
+
+        // Limite estricto según auditoría (5MB según reglas de Storage)
+        if (file.size > 5 * 1024 * 1024) {
+            toast({ variant: 'destructive', title: 'Archivo muy grande', description: 'La foto debe pesar menos de 5MB.' });
+            setPhotoURL(profile?.photoURL || null); // Revert
             return;
         }
 
         setIsUploading(true);
         try {
-            const storage = getStorage();
-            const storageRef = ref(storage, `profiles/${user.uid}/avatar_${Date.now()}`);
+            // Ruta exacta según auditoría: passengers/{uid}/profile/profile.jpg
+            const storagePath = `passengers/${authUid}/profile/profile.jpg`;
+            const storageRef = ref(storage, storagePath);
             
-            const snapshot = await uploadBytes(storageRef, file);
+            console.log("📸 [PHOTO_UPLOAD] Uploading to:", storagePath);
+            
+            const snapshot = await uploadBytes(storageRef, file, { 
+                contentType: file.type,
+                customMetadata: { 
+                    role: 'passenger',
+                    source: 'registration_v1',
+                    authUid: authUid
+                }
+            });
+            
             const downloadURL = await getDownloadURL(snapshot.ref);
+            console.log("📸 [PHOTO_UPLOAD] Success. Final URL:", downloadURL);
             
             setPhotoURL(downloadURL);
-            toast({ title: 'Foto cargada', description: 'Tu foto de perfil se actualizó correctamente.' });
-        } catch (error) {
-            console.error("Error uploading photo:", error);
-            toast({ variant: 'destructive', title: 'Error de subida', description: 'No se pudo cargar la imagen.' });
+            toast({ title: 'Foto cargada', description: 'Tu imagen se procesó correctamente.' });
+        } catch (error: any) {
+            console.error("📸 [PHOTO_UPLOAD] CRITICAL ERROR:", error);
+            setPhotoURL(profile?.photoURL || null); // Revert preview on failure
+            
+            let msg = 'No se pudo subir la foto.';
+            if (error.code === 'storage/unauthorized') {
+                msg = 'Error de permisos (Storage). Verificá tu sesión.';
+            } else if (error.code === 'storage/canceled') {
+                msg = 'Carga cancelada.';
+            } else if (error.message) {
+                msg = error.message;
+            }
+            
+            toast({ variant: 'destructive', title: 'Fallo en la carga', description: msg });
         } finally {
             setIsUploading(false);
+            if (e.target) e.target.value = ''; // Reset input
         }
     };
 
+
+
+
+
     const handleSubmit = async () => {
-        if (!name || !surname || !phone || !gender || !photoURL || !displayName) {
+        if (!name || !surname || !phone || !gender || !displayName || !cityKey) {
             toast({ 
                 variant: 'destructive', 
                 title: 'Campos requeridos', 
-                description: 'Por favor, completá todos los datos obligatorios, incluyendo tu foto.' 
+                description: 'Por favor, completá todos los datos obligatorios.' 
             });
             return;
         }
@@ -127,6 +205,7 @@ function CompletePassengerProfileContent() {
 
         setIsSubmitting(true);
         setFormError(null);
+        console.log("[PASSENGER_PROFILE_SAVE_START] Saving profile for", user?.uid);
 
         try {
             const functions = getFunctions(undefined, 'us-central1');
@@ -141,11 +220,14 @@ function CompletePassengerProfileContent() {
                 phone: normalizedPhone,
                 gender,
                 photoURL,
+                cityKey,
                 profileCompleted: true,
                 termsAccepted: true,
                 termsVersion: CURRENT_TERMS_VERSION,
-                termsAcceptedAt: new Date() // El wrapper de functions manejará el Timestamp de server si es necesario
+                termsAcceptedAt: new Date() 
             });
+
+            console.log("[PASSENGER_PROFILE_SAVE_OK] Profile updated via backend.");
 
             // APLICAR REFERIDO SI EXISTE
             if (referralCodeInput.trim()) {
@@ -160,14 +242,21 @@ function CompletePassengerProfileContent() {
                 
                 localStorage.removeItem('vamo_captured_referral');
                 localStorage.removeItem('vamo_captured_campaign');
+                console.log("[PASSENGER_REFERRAL_APPLIED] Referral code applied.");
             }
+            
+            console.log("[PASSENGER_STATUS_ACTIVE] User is now active. Redirecting to dashboard...");
             
             toast({
                 title: '¡Perfil PRO listo!',
-                description: 'Bienvenido a VamO. Redirigiendo...',
+                description: 'Bienvenido a VamO. Tu cuenta ha sido activada.',
             });
 
-            router.replace('/dashboard/ride'); 
+            // Wait for Firestore consistency
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            // Seamless transition to dashboard
+            router.replace('/dashboard');
             
         } catch (error: any) {
             console.error("🔥 ERROR GUARDANDO PERFIL:", error);
@@ -181,12 +270,27 @@ function CompletePassengerProfileContent() {
         }
     };
 
+    if (isAuthInitializing || (!!user && !profile)) {
+        // [SELF_HEALING] If we have a user but no profile after 3 seconds, something is wrong
+        // but we show the loader to keep the experience smooth.
+        return <VamoFullScreenLoader label="Preparando tu llegada..." />;
+    }
+
     return (
-        <main className="min-h-screen bg-[#121212] pt-12 pb-20 px-4">
-            <div className="max-w-md mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div className="space-y-2 text-center">
-                    <h1 className="text-4xl font-black text-white tracking-tighter">Completá tu Perfil</h1>
-                    <p className="text-zinc-500 text-sm">Necesitamos estos datos para que tus viajes sean seguros y profesionales.</p>
+        <main className="min-h-screen bg-zinc-950 bg-morphic flex items-center justify-center py-12 px-4 sm:px-6">
+            <div className="w-full max-w-lg space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-1000 ease-out">
+                <div className="space-y-4 text-center">
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-indigo-600/10 rounded-3xl mb-2 border border-indigo-500/20">
+                        <VamoIcon name="user" className="h-10 w-10 text-indigo-500" />
+                    </div>
+                    <div className="space-y-1">
+                        <h1 className="text-4xl font-black text-white tracking-tighter uppercase italic">
+                            Casi <span className="text-indigo-500">Listo</span>
+                        </h1>
+                        <p className="text-zinc-500 text-sm font-medium max-w-[280px] mx-auto leading-relaxed">
+                            Completá tu perfil para empezar a viajar con seguridad.
+                        </p>
+                    </div>
                 </div>
 
                 <div className="flex flex-col items-center gap-4">
@@ -211,8 +315,8 @@ function CompletePassengerProfileContent() {
 
                         <button 
                             onClick={() => fileInputRef.current?.click()}
-                            disabled={isUploading}
-                            className="absolute bottom-0 right-0 h-10 w-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full border-4 border-zinc-900 flex items-center justify-center shadow-lg transition-all hover:scale-110 active:scale-90"
+                            disabled={isUploading || isAuthInitializing || !authUid}
+                            className="absolute bottom-0 right-0 h-10 w-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full border-4 border-zinc-900 flex items-center justify-center shadow-lg transition-all hover:scale-110 active:scale-90 disabled:opacity-50 disabled:grayscale"
                         >
                             <VamoIcon name="camera" className="h-5 w-5" />
                         </button>
@@ -221,13 +325,13 @@ function CompletePassengerProfileContent() {
                         type="file" 
                         ref={fileInputRef} 
                         onChange={handlePhotoUpload} 
-                        className="hidden" 
+                        className="opacity-0 absolute pointer-events-none" 
                         accept="image/*" 
                     />
-                    <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest">Foto de perfil obligatoria</p>
+                    <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest">Foto de perfil recomendada</p>
                 </div>
 
-                <div className="bg-zinc-900/50 backdrop-blur-xl border border-white/5 rounded-[2rem] p-8 space-y-6">
+                <div className="bg-zinc-900/80 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-6 sm:p-10 space-y-6 shadow-2xl shadow-black/50">
                     {formError && (
                         <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-500">
                             <VamoIcon name="alert-circle" className="h-4 w-4" />
@@ -282,6 +386,21 @@ function CompletePassengerProfileContent() {
                     </div>
 
                     <div className="space-y-2">
+                        <Label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Ciudad Operativa</Label>
+                        <Select value={cityKey} onValueChange={(val: any) => setCityKey(val)}>
+                            <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl text-white focus:ring-indigo-500">
+                                <SelectValue placeholder="Seleccionar Ciudad" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                <SelectItem value="rawson">Rawson / Playa Unión</SelectItem>
+                                <SelectItem value="trelew">Trelew</SelectItem>
+                                <SelectItem value="comodoro">Comodoro Rivadavia</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-[10px] text-zinc-600 px-1">Seleccioná tu ciudad principal para ver conductores cercanos.</p>
+                    </div>
+
+                    <div className="space-y-2">
                         <Label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Género</Label>
                         <Select value={gender} onValueChange={(val: any) => setGender(val)}>
                             <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl text-white focus:ring-indigo-500">
@@ -329,14 +448,19 @@ function CompletePassengerProfileContent() {
                     <Button 
                         onClick={handleSubmit} 
                         disabled={isSubmitting || isUploading || !termsAccepted}
-                        className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-indigo-500/10 active:scale-[0.98]"
+                        className="w-full h-16 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest rounded-[1.5rem] transition-all shadow-2xl shadow-indigo-600/30 active:scale-[0.98] mt-4"
                     >
-                        {isSubmitting ? <VamoIcon name="loader" className="h-6 w-6 animate-spin" /> : "Guardar y Empezar"}
+                        {isSubmitting ? (
+                            <div className="flex items-center gap-3">
+                                <VamoIcon name="loader" className="h-6 w-6 animate-spin" />
+                                <span>ACTIVANDO CUENTA...</span>
+                            </div>
+                        ) : "Guardar y Empezar a Viajar"}
                     </Button>
                 </div>
 
                 <Dialog open={isLegalModalOpen} onOpenChange={setIsLegalModalOpen}>
-                    <DialogContent className="max-w-md h-[80vh] flex flex-col p-0 gap-0 sm:rounded-[2rem] overflow-hidden bg-zinc-900 border-zinc-800">
+                    <DialogContent className="max-w-md w-[95vw] h-[85vh] flex flex-col p-0 gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/10 shadow-3xl">
                         <DialogHeader className="p-6 border-b border-white/5 shrink-0 text-left">
                             <div className="flex items-center gap-3 mb-1">
                                 <Scale className="h-5 w-5 text-indigo-400" />

@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, limit, getDocs, startAfter, DocumentSnapshot } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs, startAfter, DocumentSnapshot, QueryConstraint } from 'firebase/firestore';
 import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -43,33 +44,55 @@ export default function AdminWithdrawalsPage() {
   // Platform Ledger
   const [ledgerTransactions, setLedgerTransactions] = useState<PlatformTransaction[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(false);
+  const { cityKey: activeCityKey, loading: loadingContext } = useMunicipalContext();
 
   useEffect(() => {
-    if (!firestore || adminProfile?.role !== 'admin') return;
+    if (!firestore || adminProfile?.role !== 'admin' || loadingContext) return;
+    
+    // IMPORTANT: Reset stats when city changes to avoid showing old data if new query fails
+    setTotalCommissions(0);
+    setTotalPendingAmount(0);
+    setTotalGMV(0);
+    setPendingRequests([]);
+    setLedgerTransactions([]);
+    setHistoryRequests([]);
+
     fetchPending();
     fetchStats();
     fetchLedger();
-  }, [firestore, adminProfile]);
+  }, [firestore, adminProfile, activeCityKey, loadingContext]);
 
   const fetchStats = async () => {
     if (!firestore) return;
     try {
-        const ridesQ = query(collection(firestore, 'rides'), where('status', '==', 'completed'), limit(100));
+        const ridesConstraints: QueryConstraint[] = [where('status', '==', 'completed'), limit(100)];
+        if (activeCityKey) ridesConstraints.push(where('cityKey', '==', activeCityKey));
+
+        const ridesQ = query(collection(firestore, 'rides'), ...ridesConstraints);
         const ridesSnap = await getDocs(ridesQ);
         
         let gmv = 0;
         let vamoCut = 0;
         ridesSnap.forEach(doc => {
             const r = doc.data();
-            const total = r.pricing?.final?.total || r.pricing?.estimated?.total || 0;
-            const driverGets = r.pricing?.driverReceivesTotal || (total * 0.85);
+            const completed = r.completedRide;
+            
+            // GMV is the total fare of the ride
+            const total = completed?.totalFare || r.pricing?.final?.total || r.pricing?.estimated?.total || 0;
+            
+            // Commission: use the recorded amount if settled, otherwise estimate 15%
+            const commission = completed?.commissionAmount || (total * 0.15);
+            
             gmv += total;
-            vamoCut += (total - driverGets);
+            vamoCut += commission;
         });
         setTotalGMV(gmv);
         setTotalCommissions(vamoCut);
 
-        const pendingQ = query(collection(firestore, 'withdrawal_requests'), where('status', '==', 'pending'));
+        const pendingConstraints: QueryConstraint[] = [where('status', '==', 'pending')];
+        if (activeCityKey) pendingConstraints.push(where('cityKey', '==', activeCityKey));
+
+        const pendingQ = query(collection(firestore, 'withdrawal_requests'), ...pendingConstraints);
         const pendingSnap = await getDocs(pendingQ);
         let pendingTotal = 0;
         pendingSnap.forEach(doc => {
@@ -85,7 +108,10 @@ export default function AdminWithdrawalsPage() {
     if (!firestore) return;
     setLoadingLedger(true);
     try {
-        const q = query(collection(firestore, 'platform_transactions'), orderBy('createdAt', 'desc'), limit(50));
+        const constraints: any[] = [orderBy('createdAt', 'desc'), limit(50)];
+        if (activeCityKey) constraints.push(where('cityKey', '==', activeCityKey));
+
+        const q = query(collection(firestore, 'platform_transactions'), ...constraints);
         const snap = await getDocs(q);
         setLedgerTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as PlatformTransaction)));
     } catch (e) {
@@ -99,11 +125,13 @@ export default function AdminWithdrawalsPage() {
     if (!firestore) return;
     setLoadingPending(true);
     try {
-        const q = query(
-            collection(firestore, 'withdrawal_requests'),
+        const constraints: any[] = [
             where('status', '==', 'pending'),
             orderBy('createdAt', 'desc')
-        );
+        ];
+        if (activeCityKey) constraints.push(where('cityKey', '==', activeCityKey));
+
+        const q = query(collection(firestore, 'withdrawal_requests'), ...constraints);
         const snap = await getDocs(q);
         setPendingRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as WithdrawalRequest)));
     } catch (e) {
@@ -120,13 +148,15 @@ export default function AdminWithdrawalsPage() {
         setHistoryRequests([]);
     }
     try {
-        const q = query(
-            collection(firestore, 'withdrawal_requests'),
+        const constraints: any[] = [
             where('status', 'in', ['approved', 'rejected']),
             orderBy('createdAt', 'desc'),
-            limit(PAGE_SIZE),
-            ...(afterDoc ? [startAfter(afterDoc)] : [])
-        );
+            limit(PAGE_SIZE)
+        ];
+        if (activeCityKey) constraints.push(where('cityKey', '==', activeCityKey));
+        if (afterDoc) constraints.push(startAfter(afterDoc));
+
+        const q = query(collection(firestore, 'withdrawal_requests'), ...constraints);
         const snap = await getDocs(q);
         const newList = snap.docs.map(d => ({ id: d.id, ...d.data() } as WithdrawalRequest));
         
@@ -258,7 +288,7 @@ export default function AdminWithdrawalsPage() {
                                 </div>
                                 <div className="space-y-1">
                                     <h3 className="text-xl font-black text-white tracking-tighter uppercase">{req.driverName}</h3>
-                                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">ID Conductor: <span className="text-zinc-300 font-mono">{req.driverId.slice(-8)}</span></p>
+                                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">ID Conductor: <span className="text-zinc-300 font-mono">{req.driverId?.slice(-8) || 'N/A'}</span></p>
                                 </div>
                             </CardHeader>
                             <CardContent className="p-6 flex-1 space-y-6">
@@ -333,7 +363,7 @@ export default function AdminWithdrawalsPage() {
                                     </td>
                                     <td className="px-6 py-4">
                                         <p className="text-sm font-bold text-white uppercase group-hover:text-primary transition-colors">{req.driverName}</p>
-                                        <p className="text-[10px] text-zinc-500 font-mono uppercase italic">{req.driverId.slice(-8)}</p>
+                                        <p className="text-[10px] text-zinc-500 font-mono uppercase italic">{req.driverId?.slice(-8) || 'N/A'}</p>
                                     </td>
                                     <td className="px-6 py-4 text-sm font-black text-white">
                                         {formatCurrency(req.amount)}
@@ -393,7 +423,7 @@ export default function AdminWithdrawalsPage() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <p className="text-xs font-bold text-white uppercase">{tx.driverId.slice(-8)}</p>
+                                        <p className="text-xs font-bold text-white uppercase">{tx.driverId?.slice(-8) || 'N/A'}</p>
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={cn("text-sm font-black", tx.amount > 0 ? "text-green-500" : "text-red-500")}>

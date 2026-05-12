@@ -1,106 +1,85 @@
 'use client';
 
-// src/app/auth/continue/page.tsx
-// This page is the SINGLE source of truth for post-auth routing.
-// It waits for the full auth state (user + profile + role) to be stable,
-// then redirects to the correct destination. Login never needs to know about roles.
-
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@/firebase/auth/use-user';
-import { useToast } from '@/hooks/use-toast';
+import { useUser, useFirebase } from '@/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
 
+/**
+ * [VamO SECURITY] Identity Repair & Routing Page
+ * 
+ * This page is the "safety net" for the authentication flow.
+ * It ensures that every authenticated user has a valid Firestore profile
+ * and is routed to the correct destination (Dashboard or Onboarding).
+ */
 export default function AuthContinuePage() {
     const router = useRouter();
-    const { toast } = useToast();
-    const { user, profile, loading, error } = useUser();
+    const { user, profile, loading } = useUser();
+    const { services } = useFirebase();
 
     useEffect(() => {
-        // Step 1: Handle Errors immediately
-        if (error) {
-            console.error('🔀 [LOOP_DEBUG] AuthContinue - Fatal Error:', error.message);
-            toast({ variant: 'destructive', title: 'Error de Sesión', description: 'No pudimos cargar tu perfil. Reintentando...' });
-            router.replace('/login');
-            return;
-        }
+        if (loading) return;
 
-        // Step 2: Wait for auth to initialize
-        if (loading) {
-            console.log('🔀 [LOOP_DEBUG] AuthContinue - Still loading auth/profile state...');
-            return;
-        }
-
-        // Step 3: No session -> go back to login
+        // 1. Unauthenticated -> Login
         if (!user) {
-            console.log('🔀 [LOOP_DEBUG] AuthContinue - No active session. Redirect -> /login');
+            console.warn("[AUTH_CONTINUE] No user found. Redirecting to login...");
             router.replace('/login');
             return;
         }
 
-        // Step 4: Session exists but profile not yet ready
-        const role = profile ? (profile as any).role : null;
-        if (!profile || !role) {
-            console.log('🔀 [LOOP_DEBUG] AuthContinue - Waiting for profile/role. profileExists:', !!profile, 'role:', role);
-            
-            // Rescue logic: if after 5 seconds we still have no profile/role, something is wrong
-            const rescueTimer = setTimeout(() => {
-                console.warn('🔀 [LOOP_DEBUG] AuthContinue - Profile resolution TIMEOUT. Redirect -> /login');
-                router.replace('/login');
-            }, 5000);
-            
-            return () => clearTimeout(rescueTimer); 
-        }
-
-        // Step 5: Full state ready — decide destination
-        const validRoles = ['driver', 'passenger', 'admin', 'admin_municipal'];
-        if (!validRoles.includes(role)) {
-            console.error('🔀 [LOOP_DEBUG] AuthContinue - INVALID ROLE:', role);
-            router.replace('/login');
-            return; 
-        }
-
-        console.log('🔀 [LOOP_DEBUG] AuthContinue - RESOLVED. UID:', user.uid, 'Role:', role, 'ProfileCompleted:', profile.profileCompleted);
-
-        let targetPath: string;
-
-        if (!profile.profileCompleted) {
-            targetPath = role === 'driver' ? '/driver/complete-profile' : '/dashboard/complete-profile';
-            console.log('🔀 [LOOP_DEBUG] AuthContinue - Profile incomplete. Redirect ->', targetPath);
-        } else {
-            switch (role) {
-                case 'driver':          targetPath = '/driver/rides'; break;
-                case 'admin':           targetPath = '/admin/dashboard'; break;
-                case 'admin_municipal': targetPath = '/municipal/dashboard'; break;
-                case 'passenger':       targetPath = '/dashboard/ride'; break;
-                default: 
-                    // Should be covered by validRoles check above, but for safety:
-                    router.replace('/login');
+        const resolveRouting = async () => {
+            try {
+                // 2. Profile missing -> Call Repair
+                if (!profile) {
+                    console.log("[AUTH_CONTINUE] Profile missing. Triggering repair...");
+                    const functions = getFunctions(undefined, 'us-central1');
+                    const repairProfile = httpsCallable(functions, 'repairUserProfileV1');
+                    await repairProfile();
+                    
+                    // Wait for Firestore propagation
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    
+                    // Reload the page to pick up the new profile
+                    window.location.reload();
                     return;
+                }
+
+                // 3. Routing based on status and role
+                console.log(`[AUTH_CONTINUE] Profile resolved. Role: ${profile.role}, Status: ${profile.registrationStatus}`);
+
+                if (profile.role === 'admin') {
+                    router.replace('/admin');
+                    return;
+                }
+
+                if (profile.registrationStatus !== 'active') {
+                    console.warn(`[AUTH_CONTINUE] Incomplete registration (${profile.registrationStatus}). Routing to onboarding...`);
+                    if (profile.role === 'driver') {
+                        router.replace('/driver/register');
+                    } else {
+                        router.replace('/dashboard/complete-profile');
+                    }
+                } else {
+                    console.log("[AUTH_CONTINUE] Status active. Routing to dashboard...");
+                    if (profile.role === 'driver') {
+                        router.replace('/driver');
+                    } else {
+                        router.replace('/dashboard');
+                    }
+                }
+
+            } catch (err) {
+                console.error("[AUTH_CONTINUE] Critical error during resolution:", err);
+                // Fallback to home/login to avoid infinite loop
+                router.replace('/login');
             }
-            console.log('🔀 [LOOP_DEBUG] AuthContinue - Profile complete. Redirect ->', targetPath);
-        }
+        };
 
-        // Delay the redirect slightly to ensure the UI message is seen and context is stable.
-        const timer = setTimeout(() => {
-            router.replace(targetPath);
-        }, 800);
-        return () => clearTimeout(timer);
-    }, [user, profile, loading, error, router, toast]);
+        resolveRouting();
+    }, [user, profile, loading, router]);
 
-    // UI Logic for sequential messages
-    let statusMessage = "Iniciando sesión...";
-    if (loading) statusMessage = "Cargando estado...";
-    else if (!profile) statusMessage = "Obteniendo tu perfil...";
-    else if (!(profile as any).role) statusMessage = "Validando permisos...";
-    else statusMessage = "Configurando tu panel...";
-
-    // Always show a clean loader — this page never has visible content
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#121212]">
-            <div className="flex flex-col items-center gap-4">
-                <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-                <p className="text-zinc-500 font-medium animate-pulse">{statusMessage}</p>
-            </div>
-        </div>
+        <VamoFullScreenLoader label="Sincronizando identidad..." />
     );
 }

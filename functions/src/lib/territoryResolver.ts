@@ -27,21 +27,21 @@ const CITY_DEFINITIONS: Record<
   { nameMap: string[]; bbox: BoundingBox }
 > = {
   rawson: {
-    nameMap: ["rawson", "playa union", "playa unión"],
+    nameMap: ["rawson", "playa-union", "magagna", "union"],
     bbox: {
-      minLat: -43.35,
-      maxLat: -43.25,
-      minLng: -65.15,
-      maxLng: -65.05,
+      minLat: -43.50, // Expanded south
+      maxLat: -43.15, // Expanded north
+      minLng: -65.30, // Expanded west
+      maxLng: -64.90, // Expanded east (towards sea)
     },
   },
   trelew: {
-    nameMap: ["trelew"],
+    nameMap: ["trelew", "gaiman", "dolavon"],
     bbox: {
-      minLat: -43.30,
-      maxLat: -43.20,
-      minLng: -65.30,
-      maxLng: -65.20,
+      minLat: -43.40,
+      maxLat: -43.10,
+      minLng: -65.60, // Expanded to include Gaiman/Dolavon
+      maxLng: -65.10,
     },
   },
   // Add more municipalities here as needed

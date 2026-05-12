@@ -15,16 +15,12 @@ export const firebaseConfig = {
     vapidKey: process.env.NEXT_PUBLIC_FCM_VAPID_KEY,
 };
 
-// --- TEST DEFINITIVO ---
-// Esto nos dirá exactamente qué configuración está usando el cliente.
-console.log("FIREBASE CONFIGURATION LOADED:", firebaseConfig);
+// Firebase configuration is loaded here.
 
 
-// A critical runtime check to ensure the build process was successful.
-// If these are undefined, the app will fail loudly here instead of with cryptic
-// Firestore errors later.
-if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-  throw new Error('La configuración de Firebase no se cargó correctamente. Revisa que las variables de entorno en tu archivo .env.local sean correctas y que hayas reiniciado el servidor de Next.js (npm run dev). El projectId no puede ser undefined.');
+// Silent validation in production SSR
+if (typeof window !== 'undefined' && (!firebaseConfig.apiKey || !firebaseConfig.projectId)) {
+  console.error('La configuración de Firebase no se cargó correctamente.');
 }
 
 

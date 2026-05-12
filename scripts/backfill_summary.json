@@ -1,0 +1,20 @@
+{
+  "total": 11,
+  "matched": 6,
+  "updated": 0,
+  "failed": 5,
+  "roles": {
+    "passenger": 3,
+    "admin_municipal": 4,
+    "admin": 1,
+    "driver": 3
+  },
+  "cities": {
+    "rawson": 5,
+    "posadas": 2
+  },
+  "nullClaims": 0,
+  "reasons": {
+    "ok": 11
+  }
+}

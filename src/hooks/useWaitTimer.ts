@@ -7,54 +7,70 @@ export function useWaitTimer(ride: Ride | null | undefined) {
     const [waitMinutes, setWaitMinutes] = useState('00:00');
     const [waitCost, setWaitCost] = useState(0);
 
-    const isCurrentlyWaiting = Boolean(ride && ((ride as any).isWaitingForPassenger === true || ride.status === 'paused'));
+    const isPaused = ride?.status === 'paused';
+    const isArrivedWaiting = ride?.status === 'driver_arrived';
+    const isCurrentlyWaiting = isPaused || isArrivedWaiting;
     
-    // Accumulate total completed wait periods
-    const historicalWaitingSeconds = (ride as any)?.cumulativeWaitSeconds ?? (ride?.pauseHistory || []).reduce((acc: number, p: any) => acc + (p.duration || 0), 0);
+    // [VamO PRO] Centralized Grace Period Logic
+    const GRACE_PERIOD_SECONDS = 300; // 5 minutes
+
+    // Calculate total historical duration (for display and grace period calculation)
+    const historicalTotalSeconds = (ride as any)?.cumulativeWaitSeconds || (ride?.pauseHistory || []).reduce((acc: number, p: any) => acc + (p.duration || 0), 0);
     
-    const hasWaitData = historicalWaitingSeconds > 0 || isCurrentlyWaiting;
+    const hasWaitData = historicalTotalSeconds > 0 || isCurrentlyWaiting;
 
     useEffect(() => {
         if (!ride) return;
 
         let intervalId: any = null;
 
-        const updateWaitState = (totalSeconds: number) => {
-            const totalMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
-            const remainingSeconds = Math.floor(Math.max(0, totalSeconds) % 60);
+        const updateWaitState = (currentTotalSeconds: number, currentBillableSeconds: number) => {
+            const totalMinutes = Math.floor(Math.max(0, currentTotalSeconds) / 60);
+            const remainingSeconds = Math.floor(Math.max(0, currentTotalSeconds) % 60);
             setWaitMinutes(`${String(totalMinutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`);
             
-            // Bloque 3: 300 seconds (5 minutes) grace period before charging
-            const GRACE_PERIOD_SECONDS = 300;
-            let costOfWait = 0;
-            if (totalSeconds > GRACE_PERIOD_SECONDS) {
-                const billableSeconds = totalSeconds - GRACE_PERIOD_SECONDS;
-                // Charge per started minute (Math.ceil)
-                costOfWait = Math.ceil(billableSeconds / 60) * WAITING_PER_MIN;
-            }
+            // Pro-rated calculation to match backend settlement
+            const costOfWait = (currentBillableSeconds / 60) * WAITING_PER_MIN;
             setWaitCost(costOfWait);
         };
 
         if (isCurrentlyWaiting) {
-            const startTimeStamp = (ride as any).isWaitingForPassenger ? (ride as any).passengerWaitStartedAt : (ride.status === 'paused' ? (ride as any).pauseStartedAt : null);
+            let startTimeStamp = isArrivedWaiting ? ride.arrivedAt : (ride as any).pauseStartedAt;
+            
+            // [VamO PRO] Reservation Guard: If arrived early, wait starts at scheduledAt
+            if (isArrivedWaiting && ride.scheduledAt && ride.arrivedAt) {
+                const arrived = (ride.arrivedAt as Timestamp).toDate().getTime();
+                const scheduled = (ride.scheduledAt as Timestamp).toDate().getTime();
+                if (scheduled > arrived) {
+                    startTimeStamp = ride.scheduledAt;
+                }
+            }
             
             if (startTimeStamp instanceof Timestamp) {
                 const startTime = startTimeStamp.toDate();
                 
-                intervalId = setInterval(() => {
+                const tick = () => {
                     const now = new Date();
-                    const currentOngoingSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
-                    updateWaitState(historicalWaitingSeconds + Math.max(0, currentOngoingSeconds));
-                }, 1000);
-                
-                // Initial tick
-                const initialCurrentSeconds = Math.floor((new Date().getTime() - startTime.getTime()) / 1000);
-                updateWaitState(historicalWaitingSeconds + Math.max(0, initialCurrentSeconds));
+                    const ongoingSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+                    
+                    const currentTotalSeconds = historicalTotalSeconds + Math.max(0, ongoingSeconds);
+                    const currentBillableSeconds = Math.max(0, currentTotalSeconds - GRACE_PERIOD_SECONDS);
+
+                    updateWaitState(
+                        currentTotalSeconds,
+                        currentBillableSeconds
+                    );
+                };
+
+                intervalId = setInterval(tick, 1000);
+                tick(); // Initial tick
             } else {
-                updateWaitState(historicalWaitingSeconds);
+                const currentBillableSeconds = Math.max(0, historicalTotalSeconds - GRACE_PERIOD_SECONDS);
+                updateWaitState(historicalTotalSeconds, currentBillableSeconds);
             }
         } else {
-            updateWaitState(historicalWaitingSeconds);
+            const currentBillableSeconds = Math.max(0, historicalTotalSeconds - GRACE_PERIOD_SECONDS);
+            updateWaitState(historicalTotalSeconds, currentBillableSeconds);
         }
         
         return () => {
@@ -62,20 +78,26 @@ export function useWaitTimer(ride: Ride | null | undefined) {
         };
     }, [
         ride?.status, 
-        (ride as any)?.isWaitingForPassenger, 
-        (ride as any)?.passengerWaitStartedAt, 
+        ride?.arrivedAt,
         (ride as any)?.pauseStartedAt, 
         ride?.pauseHistory,
         (ride as any)?.cumulativeWaitSeconds,
-        historicalWaitingSeconds,
-        isCurrentlyWaiting
+        historicalTotalSeconds,
+        isCurrentlyWaiting,
+        isArrivedWaiting
     ]);
+
+    const isEarlyArrival = isArrivedWaiting && ride?.scheduledAt && ride?.arrivedAt && 
+        ((ride.scheduledAt as Timestamp).toDate().getTime() > (ride.arrivedAt as Timestamp).toDate().getTime()) &&
+        (new Date().getTime() < (ride.scheduledAt as Timestamp).toDate().getTime());
 
     return {
         waitMinutes,
         waitCost,
+        waitChargeApplied: waitCost, // Renamed for clarity in components
         isCurrentlyWaiting,
         hasWaitData,
-        historicalWaitingSeconds
+        historicalTotalSeconds,
+        isEarlyArrival
     };
 }

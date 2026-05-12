@@ -2,16 +2,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFirestore, useUser } from '@/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, AlertTriangle, Zap, Thermometer, ShieldAlert, BadgeDollarSign, Landmark, ShieldCheck } from 'lucide-react';
+import { Loader2, Save, AlertTriangle, Zap, Thermometer, ShieldAlert, BadgeDollarSign, Landmark, ShieldCheck, MapPin } from 'lucide-react';
 import { VamoIcon } from '@/components/VamoIcon';
-import { SystemConfig, PricingConfig } from '@/lib/types';
+import { safeFixed } from '@/lib/formatters';
+import { SystemConfig, PricingConfig, City } from '@/lib/types';
 
 export default function AdminConfigPage() {
     const firestore = useFirestore();
@@ -20,6 +22,9 @@ export default function AdminConfigPage() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+
+    const [cities, setCities] = useState<City[]>([]);
+    const [selectedCityKey, setSelectedCityKey] = useState<string>('rawson');
 
     // SYSTEM CONFIG
     const [systemConfig, setSystemConfig] = useState<SystemConfig>({
@@ -39,31 +44,63 @@ export default function AdminConfigPage() {
         NIGHT_WAITING_PER_MIN: 277,
         MINIMUM_FARE: 1500,
         PLATFORM_COMMISSION_RATE: 0.15,
+        commission_particular: 0.13,
+        commission_taxi_remis: 0.07,
+        municipal_percentage: 0.05,
         ASSISTANCE_FEE: 400,
         assistanceEnabled: true
     });
 
     useEffect(() => {
         if (!firestore) return;
-        fetchConfigs();
+        fetchInitialData();
     }, [firestore]);
 
-    const fetchConfigs = async () => {
+    useEffect(() => {
+        if (!firestore || !selectedCityKey) return;
+        fetchCityPricing();
+    }, [firestore, selectedCityKey]);
+
+    const fetchInitialData = async () => {
         if (!firestore) return;
-        setLoading(true);
         try {
-            const [sysSnap, priceSnap] = await Promise.all([
-                getDoc(doc(firestore, 'config', 'system')),
-                getDoc(doc(firestore, 'config', 'pricing'))
+            const [sysSnap, citiesSnap] = await Promise.all([
+                getDoc(doc(firestore, 'system_config', 'global')),
+                getDocs(collection(firestore, 'cities'))
             ]);
 
-            if (sysSnap.exists()) setSystemConfig(sysSnap.data() as SystemConfig);
-            if (priceSnap.exists()) setPricingConfig(priceSnap.data() as PricingConfig);
+            if (sysSnap.exists()) {
+                setSystemConfig(sysSnap.data() as SystemConfig);
+            }
+            
+            const citiesList: City[] = [];
+            citiesSnap.forEach(d => citiesList.push({ id: d.id, ...d.data() } as City));
+            setCities(citiesList);
         } catch (e) {
-            console.error("Error fetching admin config:", e);
+            console.error("Error fetching initial data:", e);
+        }
+    };
+
+    const fetchCityPricing = async () => {
+        if (!firestore || !selectedCityKey) return;
+        setLoading(true);
+        try {
+            const priceSnap = await getDoc(doc(firestore, 'municipal_pricing', selectedCityKey));
+            if (priceSnap.exists()) {
+                const data = priceSnap.data() as PricingConfig;
+                setPricingConfig({
+                    ...pricingConfig,
+                    ...data,
+                    // Ensure new fields have fallbacks if missing in DB
+                    commission_particular: data.commission_particular ?? 0.13,
+                    commission_taxi_remis: data.commission_taxi_remis ?? 0.07,
+                    municipal_percentage: data.municipal_percentage ?? 0.05,
+                });
+            }
+        } catch (e) {
+            console.error("Error fetching city pricing:", e);
         } finally {
-            setLoading(true); // Artificial delay or just set to false below
-            setTimeout(() => setLoading(false), 500);
+            setLoading(false);
         }
     };
 
@@ -72,19 +109,21 @@ export default function AdminConfigPage() {
         setSaving(true);
         try {
             await Promise.all([
-                setDoc(doc(firestore, 'config', 'system'), { 
+                setDoc(doc(firestore, 'system_config', 'global'), { 
                     ...systemConfig, 
                     updatedAt: serverTimestamp(),
-                    updatedBy: profile.id 
+                    updatedBy: profile.id,
+                    schemaVersion: 1
                 }),
-                setDoc(doc(firestore, 'config', 'pricing'), { 
+                setDoc(doc(firestore, 'municipal_pricing', selectedCityKey), { 
                     ...pricingConfig, 
                     updatedAt: serverTimestamp(),
                     updatedBy: profile.id,
-                    version: (pricingConfig.version || 0) + 1
+                    version: (pricingConfig.version || 0) + 1,
+                    municipalityKey: selectedCityKey
                 })
             ]);
-            toast({ title: "Configuración Actualizada", description: "Los cambios se aplicarán a todos los nuevos viajes inmediatamente." });
+            toast({ title: "Configuración Actualizada", description: `Los cambios para ${selectedCityKey} se guardaron correctamente.` });
         } catch (e) {
             console.error(e);
             toast({ variant: "destructive", title: "Error", description: "No se pudieron guardar los cambios." });
@@ -121,6 +160,35 @@ export default function AdminConfigPage() {
                 </div>
             </div>
 
+            {/* CITY SELECTOR */}
+            <Card className="bg-zinc-900/40 border-zinc-800 rounded-[32px] overflow-hidden backdrop-blur-xl border-t border-white/5">
+                <CardContent className="p-6">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 rounded-2xl bg-primary/10">
+                                <MapPin className="h-6 w-6 text-primary" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black text-white uppercase tracking-tighter">Jurisdicción</h2>
+                                <p className="text-xs text-zinc-500">Seleccioná la ciudad para configurar sus parámetros económicos.</p>
+                            </div>
+                        </div>
+                        <div className="w-full md:w-64">
+                            <Select value={selectedCityKey} onValueChange={setSelectedCityKey}>
+                                <SelectTrigger className="bg-black/50 border-zinc-800 rounded-2xl h-12 font-bold text-white focus:ring-primary/20">
+                                    <SelectValue placeholder="Seleccionar Ciudad" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-zinc-800 text-white rounded-2xl">
+                                    {cities.map(city => (
+                                        <SelectItem key={city.id} value={city.id || ''}>{city.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* ALERT BOX FOR CRITICAL CHANGES */}
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-3xl p-6 flex gap-4 items-start">
                 <div className="mt-1 p-2 rounded-xl bg-amber-500/20">
@@ -129,8 +197,8 @@ export default function AdminConfigPage() {
                 <div>
                     <p className="text-amber-500 font-black uppercase tracking-widest text-[10px]">Atención Administrador</p>
                     <p className="text-amber-500/80 text-xs mt-1 leading-relaxed">
-                        Cualquier modificación en las tarifas afectará el cálculo de precios en tiempo real para todos los usuarios.
-                        Asegurate de validar los montos antes de guardar.
+                        Cualquier modificación en las tarifas afectará el cálculo de precios en tiempo real para todos los usuarios de <strong>{selectedCityKey.toUpperCase()}</strong>.
+                        Los cambios NO son retroactivos (se guardará un <strong>[PRICING_SNAPSHOT]</strong> en cada nuevo viaje).
                     </p>
                 </div>
             </div>
@@ -223,25 +291,56 @@ export default function AdminConfigPage() {
                         <CardHeader className="pb-4">
                             <div className="flex items-center gap-3 mb-2">
                                 <Landmark className="h-5 w-5 text-amber-500" />
-                                <CardTitle className="text-xl font-black text-white uppercase tracking-tighter">Economía VamO</CardTitle>
+                                <CardTitle className="text-xl font-black text-white uppercase tracking-tighter">Economía [PRICING_CONFIG]</CardTitle>
                             </div>
-                            <CardDescription className="text-xs text-zinc-500">Márgenes de rentabilidad de la plataforma.</CardDescription>
+                            <CardDescription className="text-xs text-zinc-500">Márgenes de rentabilidad por tipo de conductor.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            <div className="space-y-2">
-                                <Label className="text-[10px] uppercase font-black tracking-widest text-zinc-400">Comisión de Plataforma (%)</Label>
-                                <div className="flex items-center gap-4">
-                                    <Input 
-                                        type="number" 
-                                        className="bg-black/50 border-zinc-800 rounded-2xl h-12 font-bold text-white focus:ring-amber-500/20"
-                                        value={pricingConfig.PLATFORM_COMMISSION_RATE * 100}
-                                        onChange={e => setPricingConfig({...pricingConfig, PLATFORM_COMMISSION_RATE: Number(e.target.value) / 100})}
-                                    />
-                                    <div className="text-[10px] font-black text-zinc-600 bg-zinc-800/40 px-4 py-3 rounded-2xl">
-                                        {(pricingConfig.PLATFORM_COMMISSION_RATE * 100).toFixed(1)}%
+                            <div className="grid grid-cols-1 gap-6">
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] uppercase font-black tracking-widest text-zinc-400">Comisión Particulares (%)</Label>
+                                    <div className="flex items-center gap-4">
+                                        <Input 
+                                            type="number" 
+                                            className="bg-black/50 border-zinc-800 rounded-2xl h-12 font-bold text-white focus:ring-amber-500/20"
+                                            value={pricingConfig.commission_particular * 100}
+                                            onChange={e => setPricingConfig({...pricingConfig, commission_particular: Number(e.target.value) / 100})}
+                                        />
+                                        <div className="text-[10px] font-black text-zinc-600 bg-zinc-800/40 px-4 py-3 rounded-2xl">
+                                            {safeFixed(pricingConfig.commission_particular * 100, 1)}%
+                                        </div>
                                     </div>
                                 </div>
-                                <p className="text-[9px] text-zinc-500 italic mt-1">Este porcentaje será retenido de cada viaje completado.</p>
+
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] uppercase font-black tracking-widest text-zinc-400">Comisión Taxis/Remises (%)</Label>
+                                    <div className="flex items-center gap-4">
+                                        <Input 
+                                            type="number" 
+                                            className="bg-black/50 border-zinc-800 rounded-2xl h-12 font-bold text-white focus:ring-amber-500/20"
+                                            value={pricingConfig.commission_taxi_remis * 100}
+                                            onChange={e => setPricingConfig({...pricingConfig, commission_taxi_remis: Number(e.target.value) / 100})}
+                                        />
+                                        <div className="text-[10px] font-black text-zinc-600 bg-zinc-800/40 px-4 py-3 rounded-2xl">
+                                            {safeFixed(pricingConfig.commission_taxi_remis * 100, 1)}%
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] uppercase font-black tracking-widest text-zinc-400">Tasa Municipal (%)</Label>
+                                    <div className="flex items-center gap-4">
+                                        <Input 
+                                            type="number" 
+                                            className="bg-black/50 border-zinc-800 rounded-2xl h-12 font-bold text-white focus:ring-amber-500/20"
+                                            value={pricingConfig.municipal_percentage * 100}
+                                            onChange={e => setPricingConfig({...pricingConfig, municipal_percentage: Number(e.target.value) / 100})}
+                                        />
+                                        <div className="text-[10px] font-black text-zinc-600 bg-zinc-800/40 px-4 py-3 rounded-2xl">
+                                            {safeFixed(pricingConfig.municipal_percentage * 100, 1)}%
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>

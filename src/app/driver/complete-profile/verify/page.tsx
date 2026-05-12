@@ -1,127 +1,15 @@
-
 'use client';
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { VamoIcon, WhatsAppLogo } from '@/components/VamoIcon';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
-import { useState } from 'react';
-import { getAuth } from 'firebase/auth';
+import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
 
-export default function VerifyPage() {
-    const adminWhatsAppNumber = "5492804967673";
+export default function VerifyRedirect() {
     const router = useRouter();
-    const firestore = useFirestore();
-    const { user, profile, loading } = useUser();
 
-    const driverRef = useMemoFirebase(() => {
-        if (!firestore || !user?.uid) return null;
-        return doc(firestore, 'users', user.uid);
-    }, [firestore, user?.uid]);
+    useEffect(() => {
+        router.replace('/driver/register');
+    }, [router]);
 
-    const { data: latestProfile } = useDoc(driverRef);
-    const [isVerifying, setIsVerifying] = useState(false);
-
-    const handleVerifyStatus = async () => {
-        setIsVerifying(true);
-        await new Promise(r => setTimeout(r, 1000));
-        
-        const isApproved = latestProfile?.approved === true;
-        if (isApproved) {
-            router.push('/driver/rides');
-        } else {
-            setIsVerifying(false);
-            alert('Tu cuenta aún está pendiente de revisión. Por favor, enviá los documentos por WhatsApp si no lo hiciste.');
-        }
-    };
-
-    // The message is now constructed dynamically
-    const createWhatsAppMessage = () => {
-        const currentProfile = latestProfile || profile;
-        if (loading || !currentProfile) {
-            return 'Hola, soy un nuevo conductor de VamO y quiero verificar mi cuenta.';
-        }
-
-        const fullName = currentProfile.name || 'Nuevo Conductor';
-        const email = currentProfile.email || user?.email || '';
-
-        const baseText = `
-Hola, soy un nuevo conductor de VamO. Quiero verificar mi cuenta.
------------------------------------
-*Mis Datos:*
-*Nombre:* ${fullName}
-*Email:* ${email}
------------------------------------
-Adjunto mi documentación:
-- Foto de DNI (frente y dorso)
-- Foto de Licencia de Conducir (frente y dorso)
-- Foto del Seguro del Vehículo vigente
-- Foto de la Cédula del Vehículo (para verificar el modelo)
-
-Gracias.
-        `.trim().replace(/\n/g, '%0A').replace(/ /g, '%20');
-        
-        return baseText;
-    };
-
-
-    const handleWhatsAppClick = () => {
-        const message = createWhatsAppMessage();
-        const url = `https://wa.me/${adminWhatsAppNumber}?text=${message}`;
-        window.open(url, '_blank');
-    };
-    
-    const handleLogout = () => {
-        // Here you would typically sign the user out
-        router.push('/login');
-    };
-
-    return (
-        <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
-            <Card className="w-full">
-                <CardHeader className="text-center">
-                    <CardTitle>¡Ya casi estás listo!</CardTitle>
-                    <CardDescription>Solo falta un paso para activar tu cuenta.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="p-4 bg-secondary rounded-lg space-y-3">
-                        <p className="font-semibold text-center">Envíanos por WhatsApp la siguiente documentación:</p>
-                        <ul className="text-sm space-y-2">
-                            <li className="flex items-center gap-2"><VamoIcon name="user" className="w-4 h-4 text-primary" /> Foto de tu DNI (frente y dorso).</li>
-                            <li className="flex items-center gap-2"><VamoIcon name="file-text" className="w-4 h-4 text-primary" /> Foto de tu Licencia de Conducir.</li>
-                            <li className="flex items-center gap-2"><VamoIcon name="shield" className="w-4 h-4 text-primary" /> Foto del Seguro de tu vehículo.</li>
-                            <li className="flex items-center gap-2"><VamoIcon name="check" className="w-4 h-4 text-primary" /> Comprobante del modelo del auto.</li>
-                        </ul>
-                    </div>
-
-                    <Button onClick={handleWhatsAppClick} className="w-full" size="lg" disabled={loading}>
-                        <WhatsAppLogo className="mr-2 h-5 w-5" />
-                        {loading ? 'Cargando datos...' : 'Enviar Documentación por WhatsApp'}
-                    </Button>
-                    
-                    <div className="text-center text-sm text-muted-foreground pt-4">
-                        <p>Nuestro equipo revisará tus documentos y recibirás una notificación cuando tu cuenta sea aprobada.</p>
-                        <p className="font-semibold">Esto puede demorar hasta 24hs.</p>
-                    </div>
-
-                </CardContent>
-                 <CardContent className="flex flex-col gap-3">
-                    <Button 
-                        onClick={handleVerifyStatus} 
-                        className="w-full font-bold"
-                        disabled={isVerifying}
-                    >
-                        {isVerifying ? 'Verificando...' : 'Ya envié mis documentos, verificar mi estado'}
-                    </Button>
-                    <Button onClick={handleLogout} variant="outline" className="w-full">
-                       Cerrar sesión
-                    </Button>
-                </CardContent>
-            </Card>
-        </main>
-    );
+    return <VamoFullScreenLoader label="Redirigiendo al registro..." />;
 }
-

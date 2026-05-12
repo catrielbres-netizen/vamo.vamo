@@ -2,8 +2,9 @@
 
 import React, { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, orderBy, addDoc, updateDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { collection, query, orderBy, addDoc, updateDoc, doc, setDoc, serverTimestamp, where, QueryConstraint } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 import { Promotion, PromotionStatus, PromotionTarget, PromotionContext } from '@/lib/types';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
@@ -38,11 +39,17 @@ const CONTEXT_OPTIONS: PromotionContext[] = ['topup', 'ride', 'signup', 'reactiv
 export default function AdminPromotionsPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
+    const { cityKey: activeCityKey, loading: loadingContext } = useMunicipalContext();
+    const { profile } = useUser();
 
-    const promotionsQuery = useMemo(() => firestore ? query(
-        collection(firestore, 'promotions'),
-        orderBy('createdAt', 'desc')
-    ) : null, [firestore]);
+    const promotionsQuery = useMemo(() => {
+        if (!firestore || loadingContext) return null;
+        const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
+        if (activeCityKey) {
+            constraints.push(where('city', '==', activeCityKey));
+        }
+        return query(collection(firestore, 'promotions'), ...constraints);
+    }, [firestore, activeCityKey, loadingContext]);
     
     const { data: promotions, isLoading } = useCollection<Promotion>(promotionsQuery);
 
@@ -54,7 +61,7 @@ export default function AdminPromotionsPage() {
     const [formData, setFormData] = useState<Partial<Promotion>>({
         name: '', description: '', target: 'passenger', status: 'draft', 
         enabled: true, priority: 10, stackable: false, context: 'ride',
-        city: 'global',
+        city: activeCityKey || 'global',
         conditions: { minAmount: 0, isFirstAction: false },
         reward: { type: 'fixed', value: 0 },
         limits: { maxRedemptionsPerUser: 1 }
@@ -64,7 +71,7 @@ export default function AdminPromotionsPage() {
         setFormData({
             name: '', description: '', target: 'passenger', status: 'active', 
             enabled: true, priority: 10, stackable: false, context: 'ride',
-            city: 'global',
+            city: activeCityKey || 'global',
             conditions: { minAmount: 0, isFirstAction: false },
             reward: { type: 'fixed', value: 0 },
             limits: { maxRedemptionsPerUser: 1 }

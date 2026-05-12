@@ -15,9 +15,11 @@ const DOC_LABELS: Record<MunicipalChecklistKey, string> = {
     dniBack:                'DNI — Dorso',
     driverLicense:          'Licencia de conducir',
     vehicleInsurance:       'Seguro del vehículo',
+    passengerCoverageInsurance: 'Cobertura pasajeros — Seguros Rivadavia',
     vehicleRegistrationCard:'Cédula del vehículo',
     criminalRecord:         'Antecedentes penales',
     municipalCanon:         'Canon municipal',
+    disinfectionReceipt:    'Certificado de Desinfección',
 };
 
 function formatDate(ts: any) {

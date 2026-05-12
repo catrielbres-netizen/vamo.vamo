@@ -26,7 +26,8 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Ride, FapType } from '@/lib/types';
 import { Loader2, CheckCircle2, AlertCircle, Image, X, Camera } from 'lucide-react';
-import { useUser } from '@/firebase';
+import { useUser, useFirebaseApp, useFirestore } from '@/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 interface FapClaimModalProps {
   ride: Ride;
@@ -35,7 +36,8 @@ interface FapClaimModalProps {
 }
 
 export function FapClaimModal({ ride, isOpen, onClose }: FapClaimModalProps) {
-  const { user } = useUser();
+  const { user, profile } = useUser();
+  const app = useFirebaseApp();
   const [type, setType] = useState<FapType>('other');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,29 +46,61 @@ export function FapClaimModal({ ride, isOpen, onClose }: FapClaimModalProps) {
   const [successCaseId, setSuccessCaseId] = useState<string | null>(null);
   const [evidenceUrls, setEvidenceUrls] = useState<string[]>([]);
   const [requestedAmount, setRequestedAmount] = useState<string>('');
+  const [recordings, setRecordings] = useState<any[]>([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
+  const firestore = useFirestore();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (isOpen && ride.id) {
+        setLoadingRecs(true);
+        const q = query(collection(firestore, 'ride_recordings'), where('rideId', '==', ride.id), where('status', '==', 'uploaded'));
+        const unsubscribe = onSnapshot(q, (snap) => {
+            setRecordings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoadingRecs(false);
+        });
+        return () => unsubscribe();
+    }
+  }, [isOpen, ride.id, firestore]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     // ... no changes in photo upload logic
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
+    if (!ride?.id) {
+        setError('Error de integridad: ID de viaje no encontrado.');
+        console.error("[FAP_UPLOAD_ERROR] Missing ride.id in modal props");
+        return;
+    }
+
     if (!file.type.startsWith('image/')) {
         setError('Por favor, selecciona una imagen válida.');
+        return;
+    }
+
+    // 5MB Limit
+    if (file.size > 5 * 1024 * 1024) {
+        setError('La imagen es demasiado pesada (Máximo 5MB).');
         return;
     }
 
     setIsUploading(true);
     setError(null);
     try {
-        const storage = getStorage();
+        const storage = getStorage(app);
         const storageRef = ref(storage, `fap_evidence/${user.uid}/${ride.id}/${Date.now()}_${file.name}`);
+        
+        console.log(`[FAP_UPLOAD_DEBUG] Attempting upload to: fap_evidence/${user.uid}/${ride.id}/`);
+        
         const snapshot = await uploadBytes(storageRef, file);
         const url = await getDownloadURL(snapshot.ref);
         setEvidenceUrls(prev => [...prev, url]);
+        
+        console.log("[FAP_UPLOAD_SUCCESS] Photo uploaded successfully:", url);
     } catch (err: any) {
-        console.error("Error uploading evidence:", err);
-        setError("Error al subir la imagen.");
+        console.error("[FAP_UPLOAD_ERROR] Fatal error during uploadBytes:", err);
+        setError(`Error al subir la imagen: ${err.message || 'Error de red'}`);
     } finally {
         setIsUploading(false);
     }
@@ -80,6 +114,12 @@ export function FapClaimModal({ ride, isOpen, onClose }: FapClaimModalProps) {
     if (!description.trim()) {
       setError('Por favor, describe lo sucedido.');
       return;
+    }
+
+    const isLevel3 = ["accident", "robbery", "medical"].includes(type);
+    if (isLevel3 && profile?.identityStatus !== 'approved') {
+        setError('La verificación de identidad es obligatoria para este tipo de reporte. Por favor, verifícate en tu perfil.');
+        return;
     }
 
     // Validate requested amount if provided
@@ -178,10 +218,11 @@ export function FapClaimModal({ ride, isOpen, onClose }: FapClaimModalProps) {
                 <SelectValue placeholder="Selecciona el tipo" />
               </SelectTrigger>
               <SelectContent className="bg-zinc-900 border-zinc-800">
-                <SelectItem value="accident">Accidente / Choque</SelectItem>
-                <SelectItem value="injury">Lesión física</SelectItem>
-                <SelectItem value="damage">Daño a pertenencias</SelectItem>
-                <SelectItem value="theft">Robo / Hurto</SelectItem>
+                <SelectItem value="overcharge">Cobro incorrecto</SelectItem>
+                <SelectItem value="behavior">Seguridad / Comportamiento</SelectItem>
+                <SelectItem value="behavior">Inconveniente con el conductor</SelectItem>
+                <SelectItem value="accident">Accidente / Incidente en viaje</SelectItem>
+                <SelectItem value="lost_item">Objeto olvidado</SelectItem>
                 <SelectItem value="other">Otro problema</SelectItem>
               </SelectContent>
             </Select>
@@ -221,7 +262,7 @@ export function FapClaimModal({ ride, isOpen, onClose }: FapClaimModalProps) {
 
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <Label className="text-zinc-400">Evidencia fotográfica (Opcional)</Label>
+              <Label className="text-zinc-400">Evidencia fotográfica (Obligatoria)</Label>
               <Button
                 type="button"
                 variant="ghost"
@@ -235,6 +276,12 @@ export function FapClaimModal({ ride, isOpen, onClose }: FapClaimModalProps) {
               </Button>
             </div>
             
+            {evidenceUrls.length === 0 && (
+                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-tighter">
+                    ⚠️ Adjuntá al menos una foto para enviar el reclamo.
+                </p>
+            )}
+            
             <input 
               type="file" 
               ref={fileInputRef} 
@@ -247,7 +294,13 @@ export function FapClaimModal({ ride, isOpen, onClose }: FapClaimModalProps) {
               <div className="grid grid-cols-4 gap-2">
                 {evidenceUrls.map((url, idx) => (
                   <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-zinc-800 group">
-                    <img src={url} alt="Evidencia" className="object-cover w-full h-full" />
+                    {url.includes('.webm') ? (
+                       <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
+                          <VamoIcon name="video" className="text-zinc-500" />
+                       </div>
+                    ) : (
+                       <img src={url} alt="Evidencia" className="object-cover w-full h-full" />
+                    )}
                     <button
                       onClick={() => removePhoto(idx)}
                       className="absolute top-1 right-1 bg-black/60 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -260,13 +313,69 @@ export function FapClaimModal({ ride, isOpen, onClose }: FapClaimModalProps) {
             )}
           </div>
 
-          <Alert className="bg-emerald-500/5 border-emerald-500/20 text-emerald-400">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle className="text-xs font-bold uppercase tracking-wider">Recordatorio</AlertTitle>
-            <AlertDescription className="text-xs">
-              Tenés hasta 24 horas después del viaje para realizar este reporte.
-            </AlertDescription>
-          </Alert>
+          {/* Recordings Section */}
+          {recordings.length > 0 && (
+            <div className="space-y-2 border-t border-white/5 pt-4">
+              <Label className="text-zinc-400">Grabaciones de Seguridad disponibles</Label>
+              <div className="space-y-2">
+                {recordings.map(rec => {
+                  const isAttached = evidenceUrls.includes(rec.downloadUrl);
+                  return (
+                    <div key={rec.id} className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03] border border-white/5">
+                      <div className="flex items-center gap-2">
+                        <VamoIcon name={rec.type === 'audio' ? 'mic' : 'video'} className="h-4 w-4 text-zinc-500" />
+                        <div>
+                          <p className="text-[10px] font-bold text-white capitalize">{rec.type === 'audio' ? 'Audio' : 'Video'}</p>
+                          <p className="text-[9px] text-zinc-500">{new Date(rec.createdAt?.toDate ? rec.createdAt.toDate() : rec.createdAt).toLocaleTimeString()}</p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant={isAttached ? 'secondary' : 'outline'}
+                        className="h-7 text-[9px] font-black uppercase tracking-widest px-3"
+                        onClick={() => {
+                          if (isAttached) {
+                            setEvidenceUrls(prev => prev.filter(u => u !== rec.downloadUrl));
+                          } else {
+                            setEvidenceUrls(prev => [...prev, rec.downloadUrl]);
+                          }
+                        }}
+                      >
+                        {isAttached ? 'Quitar' : 'Adjuntar'}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {(() => {
+            const isLevel3 = ["accident", "robbery", "medical"].includes(type);
+            const isUnverified = profile?.identityStatus !== 'approved';
+            
+            if (isLevel3 && isUnverified) {
+              return (
+                <Alert className="bg-red-500/10 border-red-500/20 text-red-400">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle className="text-[10px] font-black uppercase tracking-[0.2em]">Acceso Restringido</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    Para reportar este tipo de incidente, primero debes verificar tu identidad en la sección de <b>Perfil</b>.
+                  </AlertDescription>
+                </Alert>
+              );
+            }
+
+            return (
+              <Alert className="bg-emerald-500/5 border-emerald-500/20 text-emerald-400">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle className="text-xs font-bold uppercase tracking-wider">Recordatorio</AlertTitle>
+                <AlertDescription className="text-xs">
+                  Tenés hasta 24 horas después del viaje para realizar este reporte.
+                </AlertDescription>
+              </Alert>
+            );
+          })()}
 
           {error && (
             <div className="text-xs text-red-500 bg-red-500/10 p-2 rounded border border-red-500/20 flex items-center gap-2">
@@ -282,7 +391,7 @@ export function FapClaimModal({ ride, isOpen, onClose }: FapClaimModalProps) {
           </Button>
           <Button 
             onClick={handleSubmit} 
-            disabled={isSubmitting}
+            disabled={isSubmitting || evidenceUrls.length === 0 || (["accident", "robbery", "medical"].includes(type) && profile?.identityStatus !== 'approved')}
             className="bg-emerald-600 hover:bg-emerald-500 text-white border-0"
           >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

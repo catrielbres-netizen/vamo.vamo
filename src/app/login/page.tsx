@@ -1,10 +1,12 @@
-import React, { Suspense } from 'react';
+'use client';
+
+import React from 'react';
 import LoginPageClient from './LoginPageClient';
 
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<div>Cargando...</div>}>
-      <LoginPageClient fixedRole="passenger" />
-    </Suspense>
-  );
+/**
+ * [VamO REVERSION] Volviendo al flujo unificado y estable.
+ * Se eliminan los portales separados por URL para evitar fragmentación.
+ */
+export default function RootLoginPage() {
+    return <LoginPageClient />;
 }

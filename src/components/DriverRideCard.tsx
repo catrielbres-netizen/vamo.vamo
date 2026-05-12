@@ -24,24 +24,15 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { type WithId } from '@/firebase/firestore/use-collection';
 import { Timestamp } from 'firebase/firestore';
 import { haversineDistance } from '@/lib/geo';
+import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
 
+
+import { formatDistance, formatDuration } from '@/lib/formatters';
 
 const serviceCardStyles: Record<Ride['serviceType'], string> = {
-    premium: "border-yellow-400/50",
+    professional: "border-yellow-400/50",
     express: "border-gray-400/50",
-    normal: "border-gray-400/30",
 };
-
-const formatDistance = (meters: number) => {
-    if (meters === 0) return '-- km';
-    if (meters < 1000) return `${Math.round(meters)} m`;
-    return `${(meters / 1000).toFixed(1)} km`;
-}
-
-const formatDuration = (seconds: number) => {
-    if (seconds === 0) return '-- min';
-    return `${Math.round(seconds / 60)} min`;
-}
 
 export default function DriverRideCard({
   ride,
@@ -124,22 +115,44 @@ export default function DriverRideCard({
         <div className="!mt-4 grid grid-cols-2 gap-2 text-center text-xs text-muted-foreground">
             <div className="flex items-center justify-center gap-2">
                 <VamoIcon name="route" className="w-4 h-4" />
-                <span>{formatDistance( ride.origin && ride.destination ? haversineDistance(ride.origin, ride.destination) : 0 )}</span>
+                <span>{formatDistance(ride.pricing?.estimatedDistanceMeters || (ride.origin && ride.destination ? haversineDistance(ride.origin, ride.destination) : 0))}</span>
             </div>
              <div className="flex items-center justify-center gap-2">
                 <VamoIcon name="clock" className="w-4 h-4" />
-                <span>{formatDuration( ride.origin && ride.destination ? (haversineDistance(ride.origin, ride.destination) / 1000 / 30) * 3600 : 0 )}</span>
+                <span>{formatDuration(ride.pricing?.estimatedDurationSeconds || (ride.origin && ride.destination ? (haversineDistance(ride.origin, ride.destination) / 1000 / 30) * 3600 : 0))}</span>
             </div>
         </div>
 
-        <div className="!mt-2 bg-secondary/50 p-3 rounded-lg">
-            <p className="font-bold text-base text-center">
-            Tarifa Estimada:{' '}
-            <span className="text-primary">
-                ${new Intl.NumberFormat('es-AR').format(ride.pricing?.estimated?.total ?? (ride.pricing as any)?.estimatedTotal ?? 0)}
-            </span>
-            </p>
-        </div>
+        {(() => {
+            const financial = getRideFinancialSnapshot(ride);
+            return (
+                <div className="!mt-2 bg-secondary/20 p-3 rounded-lg flex flex-col gap-1 border border-border/40">
+                    <div className="flex justify-between items-center text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
+                        <span>Tarifa Total</span>
+                        <span>${new Intl.NumberFormat('es-AR').format(financial.totalFare)}</span>
+                    </div>
+                    {financial.walletCoveredAmount > 0 && (
+                        <div className="flex justify-between items-center text-[10px] text-emerald-500 uppercase tracking-widest font-black">
+                            <span>Crédito VamO Pay</span>
+                            <span>-${new Intl.NumberFormat('es-AR').format(financial.walletCoveredAmount)}</span>
+                        </div>
+                    )}
+                    {financial.vamoSubsidyAmount > 0 && (
+                        <div className="flex justify-between items-center text-[10px] text-amber-500 uppercase tracking-widest font-black">
+                            <span>Subsidio VamO (Beneficio)</span>
+                            <span>-${new Intl.NumberFormat('es-AR').format(financial.vamoSubsidyAmount)}</span>
+                        </div>
+                    )}
+                    <div className="h-px bg-border/40 my-1" />
+                    <div className="flex justify-between items-end">
+                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">Efectivo a cobrar</span>
+                        <span className="text-2xl font-black text-primary tracking-tighter leading-none italic">
+                            ${new Intl.NumberFormat('es-AR').format(financial.cashToCollect)}
+                        </span>
+                    </div>
+                </div>
+            );
+        })()}
       </CardContent>
       <CardFooter className="flex-row gap-2">
         <Button onClick={handleRejectRide} className="w-full" size="lg" variant="outline" disabled={isAccepting}>

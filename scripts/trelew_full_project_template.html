@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VamO - Proyecto Maestro Trelew</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap');
+        
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #312e81;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --text-dark: #0f172a;
+            --text-body: #334155;
+            --bg-page: #ffffff;
+            --bg-alt: #f8fafc;
+        }
+
+        body { font-family: 'Outfit', sans-serif; color: var(--text-body); margin: 0; padding: 0; background: #e2e8f0; line-height: 1.6; }
+        .page { width: 210mm; min-height: 297mm; padding: 25mm; margin: 10mm auto; background: var(--bg-page); box-shadow: 0 0 20px rgba(0,0,0,0.2); position: relative; box-sizing: border-box; page-break-after: always; }
+        
+        h1 { font-size: 38px; font-weight: 900; color: var(--text-dark); margin: 0; letter-spacing: -1.5px; text-transform: uppercase; line-height: 1; }
+        h2 { font-size: 24px; font-weight: 800; color: var(--primary); margin-top: 40px; margin-bottom: 20px; border-bottom: 3px solid var(--bg-alt); padding-bottom: 10px; }
+        h3 { font-size: 18px; font-weight: 700; color: var(--text-dark); margin-top: 25px; margin-bottom: 12px; }
+        p { font-size: 14px; text-align: justify; margin-bottom: 15px; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 60px; }
+        .logo { font-weight: 900; font-size: 32px; color: var(--text-dark); }
+        .logo span { color: var(--primary); }
+        
+        .hero { background: var(--text-dark); color: white; padding: 50px; border-radius: 20px; margin-bottom: 50px; }
+        .hero h1 { color: white; margin-bottom: 20px; font-size: 32px; }
+        
+        .box { background: var(--bg-alt); padding: 20px; border-radius: 15px; border-left: 5px solid var(--primary); margin: 20px 0; }
+        .box-title { font-weight: 800; color: var(--text-dark); font-size: 16px; margin-bottom: 8px; display: block; }
+        
+        .footer { position: absolute; bottom: 20mm; left: 25mm; right: 25mm; border-top: 1px solid #e2e8f0; padding-top: 15px; font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; }
+        
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; }
+        th { background: var(--text-dark); color: white; padding: 12px; text-align: left; }
+        td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+
+        .check-list { list-style: none; padding: 0; }
+        .check-list li { position: relative; padding-left: 25px; margin-bottom: 10px; font-size: 14px; }
+        .check-list li::before { content: '✓'; position: absolute; left: 0; color: var(--secondary); font-weight: 900; }
+
+        @media print { body { background: none; } .page { margin: 0; box-shadow: none; } }
+    </style>
+</head>
+<body>
+
+<!-- PÁGINA 1 -->
+<div class="page">
+    <div class="header">
+        <div class="logo">Vam<span>O</span></div>
+        <div style="text-align: right; font-size: 12px; font-weight: 700;">PROYECTO INSTITUCIONAL<br>TRELEW, CHUBUT 2026</div>
+    </div>
+
+    <div class="hero">
+        <h1>PROYECTO ESTRATÉGICO DE MODERNIZACIÓN DEL TRANSPORTE URBANO</h1>
+        <p style="font-size: 16px; color: #94a3b8;">Habilitación, Regulación e Integración Tecnológica de Plataformas de Movilidad.</p>
+    </div>
+
+    <h2>1. Resumen Ejecutivo</h2>
+    <p>El presente proyecto detalla la propuesta integral de implementación de <strong>VamO</strong>, una plataforma tecnológica de intermediación diseñada para resolver la crisis de movilidad urbana en Trelew. VamO permite la convivencia armónica entre el transporte tradicional (Taxis/Remises) y conductores particulares habilitados, bajo un estricto control municipal y soberanía de datos.</p>
+
+    <div class="box">
+        <span class="box-title">Visión de Cambio</span>
+        <p>Formalizar la actividad informal actual, transformándola en una fuente de ingresos para el municipio, seguridad para el vecino y prosperidad para el trabajador local, cumpliendo y superando los estándares de la Ordenanza 13.549 de Córdoba.</p>
+    </div>
+
+    <h2>2. El Problema en Trelew</h2>
+    <ul class="check-list">
+        <li><strong>Informalidad Crítica:</strong> Grupos de WhatsApp operan sin seguros ni control de antecedentes.</li>
+        <li><strong>Inseguridad:</strong> Falta de trazabilidad GPS auditable para el pasajero.</li>
+        <li><strong>Crisis del Sector:</strong> El transporte tradicional pierde competitividad por falta de tecnología.</li>
+        <li><strong>Pérdida de Recaudación:</strong> La actividad informal no tributa a la ciudad.</li>
+    </ul>
+
+    <div class="footer">
+        <div>VamO · Propuesta Institucional Trelew</div>
+        <div>Página 01</div>
+    </div>
+</div>
+
+<!-- PÁGINA 2 -->
+<div class="page">
+    <div class="header"><div class="logo">Vam<span>O</span></div></div>
+
+    <h2>3. ¿Qué es VamO?</h2>
+    <p>VamO es una plataforma de intermediación digital multimodal. Su arquitectura tecnológica se basa en:</p>
+    <ul class="check-list">
+        <li><strong>Matching Inteligente:</strong> Algoritmos que conectan la oferta y demanda eficientemente.</li>
+        <li><strong>VamO Pay:</strong> Billetera integrada para pagos digitales y efectivo con trazabilidad fiscal.</li>
+        <li><strong>Soberanía de Datos:</strong> Información radicada y controlada por la autoridad local.</li>
+    </ul>
+
+    <h2>4. Seguridad: El Pilar Fundamental</h2>
+    <p>Elevamos los estándares de seguridad pública mediante:</p>
+    <div class="box">
+        <span class="box-title">Control Documental Estricto</span>
+        <p>Validación de DNI, Licencia Profesional, Cédula, Seguro y Antecedentes Penales antes de habilitar cualquier unidad.</p>
+    </div>
+    <ul class="check-list">
+        <li><strong>Trazabilidad GPS:</strong> Registro inalterable de cada viaje en la nube.</li>
+        <li><strong>Botón Antipánico:</strong> Integración con la central de monitoreo.</li>
+        <li><strong>FAP (Fondo de Asistencia al Pasajero):</strong> Fondo local para cobertura de contingencias.</li>
+    </ul>
+
+    <h2>5. Beneficio para la Municipalidad</h2>
+    <p>La Municipalidad de Trelew se convierte en socio estratégico del sistema:</p>
+    <ul class="check-list">
+        <li><strong>Canon del 2%:</strong> Recaudación directa automática por cada viaje realizado.</li>
+        <li><strong>VamoMuni:</strong> Consola de control para aprobación de legajos y fiscalización digital 24/7.</li>
+        <li><strong>Datos de Tráfico:</strong> Mapas de calor y estadísticas para planificación urbana.</li>
+    </ul>
+
+    <div class="footer">
+        <div>VamO · Control y Seguridad</div>
+        <div>Página 02</div>
+    </div>
+</div>
+
+<!-- PÁGINA 3 -->
+<div class="page">
+    <div class="header"><div class="logo">Vam<span>O</span></div></div>
+
+    <h2>6. Comparación con Córdoba (Ord. 13.549)</h2>
+    <p>VamO ya está preparado para encajar legalmente en el estándar más exigente del país:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Requisito (Córdoba)</th>
+                <th>Solución en VamO</th>
+                <th>Ventaja</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Registro Digital Municipal</td>
+                <td>Módulo VamoMuni integrado.</td>
+                <td>Control soberano local.</td>
+            </tr>
+            <tr>
+                <td>Licencia Profesional</td>
+                <td>Bloqueo automático si no es D1.</td>
+                <td>Seguridad jurídica.</td>
+            </tr>
+            <tr>
+                <td>Antigüedad (10 años)</td>
+                <td>Filtro automático por modelo.</td>
+                <td>Calidad de servicio.</td>
+            </tr>
+            <tr>
+                <td>Canon por Viaje</td>
+                <td>Débito automático (2%).</td>
+                <td>Cero evasión.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>7. Impacto Económico</h2>
+    <p>Generamos un ecosistema de prosperidad para Trelew:</p>
+    <div class="box" style="border-left-color: var(--secondary);">
+        <span class="box-title">Formalización Laboral</span>
+        <p>Conductores que hoy operan en la sombra pasan a ser contribuyentes locales con ingresos auditables.</p>
+    </div>
+    <ul class="check-list">
+        <li><strong>Taxis/Remis:</strong> Comisión baja (8%) y prioridad de viajes para proteger su inversión.</li>
+        <li><strong>Particulares:</strong> Salida laboral regulada bajo el modelo de "Economía Colaborativa".</li>
+        <li><strong>Activación Local:</strong> El dinero de los viajes circula y se gasta en los comercios de la ciudad.</li>
+    </ul>
+
+    <div class="footer">
+        <div>VamO · Análisis y Economía</div>
+        <div>Página 03</div>
+    </div>
+</div>
+
+<!-- PÁGINA 4 -->
+<div class="page">
+    <div class="header"><div class="logo">Vam<span>O</span></div></div>
+
+    <h2>8. Propuesta de Ordenanza (Esquema)</h2>
+    <p>Sugerimos los siguientes lineamientos para el marco regulatorio:</p>
+    <div style="font-family: monospace; font-size: 11px; background: #eee; padding: 20px; border-radius: 10px;">
+        ART 1: Autorícese el servicio de transporte por plataformas en Trelew.<br>
+        ART 2: Las plataformas deberán ceder una consola de control al municipio.<br>
+        ART 3: Los conductores deberán acreditar licencia profesional y antecedentes.<br>
+        ART 4: Establézcase un canon municipal del 2% por viaje.<br>
+        ART 5: Prohíbase la operación de plataformas no radicadas en la ciudad.
+    </div>
+
+    <h2>9. Plan de Implementación</h2>
+    <p>Proponemos un despliegue en fases para garantizar la estabilidad:</p>
+    <ul class="check-list">
+        <li><strong>Fase 1 (30 días):</strong> Registro y habilitación de Taxis y Remises tradicionales.</li>
+        <li><strong>Fase 2 (60 días):</strong> Apertura controlada de conductores "VamO Express".</li>
+        <li><strong>Fase 3 (90 días):</strong> Integración total con la Central de Monitoreo Municipal.</li>
+    </ul>
+
+    <div style="margin-top: 50px; text-align: center; border: 2px solid var(--primary); padding: 30px; border-radius: 20px;">
+        <h3 style="margin-top:0;">Conclusión</h3>
+        <p style="font-weight: 600;">VamO no viene a competir con lo existente; viene a potenciar el transporte de Trelew, dándole a la Municipalidad el control que hoy no tiene sobre la calle.</p>
+        <p style="font-style: italic;">Es hora de mover a Trelew hacia el futuro.</p>
+    </div>
+
+    <div style="margin-top: 40px; font-weight: 900; text-align: center; color: var(--primary);">
+        EQUIPO VamO PLATFORM · ARGENTINA
+    </div>
+
+    <div class="footer">
+        <div>VamO · Propuesta Final 2026</div>
+        <div>Página 04</div>
+    </div>
+</div>
+
+</body>
+</html>

@@ -8,5 +8,14 @@ export * from './firestore/use-collection';
 export * from './firestore/use-doc';
 export * from './errors';
 export * from './error-emitter';
-export * from './auth/use-user';
+
+// Explicitly export useUser but not its re-exports from provider
+export { useUser } from './auth/use-user';
+export type { UseUserResult } from './auth/use-user';
+
+/**
+ * AUTH CORE — NO MODIFICAR SIN EJECUTAR TESTS DE REGRESIÓN AUTH
+ */
+export * from './config';
+
 export * from './hooks';

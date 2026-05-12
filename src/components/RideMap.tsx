@@ -1,8 +1,9 @@
 'use client';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { AdvancedMarker, Marker, useMap } from '@vis.gl/react-google-maps';
 import type { Place } from '@/lib/types';
 import { VamoIcon } from './VamoIcon';
+import { cn } from '@/lib/utils';
 
 interface RideMapProps {
   status: string;
@@ -34,9 +35,9 @@ export default function RideMap({
   isExpanded = false,
 }: RideMapProps) {
   const map = useMap();
-  const [directions, setDirections] = React.useState<google.maps.DirectionsResult | null>(null);
-  const directionsService = React.useMemo(() => (typeof google !== 'undefined' ? new google.maps.DirectionsService() : null), []);
-  const directionsRenderer = React.useRef<google.maps.DirectionsRenderer | null>(null);
+  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const directionsService = useMemo(() => (typeof google !== 'undefined' ? new google.maps.DirectionsService() : null), []);
+  const directionsRenderer = useRef<google.maps.DirectionsRenderer | null>(null);
 
   // 1. Manejo de Rutas (Directions API)
   useEffect(() => {
@@ -92,7 +93,10 @@ export default function RideMap({
     fetchRoute();
 
     return () => {
-      // Cleanup is handled by hidden renderer update
+      if (directionsRenderer.current) {
+        directionsRenderer.current.setMap(null);
+        directionsRenderer.current = null;
+      }
     };
   }, [map, status, origin, destination, driverLocation, directionsService]);
 
@@ -147,15 +151,23 @@ export default function RideMap({
       {origin?.lat != null && origin?.lng != null && (
         <VamoMarker position={origin}>
           <div className="relative flex flex-col items-center">
-            {isSearching && (
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-20 w-20 rounded-full radar-pulse-1 bg-green-500/20" />
-            )}
-            <div className="relative group transition-all duration-500 hover:scale-110">
-              <div className="absolute -inset-1 bg-green-500 blur-lg opacity-40 group-hover:opacity-60 transition-opacity" />
-              <div className="relative bg-[#0a0a0a] p-2.5 rounded-2xl border-2 border-green-500/50 shadow-2xl flex items-center justify-center">
-                <div className="w-6 h-6 flex items-center justify-center bg-green-500 text-white rounded-lg font-black text-[10px]">A</div>
+            {/* Outer large pinging aura - visible always but faster on searching */}
+            <div className={cn("absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-green-500/30", isSearching ? "h-32 w-32 animate-ping" : "h-24 w-24 animate-pulse")} style={{ animationDuration: isSearching ? '2s' : '3s' }} />
+            
+            {/* Inner stable pulse */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-16 w-16 rounded-full bg-green-500/40 animate-pulse" />
+            
+            <div className="relative group transition-all duration-500 hover:scale-125 hover:-translate-y-2 cursor-pointer z-10">
+              {/* Thick blurred glow effect */}
+              <div className="absolute -inset-2 bg-green-500 blur-xl opacity-70 animate-pulse" />
+              
+              {/* Premium Pin container */}
+              <div className="relative bg-zinc-950 p-3 rounded-full border-[3px] border-green-500 shadow-[0_0_40px_rgba(34,197,94,0.8)] flex flex-col items-center justify-center">
+                <VamoIcon name="map-pin" className="w-6 h-6 text-green-500 group-hover:animate-bounce" />
               </div>
-              <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#0a0a0a] border-r-2 border-b-2 border-green-500/50 rotate-45" />
+              
+              {/* Small dot below the pin pointing to actual location */}
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-zinc-950 border-r-[3px] border-b-[3px] border-green-500 rotate-45 shadow-[0_0_10px_rgba(34,197,94,0.8)]" />
             </div>
           </div>
         </VamoMarker>
@@ -164,12 +176,17 @@ export default function RideMap({
       {destination?.lat != null && destination?.lng != null && (
         <VamoMarker position={destination}>
           <div className="relative flex flex-col items-center">
-            <div className="relative group transition-all duration-500 hover:scale-110">
-              <div className="absolute -inset-1 bg-white blur-lg opacity-20 group-hover:opacity-40 transition-opacity" />
-              <div className="relative bg-[#0a0a0a] p-2.5 rounded-2xl border-2 border-white/50 shadow-2xl flex items-center justify-center">
-                <VamoIcon name="flag" className="h-4 w-4 text-white" />
+             {/* Smooth aura for destination point */}
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-24 w-24 rounded-full bg-white/10 animate-ping" style={{ animationDuration: '3s', animationDelay: '1s' }} />
+
+            <div className="relative group transition-all duration-500 animate-bounce hover:-translate-y-4 cursor-pointer z-10" style={{ animationDuration: '2.5s' }}>
+              <div className="absolute -inset-2 bg-white blur-xl opacity-50 group-hover:opacity-80 transition-opacity" />
+              
+              <div className="relative bg-zinc-950 p-3 rounded-full border-[3px] border-white shadow-[0_0_40px_rgba(255,255,255,0.6)] flex items-center justify-center">
+                <VamoIcon name="flag" className="h-6 w-6 text-white" />
               </div>
-              <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#0a0a0a] border-r-2 border-b-2 border-white/50 rotate-45" />
+              
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-zinc-950 border-r-[3px] border-b-[3px] border-white rotate-45" />
             </div>
           </div>
         </VamoMarker>

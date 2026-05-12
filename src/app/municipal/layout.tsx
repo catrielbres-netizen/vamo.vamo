@@ -1,82 +1,95 @@
 'use client';
 
 import React from 'react';
-import { useEffect } from 'react';
 import { useUser } from '@/firebase/auth/use-user';
-import { useRouter } from 'next/navigation';
-import { VamoIcon } from '@/components/VamoIcon';
+import { useRouter, usePathname } from 'next/navigation';
 import { MunicipalNavbar } from './components/MunicipalNavbar';
+import { GlobalPanicListener } from '@/components/GlobalPanicListener';
+import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
+import { DemoWrapper } from './components/DemoWrapper';
 
 export default function MunicipalLayout({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useUser();
   const router = useRouter();
+  const pathname = usePathname();
+  const [mounted, setMounted] = React.useState(false);
 
-  // Gatekeeper Logic
-  
+  // 2. NO SESSION or WRONG ROLE:
+  const allowedRoles = ['admin', 'superadmin', 'admin_municipal', 'operator_municipal', 'treasury_municipal', 'auditor_municipal', 'traffic_municipal'];
+  // TODO SECURITY: remover bypass temporal de superadmin después de reparar guards por claims.
+  const isSuperAdminEmergency = user?.uid === "9oOsPaBsp8XkcTLjSTEJbdzMafa2" || user?.email === "superadmin@vamo.local";
+  const isAuthorized = (user && profile && allowedRoles.includes(profile.role)) || isSuperAdminEmergency;
+
+  const isPublicPage = Boolean(pathname && (
+    pathname.includes('login') || 
+    pathname.includes('register') || 
+    pathname.includes('onboarding')
+  ));
+
+  React.useEffect(() => {
+    setMounted(true);
+    if (pathname === '/municipal') {
+      router.replace('/municipal/dashboard');
+    }
+  }, [pathname, router]);
+
+  React.useEffect(() => {
+    if (!mounted || loading || (!!user && !profile) || isPublicPage) return;
+    
+    if (isSuperAdminEmergency) {
+        console.log(`[SUPERADMIN_EMERGENCY_BYPASS] uid=${user?.uid} email=${user?.email} pathname=${pathname} allowed=true`);
+        return;
+    }
+
+    if (!user || !isAuthorized) {
+        console.error(`[AUTH_ROUTE_DEBUG] /municipal FORBIDDEN. Role: ${profile?.role}. Redirecting to /login/municipal`, {
+            uid: user?.uid,
+            email: user?.email,
+            firestoreRole: profile?.role,
+            allowedRoles,
+            pathname
+        });
+        router.replace('/login/municipal');
+    } else {
+        console.log(`[AUTH_ROUTE_DEBUG] /municipal ACCESS_GRANTED. Role: ${profile?.role}`);
+    }
+  }, [user, profile, loading, isAuthorized, isPublicPage, router, pathname, mounted, isSuperAdminEmergency]);
+
+  if (!mounted || pathname === '/municipal') {
+    return <VamoFullScreenLoader label="Cargando sistema municipal..." />;
+  }
+
+  if (isPublicPage) {
+    return <>{children}</>;
+  }
+
   // 1. Loading state
   const isResolvingSession = loading || (!!user && !profile);
   if (isResolvingSession) {
-    return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-[#121212]">
-        <div className="flex flex-col items-center gap-4">
-           <div className="w-10 h-10 border-4 border-indigo-500/10 border-t-indigo-500 rounded-full animate-spin"></div>
-           <p className="text-zinc-600 font-bold uppercase tracking-widest text-[10px] animate-pulse uppercase">Verificando acceso municipal</p>
-        </div>
-      </div>
-    );
+    return <VamoFullScreenLoader label="Verificando acceso municipal..." />;
   }
 
-  // 2. NO SESSION
-  if (!user) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#121212] p-4 text-center">
-        <div className="max-w-xs w-full space-y-6">
-          <div className="mx-auto w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
-            <VamoIcon name="lock" className="h-8 w-8 text-indigo-500" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-xl font-bold text-white">Acceso Denegado</h2>
-            <p className="text-zinc-500 text-sm">Debés iniciar sesión para acceder al panel municipal.</p>
-          </div>
-          <button 
-            onClick={() => router.push('/municipal/login')} 
-            className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-bold transition-colors"
-          >
-            Ir al Login Municipal
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 3. WRONG ROLE
-  if (profile && profile.role !== 'admin_municipal') {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#121212] p-4 text-center">
-        <div className="max-w-xs w-full space-y-6">
-          <div className="mx-auto w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
-            <VamoIcon name="alert-triangle" className="h-8 w-8 text-amber-500" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-xl font-bold text-white">Rol Incorrecto</h2>
-            <p className="text-zinc-500 text-sm">Tu cuenta no tiene permisos municipales.</p>
-          </div>
-          <button 
-            onClick={() => router.push('/municipal/login')} 
-            className="w-full h-12 bg-amber-600 hover:bg-amber-700 text-white rounded-md font-bold transition-colors"
-          >
-            Cambiar de Cuenta
-          </button>
-        </div>
-      </div>
-    );
+  if (!isPublicPage && (!user || !isAuthorized)) {
+    return <VamoFullScreenLoader label="Redirigiendo..." />;
   }
 
   // Render authorized content
   return (
-    <div className="flex min-h-screen w-full flex-col bg-muted/40">
-      <MunicipalNavbar />
-      <main className="flex-1 p-6">{children}</main>
+    <div className="flex min-h-screen w-full bg-[#050912] selection:bg-[#1D7CFF] selection:text-white">
+      {/* Sidebar Navigation */}
+      <aside className="w-72 bg-[#0A111F] border-r border-white/5 flex flex-col hidden lg:flex shrink-0">
+         <MunicipalNavbar />
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col relative overflow-hidden">
+        <GlobalPanicListener />
+        <main className="flex-1 p-8 lg:p-12 overflow-y-auto">
+          <DemoWrapper>
+            {children}
+          </DemoWrapper>
+        </main>
+      </div>
     </div>
   );
 }

@@ -42,6 +42,7 @@ import {
     SelectValue 
 } from "@/components/ui/select";
 import { VamoIcon } from '@/components/VamoIcon';
+import { safeFixed } from '@/lib/formatters';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Referral, UserReward, UserProfile } from '@/lib/types';
@@ -181,7 +182,7 @@ export default function AdminReferralsPage() {
         const newUserMap: Record<string, UserProfile> = { ...users };
 
         for (let i = 0; i < uidArray.length; i += 30) {
-            const chunk = uidArray.slice(i, i + 30);
+            const chunk = uidArray?.slice(i, i + 30) || [];
             const uQuery = query(collection(firestore, 'users'), where('uid', 'in', chunk));
             const uSnap = await getDocs(uQuery);
             uSnap.forEach(d => {
@@ -272,7 +273,7 @@ export default function AdminReferralsPage() {
         );
     }
 
-    const conversionRate = metrics.total > 0 ? ((metrics.rewarded / metrics.total) * 100).toFixed(1) : 0;
+    const conversionRate = metrics.total > 0 ? safeFixed((metrics.rewarded / metrics.total) * 100, 1) : 0;
 
     return (
         <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -358,7 +359,7 @@ export default function AdminReferralsPage() {
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="font-bold text-sm text-white">{users[r.referrerId]?.name || '...'}</span>
                                                     <span className="text-[10px] text-zinc-500 font-mono truncate max-w-[120px]" title={r.referrerId}>
-                                                        {r.referrerId.substring(0, 10)}...
+                                                        {r.referrerId?.substring(0, 10) || 'N/A'}...
                                                     </span>
                                                 </div>
                                             </TableCell>
@@ -366,7 +367,7 @@ export default function AdminReferralsPage() {
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="font-bold text-sm text-zinc-300">{users[r.referredId]?.name || '...'}</span>
                                                     <span className="text-[10px] text-zinc-500 font-mono truncate max-w-[120px]" title={r.referredId}>
-                                                        {r.referredId.substring(0, 10)}...
+                                                        {r.referredId?.substring(0, 10) || 'N/A'}...
                                                     </span>
                                                 </div>
                                             </TableCell>

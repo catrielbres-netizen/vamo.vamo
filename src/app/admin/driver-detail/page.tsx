@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { doc } from 'firebase/firestore';
+import { doc, collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { useFirestore, useDoc, useUser, useMemoFirebase, useFirebaseApp } from '@/firebase';
+import { RideReceipt } from '@/components/RideReceipt';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -20,6 +23,7 @@ import { Loader2, FileText, CheckCircle2, AlertCircle, Clock } from 'lucide-reac
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { updateDoc } from 'firebase/firestore';
+import { syncPublicDriverProfile } from '@/lib/driver-public';
 
 type DriverProfile = {
   id: string;
@@ -40,11 +44,15 @@ type DriverProfile = {
   photoURL?: string;
   vehicleFrontPhotoURL?: string;
   driverSubtype?: string;
+  municipalStatus?: string;
   requiresManualReview?: boolean;
   manualReviewStatus?: 'none' | 'pending_docs' | 'docs_submitted' | 'approved' | 'rejected';
   documentsRequested?: string[];
   documentsSubmitted?: Record<string, { url: string; uploadedAt: any }>;
   adminReviewNote?: string;
+  driverRiskScore?: number;
+  driverRiskLevel?: 'low' | 'medium' | 'high' | 'blocked';
+  riskReasons?: string[];
 };
 
 function formatCurrency(value: number) {
@@ -105,6 +113,9 @@ export default function AdminDriverDetailPage() {
       const functions = getFunctions(undefined, 'us-central1');
       const callable = httpsCallable(functions, functionName);
       await callable(data);
+      if (firestore && driverId) {
+          syncPublicDriverProfile(firestore, driverId).catch(console.error);
+      }
       toast({ title: 'Éxito', description: successMessage });
     } catch (e: any) {
       console.error(`Error llamando a ${functionName}:`, e);
@@ -200,6 +211,7 @@ export default function AdminDriverDetailPage() {
             documentsRequested: selectedDocs,
             adminReviewNote: reviewNote,
         });
+        syncPublicDriverProfile(firestore, driverId).catch(console.error);
         toast({ title: 'Solicitud enviada', description: 'El conductor verá el pedido en su perfil.' });
     } catch (e: any) {
         toast({ variant: 'destructive', title: 'Error', description: e.message });
@@ -225,6 +237,7 @@ export default function AdminDriverDetailPage() {
     try {
         const userRef = doc(firestore, 'users', driverId);
         await updateDoc(userRef, { manualReviewStatus: status });
+        syncPublicDriverProfile(firestore, driverId).catch(console.error);
         toast({ title: 'Estado de revisión actualizado', description: `El conductor ha sido ${status === 'approved' ? 'aprobado' : 'rechazado'} manualment.` });
     } catch (e: any) {
         toast({ variant: 'destructive', title: 'Error', description: e.message });
@@ -250,6 +263,11 @@ export default function AdminDriverDetailPage() {
             <div className="text-center md:text-left flex-1">
                 <h1 className="text-4xl font-black tracking-tight">{driver.name || 'Sin nombre'}</h1>
                 <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest mt-1">UID: {driver.id}</p>
+                <div className="flex gap-2 mt-2 justify-center md:justify-start">
+                    <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest border-indigo-500/30 text-indigo-400 bg-indigo-500/5">
+                        {driver.driverSubtype === 'express' ? 'PARTICULAR' : driver.driverSubtype === 'professional' ? 'TAXI / REMIS' : 'SIN SUBTIPO'}
+                    </Badge>
+                </div>
             </div>
             <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="rounded-xl border-zinc-800 bg-zinc-900/50" onClick={openWhatsApp}>
@@ -284,22 +302,75 @@ export default function AdminDriverDetailPage() {
                             {formatCurrency(driver.currentBalance || 0)}
                         </p>
                     </div>
+
+                    {/* FRAUD & RISK INDICATORS QUICK VIEW */}
+                    <div className="pt-4 space-y-3 border-t border-zinc-800/50">
+                        <div className="flex justify-between items-center">
+                            <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Score de Riesgo</p>
+                            <span className={cn("text-xs font-black", 
+                                (driver.driverRiskScore || 0) > 85 ? "text-red-500" :
+                                (driver.driverRiskScore || 0) > 60 ? "text-orange-500" :
+                                (driver.driverRiskScore || 0) > 30 ? "text-amber-500" : "text-green-500"
+                            )}>
+                                {driver.driverRiskScore || 0}/100
+                            </span>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2">
+                            {driver.driverRiskLevel && (
+                                <Badge variant="outline" className={cn("text-[9px] font-black uppercase tracking-widest",
+                                    driver.driverRiskLevel === 'blocked' ? "border-red-500/50 text-red-500 bg-red-500/10" :
+                                    driver.driverRiskLevel === 'high' ? "border-orange-500/50 text-orange-500 bg-orange-500/10" :
+                                    driver.driverRiskLevel === 'medium' ? "border-amber-500/50 text-amber-500 bg-amber-500/10" :
+                                    "border-green-500/50 text-green-500 bg-green-500/10"
+                                )}>
+                                    Nivel: {driver.driverRiskLevel}
+                                </Badge>
+                            )}
+                            {(driver as any).plateNumber ? (
+                                <Badge variant="outline" className="text-[9px] border-zinc-800 bg-zinc-900/50 font-black text-zinc-400">
+                                    PATENTE: {(driver as any).plateNumber}
+                                </Badge>
+                            ) : null}
+                            {(driver.currentBalance ?? 0) < -3000 ? (
+                                <Badge variant="outline" className="text-[9px] border-red-500/20 bg-red-500/10 font-black text-red-500 uppercase">
+                                    Deuda Alta
+                                </Badge>
+                            ) : null}
+                            {driver.riskReasons && driver.riskReasons.map((reason, idx) => (
+                                <Badge key={idx} variant="outline" className="text-[9px] border-zinc-700 bg-zinc-800/40 font-bold text-zinc-300">
+                                    {reason}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
 
             <Card className="border-zinc-800 bg-black/40 backdrop-blur-xl">
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Datos de Contacto</CardTitle>
+                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Datos y Estado Municipal</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3 text-sm">
+                <CardContent className="space-y-4">
                     <div>
                         <Label className="text-[10px] text-zinc-500 uppercase">Email</Label>
-                        <p className="font-medium text-white break-all">{driver.email || 'N/A'}</p>
+                        <p className="font-medium text-white break-all text-sm">{driver.email || 'N/A'}</p>
                     </div>
-                    <div>
-                        <Label className="text-[10px] text-zinc-500 uppercase">Número de Licencia</Label>
-                        <p className="font-bold text-white tracking-widest">{(driver as any).licenseNumber || 'PENDIENTE'}</p>
+                    <Separator className="bg-zinc-800/50" />
+                    <div className="flex items-center justify-between">
+                        <Label className="text-[10px] text-zinc-500 uppercase">Estatus Municipal</Label>
+                        <Badge variant="outline" className={cn("text-[10px] font-black uppercase", 
+                            driver.municipalStatus === 'active' || driver.municipalStatus === 'municipal_approved' ? "border-green-500/30 text-green-500 bg-green-500/5" : "border-amber-500/30 text-amber-500 bg-amber-500/5")}>
+                            {driver.municipalStatus || 'PENDIENTE'}
+                        </Badge>
                     </div>
+                    <Button 
+                        variant="link" 
+                        className="text-[10px] p-0 h-auto text-indigo-400 font-black uppercase tracking-widest"
+                        onClick={() => router.push(`/traffic/drivers/${driverId}`)}
+                    >
+                        Ver Legajo Municipal Completo →
+                    </Button>
                 </CardContent>
             </Card>
 
@@ -531,6 +602,149 @@ export default function AdminDriverDetailPage() {
             </div>
         </div>
       </div>
+
+      <DriverHistorySection driverId={driverId} />
     </div>
   );
 }
+
+function DriverHistorySection({ driverId }: { driverId: string }) {
+    const firestore = useFirestore();
+    const [rides, setRides] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedRide, setSelectedRide] = useState<any | null>(null);
+
+    useEffect(() => {
+        if (!firestore || !driverId) return;
+
+        const q = query(
+            collection(firestore, 'rides'),
+            where('driverId', '==', driverId),
+            orderBy('createdAt', 'desc'),
+            limit(50)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetchedRides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setRides(fetchedRides);
+            setLoading(false);
+        }, (err) => {
+            console.error('[HISTORY_FETCH_ERROR]', err);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [firestore, driverId]);
+
+    if (loading) return <Skeleton className="h-64 w-full rounded-2xl" />;
+
+    return (
+        <Card className="border-zinc-800 bg-black/20">
+            <CardHeader>
+                <CardTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-indigo-400" /> Historial de Viajes
+                </CardTitle>
+                <CardDescription>Últimos 50 viajes realizados por este conductor.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm border-collapse">
+                        <thead>
+                            <tr className="border-b border-zinc-800 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                                <th className="p-3">Fecha/Hora</th>
+                                <th className="p-3">Pasajero</th>
+                                <th className="p-3">Trayecto</th>
+                                <th className="p-3">Estado</th>
+                                <th className="p-3 text-right">Comisión</th>
+                                <th className="p-3 text-right">Total</th>
+                                <th className="p-3 text-right">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/50">
+                            {rides.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="p-8 text-center text-zinc-500 italic">No se registraron viajes aún.</td>
+                                </tr>
+                            ) : (
+                                rides.map((ride) => (
+                                    <tr key={ride.id} className="hover:bg-white/5 transition-colors group">
+                                        <td className="p-3 align-top">
+                                            <p className="font-bold text-zinc-200">
+                                                {ride.createdAt?.toDate?.()?.toLocaleDateString('es-AR') || '---'}
+                                            </p>
+                                            <p className="text-[10px] text-zinc-500">
+                                                {ride.createdAt?.toDate?.()?.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) || '---'}
+                                            </p>
+                                        </td>
+                                        <td className="p-3 align-top">
+                                            <p className="font-bold text-zinc-200">{ride.passengerName || 'Desconocido'}</p>
+                                            <p className="text-[9px] text-zinc-500 font-mono">UID: {ride.passengerId?.substring(0,8) || 'N/A'}...</p>
+                                        </td>
+                                        <td className="p-3 align-top max-w-xs">
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-1">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                                                    <p className="text-[10px] text-zinc-400 truncate">{ride.origin?.address}</p>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <div className="w-1.5 h-1.5 rounded-sm bg-primary shrink-0" />
+                                                    <p className="text-[10px] text-zinc-400 truncate">{ride.destination?.address}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="p-3 align-top">
+                                            <Badge 
+                                                variant="outline" 
+                                                className={cn(
+                                                    "text-[9px] font-black uppercase tracking-widest px-2",
+                                                    ride.status === 'completed' ? "border-green-500/30 text-green-500 bg-green-500/5" :
+                                                    ride.status === 'cancelled' ? "border-red-500/30 text-red-500 bg-red-500/5" :
+                                                    "border-zinc-700 text-zinc-500"
+                                                )}
+                                            >
+                                                {ride.status === 'completed' ? 'Completado' :
+                                                 ride.status === 'cancelled' ? 'Cancelado' :
+                                                 ride.status}
+                                            </Badge>
+                                        </td>
+                                        <td className="p-3 align-top text-right font-medium text-zinc-400">
+                                            {formatCurrency(ride.completedRide?.commissionAmount || 0)}
+                                        </td>
+                                        <td className="p-3 align-top text-right font-black text-white">
+                                            {formatCurrency(ride.completedRide?.totalFare || ride.pricing?.estimatedTotal || 0)}
+                                        </td>
+
+                                        <td className="p-3 align-top text-right">
+                                            <Dialog>
+                                                <DialogTrigger asChild>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="ghost" 
+                                                        className="h-8 rounded-xl text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 font-bold text-[10px] uppercase"
+                                                        onClick={() => setSelectedRide(ride)}
+                                                    >
+                                                        <FileText className="h-3.5 w-3.5 mr-1" /> Recibo
+                                                    </Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="p-0 bg-transparent border-none max-w-lg">
+                                                    {selectedRide && (
+                                                        <RideReceipt 
+                                                            ride={selectedRide} 
+                                                            onClose={() => {}} // Controlled by Dialog
+                                                            closeLabel="Cerrar Comprobante"
+                                                        />
+                                                    )}
+                                                </DialogContent>
+                                            </Dialog>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+

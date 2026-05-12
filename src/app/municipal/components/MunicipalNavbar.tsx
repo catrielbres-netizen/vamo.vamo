@@ -8,10 +8,19 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useAuth, useUser } from '@/firebase'
 import { signOut } from 'firebase/auth'
+import { useMunicipalContext } from '@/hooks/useMunicipalContext';
+import { CITIES } from '@/lib/cityData';
+import { VamoLogo } from '@/components/branding/VamoLogo';
 
 const navLinks = [
     { href: '/municipal/dashboard',  label: 'Dashboard',   icon: 'layout-dashboard' },
+    { href: '/municipal/alerts',     label: 'Alertas',     icon: 'shield-alert' },
+    { href: '/municipal/map',        label: 'Mapa',        icon: 'map' },
     { href: '/municipal/drivers',    label: 'Conductores', icon: 'users' },
+    { href: '/municipal/passengers', label: 'Pasajeros',   icon: 'contact' },
+    { href: '/traffic',              label: 'Tránsito',    icon: 'shield-check' },
+    { href: '/municipal/treasury',   label: 'Tesorería',   icon: 'landmark' },
+    { href: '/municipal/team',       label: 'Equipo',      icon: 'shield' },
     { href: '/municipal/pricing',    label: 'Tarifas',     icon: 'banknote' },
 ]
 
@@ -22,59 +31,77 @@ export function MunicipalNavbar() {
   const auth      = useAuth()
   const router    = useRouter()
   const { profile } = useUser()
+  const { cityKey: currentCityKey, cityName, setCityOverride, isGlobalAdmin, isMuniAdmin, isOperator, isTreasury, isTraffic } = useMunicipalContext();
+
+  const filteredLinks = navLinks.filter(link => {
+      if (link.href === '/municipal/team') return isMuniAdmin;
+      if (link.href === '/municipal/pricing') return isMuniAdmin;
+      if (link.href === '/municipal/drivers') return isOperator || isMuniAdmin;
+      if (link.href === '/municipal/passengers') return isOperator || isMuniAdmin;
+      if (link.href === '/municipal/alerts') return isTraffic || isOperator || isMuniAdmin;
+      if (link.href === '/municipal/treasury') return isTreasury || isMuniAdmin;
+      if (link.href === '/municipal/traffic') return isTraffic || isMuniAdmin;
+      return true;
+  });
+
+  const currentCityName = cityName;
+
+  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setCityOverride(e.target.value);
+    window.location.reload();
+  };
 
   const handleLogout = async () => {
     if (auth) { await signOut(auth); router.push('/municipal/login'); }
   }
 
   return (
-    <nav className="flex items-center gap-1 border-b border-zinc-800 bg-[#0d0d0d] px-4 py-3 sticky top-0 z-10">
-        <div className="flex items-center gap-2 mr-4">
-            <div className="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
-                <VamoIcon name="landmark" className="h-4 w-4 text-indigo-400" />
-            </div>
-            <div className="hidden md:block">
-                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">VamoMuni</p>
-                <p className="text-[9px] text-zinc-600 -mt-0.5">{profile?.city ?? 'Portal Municipal'}</p>
+    <div className="flex flex-col h-full py-8">
+        <div className="px-8 mb-10">
+            <div className="flex flex-col items-start gap-2">
+                <VamoLogo variant="navbar" />
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 pl-1 mt-1">Muni <span className="text-white">{currentCityName}</span></p>
             </div>
         </div>
-        <div className="flex items-center gap-1 flex-1">
-            {navLinks.map(link => (
+
+        <nav className="flex-1 px-4 space-y-2">
+            {filteredLinks.map(link => (
                 <Link
                     key={link.href}
                     href={link.href}
                     prefetch={false}
                     className={cn(
-                        "flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-bold transition-colors",
+                        "flex items-center gap-3 px-6 h-12 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all",
                         pathname.startsWith(link.href)
-                            ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/20"
+                            ? "bg-[#1D7CFF] text-white shadow-lg shadow-[#1D7CFF]/20"
                             : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
                     )}
                 >
-                    <VamoIcon name={link.icon as any} className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">{link.label}</span>
+                    <VamoIcon name={link.icon as any} className="h-4 w-4" />
+                    <span>{link.label}</span>
                 </Link>
             ))}
-            {profile?.cityKey === HUB_CITY_KEY && (
+        </nav>
+
+        <div className="px-4 pt-4 mt-4 border-t border-white/5 space-y-2">
+            {profile?.role === 'admin' && (
                 <Link
-                    href={'/municipal/expansion'}
-                    prefetch={false}
-                    className={cn(
-                        "flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-bold transition-colors",
-                        pathname.startsWith('/municipal/expansion')
-                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
-                            : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
-                    )}
+                    href="/admin/dashboard"
+                    className="flex items-center gap-3 px-6 h-12 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-zinc-900 text-zinc-500 hover:text-white border border-white/5 transition-all"
                 >
-                    <VamoIcon name="map" className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline text-[9px] uppercase tracking-tighter">Expansión HUB</span>
+                    <VamoIcon name="shield-check" className="h-4 w-4" />
+                    Central
                 </Link>
             )}
+            <Button 
+                variant="ghost" 
+                onClick={handleLogout} 
+                className="w-full justify-start gap-3 px-6 h-12 rounded-2xl text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-all"
+            >
+                <VamoIcon name="log-out" className="h-4 w-4" />
+                <span>Salir</span>
+            </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleLogout} className="text-zinc-600 hover:text-zinc-300 text-xs h-8">
-            <VamoIcon name="log-out" className="h-3.5 w-3.5 mr-1.5" />
-            <span className="hidden sm:inline">Salir</span>
-        </Button>
-    </nav>
+    </div>
   )
 }

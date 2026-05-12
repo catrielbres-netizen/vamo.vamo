@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proyecto VamO Trelew - Modernización del Transporte</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap');
+        
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #3730a3;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --danger: #ef4444;
+            --text-dark: #0f172a;
+            --text-body: #334155;
+            --text-muted: #64748b;
+            --bg-page: #ffffff;
+            --bg-alt: #f8fafc;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-body);
+            margin: 0;
+            padding: 0;
+            background: #f1f5f9;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 25mm;
+            margin: 10mm auto;
+            background: var(--bg-page);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+            position: relative;
+            box-sizing: border-box;
+            page-break-after: always;
+            overflow: hidden;
+        }
+
+        @media print {
+            body { background: none; }
+            .page { margin: 0; box-shadow: none; }
+        }
+
+        /* Tipografía */
+        h1 { font-size: 42px; font-weight: 900; color: var(--text-dark); margin: 0; letter-spacing: -2px; line-height: 1.1; }
+        h2 { font-size: 26px; font-weight: 800; color: var(--primary); margin-top: 45px; margin-bottom: 20px; border-left: 6px solid var(--primary); padding-left: 15px; }
+        h3 { font-size: 20px; font-weight: 700; color: var(--text-dark); margin-top: 30px; margin-bottom: 12px; }
+        p { font-size: 15px; line-height: 1.7; margin-bottom: 18px; text-align: justify; }
+
+        /* Estética Profesional */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 50px; }
+        .logo { font-weight: 900; font-size: 36px; color: var(--text-dark); letter-spacing: -2px; }
+        .logo span { color: var(--primary); }
+        .badge { background: var(--text-dark); color: white; padding: 6px 16px; border-radius: 50px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+
+        .hero-box { 
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); 
+            color: white; 
+            padding: 60px 40px; 
+            border-radius: 30px; 
+            margin-bottom: 50px; 
+            position: relative;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .hero-box h1 { color: white; margin-bottom: 25px; }
+        .hero-box p { font-size: 18px; color: #cbd5e1; font-weight: 400; text-align: left; margin-bottom: 0; }
+
+        .compliance-box {
+            background: #f0fdf4;
+            border: 2px solid #22c55e;
+            padding: 25px;
+            border-radius: 20px;
+            margin: 30px 0;
+            position: relative;
+        }
+        .compliance-box::before {
+            content: '✓ ESTÁNDAR DE EXCELENCIA';
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: #22c55e;
+            color: white;
+            padding: 2px 12px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 900;
+        }
+
+        .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin: 35px 0; }
+        .feature-card { background: var(--bg-alt); padding: 25px; border-radius: 20px; transition: transform 0.3s ease; }
+        .feature-card h4 { margin: 0 0 12px 0; font-size: 18px; color: var(--text-dark); font-weight: 800; }
+        .feature-card p { margin: 0; font-size: 14px; color: var(--text-muted); text-align: left; }
+
+        .icon-badge {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            font-size: 20px;
+        }
+
+        .footer { 
+            position: absolute; 
+            bottom: 20mm; 
+            left: 25mm; 
+            right: 25mm; 
+            border-top: 1px solid #e2e8f0; 
+            padding-top: 20px; 
+            font-size: 11px; 
+            color: var(--text-muted); 
+            display: flex; 
+            justify-content: space-between;
+            font-weight: 600;
+        }
+
+        .check-list { list-style: none; padding: 0; margin: 20px 0; }
+        .check-list li { position: relative; padding-left: 35px; margin-bottom: 15px; font-size: 15px; font-weight: 500; }
+        .check-list li::before { 
+            content: '✔'; 
+            position: absolute; 
+            left: 0; 
+            top: 0;
+            width: 24px;
+            height: 24px;
+            background: var(--secondary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .highlight-text { color: var(--primary); font-weight: 800; }
+        
+        .muni-tag {
+            background: var(--primary);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 13px;
+        }
+        .comparison-table th { background: var(--text-dark); color: white; padding: 12px; text-align: left; }
+        .comparison-table td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
+        .comparison-table tr:nth-child(even) { background: var(--bg-alt); }
+        .status-ok { color: var(--secondary); font-weight: 900; }
+
+    </style>
+</head>
+<body>
+
+<!-- PÁGINA 1: PORTADA Y RESUMEN -->
+<div class="page">
+    <div class="header">
+        <div class="logo">Vam<span>O</span></div>
+        <div class="badge">Propuesta Institucional · Trelew 2026</div>
+    </div>
+
+    <div class="hero-box">
+        <h1>VamO: El Futuro del Transporte Multimodal para Trelew</h1>
+        <p>Integración tecnológica soberana para Taxis, Remises y Particulares bajo el estándar regulatorio más alto de la República Argentina.</p>
+    </div>
+
+    <h2>Resumen Ejecutivo</h2>
+    <p>Trelew enfrenta hoy el desafío de convivir con la informalidad de los grupos de transporte por redes sociales. <span class="highlight-text">VamO</span> propone formalizar y jerarquizar esta actividad, otorgando a la Municipalidad herramientas de control en tiempo real y garantizando que el transporte tradicional (Taxis y Remis) no solo sobreviva, sino que lidere la transformación.</p>
+    
+    <p>Nuestra plataforma no es solo una "App de viajes"; es un <span class="highlight-text">Sistema de Gestión de Movilidad Urbana</span> diseñado para cumplir con las normativas más modernas y exigentes, como la reciente <strong>Ordenanza 13.549 de la Ciudad de Córdoba</strong>, garantizando seguridad, transparencia y tributación local.</p>
+
+    <div class="feature-grid">
+        <div class="feature-card">
+            <div class="icon-badge">🛡️</div>
+            <h4>Seguridad Total</h4>
+            <p>Monitoreo GPS 24/7 y Fondo de Asistencia al Pasajero (FAP) para máxima tranquilidad del vecino.</p>
+        </div>
+        <div class="feature-card">
+            <div class="icon-badge">📊</div>
+            <h4>Control Municipal</h4>
+            <p>Módulo VamoMuni para auditoría de documentos, licencias y sanciones disciplinarias.</p>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div>VamO · Modernización de Trelew</div>
+        <div>Página 01</div>
+    </div>
+</div>
+
+<!-- PÁGINA 2: COMPLIANCE CÓRDOBA -->
+<div class="page">
+    <div class="header">
+        <div class="logo">Vam<span>O</span></div>
+    </div>
+
+    <h2>Alineación con Estándares Nacionales</h2>
+    <p>Para brindar la máxima credibilidad técnica y legal a este proyecto, VamO ha sido desarrollado siguiendo estrictamente los lineamientos de la <span class="highlight-text">Ordenanza Nº 13.549 de Córdoba</span>, considerada hoy el estándar de oro en regulación de plataformas de transporte en Argentina.</p>
+
+    <div class="compliance-box">
+        <h3 style="margin-top:0;">Garantía de Cumplimiento (Compliance)</h3>
+        <p>A continuación, detallamos cómo VamO cumple punto por punto con los requisitos que Trelew necesita para una regulación exitosa:</p>
+        
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>Requisito (Ordenanza Córdoba)</th>
+                    <th>Implementación en VamO</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Registro Digital de Conductores</td>
+                    <td>Módulo de Onboarding con validación de identidad.</td>
+                    <td class="status-ok">CUMPLE</td>
+                </tr>
+                <tr>
+                    <td>Licencia de Conducir Profesional</td>
+                    <td>Bloqueo automático para conductores sin Clase D1.</td>
+                    <td class="status-ok">CUMPLE</td>
+                </tr>
+                <tr>
+                    <td>Certificado de Antecedentes Penales</td>
+                    <td>Validación obligatoria en el legajo digital.</td>
+                    <td class="status-ok">CUMPLE</td>
+                </tr>
+                <tr>
+                    <td>Seguros para Pasajeros</td>
+                    <td>Integración de pólizas y validación de vigencia.</td>
+                    <td class="status-ok">CUMPLE</td>
+                </tr>
+                <tr>
+                    <td>Antigüedad del Vehículo (10 años)</td>
+                    <td>Filtro automático por modelo de vehículo.</td>
+                    <td class="status-ok">CUMPLE</td>
+                </tr>
+                <tr>
+                    <td>Trazabilidad GPS en Tiempo Real</td>
+                    <td>Streaming de ubicación para la Central de Monitoreo.</td>
+                    <td class="status-ok">CUMPLE</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <p>Esta alineación normativa asegura que la Municipalidad de Trelew no esté improvisando, sino implementando una solución probada y avalada por las mejores prácticas legislativas del país.</p>
+
+    <div class="footer">
+        <div>VamO · Estándares Regulatorios</div>
+        <div>Página 02</div>
+    </div>
+</div>
+
+<!-- PÁGINA 3: VAMOMUNI Y CONTROL -->
+<div class="page">
+    <div class="header">
+        <div class="logo">Vam<span>O</span></div>
+    </div>
+
+    <h2>Módulo VamoMuni: El Control es de la Ciudad</h2>
+    <p>A diferencia de las empresas multinacionales, VamO entrega las "llaves" del sistema a la autoridad local. El intendente y su equipo de transporte tienen acceso a una plataforma de administración soberana.</p>
+
+    <h3>Capacidades de Gestión Municipal:</h3>
+    <ul class="check-list">
+        <li><strong>Auditoría de Documentación:</strong> Los agentes municipales revisan y aprueban cada legajo digital (DNI, Seguro, VTV, Carnet).</li>
+        <li><strong>Sanciones en Tiempo Real:</strong> Posibilidad de suspender conductores por infracciones o mal servicio de manera inmediata.</li>
+        <li><strong>Control de Precios y Zonas:</strong> La municipalidad puede establecer tarifas máximas y zonas de exclusión si lo considera necesario.</li>
+        <li><strong>Mapa de Calor y Tránsito:</strong> Datos precisos sobre flujos de movilidad para mejorar la planificación urbana de Trelew.</li>
+    </ul>
+
+    <div class="feature-card" style="border: 2px solid var(--accent); background: #fffcf2;">
+        <h4 style="color: var(--accent);">Seguridad Ciudadana</h4>
+        <p>En caso de cualquier incidente, la Municipalidad tiene acceso instantáneo a la hoja de ruta del viaje, identidad del conductor y grabaciones de geolocalización, colaborando directamente con las fuerzas de seguridad.</p>
+    </div>
+
+    <h3>Fiscalización Electrónica</h3>
+    <p>Se elimina la necesidad de controles físicos constantes que saturan al personal. El sistema alerta automáticamente si un vehículo está circulando con el seguro vencido o si el conductor no ha renovado su habilitación municipal.</p>
+
+    <div class="footer">
+        <div>VamO · Gestión y Soberanía Municipal</div>
+        <div>Página 03</div>
+    </div>
+</div>
+
+<!-- PÁGINA 4: CONDUCTORES Y ECONOMÍA -->
+<div class="page">
+    <div class="header">
+        <div class="logo">Vam<span>O</span></div>
+    </div>
+
+    <h2>Prosperidad para el Trabajador de Trelew</h2>
+    <p>VamO protege al transporte tradicional y ofrece una salida laboral digna para conductores particulares, siempre bajo el marco de la legalidad.</p>
+
+    <div class="feature-grid">
+        <div class="feature-card" style="background: #eef2ff; border: 1px solid #c7d2fe;">
+            <div class="muni-tag">TAXIS Y REMISES</div>
+            <h4>Comisión Preferencial (8%)</h4>
+            <p>Los profesionales habilitados disfrutan de la tasa más baja para potenciar su rentabilidad frente a las apps extranjeras.</p>
+        </div>
+        <div class="feature-card" style="background: #f0fdf4; border: 1px solid #bbf7d0;">
+            <div class="muni-tag">PARTICULARES (EXPRESS)</div>
+            <h4>Formalización Progresiva</h4>
+            <p>Acceso a una fuente de ingresos regulada, con tributación simplificada y aportes al sistema de seguridad local.</p>
+        </div>
+    </div>
+
+    <h3>Pozo Semanal: Incentivo a la Excelencia</h3>
+    <p>VamO implementa un sistema de recompensas único. Cada semana, los conductores con mejores calificaciones y mayor cumplimiento participan de un <span class="highlight-text">Pozo Semanal de $2.000 ARS (base)</span>.</p>
+    
+    <div style="background: var(--bg-alt); padding: 25px; border-radius: 20px; text-align: center; margin: 20px 0;">
+        <h4 style="margin:0;">Sistema de Gamificación y Niveles</h4>
+        <p style="font-size: 14px; margin-top: 10px;">Los conductores ascienden de nivel (Bronce, Plata, Oro) según su desempeño, desbloqueando beneficios como prioridad de viajes y bonificaciones en comercios adheridos de Trelew.</p>
+    </div>
+
+    <h3>Fondo de Asistencia al Pasajero (FAP)</h3>
+    <p>Un porcentaje de cada viaje alimenta el FAP, un fondo local destinado a cubrir cualquier contingencia, brindando una capa de protección adicional que ninguna otra aplicación ofrece en la provincia.</p>
+
+    <div class="footer">
+        <div>VamO · Economía Colaborativa Local</div>
+        <div>Página 04</div>
+    </div>
+</div>
+
+<!-- PÁGINA 5: CONCLUSIÓN -->
+<div class="page">
+    <div class="header">
+        <div class="logo">Vam<span>O</span></div>
+    </div>
+
+    <div style="margin-top: 50px; text-align: center; padding: 40px; background: var(--bg-alt); border-radius: 30px;">
+        <h2 style="border:none; padding:0; margin-top:0; font-size: 36px;">Conclusión</h2>
+        <p style="font-size: 18px; line-height: 1.8; color: var(--text-dark); font-weight: 500;">
+            VamO no es solo tecnología; es un compromiso con el orden y el desarrollo de Trelew. 
+        </p>
+        <p>
+            Al adoptar este sistema, la Municipalidad de Trelew se posiciona a la vanguardia nacional, resolviendo el conflicto del transporte ilegal mediante una solución <span class="highlight-text">segura, auditable y argentina</span>.
+        </p>
+        <p style="font-weight: 800; font-size: 20px; color: var(--primary);">Estamos listos para transformar la ciudad.</p>
+    </div>
+
+    <div style="margin-top: 60px;">
+        <h3>Siguientes Pasos propuestos:</h3>
+        <ul class="check-list">
+            <li>Reunión técnica con el equipo de Modernización y Transporte de Trelew.</li>
+            <li>Presentación de la consola VamoMuni en vivo.</li>
+            <li>Prueba piloto de 30 días con una flota seleccionada de Taxis y Remises.</li>
+            <li>Lanzamiento masivo con campaña de concientización ciudadana.</li>
+        </ul>
+    </div>
+
+    <div style="margin-top: 100px; border-top: 2px solid var(--text-dark); padding-top: 20px; width: 250px;">
+        <p style="font-weight: 900; margin: 0;">EQUIPO VamO</p>
+        <p style="font-size: 12px; margin: 0; color: var(--text-muted);">Movilidad Soberana Argentina</p>
+    </div>
+
+    <div class="footer">
+        <div>VamO · Propuesta Estratégica Trelew 2026</div>
+        <div>Página 05</div>
+    </div>
+</div>
+
+</body>
+</html>

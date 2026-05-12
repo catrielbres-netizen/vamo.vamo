@@ -17,13 +17,17 @@ export function WaitTimerDialog({
     onOpenChange,
     waitMinutes, 
     waitCost, 
-    currentTotal 
+    currentTotal,
+    isEarlyArrival,
+    scheduledTime
 }: { 
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     waitMinutes: string;
     waitCost: string;
     currentTotal: string;
+    isEarlyArrival?: boolean;
+    scheduledTime?: string;
 }) {
 
   return (
@@ -35,7 +39,11 @@ export function WaitTimerDialog({
             Viaje en Espera
           </DialogTitle>
           <DialogDescription>
-            {waitMinutes.startsWith('00:') || (parseInt(waitMinutes.split(':')[0]) < 5) 
+            {isEarlyArrival ? (
+                <span className="text-amber-500 font-medium">
+                    Llegaste antes de la hora de la reserva. La espera comienza a las {scheduledTime || 'la hora programada'}.
+                </span>
+            ) : (waitMinutes.startsWith('00:') || (parseInt(waitMinutes.split(':')[0]) < 5))
               ? "Tenés 5 minutos (300s) de espera sin cargo. Luego se aplicará la tarifa por minuto." 
               : "El tiempo de cortesía ha finalizado y se está aplicando el costo por minuto de espera."}
           </DialogDescription>
@@ -54,7 +62,7 @@ export function WaitTimerDialog({
             )}
           </div>
           <div className="text-center p-3 bg-secondary rounded-md mt-2">
-            <p className="text-xs text-muted-foreground">Nueva tarifa total estimada</p>
+            <p className="text-xs text-muted-foreground">Efectivo a cobrar</p>
             <p className="font-bold text-lg text-primary">{currentTotal}</p>
           </div>
         </div>

@@ -276,7 +276,7 @@ export default function AdminBenefitsPage() {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label className="text-[10px] uppercase font-black tracking-widest text-zinc-500">Rubro *</Label>
-                                <Select value={formData.type} onValueChange={v => setFormData({...formData, type: v})}>
+                                <Select value={formData.type} onValueChange={v => setFormData({...formData, type: v as Benefit['type']})}>
                                     <SelectTrigger className="bg-zinc-900 border-zinc-800">
                                         <SelectValue placeholder="Seleccionar" />
                                     </SelectTrigger>

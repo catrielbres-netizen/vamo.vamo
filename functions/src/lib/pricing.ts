@@ -1,4 +1,6 @@
-import { PricingConfig, ServiceType } from '../types';
+
+import { PricingConfig, ServiceType, DynamicPricingConfig, DynamicPricingSnapshot } from '../types';
+import { Timestamp } from "firebase-admin/firestore";
 
 export interface PricingInput {
   distanceKm: number;
@@ -20,74 +22,124 @@ export interface PricingBreakdown {
   assistanceFee: number;
   minimumFareApplied: boolean;
   total: number;
+  expressDiscountAmount?: number;
+  expressDiscountPercent?: number;
 }
 
 export function calculateRidePrice(
   input: PricingInput,
-  config: PricingConfig
-): { total: number, breakdown: PricingBreakdown } {
+  config: PricingConfig,
+  dynamicConfig?: DynamicPricingConfig,
+  cityKey?: string
+): { total: number, breakdown: PricingBreakdown, dynamicSnapshot?: DynamicPricingSnapshot } {
 
   const baseFare = input.isNight ? config.NIGHT_BASE_FARE : config.DAY_BASE_FARE;
-  const factor = (config as any)._pricePerKmFactor ?? 10;
-  const pricePerKm = (input.isNight ? config.NIGHT_PRICE_PER_100M : config.DAY_PRICE_PER_100M) * factor;
+  const pricePer100m = input.isNight ? config.NIGHT_PRICE_PER_100M : config.DAY_PRICE_PER_100M;
   const waitingPerMin = input.isNight ? config.NIGHT_WAITING_PER_MIN : config.DAY_WAITING_PER_MIN;
 
-  // Use dynamically from config if defined, else 0
-  const timePerMin = (config as any).DAY_PRICE_PER_MIN
-    ? (input.isNight ? (config as any).NIGHT_PRICE_PER_MIN : (config as any).DAY_PRICE_PER_MIN)
-    : 0;
+  // 1. Distance Fare: Math.ceil(meters / 100) * pricePer100m
+  const distanceMeters = input.distanceKm * 1000;
+  const distanceUnits = Math.ceil(distanceMeters / 100);
+  const distanceFare = distanceUnits * pricePer100m;
 
-  const minFare = (config as any).MINIMUM_FARE || 0;
-
-  const distanceFare = input.distanceKm * pricePerKm;
-  const timeFare = input.durationMin * timePerMin;
-
-  // --- Wait Logic (Bloque 3) ---
+  // 2. Waiting Fare: Math.ceil(seconds / 60) * waitingPerMin
   const FREE_WAIT_SECONDS = 300;
   const totalWaitSeconds = input.waitingSeconds || 0;
   const billableWaitSeconds = Math.max(0, totalWaitSeconds - FREE_WAIT_SECONDS);
   const billableWaitMinutes = Math.ceil(billableWaitSeconds / 60);
   const waitingFare = billableWaitMinutes * waitingPerMin;
 
-  const subtotal = baseFare + distanceFare + timeFare + waitingFare;
+  // 3. Subtotal Municipal (Top Official Fare)
+  const subtotalMunicipal = (baseFare || 0) + (distanceFare || 0) + (waitingFare || 0);
+  
+  // VamO Standard Rounding: Ceil to next 50 (Official Municipal Price)
+  const municipalTotal = Math.ceil(subtotalMunicipal / 50) * 50;
 
-  let serviceMultiplier = 1.0;
-  if (input.serviceType === 'express') {
-    serviceMultiplier = 0.90; // 10% discount
-  } else if (input.serviceType === 'premium') {
-    serviceMultiplier = 1.0;
+  // 4. Dynamic Pricing Discount (VamO PRO)
+  let finalPassengerFare = municipalTotal;
+  let dynamicSnapshot: DynamicPricingSnapshot | undefined = undefined;
+
+  if (dynamicConfig?.enabled) {
+    // CLAMP rules (0-30%)
+    const maxAllowed = Math.min(30, dynamicConfig.maxDiscountPercent || 30);
+    const rawDiscountPercent = dynamicConfig.currentDiscountPercent || 0;
+    const effectiveDiscountPercent = Math.min(maxAllowed, Math.max(0, rawDiscountPercent));
+
+    if (effectiveDiscountPercent > 0) {
+      const rawDiscountAmount = (municipalTotal * effectiveDiscountPercent) / 100;
+      const fareAfterRawDiscount = municipalTotal - rawDiscountAmount;
+      
+      // Subtract discount and round AGAIN to $50 to keep UX consistent
+      finalPassengerFare = Math.ceil(fareAfterRawDiscount / 50) * 50;
+      
+      // Ensure we never EXCEED municipal fare due to rounding (though Math.ceil on a subtraction shouldn't)
+      // and ensure we never go below 70% of municipal fare
+      const minPossibleFare = Math.ceil((municipalTotal * 0.70) / 50) * 50;
+      finalPassengerFare = Math.min(municipalTotal, Math.max(minPossibleFare, finalPassengerFare));
+
+      const appliedDiscountAmount = municipalTotal - finalPassengerFare;
+      const appliedDiscountPercent = municipalTotal > 0 ? (appliedDiscountAmount / municipalTotal) * 100 : 0;
+
+      dynamicSnapshot = {
+        applied: true,
+        municipalBaseFare: municipalTotal,
+        configuredDiscountPercent: effectiveDiscountPercent,
+        rawDiscountAmount: rawDiscountAmount,
+        fareAfterRawDiscount: fareAfterRawDiscount,
+        finalPassengerFare: finalPassengerFare,
+        appliedDiscountAmount: appliedDiscountAmount,
+        appliedDiscountPercent: parseFloat(appliedDiscountPercent.toFixed(2)),
+        maxDiscountPercent: maxAllowed,
+        reasonCodes: dynamicConfig.reasonCodes || [],
+        algorithmMode: dynamicConfig.algorithmMode || 'manual',
+        calculatedAt: Timestamp.now(),
+        cityKey: cityKey || 'unknown',
+        source: 'backend'
+      };
+    } else {
+        // Even if enabled, if percent is 0, we don't apply it
+        dynamicSnapshot = {
+            applied: false,
+            municipalBaseFare: municipalTotal,
+            configuredDiscountPercent: effectiveDiscountPercent,
+            rawDiscountAmount: 0,
+            fareAfterRawDiscount: municipalTotal,
+            finalPassengerFare: municipalTotal,
+            appliedDiscountAmount: 0,
+            appliedDiscountPercent: 0,
+            maxDiscountPercent: maxAllowed,
+            reasonCodes: dynamicConfig.reasonCodes || [],
+            algorithmMode: dynamicConfig.algorithmMode || 'manual',
+            calculatedAt: Timestamp.now(),
+            cityKey: cityKey || 'unknown',
+            source: 'backend'
+        };
+    }
   }
 
-  const urgentCharge = input.isUrgent ? 500 : 0;
-
-  // [Vamo PRO v1.3] El aporte al fondo ahora es interno a la comisión. 
-  // No se suma como cargo extra al pasajero para evitar fricción visual.
-  const assistanceFee = 0;
-
-  let totalExact = (subtotal * serviceMultiplier) + urgentCharge;
-
+  // [AUDIT] Minimum Fare Guard (Applied to final fare)
+  const minFare = (config as any).MINIMUM_FARE || 0;
   let minimumFareApplied = false;
-  if (totalExact < minFare) {
-    totalExact = minFare;
+
+  if (finalPassengerFare < minFare) {
+    finalPassengerFare = minFare;
     minimumFareApplied = true;
   }
 
-  // Redondear a lo múltiplo de 50 más cercano (o simplemente redondear entero si se prefiere)
-  const totalFare = Math.round(totalExact);
-
   return {
-    total: totalFare,
+    total: finalPassengerFare,
     breakdown: {
-      baseFare: Math.round(baseFare),
-      distanceFare: Math.round(distanceFare),
-      timeFare: Math.round(timeFare),
-      waitingFare: Math.round(waitingFare),
-      subtotal: Math.round(subtotal),
-      serviceMultiplier,
-      urgentCharge,
-      assistanceFee,
+      baseFare,
+      distanceFare,
+      timeFare: 0, 
+      waitingFare,
+      subtotal: municipalTotal, // Original municipal subtotal
+      serviceMultiplier: 1.0,
+      urgentCharge: 0,
+      assistanceFee: 0,
       minimumFareApplied,
-      total: totalFare
-    }
+      total: finalPassengerFare
+    },
+    dynamicSnapshot
   };
 }

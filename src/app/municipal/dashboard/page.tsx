@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useUser, useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getCountFromServer, doc, setDoc } from 'firebase/firestore';
 import { MunicipalProfile, MunicipalExpressStatus, normalizeCityKey } from '@/lib/types';
 import Link from 'next/link';
 import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
-import { isDriverReadyForReview } from '@/lib/eligibility';
+import { useSearchParams } from 'next/navigation';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function isExpired(ts: any): boolean {
@@ -30,71 +31,170 @@ const BLOCKED_STATUSES: MunicipalExpressStatus[] = [
 ];
 
 // ─── KPI Card ────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, icon, color }: { label: string; value: number; icon: string; color: string }) {
-    return (
+function KpiCard({ label, value, icon, color, href }: { label: string; value: string | number; icon: string; color: string; href?: string }) {
+    const searchParams = useSearchParams();
+    const isDemo = searchParams.get('demo') === 'true';
+
+    const finalHref = href ? (isDemo ? `${href}${href.includes('?') ? '&' : '?'}demo=true` : href) : undefined;
+
+    const colorClasses: Record<string, string> = {
+        amber: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
+        emerald: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
+        red: 'bg-red-500/10 border-red-500/20 text-red-400',
+        blue: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
+        indigo: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400',
+        zinc: 'bg-zinc-500/10 border-white/5 text-zinc-400',
+    };
+
+    const innerContent = (
         <div className={cn(
-            'rounded-2xl border p-4 space-y-3 bg-white/[0.02]',
-            color === 'amber'  ? 'border-amber-500/20'
-            : color === 'emerald' ? 'border-emerald-500/20'
-            : color === 'red'     ? 'border-red-500/20'
-            : color === 'blue'    ? 'border-blue-500/20'
-                                  : 'border-white/5'
+            "bg-white/5 border border-white/10 p-6 rounded-[2.5rem] relative overflow-hidden transition-all duration-300 group",
+            href ? "cursor-pointer hover:bg-white/10 hover:scale-105 hover:shadow-[0_0_20px_rgba(29,124,255,0.15)] active:scale-95" : "hover:bg-white/10"
         )}>
-            <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{label}</p>
-                <div className={cn(
-                    'w-8 h-8 rounded-xl flex items-center justify-center',
-                    color === 'amber'   ? 'bg-amber-500/10'
-                    : color === 'emerald' ? 'bg-emerald-500/10'
-                    : color === 'red'     ? 'bg-red-500/10'
-                    : color === 'blue'    ? 'bg-blue-500/10'
-                                          : 'bg-zinc-500/10'
-                )}>
-                    <VamoIcon name={icon as any} className={cn(
-                        'h-4 w-4',
-                        color === 'amber'   ? 'text-amber-400'
-                        : color === 'emerald' ? 'text-emerald-400'
-                        : color === 'red'     ? 'text-red-400'
-                        : color === 'blue'    ? 'text-blue-400'
-                                              : 'text-zinc-500'
-                    )} />
+            <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity duration-300">
+                <VamoIcon name={icon as any} className="w-20 h-20" />
+            </div>
+            
+            <div className="flex justify-between items-start mb-4">
+                <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110", colorClasses[color].split(' ')[0])}>
+                    <VamoIcon name={icon as any} className={cn("h-5 w-5", colorClasses[color].split(' ').pop())} />
                 </div>
             </div>
-            <p className="text-3xl font-black text-white">{value}</p>
+
+            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">{label}</p>
+            <p className={cn(
+                "text-3xl font-black italic tracking-tighter truncate",
+                typeof value === 'string' && value.includes('$') ? 'text-white' : 'text-white'
+            )}>{value}</p>
         </div>
     );
+
+    if (finalHref) {
+        return <Link href={finalHref} className="block">{innerContent}</Link>;
+    }
+    return innerContent;
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function MunicipalDashboardPage() {
-    const firestore = useFirestore();
-    const { profile } = useUser();
-    const [drivers, setDrivers]   = useState<MunicipalProfile[]>([]);
-    const [loading, setLoading]   = useState(true);
-    const [quickSearch, setQuickSearch] = useState('');
+import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 
-    const cityKey = profile?.city ? normalizeCityKey(profile.city) : null;
+// ─── Main ─────────────────────────────────────────────────────────────────────
+export default function MunicipalDashboardPage() {
+    const { cityKey, cityName, loading: contextLoading } = useMunicipalContext();
+    
+    const [stats, setStats] = useState<any>(null);
+    const [recentPending, setRecentPending] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [quickSearch, setQuickSearch] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searching, setSearching] = useState(false);
+
+    const fetchDashboard = async () => {
+        if (!cityKey) return;
+        setLoading(true);
+        try {
+            const fns = getFunctions(undefined, 'us-central1');
+            const statsFn = httpsCallable(fns, 'getMunicipalDashboardStatsV1');
+            const result = await statsFn({ cityKey });
+            const data = result.data as any;
+            
+            setStats(data);
+            setRecentPending(data.recentPending || []);
+        } catch (e) {
+            console.error('Error fetching dashboard stats:', e);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        if (!firestore || !cityKey) return;
-        const q = query(
-            collection(firestore, 'municipal_profiles'),
-            where('cityKey', '==', cityKey)
-        );
-        getDocs(q).then(snap => {
-            const fetched = snap.docs.map(d => ({ ...d.data(), driverId: d.id } as MunicipalProfile));
-            fetched.sort((a, b) => {
-                const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-                const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-                return tb - ta;
-            });
-            setDrivers(fetched);
-            setLoading(false);
-        }).catch((e) => {
-            console.error('Error fetching municipal dashboard:', e);
-            setLoading(false);
-        });
-    }, [firestore, cityKey]);
+        if (cityKey) {
+            fetchDashboard();
+        }
+    }, [cityKey]);
+
+    // Búsqueda Global en Backend
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            if (quickSearch.trim().length >= 2) {
+                setSearching(true);
+                try {
+                    const fns = getFunctions(undefined, 'us-central1');
+                    const searchFn = httpsCallable(fns, 'listMunicipalDriversV1');
+                    const result = await searchFn({
+                        cityKey,
+                        query: quickSearch,
+                        limit: 5
+                    });
+                    setSearchResults((result.data as any).drivers || []);
+                } catch (e) {
+                    console.error('Error in search:', e);
+                } finally {
+                    setSearching(false);
+                }
+            } else {
+                setSearchResults([]);
+            }
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [quickSearch, cityKey]);
+
+    const [totalPassengers, setTotalPassengers] = useState<number>(0);
+    const [onlinePassengers, setOnlinePassengers] = useState<number>(0);
+    const [metricsLoading, setMetricsLoading] = useState(true);
+    const [indexError, setIndexError] = useState(false);
+
+    const db = useFirestore();
+
+    useEffect(() => {
+        if (!db || !cityKey) return;
+
+        console.log("[PASSENGER_METRICS_FETCH_START] City:", cityKey);
+        
+        const fetchMetrics = async () => {
+            if (!db || !cityKey) return;
+            
+            try {
+                // Query Total Passengers (Count Only - Cheap)
+                const qTotal = query(
+                    collection(db, 'users'),
+                    where('role', '==', 'passenger'),
+                    where('cityKey', '==', cityKey)
+                );
+                const totalSnap = await getCountFromServer(qTotal);
+                setTotalPassengers(totalSnap.data().count);
+
+                // Query Online Passengers (Active in last 2 mins)
+                const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000);
+                const qOnline = query(
+                    collection(db, 'users'),
+                    where('role', '==', 'passenger'),
+                    where('cityKey', '==', cityKey),
+                    where('isOnline', '==', true),
+                    where('lastActiveAt', '>=', twoMinsAgo)
+                );
+                const onlineSnap = await getCountFromServer(qOnline);
+                setOnlinePassengers(onlineSnap.data().count);
+                
+                setMetricsLoading(false);
+                setIndexError(false);
+                console.log("[PASSENGER_METRICS_INDEX_READY]");
+            } catch (err: any) {
+                if (err.message?.includes('index')) {
+                    console.error("[PASSENGER_METRICS_INDEX_MISSING]");
+                    setIndexError(true);
+                } else {
+                    console.error("[PASSENGER_METRICS_ERROR]", err);
+                }
+                setMetricsLoading(false);
+            }
+        };
+
+        fetchMetrics();
+        // Refresh every 2 minutes instead of onSnapshot (Cost Optimized)
+        const interval = setInterval(fetchMetrics, 120000);
+        return () => clearInterval(interval);
+    }, [db, cityKey]);
 
     if (loading) return (
         <div className="py-20 flex justify-center">
@@ -103,90 +203,103 @@ export default function MunicipalDashboardPage() {
     );
 
     // ── Métricas ───────────────────────────────────────────────────────────────
-    const total       = drivers.length;
-    const pending     = drivers.filter(isDriverReadyForReview).length;
-    const active      = drivers.filter(d => d.municipalStatus === 'active').length;
-    const suspended   = drivers.filter(d => BLOCKED_STATUSES.includes(d.municipalStatus)).length;
-    const expired     = drivers.filter(d => 
-        isExpired(d.licenseExpiry) || 
-        isExpired(d.insuranceExpiry) || 
-        isExpired(d.backgroundCheckExpiry) || 
-        isExpired(d.canonExpiry)
-    ).length;
-    const canonPend   = drivers.filter(d => d.canonStatus !== 'paid' || isExpired(d.canonExpiry)).length;
-
-    const recentPending = drivers
-        .filter(isDriverReadyForReview)
-        .slice(0, 5);
+    // ── Métricas ───────────────────────────────────────────────────────────────
+    const total       = stats?.total || 0;
+    const pending     = stats?.pending || 0;
+    const active      = stats?.active || 0;
+    const suspended   = stats?.suspended || 0;
+    const expired     = stats?.expired || 0; // Skipped for now
+    const municipalParticipation = stats?.cityData?.stats?.totalMunicipalContribution || 0;
 
     const handleQuickSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let val = e.target.value;
-        const prefixStr = cityKey ? cityKey.substring(0, 3).toUpperCase() : '';
-        
-        if (prefixStr) {
-            // Si parece que están intentando escribir el código sin guiones (ej. RAWEXP12)
-            const clean = val.toUpperCase().replace(/[^A-Z0-9]/g, '');
-            const targetClean = prefixStr + 'EXP';
-            
-            if (clean.startsWith(targetClean)) {
-                const nums = clean.substring(targetClean.length);
-                val = `${prefixStr}-EXP-${nums}`;
-            }
-        }
-        setQuickSearch(val);
+        setQuickSearch(e.target.value);
     };
 
     return (
         <div className="space-y-8 max-w-6xl mx-auto">
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-black text-white">Dashboard Municipal</h1>
-                <p className="text-zinc-500 text-sm mt-1">
-                    Municipalidad de <span className="text-indigo-400 font-bold">{profile?.city}</span> · {total} conductor{total !== 1 ? 'es' : ''} express registrado{total !== 1 ? 's' : ''}
+            <div className="mb-12">
+                <span className="text-[#1D7CFF] font-black uppercase tracking-[0.3em] text-[10px]">Portal de Control Municipal</span>
+                <h1 className="text-5xl font-black text-white mt-2 uppercase italic tracking-tighter leading-none">Dashboard <span className="text-[#1D7CFF]">{cityName}</span></h1>
+                <p className="text-zinc-500 text-xs mt-4 uppercase font-black tracking-widest">
+                    {total} Conductor{total !== 1 ? 'es' : ''} Express registrado{total !== 1 ? 's' : ''} en sistema
                 </p>
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-                <KpiCard label="Pendientes"    value={pending}   icon="clock"          color="amber"   />
-                <KpiCard label="Habilitados"   value={active}    icon="check-circle"   color="emerald" />
-                <KpiCard label="Suspendidos"   value={suspended} icon="shield-off"     color="red"     />
-                <KpiCard label="Vencidos"      value={expired}   icon="calendar"       color="red"     />
-                <KpiCard label="Canon pte."    value={canonPend} icon="receipt"        color="amber"   />
-                <KpiCard label="Total express" value={total}     icon="users"          color="zinc"    />
+            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 gap-4 mb-6">
+                <KpiCard 
+                    label="Pasajeros Registrados" 
+                    value={indexError ? "Calculando..." : totalPassengers} 
+                    icon="users" 
+                    color="indigo" 
+                />
+                <KpiCard 
+                    label="Pasajeros Online Ahora" 
+                    value={indexError ? "Calculando..." : onlinePassengers} 
+                    icon="zap" 
+                    color="emerald" 
+                />
+                <KpiCard 
+                    label="Viajes Totales (Hoy)" 
+                    value={stats?.cityData?.stats?.totalRidesToday || 0} 
+                    icon="car" 
+                    color="blue" 
+                />
+                <KpiCard 
+                    label="Recaudación Ciudad" 
+                    value={`$${(stats?.cityData?.stats?.totalCityRevenue || 0).toLocaleString('es-AR')}`} 
+                    icon="trending-up" 
+                    color="emerald" 
+                />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3">
+                <KpiCard label="Pendientes"    value={pending}   icon="clock"          color="amber"   href="/municipal/drivers?filter=pending" />
+                <KpiCard label="Habilitados"   value={active}    icon="check-circle"   color="emerald" href="/municipal/drivers?filter=active" />
+                <KpiCard label="Suspendidos"   value={suspended} icon="shield-off"     color="red"     href="/municipal/drivers?filter=suspended" />
+                <KpiCard label="Vencidos"      value={expired}   icon="calendar"       color="red"     href="/municipal/vencimientos" />
+                {/* <KpiCard label="Canon pte."    value={canonPend} icon="receipt"        color="amber"   /> */}
+                <KpiCard 
+                    label={`Participación Municipal (${cityKey === 'rawson' ? '5%' : '2%'})`} 
+                    value={`$${municipalParticipation.toLocaleString('es-AR')}`} 
+                    icon="coins" 
+                    color="indigo" 
+                    href="/municipal/treasury"
+                />
+                <KpiCard label="Total express" value={total}     icon="users"          color="zinc"    href="/municipal/drivers?filter=express" />
             </div>
 
             {/* Buscador Rápido */}
             <div className="relative">
                 <VamoIcon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-500" />
                 <Input
-                    placeholder="Búsqueda rápida por código o nombre (Ej: RAW-EXP-000001)"
+                    placeholder={`Búsqueda rápida por código o nombre (Ej: ${cityKey?.substring(0, 3).toUpperCase()}-EXP-000001)`}
                     value={quickSearch}
                     onChange={handleQuickSearchChange}
                     className="h-14 pl-12 rounded-2xl bg-white/[0.05] border-white/10 text-white placeholder:text-zinc-300 font-medium text-lg shadow-inner"
                 />
                 
-                {quickSearch.trim().length > 2 && (
+                {quickSearch.trim().length >= 2 && (
                     <div className="absolute top-full mt-2 w-full bg-zinc-900 border border-white/10 rounded-2xl shadow-xl overflow-hidden z-20">
-                        {drivers.filter(d => {
-                            const qClean = quickSearch.toLowerCase().replace(/[^a-z0-9]/g, '');
-                            const codeClean = (d.municipalCode ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                            return codeClean.includes(qClean) || (d.driverName ?? '').toLowerCase().includes(quickSearch.toLowerCase());
-                        }).slice(0, 5).map(d => (
-                            <Link key={d.driverId} href={`/municipal/drivers/${d.driverId}`}>
-                                <div className="px-5 py-3 hover:bg-white/[0.05] flex items-center justify-between border-b border-white/5 last:border-0 cursor-pointer transition-colors">
-                                    <div>
-                                        <p className="text-sm font-bold text-white">{d.driverName ?? 'Sin Nombre'}</p>
-                                        <p className="text-xs text-indigo-400 font-mono mt-0.5">{d.municipalCode}</p>
+                        {searching ? (
+                            <div className="px-5 py-4 text-sm text-zinc-500 flex items-center gap-2">
+                                <div className="w-4 h-4 border-2 border-indigo-500/20 border-t-indigo-400 rounded-full animate-spin" />
+                                Buscando...
+                            </div>
+                        ) : searchResults.length > 0 ? (
+                            searchResults.map(d => (
+                                <Link key={d.driverId} href={`/municipal/drivers/${d.driverId}`}>
+                                    <div className="px-5 py-3 hover:bg-white/[0.05] flex items-center justify-between border-b border-white/5 last:border-0 cursor-pointer transition-colors">
+                                        <div>
+                                            <p className="text-sm font-bold text-white">{d.driverName ?? 'Sin Nombre'}</p>
+                                            <p className="text-xs text-indigo-400 font-mono mt-0.5">{d.municipalCode}</p>
+                                        </div>
+                                        <VamoIcon name="chevron-right" className="h-4 w-4 text-zinc-600" />
                                     </div>
-                                    <VamoIcon name="chevron-right" className="h-4 w-4 text-zinc-600" />
-                                </div>
-                            </Link>
-                        ))}
-                        {drivers.filter(d => 
-                            (d.municipalCode ?? '').toLowerCase().includes(quickSearch.toLowerCase()) ||
-                            (d.driverName ?? '').toLowerCase().includes(quickSearch.toLowerCase())
-                        ).length === 0 && (
+                                </Link>
+                            ))
+                        ) : (
                             <div className="px-5 py-4 text-sm text-zinc-500 italic">
                                 No se encontraron conductores.
                             </div>
@@ -234,7 +347,7 @@ export default function MunicipalDashboardPage() {
             {total === 0 && !loading && (
                 <div className="py-20 text-center space-y-3">
                     <VamoIcon name="users" className="h-12 w-12 mx-auto text-zinc-700" />
-                    <p className="text-zinc-500">No hay conductores express registrados en {profile?.city}.</p>
+                    <p className="text-zinc-500">No hay conductores express registrados en {cityName}.</p>
                 </div>
             )}
         </div>

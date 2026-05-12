@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useUser, useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { MunicipalProfile, MunicipalExpressStatus, normalizeCityKey } from '@/lib/types';
 import Link from 'next/link';
 import { VamoIcon } from '@/components/VamoIcon';
@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { useSearchParams } from 'next/navigation';
 import { isDriverReadyForReview } from '@/lib/eligibility';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 // ─── Types & Helpers ──────────────────────────────────────────────────────────
 type FilterStatus = 'all' | 'pending' | 'active' | 'suspended' | 'expired';
@@ -55,72 +57,110 @@ function StatusBadge({ status }: { status: MunicipalExpressStatus }) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
+import { useMunicipalContext } from '@/hooks/useMunicipalContext';
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function MunicipalDriversPage() {
-    const firestore    = useFirestore();
     const { profile }  = useUser();
+    const { cityKey, cityName, loading: contextLoading } = useMunicipalContext();
     const searchParams = useSearchParams();
+    const { toast } = useToast();
 
     const initialFilter = (searchParams.get('status') as FilterStatus) || 'all';
     const [filter,  setFilter]  = useState<FilterStatus>(initialFilter);
     const [search,  setSearch]  = useState('');
     const [drivers, setDrivers] = useState<MunicipalProfile[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [lastVisibleId, setLastVisibleId] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
 
-    const cityKey = profile?.city ? normalizeCityKey(profile.city) : null;
+    const loadDrivers = async (reset: boolean = false) => {
+        if (!cityKey) return;
+        
+        if (reset) {
+            setLoading(true);
+            setLastVisibleId(null);
+        } else {
+            setLoadingMore(true);
+        }
+
+        try {
+            const fns = getFunctions(undefined, 'us-central1');
+            const listFn = httpsCallable(fns, 'listMunicipalDriversV1');
+            
+            const result = await listFn({
+                cityKey,
+                status: filter,
+                query: search.trim() || undefined,
+                limit: 20,
+                lastVisibleId: reset ? null : lastVisibleId
+            });
+
+            const data = result.data as any;
+            const newDrivers = data.drivers as MunicipalProfile[];
+            
+            if (reset) {
+                setDrivers(newDrivers);
+            } else {
+                setDrivers(prev => [...prev, ...newDrivers]);
+            }
+            
+            setLastVisibleId(data.lastVisibleId);
+            setHasMore(data.hasMore);
+        } catch (e: any) {
+            console.error('Error listing drivers:', e);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron cargar los conductores.' });
+        } finally {
+            setLoading(false);
+            setLoadingMore(false);
+        }
+    };
 
     useEffect(() => {
-        if (!firestore || !cityKey) return;
-        const q = query(
-            collection(firestore, 'municipal_profiles'),
-            where('cityKey', '==', cityKey)
-        );
-        getDocs(q).then(snap => {
-            const fetched = snap.docs.map(d => ({ ...d.data(), driverId: d.id } as MunicipalProfile));
-            fetched.sort((a, b) => {
-                const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-                const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-                return tb - ta;
-            });
-            setDrivers(fetched);
-            setLoading(false);
-        }).catch((e) => {
-            console.error('Error fetching municipal drivers:', e);
-            setLoading(false);
-        });
-    }, [firestore, cityKey]);
+        if (cityKey) {
+            loadDrivers(true);
+        }
+    }, [cityKey, filter]);
+
+    // Búsqueda con debounce o trigger manual
+    const handleSearchChange = (val: string) => {
+        setSearch(val);
+    };
+
+    const handleSearchSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        loadDrivers(true);
+    };
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (search.trim().length >= 2 || search.trim().length === 0) {
+                loadDrivers(true);
+            }
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     const displayed = useMemo(() => {
-        let list = drivers;
-        if (filter !== 'all') {
-            if (filter === 'expired') {
-                const isExpired = (ts: any) => {
-                    if (!ts) return false;
-                    const d = ts.toDate ? ts.toDate() : new Date(ts);
-                    return d < new Date();
-                };
-                list = list.filter(d => 
-                    isExpired(d.licenseExpiry) || 
-                    isExpired(d.insuranceExpiry) || 
-                    isExpired(d.backgroundCheckExpiry) || 
-                    isExpired(d.canonExpiry)
-                );
-            } else if (filter === 'pending') {
-                list = list.filter(isDriverReadyForReview);
-            } else {
-                const statuses = STATUS_FILTER_MAP[filter];
-                list = list.filter(d => statuses.includes(d.municipalStatus));
-            }
-        }
-        if (search.trim()) {
-            const q = search.toLowerCase();
-            list = list.filter(d =>
-                (d.driverName ?? '').toLowerCase().includes(q) ||
-                (d.municipalCode ?? '').toLowerCase().includes(q) ||
-                (d.driverPhone ?? '').includes(q)
+        // En el nuevo modelo, los conductores ya vienen filtrados por estado y búsqueda del backend.
+        // El filtro de 'vencidos' sigue siendo cliente-side sobre los ya cargados para evitar queries pesadas.
+        if (filter === 'expired') {
+            const isExpired = (ts: any) => {
+                if (!ts) return false;
+                const d = ts.toDate ? ts.toDate() : new Date(ts);
+                const now = new Date();
+                return d < now;
+            };
+            return drivers.filter(d => 
+                isExpired(d.licenseExpiry) || 
+                isExpired(d.insuranceExpiry) || 
+                isExpired(d.backgroundCheckExpiry) || 
+                isExpired(d.canonExpiry)
             );
         }
-        return list;
-    }, [drivers, filter, search]);
+        return drivers;
+    }, [drivers, filter]);
 
     const FILTERS: { key: FilterStatus; label: string }[] = [
         { key: 'all',       label: 'Todos' },
@@ -135,7 +175,7 @@ export default function MunicipalDriversPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-black text-white">Conductores Express</h1>
-                    <p className="text-zinc-500 text-sm mt-1">Municipalidad de {profile?.city} · {drivers.length} registrados</p>
+                    <p className="text-zinc-500 text-sm mt-1">Municipalidad de {cityName} · {drivers.length} registrados</p>
                 </div>
             </div>
 
@@ -155,14 +195,14 @@ export default function MunicipalDriversPage() {
                         </button>
                     ))}
                 </div>
-                <div className="relative flex-1">
+                <form onSubmit={handleSearchSubmit} className="relative flex-1">
                     <VamoIcon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600" />
                     <Input
-                        placeholder="Buscar por nombre, código o teléfono..."
-                        value={search} onChange={e => setSearch(e.target.value)}
+                        placeholder="Buscar por nombre, código, email o teléfono..."
+                        value={search} onChange={e => handleSearchChange(e.target.value)}
                         className="pl-10 h-10 bg-white/[0.03] border-white/5 text-white placeholder:text-zinc-600"
                     />
-                </div>
+                </form>
             </div>
 
             {/* Table */}
@@ -172,6 +212,7 @@ export default function MunicipalDriversPage() {
                         <thead className="text-[10px] font-black uppercase tracking-widest text-zinc-600 border-b border-white/5 bg-black/20">
                             <tr>
                                 <th className="px-5 py-3">Conductor</th>
+                                <th className="px-5 py-3">Tipo / Dinámica</th>
                                 <th className="px-5 py-3">Código</th>
                                 <th className="px-5 py-3">Alta</th>
                                 <th className="px-5 py-3">Estado municipal</th>
@@ -194,8 +235,32 @@ export default function MunicipalDriversPage() {
                                 return (
                                     <tr key={d.driverId} className="hover:bg-white/[0.02] transition-colors">
                                         <td className="px-5 py-3">
-                                            <p className="font-bold text-white">{d.driverName ?? '—'}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-bold text-white">{d.driverName ?? '—'}</p>
+                                                {isDriverReadyForReview(d) && (
+                                                    <span className="text-[8px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30 uppercase font-black tracking-widest">Listo</span>
+                                                )}
+                                            </div>
                                             <p className="text-[10px] text-zinc-500">{d.driverPhone ?? d.driverEmail ?? '—'}</p>
+                                        </td>
+                                        <td className="px-5 py-3">
+                                            <div className="flex flex-col gap-1">
+                                                <span className={cn(
+                                                    "text-[9px] font-black px-2 py-0.5 rounded-md w-fit uppercase tracking-tighter",
+                                                    d.driverSubtype === 'express' ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                                )}>
+                                                    {d.driverSubtype === 'express' ? 'Express' : 'Profesional'}
+                                                </span>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <div className={cn(
+                                                        "h-1.5 w-1.5 rounded-full",
+                                                        (d.driverSubtype === 'express' || d.driverPreferences?.acceptsDiscountedRides) ? "bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" : "bg-zinc-700"
+                                                    )} />
+                                                    <span className="text-[10px] font-bold text-zinc-500">
+                                                        {(d.driverSubtype === 'express' || d.driverPreferences?.acceptsDiscountedRides) ? 'Acepta Dinámica' : 'Tarifa Plana'}
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </td>
                                         <td className="px-5 py-3">
                                             <span className="font-mono text-xs text-zinc-300">{d.municipalCode}</span>
@@ -235,6 +300,22 @@ export default function MunicipalDriversPage() {
                         </tbody>
                     </table>
                 </div>
+
+                {hasMore && (
+                    <div className="p-4 border-t border-white/5 bg-black/10 flex justify-center">
+                        <Button
+                            variant="ghost"
+                            onClick={() => loadDrivers(false)}
+                            disabled={loadingMore}
+                            className="text-xs font-bold text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/5 h-8 px-6"
+                        >
+                            {loadingMore ? (
+                                <div className="w-4 h-4 border-2 border-indigo-500/20 border-t-indigo-400 rounded-full animate-spin mr-2" />
+                            ) : null}
+                            {loadingMore ? 'Cargando...' : 'Cargar más conductores'}
+                        </Button>
+                    </div>
+                )}
             </div>
         </div>
     );

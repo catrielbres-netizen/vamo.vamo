@@ -9,6 +9,11 @@
 export function playOfferSound(): void {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // Explicitly resume context for browsers that start in 'suspended' state
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(e => console.warn('[SOUND] Could not resume audio context:', e));
+    }
 
     const playBeep = (startTime: number, freq: number, duration: number) => {
       const osc = ctx.createOscillator();
@@ -32,8 +37,6 @@ export function playOfferSound(): void {
 
 /**
  * Announces a new ride offer via the browser's Text-to-Speech (Web Speech API).
- * Waits for voices to load and resumes any paused synthesis (important on Chrome Android
- * where synthesis can be paused when the tab loses focus).
  */
 export function announceNewRide(originAddress?: string): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -41,37 +44,66 @@ export function announceNewRide(originAddress?: string): void {
   const speak = () => {
     try {
       window.speechSynthesis.cancel();
-      // Resume if paused (Chrome Android pauses when tab is not focused)
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-      const text = originAddress
-        ? `Nuevo viaje. Desde ${originAddress}`
-        : 'Nuevo viaje disponible';
+      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+      const text = originAddress ? `Nuevo viaje. Desde ${originAddress}` : 'Nuevo viaje disponible';
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'es-AR';
       utterance.rate = 1.1;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-      // Pick a Spanish voice if available
-      const voices = window.speechSynthesis.getVoices();
-      const esVoice = voices.find(v => v.lang.startsWith('es'));
-      if (esVoice) utterance.voice = esVoice;
       window.speechSynthesis.speak(utterance);
     } catch (e) {
       console.warn('[TTS] Speech synthesis failed:', e);
     }
   };
 
-  // If voices aren't loaded yet, wait for them
   if (window.speechSynthesis.getVoices().length === 0) {
     window.speechSynthesis.addEventListener('voiceschanged', speak, { once: true });
-    // Fallback: if event never fires (some browsers), try after 500ms
-    setTimeout(() => {
-      if (!window.speechSynthesis.speaking) speak();
-    }, 500);
+    setTimeout(() => { if (!window.speechSynthesis.speaking) speak(); }, 800);
   } else {
     speak();
+  }
+}
+
+let nextelInterval: any = null;
+
+/**
+ * Starts a persistent "Nextel-style" rhythmic alert loop.
+ */
+export function startNextelLoop(): void {
+  if (typeof window === 'undefined' || nextelInterval) return;
+  
+  const playChirp = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const playPulse = (start: number, freq: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.6, start + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.1);
+        osc.start(start);
+        osc.stop(start + 0.15);
+      };
+      playPulse(ctx.currentTime, 800);
+      playPulse(ctx.currentTime + 0.1, 1000);
+    } catch (e) {
+      console.warn('[SOUND] Loop chirp failed:', e);
+    }
+  };
+
+  playChirp();
+  nextelInterval = setInterval(playChirp, 3000);
+}
+
+/**
+ * Stops the persistent alert loop.
+ */
+export function stopNextelLoop(): void {
+  if (nextelInterval) {
+    clearInterval(nextelInterval);
+    nextelInterval = null;
   }
 }
 

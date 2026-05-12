@@ -12,6 +12,11 @@ export const RideStatusInfo: {
     [key: string]: { text: string; icon: string; progress: number };
 } = {
     // === ACTIVE RIDE FLOW ===
+    scheduled: {
+      text: 'Viaje programado',
+      icon: 'calendar',
+      progress: 10,
+    },
     searching: {
       text: 'Buscando conductor',
       icon: 'circle-dashed',
@@ -45,6 +50,7 @@ export const RideStatusInfo: {
 
 // Set of states representing a ride that is active from the passenger's perspective.
 export const ACTIVE_RIDE_STATES = [
+  "scheduled",
   "searching",
   "driver_assigned",
   "driver_arrived",
@@ -60,6 +66,7 @@ export const FINAL_RIDE_STATES = [
 
 // Set of states that should lock the main UI navigation for the passenger.
 export const VISUALLY_LOCKED_STATUSES = [
+  "scheduled",
   "searching",
   "driver_assigned",
   "driver_arrived",

@@ -1,207 +1,211 @@
 'use client';
 
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useUser, useFirestore, useFunctions } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { useUser } from '@/firebase/auth/use-user';
+import { useFirebase } from '@/firebase/provider';
+import { 
+    doc, 
+    getDoc, 
+    collection, 
+    query, 
+    where, 
+    getDocs,
+    serverTimestamp 
+} from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { City, normalizeCityKey } from '@/lib/types';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
-function OnboardingContent() {
+interface City {
+    id: string;
+    name: string;
+    province: string;
+    cityKey: string;
+}
+
+interface Invitation {
+    cityKey: string;
+    cityName: string;
+    token: string;
+}
+
+export default function OnboardingPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const { firestore, functions } = useFirebase();
     const { user, profile, loading: userLoading } = useUser();
-    const firestore = useFirestore();
-    const functions = useFunctions();
-    
-    const cityKey = searchParams.get('cityKey');
-    const [city, setCity] = useState<City | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [processing, setProcessing] = useState(false);
+    const { toast } = useToast();
 
+    const cityKey = searchParams.get('cityKey');
+    const token = searchParams.get('token');
+
+    const [city, setCity] = useState<City | null>(null);
+    const [invitation, setInvitation] = useState<Invitation | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [activating, setActivating] = useState(false);
+
+    // Flujo Robusto: 
+    // 1. Si no hay usuario, mandarlo al login con redirect.
+    // 2. Si hay usuario, validar invitación directamente.
+    
     useEffect(() => {
-        if (!firestore || !cityKey) {
+        if (userLoading) return;
+
+        if (!user) {
+            // No logueado: No podemos leer DB de forma segura/resiliente en prod sin reglas publicas.
+            // Mandamos a loguearse primero.
             setLoading(false);
             return;
         }
 
-        const fetchCity = async () => {
+        const resolveOnboarding = async () => {
             try {
-                const cityRef = doc(firestore, 'cities', cityKey);
-                const snap = await getDoc(cityRef);
-                if (snap.exists()) {
-                    setCity({ ...snap.data(), id: snap.id } as City);
+                if (!cityKey || !token || !firestore) return;
+
+                // Ahora que estamos logueados, tenemos permisos de lectura (signedIn)
+                const invitesSnap = await getDocs(query(
+                    collection(firestore, 'municipal_onboarding_invites'),
+                    where('token', '==', token),
+                    where('status', '==', 'sent')
+                ));
+
+                if (invitesSnap.empty) {
+                    setLoading(false);
+                    return;
                 }
-            } catch (error) {
-                console.error("Error fetching city for onboarding:", error);
+
+                const inviteData = invitesSnap.docs[0].data() as Invitation;
+                setInvitation(inviteData);
+
+                // Buscar la ciudad
+                const cityRef = doc(firestore, 'cities', cityKey);
+                const citySnap = await getDoc(cityRef);
+                
+                if (citySnap.exists()) {
+                    setCity({ ...citySnap.data(), id: citySnap.id } as City);
+                } else {
+                    // Fallback por si el ID no coincide pero el cityKey si
+                    const q = query(collection(firestore, 'cities'), where('cityKey', '==', cityKey));
+                    const qSnap = await getDocs(q);
+                    if (!qSnap.empty) {
+                        setCity({ ...qSnap.docs[0].data(), id: qSnap.docs[0].id } as City);
+                    }
+                }
+            } catch (e) {
+                console.error("Error resolving onboarding:", e);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchCity();
-    }, [firestore, cityKey]);
+        resolveOnboarding();
+    }, [user, userLoading, cityKey, token, firestore]);
 
     const handleActivate = async () => {
-        if (!functions || !cityKey || !user) return;
-        
-        setProcessing(true);
+        if (!user || !city || !invitation) return;
+        setActivating(true);
+
         try {
             const finalizeOnboarding = httpsCallable(functions, 'finalizeOnboardingV1');
-            await finalizeOnboarding({ cityKey });
-            
-            toast({
-                title: "¡Ciudad Activada!",
-                description: `Has sido asignado como administrador de ${city?.name}.`,
+            await finalizeOnboarding({
+                cityKey: city.id, // Usamos el ID real del documento
+                token: token
             });
-            
+
+            toast({ title: "✅ Activación Exitosa", description: `${city.name} ya está bajo tu gestión.` });
             router.push('/municipal/dashboard');
-        } catch (error: any) {
-            console.error("Error activating city:", error);
-            toast({
-                title: "Error de activación",
-                description: error.message || "No se pudo completar el onboarding.",
-                variant: "destructive"
-            });
+        } catch (e: any) {
+            toast({ variant: "destructive", title: "Error", description: e.message });
         } finally {
-            setProcessing(false);
+            setActivating(false);
         }
     };
 
     if (userLoading || loading) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center p-6 text-indigo-400">
-                <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-400 rounded-full animate-spin" />
+            <div className="min-h-screen bg-black flex items-center justify-center">
+                <div className="w-10 h-10 border-4 border-indigo-500/10 border-t-indigo-500 rounded-full animate-spin" />
             </div>
         );
     }
 
-    if (!cityKey || !city) {
-        return (
-            <div className="min-h-screen bg-black flex items-center justify-center p-6 text-center">
-                <Card className="max-w-md w-full p-8 border-white/5 bg-zinc-900 space-y-4">
-                    <VamoIcon name="alert-triangle" className="h-12 w-12 text-amber-500 mx-auto" />
-                    <h1 className="text-xl font-bold text-white">Enlace Inválido</h1>
-                    <p className="text-zinc-400 text-sm">Esta invitación no existe o ha expirado. Por favor, contactá al soporte de VamO.</p>
-                </Card>
-            </div>
-        );
-    }
-
-    if (city.status === 'active') {
-        return (
-            <div className="min-h-screen bg-black flex items-center justify-center p-6 text-center">
-                <Card className="max-w-md w-full p-8 border-white/5 bg-zinc-900 space-y-4">
-                    <VamoIcon name="check-circle" className="h-12 w-12 text-emerald-500 mx-auto" />
-                    <h1 className="text-xl font-bold text-white">Ciudad ya Activa</h1>
-                    <p className="text-zinc-400 text-sm">La municipalidad de {city.name} ya se encuentra operativa.</p>
-                    <Button onClick={() => router.push('/municipal/dashboard')} className="w-full bg-indigo-600 hover:bg-indigo-500">
-                        Ir al Dashboard
-                    </Button>
-                </Card>
-            </div>
-        );
-    }
-
+    // SI NO ESTÁ LOGUEADO: Mostrar pantalla de "Bienvenida + CTA Login"
     if (!user) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center p-6 text-center">
-                <Card className="max-w-md w-full p-8 border-white/5 bg-zinc-900 space-y-6">
-                    <VamoIcon name="mail" className="h-12 w-12 text-indigo-400 mx-auto" />
-                    <div className="space-y-2">
-                        <h1 className="text-xl font-bold text-white">Invitación para {city.name}</h1>
-                        <p className="text-zinc-400 text-sm">Para continuar con el onboarding municipal, debés iniciar sesión o registrarte con tu correo oficial.</p>
+            <main className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-6">
+                <Card className="max-w-md w-full p-8 border-white/5 bg-zinc-900 shadow-2xl space-y-8 text-center">
+                    <div className="mx-auto w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center">
+                        <VamoIcon name="building" className="h-8 w-8 text-white" />
                     </div>
-                    <Button onClick={() => router.push(`/municipal/login?redirect=/municipal/onboarding?cityKey=${cityKey}`)} className="w-full bg-indigo-600 hover:bg-indigo-500">
-                        Iniciar Sesión
+                    <div className="space-y-4">
+                        <h1 className="text-3xl font-black tracking-tighter">VamoMuni</h1>
+                        <p className="text-zinc-400 leading-relaxed">
+                            Has sido invitado a activar la gestión municipal de VamO. Para continuar, debés iniciar sesión con tu cuenta oficial.
+                        </p>
+                    </div>
+                    <Button 
+                        onClick={() => router.push(`/municipal/login?redirect=${encodeURIComponent(window.location.href)}`)}
+                        className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-lg font-bold rounded-xl"
+                    >
+                        Iniciar Sesión para Activar
                     </Button>
                 </Card>
-            </div>
+            </main>
         );
     }
 
+    // SI NO HAY INVITACIÓN (y ya está logueado)
+    if (!invitation || !city) {
+        return (
+            <main className="min-h-screen bg-black flex items-center justify-center p-6">
+                <Card className="max-w-md w-full p-8 border-white/5 bg-zinc-900 text-center space-y-6">
+                    <VamoIcon name="alert-triangle" className="h-12 w-12 text-amber-500 mx-auto" />
+                    <h2 className="text-xl font-bold text-white">Invitación no encontrada</h2>
+                    <p className="text-zinc-500 text-sm">El link es inválido o ya fue utilizado. Por favor, generá uno nuevo desde el Admin.</p>
+                    <div className="text-[10px] font-mono text-zinc-700 bg-black/50 p-2 rounded">
+                        ID: {cityKey} | UID: {user.uid.slice(0,5)}
+                    </div>
+                    <Button onClick={() => router.push('/admin/expansion')} variant="outline" className="w-full">
+                        Volver al Hub
+                    </Button>
+                </Card>
+            </main>
+        );
+    }
+
+    // PANTALLA DE ACTIVACIÓN FINAL (Logueado + Invitación OK)
     return (
         <main className="min-h-screen bg-black text-white selection:bg-indigo-500/30">
-            <div className="max-w-2xl mx-auto px-6 py-20 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-                <div className="flex items-center gap-3 mb-8">
-                    <div className="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                        <VamoIcon name="building" className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-black tracking-tight">Onboarding Municipal</h1>
-                        <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Activa tu ciudad en VamO</p>
-                    </div>
-                </div>
-
-                <Card className="border-white/5 bg-zinc-900/50 backdrop-blur-xl p-8 space-y-8 overflow-hidden relative">
-                    <div className="absolute top-0 right-0 p-8 opacity-5">
-                        <VamoIcon name="building" className="h-32 w-32" />
-                    </div>
-
-                    <section className="space-y-6 relative z-10">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Ciudad a activar</label>
-                            <div className="text-3xl font-black text-white">{city.name}</div>
-                            <p className="text-zinc-400 text-sm">{city.province}, {city.country}</p>
+            <div className="max-w-2xl mx-auto px-6 py-20 animate-in fade-in duration-700">
+                <Card className="border-white/5 bg-zinc-900/50 backdrop-blur-xl p-10 space-y-10 overflow-hidden relative shadow-2xl">
+                    <div className="absolute -top-10 -right-10 opacity-10 blur-3xl h-64 w-64 bg-emerald-500 rounded-full" />
+                    
+                    <section className="space-y-8 relative z-10 text-center">
+                        <div className="space-y-4">
+                            <p className="text-sm font-medium text-emerald-400">Paso Final</p>
+                            <h2 className="text-4xl font-black tracking-tighter leading-none">
+                                Activar <span className="text-indigo-400">{city.name}</span>
+                            </h2>
+                            <p className="text-zinc-400 max-w-sm mx-auto">
+                                Confirmá que sos el responsable de gestionar VamoMuni en esta localidad.
+                            </p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
-                                <p className="text-[10px] font-black text-zinc-500 uppercase mb-2">Administrador</p>
-                                <p className="text-sm font-bold text-indigo-400">{profile?.name || user.email}</p>
-                                <p className="text-[10px] text-zinc-600">ID: {user.uid}</p>
-                            </div>
-                            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
-                                <p className="text-[10px] font-black text-zinc-500 uppercase mb-2">Rol Asignado</p>
-                                <p className="text-sm font-bold text-emerald-400 uppercase tracking-tighter">ADMIN_MUNICIPAL</p>
-                            </div>
+                        <div className="flex flex-col gap-4">
+                            <Button 
+                                onClick={handleActivate}
+                                disabled={activating}
+                                className="w-full h-16 bg-white hover:bg-zinc-100 text-black text-xl font-black rounded-2xl shadow-2xl transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {activating ? "ACTIVANDO..." : "CONFIRMAR ACTIVACIÓN"}
+                            </Button>
                         </div>
-
-                        <div className="space-y-4 pt-4 border-t border-white/5">
-                            <div className="flex gap-3 text-sm text-zinc-400">
-                                <VamoIcon name="check-circle" className="h-5 w-5 text-emerald-500 flex-shrink-0" />
-                                <p>Al activar, aceptar el rol de responsable municipal para <strong>{city.name}</strong>.</p>
-                            </div>
-                            <div className="flex gap-3 text-sm text-zinc-400">
-                                <VamoIcon name="check-circle" className="h-5 w-5 text-emerald-500 flex-shrink-0" />
-                                <p>Podrás gestionar conductores express, validar documentación y ver métricas locales.</p>
-                            </div>
-                        </div>
-
-                        <Button 
-                            onClick={handleActivate} 
-                            disabled={processing}
-                            className="w-full h-14 bg-indigo-600 hover:bg-indigo-500 text-lg font-black rounded-2xl shadow-xl shadow-indigo-500/10 transition-all active:scale-95 flex gap-2"
-                        >
-                            {processing ? (
-                                <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                            ) : (
-                                <>Aceptar e Inicializar {city.name}</>
-                            )}
-                        </Button>
-                        
-                        <p className="text-[10px] text-center text-zinc-600">
-                            Presionando el botón, confirmás la activación técnica de la plataforma para tu jurisdicción.
-                        </p>
                     </section>
                 </Card>
             </div>
         </main>
-    );
-}
-
-export default function MunicipalOnboardingPage() {
-    return (
-        <Suspense fallback={
-            <div className="min-h-screen bg-black flex items-center justify-center p-6 text-indigo-400">
-                <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-400 rounded-full animate-spin" />
-            </div>
-        }>
-            <OnboardingContent />
-        </Suspense>
     );
 }

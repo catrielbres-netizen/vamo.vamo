@@ -1,3 +1,4 @@
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
@@ -61,7 +62,7 @@ export const sendRideMessageV1 = onCall({ cors: true, region: 'us-central1' }, a
                 senderId,
                 senderRole,
                 text: sanitizedText,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
                 type: 'text',
                 status: 'sent'
             };
@@ -78,28 +79,37 @@ export const sendRideMessageV1 = onCall({ cors: true, region: 'us-central1' }, a
 
             const updatedSummary: RideChatSummary = {
                 ...currentSummary,
-                lastMessageText: sanitizedText,
-                lastMessageAt: admin.firestore.FieldValue.serverTimestamp(),
+                unreadCountPassenger: isDriver ? ((currentSummary.unreadCountPassenger || 0) + 1) : (currentSummary.unreadCountPassenger || 0),
+                unreadCountDriver: isPassenger ? ((currentSummary.unreadCountDriver || 0) + 1) : (currentSummary.unreadCountDriver || 0),
+                lastMessageText: text.substring(0, 50),
+                lastMessageAt: FieldValue.serverTimestamp(),
                 lastMessageSenderId: senderId,
-                unreadCountPassenger: isDriver ? (currentSummary.unreadCountPassenger + 1) : currentSummary.unreadCountPassenger,
-                unreadCountDriver: isPassenger ? (currentSummary.unreadCountDriver + 1) : currentSummary.unreadCountDriver,
+                chatEnabled: true
             };
 
             tx.update(rideRef, { chatSummary: updatedSummary });
 
-            return { senderRole, recipientId, senderName: isPassenger ? (rideData.passengerName || 'Pasajero') : (rideData.driverName || 'Conductor') };
+            return { 
+                senderRole, 
+                recipientId, 
+                senderName: isPassenger ? (rideData.passengerName || 'Pasajero') : (rideData.driverName || 'Conductor') 
+            };
         });
 
         // 5. NOTIFICACIÓN PUSH (Fuera de la transacción para evitar lentitud)
         if (result && result.recipientId) {
             // Importación dinámica para evitar dependencia circular si existe
             const { sendNotification } = require('./handlers');
+            const deepLink = result.senderRole === 'passenger' 
+                ? `/driver/rides?activeRideId=${rideId}&openChat=true` 
+                : `/dashboard/ride?rideId=${rideId}&openChat=true`;
+
             await sendNotification(
                 result.recipientId,
                 `Mensaje de ${result.senderName}`,
                 sanitizedText,
-                result.senderRole === 'passenger' ? '/driver' : `/dashboard/ride`,
-                { event: 'NEW_CHAT_MESSAGE', rideId }
+                deepLink,
+                { event: 'NEW_CHAT_MESSAGE', rideId, openChat: 'true' }
             );
         }
 

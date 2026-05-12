@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { Metadata } from 'next';
 import { Inter, Archivo } from 'next/font/google';
@@ -6,31 +5,26 @@ import { cn } from '@/lib/utils';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import ClientProviders from './ClientProviders';
+import { VersionManager } from '@/components/VersionManager';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { AIGuard } from '@/components/ai/AIGuard';
 
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const archivo = Archivo({ subsets: ['latin'], variable: '--font-archivo', weight: ['400', '600', '800', '900'] });
 
 export const metadata: Metadata = {
-  title: 'VamO',
-  description: 'Movete fácil, movete con VamO',
-  manifest: '/manifest.webmanifest',
+  title: "VamO",
+  description: "Transporte seguro, moderno y municipalmente integrado.",
   icons: {
-    icon: '/vamo-logo.svg',
-    apple: '/vamo-logo.svg',
+    icon: "/branding/vamo-logo.png",
+    apple: "/branding/vamo-logo.png",
   },
-  appleWebApp: {
-    capable: true,
-    title: 'VamO',
-    statusBarStyle: 'black-translucent',
-  },
-  other: {
-    'mobile-web-app-capable': 'yes',
-  }
+  manifest: "/manifest.webmanifest",
 };
 
 export const viewport = {
-  themeColor: '#1E293B',
+  themeColor: "#050816",
 };
 
 
@@ -41,6 +35,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning>
+      <head />
       <body
         className={cn(
           'min-h-screen bg-background bg-morphic font-sans antialiased selection:bg-indigo-500/30',
@@ -50,9 +45,13 @@ export default function RootLayout({
         )}
       >
         <ClientProviders>
-          <div className="relative flex min-h-screen flex-col">
-            <main className="flex-1">{children}</main>
-          </div>
+          <ErrorBoundary>
+            <div className="relative flex min-h-screen flex-col">
+              <VersionManager />
+              <main className="flex-1">{children}</main>
+              <AIGuard />
+            </div>
+          </ErrorBoundary>
         </ClientProviders>
         <Toaster />
       </body>

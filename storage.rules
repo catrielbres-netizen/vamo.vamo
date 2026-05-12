@@ -3,49 +3,112 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     
-    // Helpers
+    // Helpers O(1) - Basados en Custom Claims (Fase 4A)
     function signedIn() {
       return request.auth != null;
     }
     
     function isAdmin() {
-      return signedIn() && 
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return signedIn() && request.auth.token.r != null && request.auth.token.r == 'admin';
     }
 
-    // 1. PUBLIC: Profile Photos (Avatars)
-    // Matches path used in DriverProfilePage: profile_photos/{uid}/avatar.jpg
-    match /profile_photos/{userId}/{allPaths=**} {
+    // 1. PUBLIC: Passenger Profile Photos
+    match /passengers/{userId}/profile/profile.jpg {
       allow read: if true;
-      allow write: if signedIn() && request.auth.uid == userId;
+      allow write: if signedIn() && request.auth.uid == userId
+                   && request.resource.contentType.matches('image/.*')
+                   && request.resource.size < 5 * 1024 * 1024;
     }
     
-    // Legacy/Alternative profile path
-    match /profiles/{userId}/{allPaths=**} {
+    // Legacy/Alternative profile paths (Hardened)
+    match /profile_photos/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if signedIn() && request.auth.uid == userId;
+      allow write: if signedIn() && request.auth.uid == userId
+                   && request.resource.contentType.matches('image/.*');
     }
-
-    // 2. PUBLIC: Vehicle Photos
-    // Matches path used in DriverRegisterClient: drivers/{uid}/{fileName}
-    match /drivers/{userId}/{allPaths=**} {
+    
+    match /profiles/{userId}/{allPaths=**} {
       allow read: if true;
       allow write: if signedIn() && request.auth.uid == userId
                    && request.resource.contentType.matches('image/.*');
     }
 
+    // 2. PUBLIC: Mandatory Driver Photos (Profile & Front)
+    match /drivers/{userId}/profile/profile.jpg {
+      allow read: if true;
+      allow write: if signedIn() && request.auth.uid == userId
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    match /drivers/{userId}/vehicle/front.jpg {
+      allow read: if true;
+      allow write: if signedIn() && request.auth.uid == userId
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Secondary driver folder (Limited to images)
+    match /drivers/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if signedIn() && request.auth.uid == userId
+                   && request.resource.contentType.matches('image/.*')
+                   && request.resource.size < 5 * 1024 * 1024;
+    }
+
     // 3. PRIVATE: Driver Sensitive Documents (Manual Review)
-    // Matches path used in DriverProfilePage: driver_documents/{uid}/{docId}_{timestamp}.jpg
     match /driver_documents/{userId}/{allPaths=**} {
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow write: if signedIn() && request.auth.uid == userId
                    && request.resource.contentType.matches('image/.*');
     }
     
-    // 4. PRIVATE: Municipal Documents (Express Drivers)
+    // 4. PRIVATE: [FASE 4A] Municipal Documents (Hardened O(1))
     match /municipal_docs/{cityKey}/{userId}/{allPaths=**} {
+      
+      allow read: if signedIn() && (
+        request.auth.uid == userId || 
+        isAdmin() || 
+        (
+          request.auth.token.ck != null &&
+          request.auth.token.ck == cityKey &&
+          (
+            request.auth.token.r == 'admin_municipal' || 
+            request.auth.token.r == 'traffic_municipal'
+          )
+        )
+      );
+
+      allow write: if signedIn() && (
+        isAdmin() || 
+        (
+          request.auth.uid == userId && 
+          request.auth.token.r == 'driver' &&
+          request.auth.token.ck != null &&
+          request.auth.token.ck == cityKey &&
+          request.resource.size < 10 * 1024 * 1024 &&
+          request.resource.contentType.matches('image/.*|application/pdf')
+        )
+      );
+    }
+
+    // 5. PRIVATE: F.A.P. Evidence
+    match /fap_evidence/{userId}/{allPaths=**} {
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
-      allow write: if signedIn() && request.auth.uid == userId;
+      allow write: if signedIn() && request.auth.uid == userId
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // 6. PRIVATE: Safety Recordings
+    match /safety_recordings/{rideId}/{allPaths=**} {
+      allow read: if isAdmin();
+      allow write: if signedIn();
+    }
+
+    // 7. PRIVATE: [FASE 1] Passenger Identity
+    match /passenger_identity/{userId}/{allPaths=**} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if signedIn() && request.auth.uid == userId
+                   && request.resource.size < 20 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*|application/pdf');
     }
 
     // Default deny

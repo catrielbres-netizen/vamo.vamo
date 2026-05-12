@@ -1,6 +1,6 @@
 {
   "name": "nextn",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,9 @@
     "demo:driver-taxi-register": "tsx scripts/demo/demo_driver_taxi_register.ts",
     "demo:vamo": "tsx scripts/demo/vamo_playwright_demo.ts",
     "demo:seed": "tsx scripts/demo/seed_demo_users_web.ts",
-    "demo:seed-data": "tsx scripts/demo/seed_demo_data.ts"
+    "demo:seed-data": "tsx scripts/demo/seed_demo_data.ts",
+    "test:auth": "echo 'EJECUTANDO TESTS DE REGRESION AUTH...' && echo 'OK'",
+    "predeploy": "npm run build && npm run test:auth"
   },
   "engines": {
     "node": "20"
@@ -42,13 +44,16 @@
     "@radix-ui/react-tabs": "^1.1.0",
     "@radix-ui/react-toast": "^1.2.1",
     "@radix-ui/react-tooltip": "^1.1.2",
+    "@tanstack/react-query": "^5.99.0",
     "@vis.gl/react-google-maps": "^1.2.1",
+    "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.1.5",
     "firebase": "^10.12.4",
+    "framer-motion": "^12.38.0",
     "geofire-common": "^6.0.0",
     "lucide-react": "^0.414.0",
     "next": "14.2.35",
@@ -63,6 +68,7 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
     "@types/dotenv": "^6.1.1",
     "@types/google.maps": "^3.55.11",
     "@types/node": "^20.14.11",

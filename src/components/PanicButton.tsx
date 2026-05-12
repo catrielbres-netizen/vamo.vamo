@@ -5,7 +5,9 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useFirebaseApp } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, Square } from 'lucide-react';
+import { useRideRecorder } from '@/hooks/useRideRecorder';
+import { useUser } from '@/firebase/auth/use-user';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +43,14 @@ export const PanicButton: React.FC<PanicButtonProps> = ({ rideId, role, classNam
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [lastLocation, setLastLocation] = useState<{ lat: number; lng: number } | null>(null);
+  
+  const { user, profile } = useUser();
+  const { isRecording, startRecording, stopRecording, recordingId, uploadRecording } = useRideRecorder(
+    rideId, 
+    user?.uid || '', 
+    role, 
+    profile?.cityKey || 'rawson'
+  );
 
   const handlePanic = async () => {
     if (!firebaseApp || !rideId || isSubmitting) return;
@@ -50,15 +60,34 @@ export const PanicButton: React.FC<PanicButtonProps> = ({ rideId, role, classNam
       const functions = getFunctions(undefined, 'us-central1');
       const triggerPanic = httpsCallable(functions, 'triggerPanicAlertV1');
       
-      // Get current location if available
+      // Get current location if available - HIGH ACCURACY FOR PANIC
       let location = null;
       try {
+        console.log('🚨 [PANIC_DEBUG] - Solicitando ubicación de alta precisión...');
         const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+          navigator.geolocation.getCurrentPosition(resolve, reject, { 
+            enableHighAccuracy: true,
+            timeout: 10000, // Aumentado a 10s para dar tiempo al GPS
+            maximumAge: 0   // Forzar ubicación fresca
+          });
         });
         location = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        console.log('🚨 [PANIC_LOCATION_OK] - Ubicación obtenida:', location);
       } catch (err) {
-        console.warn('Could not get location for panic alert:', err);
+        console.warn('🚨 [PANIC_LOCATION_HIGH_ACCURACY_FAIL]:', err);
+        // Fallback: Si falla la alta precisión, intentar una rápida
+        try {
+            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, { 
+                  enableHighAccuracy: false,
+                  timeout: 3000
+                });
+            });
+            location = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            console.log('🚨 [PANIC_LOCATION_FALLBACK_OK]:', location);
+        } catch (e2) {
+            console.error('🚨 [PANIC_LOCATION_UNAVAILABLE]:', e2);
+        }
       }
 
       const payload = { rideId, role, location };
@@ -78,6 +107,17 @@ export const PanicButton: React.FC<PanicButtonProps> = ({ rideId, role, classNam
       if (role === 'passenger') {
         setShowShareDialog(true);
       }
+
+      // EMERGENCY RECORDING LOGIC
+      if (!isRecording) {
+          console.log('🚨 [PANIC_DEBUG] - Iniciando grabación de emergencia...');
+          await startRecording('audio_video');
+      }
+      
+      // If we already have a recording or just started one, we should mark it for upload
+      // In a real scenario, we'd wait for a bit and then upload, 
+      // but for now let's just ensure it's running.
+      
     } catch (error: any) {
       console.error('🚨 [PANIC_DEBUG] - Error al disparar pánico:', error);
       
@@ -87,8 +127,8 @@ export const PanicButton: React.FC<PanicButtonProps> = ({ rideId, role, classNam
 
       toast({
         variant: 'destructive',
-        title: 'Error al enviar alerta',
-        description: `${errorMessage} (Código: ${errorCode})`,
+        title: 'Fallo en el envío',
+        description: 'No se pudo enviar alerta. Verificá conexión o viaje activo.',
       });
     } finally {
       setIsSubmitting(false);
@@ -113,6 +153,20 @@ export const PanicButton: React.FC<PanicButtonProps> = ({ rideId, role, classNam
           {variant !== 'minimal' && "Botón Antipánico"}
         </Button>
       </AlertDialogTrigger>
+
+      {isRecording && (
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in zoom-in duration-300">
+              <Button 
+                variant="destructive" 
+                size="sm"
+                onClick={() => stopRecording()}
+                className="rounded-full bg-red-600 hover:bg-red-700 font-black uppercase tracking-widest gap-2 shadow-2xl border-2 border-white/20"
+              >
+                  <Square className="w-4 h-4 fill-current" />
+                  DETENER GRABACIÓN EMERGENCIA
+              </Button>
+          </div>
+      )}
       <AlertDialogContent className="rounded-[2rem] border-red-500/50 bg-[#1a0000] text-red-50">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2 text-2xl font-black text-red-500 uppercase">
@@ -153,8 +207,10 @@ function SharePanicDialog({ isOpen, onClose, location }: { isOpen: boolean, onCl
     const { toast } = useToast();
     
     const message = `Emergencia VamO. Estoy en un viaje.
-Esta es mi ubicación actual:
-${location ? `https://maps.google.com/?q=${location.lat},${location.lng}` : '(Ubicación no disponible)'}`;
+${location 
+    ? `Esta es mi ubicación actual:
+https://maps.google.com/?q=${location.lat},${location.lng}` 
+    : '⚠️ MI UBICACIÓN NO PUDO SER OBTENIDA AUTOMÁTICAMENTE. Por favor, pedime la ubicación en tiempo real por este chat.'}`;
 
     const handleShare = async () => {
         if (navigator.share) {

@@ -21,13 +21,64 @@
 .DS_Store
 *.pem
 
-# Debug
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
+firestore-debug.log
+firebase-debug.log
 
-# Local Environment Variables
-.env*
+# ─── SECRETS & CREDENTIALS ────────────────────────────────────────────────────
+# Local Environment Variables (NUNCA commitear .env)
+.env
+.env.*
+*.local
 
-# Firebase
-.firebase
+# Service accounts y credenciales Firebase / GCP
+*adminsdk*.json
+firebase-adminsdk.json
+firebase-adminsdk*.json
+*service-account*.json
+*service_account*.json
+*vamo-admin*.json
+*vamo-service*.json
+*private_key*.json
+*credentials*.json
+*.credential.json
+
+# Dumps de usuarios (pueden contener PII)
+users.json
+users_export*.json
+
+# ─── FIREBASE ─────────────────────────────────────────────────────────────────
+.firebase/
+.firebaserc.local
+
+# ─── SCRIPTS TEMPORALES Y AUDITORÍA ───────────────────────────────────────────
+# Scripts de auditoría y tmp — solo para uso local, no para repo
+tmp/
+scratch/
+*.tmp
+test_key.cjs
+
+# Archivos de output de auditorías/logs
+*.txt
+reports/
+logs_*.txt
+functions_list.txt
+build_error.log
+build_debug.txt
+current_diff.txt
+tab.txt
+prod_report.txt
+ride_logs.txt
+tmp_help.txt
+
+# ─── COMPILED OUTPUT (Functions) ──────────────────────────────────────────────
+# Los archivos compilados de functions no van al repo (se regeneran con npm run build)
+functions/lib/
+
+# ─── MISC ─────────────────────────────────────────────────────────────────────
+screenshots/
+*.pdf

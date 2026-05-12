@@ -29,9 +29,12 @@ export function useDriverTransactions() {
       const newTransactions = snapshot.docs.map(doc => ({ ...doc.data() as PlatformTransaction, id: doc.id }));
       setTransactions(newTransactions);
       setLoading(false);
-    }, (err) => {
+    }, (err: any) => {
       console.error("[useDriverTransactions] Error:", err);
-      setError('Hubo un error al cargar las transacciones. Por favor, intentá de nuevo más tarde.');
+      const isIndexError = err.message?.includes('index') || err.code === 'failed-precondition';
+      setError(isIndexError 
+        ? 'Falta un índice en la base de datos para cargar tus movimientos. Contactá a soporte.'
+        : 'Hubo un error al cargar las transacciones. Por favor, intentá de nuevo más tarde.');
       setLoading(false);
     });
 

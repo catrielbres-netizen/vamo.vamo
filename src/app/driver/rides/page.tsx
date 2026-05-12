@@ -1,16 +1,20 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useUser, useFirestore } from '@/firebase';
 import { VerificationStatus } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useDriverDashboard } from '@/context/DriverRidesProvider';
+import { useDriverData } from '@/context/DriverRealtimeProvider';
 import DriverOfferCard from '@/components/DriverOfferCard';
-import { DriverProgressPanel } from '@/components/DriverProgressPanel';
+import { DailyEarningsWidget } from '@/components/DailyEarningsWidget';
 
-const statusMessages: Record<VerificationStatus, {title: string, description: string, icon: string}> = {
+
+import { WeeklyPoolCard } from '@/components/WeeklyPoolCard';
+import { DriverMissionPanel } from '@/components/DriverMissionPanel';
+import { NotificationToggle } from '@/components/NotificationToggle';
+const statusMessages: Record<string, {title: string, description: string, icon: string}> = {
     unverified: {
         title: 'Perfil Incompleto',
         description: 'Debes completar tu perfil y enviar la documentación para empezar a recibir viajes.',
@@ -34,50 +38,37 @@ const statusMessages: Record<VerificationStatus, {title: string, description: st
 };
 
 export default function DriverRidesPage() {
-  const { profile, user } = useUser();
-  const { rides: availableOffers, loading: isLoading, error, newRideIds } = useDriverDashboard();
+  const { profile, rides: availableOffers, newRideIds, ready, error } = useDriverData();
 
-  // Sound logic and global alerts are now handled by GlobalOfferOverlay 
-  // in the layout to ensure they work across all dashboard pages.
-
-  if (!profile) {
-      return null; 
-  }
   
-  if (!profile.approved) {
-    let statusKey = profile.vehicleVerificationStatus || 'unverified';
-    
-    // Si ya completó el alta pero no está aprobado, forzar "pending_review" si no hay otro estado terminal
-    if (profile.profileCompleted && statusKey === 'unverified') {
-        statusKey = 'pending_review';
-    }
-
-    const message = statusMessages[statusKey] || statusMessages.unverified;
-    return (
-        <Alert variant="default" className="border-yellow-400 bg-yellow-50 dark:bg-yellow-900/30">
-            <VamoIcon name={message.icon} className="h-4 w-4 text-yellow-500" />
-            <AlertTitle className="text-yellow-700 dark:text-yellow-300">{message.title}</AlertTitle>
-            <AlertDescription className="text-yellow-600 dark:text-yellow-500 font-medium">
-                {message.description}
-            </AlertDescription>
-        </Alert>
-    );
-  }
+  const isPendingReview = !profile.approved && profile.municipalStatus === 'pending_municipal_review';
+  const statusKey = profile.municipalStatus || 'unverified';
+  const message = statusMessages[statusKey] || statusMessages.unverified;
 
   const isOnline = profile?.driverStatus === 'online';
   const balance = profile?.currentBalance ?? 0;
-  const driverIsAvailable = isOnline && profile.approved && balance >= 0;
+  // [VamO AUDIT] Allow rendering offers even if balance is low, so driver can see the penalty.
+  const driverIsAvailable = isOnline && profile.approved;
+  
+  console.log(`[DRIVER_PAGE] Render. Online: ${isOnline}, Balance: ${balance}, Offers: ${availableOffers.length}`);
 
   return (
       <div className="space-y-4">
-
-        {isOnline && balance < 0 && (
-            <Alert variant="destructive">
-                <VamoIcon name="alert-triangle" className="h-4 w-4" />
-                <AlertTitle>¡Saldo Insuficiente!</AlertTitle>
-                <AlertDescription>
-                    No podrás recibir nuevos viajes hasta que no regularices tu saldo. Por favor, cargá crédito desde la pestaña "Ganancias".
+        {isPendingReview && (
+            <Alert variant="default" className="border-indigo-500/50 bg-indigo-500/10 rounded-2xl">
+                <VamoIcon name="clock" className="h-4 w-4 text-indigo-400" />
+                <AlertTitle className="text-indigo-400 font-bold">Cuenta en Revisión</AlertTitle>
+                <AlertDescription className="text-indigo-500/80 text-xs">
+                    Estamos validando tu documentación municipal. Podrás recibir viajes una vez aprobado.
                 </AlertDescription>
+            </Alert>
+        )}
+
+        {(!profile.approved && !isPendingReview) && (
+            <Alert variant="destructive" className="rounded-2xl">
+                <VamoIcon name={message.icon} className="h-4 w-4" />
+                <AlertTitle>{message.title}</AlertTitle>
+                <AlertDescription>{message.description}</AlertDescription>
             </Alert>
         )}
 
@@ -90,13 +81,18 @@ export default function DriverRidesPage() {
               </Alert>
             )}
 
-            {!isLoading && availableOffers.length > 0 ? (
+            {!ready ? (
+               <div className="flex flex-col items-center justify-center p-12 bg-card border border-border/50 rounded-[2rem] shadow-sm text-center">
+                   <VamoIcon name="loader" className="h-10 w-10 animate-spin text-primary mb-4" />
+                   <h3 className="text-xl font-bold tracking-tight">Cargando viajes...</h3>
+               </div>
+            ) : availableOffers.length > 0 ? (
                <div className="space-y-4">
                    {availableOffers.map((offer) => (
                     <DriverOfferCard key={offer.id} offer={offer} isNew={newRideIds.has(offer.id)} />
                   ))}
                </div>
-            ) : !isLoading && (
+            ) : (
                <div className="flex flex-col items-center justify-center p-8 bg-card border border-border/50 rounded-[2rem] shadow-sm text-center">
                    <div className="relative w-20 h-20 mb-6">
                        <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping opacity-75" />
@@ -106,13 +102,23 @@ export default function DriverRidesPage() {
                        </div>
                    </div>
                    <h3 className="text-2xl font-bold tracking-tight mb-2">Buscando viajes</h3>
-                   <p className="text-muted-foreground font-medium mb-8">Estás en línea. Mantené la app abierta para recibir nuevas solicitudes en tu zona.</p>
-
-                   {profile && <DriverProgressPanel profile={profile} className="w-full mt-4" />}
+                   <p className="text-muted-foreground font-medium mb-8 text-balance text-center px-4">Mantené la app abierta para recibir solicitudes inmediatas en tu ubicación.</p>
                </div>
             )}
           </>
         ) : null}
+        
+        <div className="space-y-4">
+            <WeeklyPoolCard />
+            <DriverMissionPanel />
+            {driverIsAvailable && <DailyEarningsWidget />}
+        </div>
+
+        {profile.approved && (
+            <div className="pt-10 pb-20">
+                {/* [VamO PRO] Heatmap section removed */}
+            </div>
+        )}
       </div>
   );
 }

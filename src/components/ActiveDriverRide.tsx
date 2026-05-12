@@ -1,39 +1,16 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
-import { doc, serverTimestamp, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Ride, isPanicButtonVisible } from '@/lib/types';
 import { PanicButton } from './PanicButton';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { useToast } from '@/hooks/use-toast';
-import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from '@/components/ui/alert-dialog';
-import { ChatContainer } from './Chat/ChatContainer';
-import { ChatTrigger } from './Chat/ChatTrigger';
-import FinishedRideSummary from './FinishedRideSummary';
 import { useRouter } from 'next/navigation';
-import { Map } from '@vis.gl/react-google-maps';
 import RideMap from './RideMap';
 import { useMapsAvailability } from '@/components/MapsProvider';
 import { TripCard } from './TripCard';
@@ -41,13 +18,20 @@ import { useWaitTimer } from '@/hooks/useWaitTimer';
 import { VamoBottomSheet } from './VamoBottomSheet';
 import { WaitTimerDialog } from './WaitTimerDialog';
 import { cn } from '@/lib/utils';
+import FinishedRideSummary from './FinishedRideSummary';
+import { Sparkles } from 'lucide-react';
+import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
+import { ChatContainer } from './Chat/ChatContainer';
+import { SafetyToolkit } from './SafetyToolkit';
 
-function formatCurrency(value: number) {
-  if (typeof value !== 'number' || isNaN(value)) return '$...';
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value);
-}
-
-export default function ActiveDriverRide({ ride }: { ride: WithId<Ride> }) {
+export default function ActiveDriverRide({ 
+  ride: activeRide,
+  onClose
+}: { 
+  ride: WithId<Ride> | null | undefined,
+  onClose?: () => void
+}) {
+  // --- 1. HOOKS DECLARATIONS (STRICT ORDER) ---
   const firestore = useFirestore();
   const { user, profile } = useUser();
   const firebaseApp = useFirebaseApp();
@@ -55,490 +39,376 @@ export default function ActiveDriverRide({ ride }: { ride: WithId<Ride> }) {
   const router = useRouter();
   const { mapsAvailable } = useMapsAvailability();
   
-  const { waitMinutes, waitCost, hasWaitData, isCurrentlyWaiting } = useWaitTimer(ride);
-  
+  const [finalRide, setFinalRide] = useState<WithId<Ride> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  
-  // Bloque 4: Summary Preview Logic
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [previewData, setPreviewData] = useState<any>(null);
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isWaitTimerOpen, setIsWaitTimerOpen] = useState(false);
-  
-  const isFemale = profile?.gender === 'female';
-  
+
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [lastEta, setLastEta] = useState<number | null>(null);
+  const [hasClosedReceipt, setHasClosedReceipt] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    // [VamO PRO] Force update when settlement data arrives
+    if (activeRide?.status === 'completed' && !hasClosedReceipt) {
+      const hasSettledData = !!activeRide.completedRide;
+      const isStale = !finalRide || (!finalRide.completedRide && hasSettledData);
+      
+      if (isStale) {
+        console.log("[RECEIPT_SYNC] Settlement detected, updating state...");
+        setFinalRide({ ...activeRide }); // Spread to force new identity
+      }
+    }
+  }, [activeRide, finalRide, hasClosedReceipt]);
+
+  // Combined state reference
+  const ride = finalRide || activeRide;
+
+  // [DIAGNOSTIC] Chat State Tracking
+  useEffect(() => {
+    console.log("[CHAT_STATE]", { isChatOpen, rideId: ride?.id });
+  }, [isChatOpen, ride?.id]);
+
+  const { waitMinutes, waitCost, hasWaitData, isCurrentlyWaiting, waitChargeApplied, isEarlyArrival } = useWaitTimer(ride);
+  const scheduledTimeStr = ride?.scheduledAt ? (ride.scheduledAt as Timestamp).toDate().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+  useEffect(() => {
+    if (ride) {
+      console.log(`[ACTIVE_RIDE_AUDIT] status=${ride.status} rideId=${ride.id}`);
+    }
+  }, [ride?.id, ride?.status]);
+
   useEffect(() => {
     setIsWaitTimerOpen(isCurrentlyWaiting);
+    if (isCurrentlyWaiting) {
+      setIsChatOpen(false);
+    }
   }, [isCurrentlyWaiting]);
 
-  const fetchPreview = async () => {
-    if (!firebaseApp || isLoadingPreview) return;
-    setIsLoadingPreview(true);
-    try {
-      const functions = getFunctions(undefined, 'us-central1');
-      const getPreview = httpsCallable(functions, 'getRideSummaryPreviewV1');
-      const result = await getPreview({ rideId: ride.id });
-      if (result.data && (result.data as any).success) {
-        setPreviewData((result.data as any).summary);
-      }
-    } catch (error: any) {
-      console.error('Error fetching preview:', error);
-      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo obtener el resumen del viaje.' });
-    } finally {
-      setIsLoadingPreview(false);
-    }
-  };
+  useEffect(() => {
+    const handleFocus = () => console.log("[NAV_DEBUG] Driver returned");
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
+  const pricing = useMemo(() => {
+    // [VamO PRO] Unified Financial Snapshot
+    const financial = getRideFinancialSnapshot(ride);
+
+    return { 
+        total: financial.totalFare, 
+        wallet: financial.walletCoveredAmount, 
+        cash: financial.cashToCollect,
+        subsidy: financial.vamoSubsidyAmount
+    };
+  }, [ride]);
 
   useEffect(() => {
-    if (isPreviewOpen) {
-      fetchPreview();
-    }
-  }, [isPreviewOpen]);
+    if (!activeRide || activeRide.status !== 'driver_assigned' || !activeRide.id || !firestore) return;
 
-  useEffect(() => {
-    if (profile?.role === 'driver' && profile.activeRideId === null && ride.status === 'completed') {
-      // Forzar redirección inmediata y reset de estado garantizado
-      window.location.href = '/driver/rides';
-    }
-  }, [profile?.activeRideId, profile?.role, ride.status]);
-
-  // --- ETA UPDATE LOGIC (Bloque 2) ---
-  const [lastEta, setLastEta] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (ride.status !== 'driver_assigned' || !firestore) return;
-
-    const updateETA = async () => {
-      // Get current driver location
+    const updateETA = () => {
+      if (!navigator.geolocation) return;
       navigator.geolocation.getCurrentPosition(async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const driverLoc = { lat: latitude, lng: longitude };
-        
-        const toRad = (x: number) => x * Math.PI / 180;
-        const R = 6371;
-        const dLat = toRad(ride.origin.lat - driverLoc.lat);
-        const dLon = toRad(ride.origin.lng - driverLoc.lng);
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                  Math.cos(toRad(driverLoc.lat)) * Math.cos(toRad(ride.origin.lat)) *
-                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        const distanceKm = R * c;
-
-        const newEta = Math.max(1, Math.round((distanceKm / 30) * 60));
-        
-        // --- PERFORMANCE IMPROVEMENT ---
-        // Only update if difference is >= 1 minute to save writes and bandwidth
-        const currentEtaInDoc = ride.etaMinutes ?? 0;
-        if (Math.abs(currentEtaInDoc - newEta) < 1 && lastEta !== null) {
-          return;
-        }
-
-        console.log(`[ETA_UPDATE] Setting new ETA: ${newEta}min (Distance: ${distanceKm.toFixed(2)}km)`);
-        setLastEta(newEta);
-
         try {
-          await updateDoc(doc(firestore, 'rides', ride.id), {
+          const lat1 = pos.coords.latitude;
+          const lon1 = pos.coords.longitude;
+          const lat2 = activeRide.origin.lat;
+          const lon2 = activeRide.origin.lng;
+          
+          const R = 6371; 
+          const toRad = (n: number) => n * Math.PI / 180;
+          const dLat = toRad(lat2 - lat1);
+          const dLon = toRad(lon2 - lon1);
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const distance = R * c;
+          
+          const newEta = Math.max(1, Math.ceil((distance / 30) * 60)); 
+          
+          if (lastEta === newEta) return;
+          setLastEta(newEta);
+
+          await updateDoc(doc(firestore, 'rides', activeRide.id), {
             etaMinutes: newEta,
             updatedAt: serverTimestamp()
           });
         } catch (e) {
-          console.error("Failed to update ETA:", e);
+          console.error("ETA Update failed:", e);
         }
-      }, (err) => {
-        console.warn("Geolocation failed for ETA:", err);
       });
     };
 
     updateETA();
     const interval = setInterval(updateETA, 45000);
     return () => clearInterval(interval);
-  }, [ride.status, ride.id, ride.origin, firestore, ride.etaMinutes, lastEta]);
-  // --- END ETA UPDATE LOGIC ---
+  }, [activeRide?.status, activeRide?.id, firestore, lastEta]);
+
+  // --- 2. HANDLERS ---
+  const handleOpenMaps = (lat: number, lng: number) => {
+    setIsNavigating(true);
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+  };
 
   const handleStartRide = async () => {
-    if (!firebaseApp || !user || isProcessing) return;
+    if (!firebaseApp || isProcessing || !ride) return;
     setIsProcessing(true);
     try {
-      const functions = getFunctions(undefined, 'us-central1');
-      const startRideV1 = httpsCallable(functions, 'startRideV1');
+      const startRideV1 = httpsCallable(getFunctions(undefined, 'us-central1'), 'startRideV1');
       await startRideV1({ rideId: ride.id });
-      toast({ title: '¡Viaje iniciado!', description: 'Que tengas una buena ruta.' });
-    } catch (error: any) {
-      console.error('Error en la transacción de handleStartRide:', error);
-      toast({
-        variant: 'destructive',
-        title: 'No se pudo iniciar el viaje',
-        description: error.message || 'Un error inesperado ocurrió.',
-        duration: 9000,
-      });
+      toast({ title: '¡Viaje iniciado!' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message });
     } finally { setIsProcessing(false); }
   };
 
   const handleArrived = async () => {
-    if (!firebaseApp || isProcessing) return;
+    if (!firebaseApp || isProcessing || !ride) return;
     setIsProcessing(true);
     try {
-      const functions = getFunctions(undefined, 'us-central1');
-      const driverArrived = httpsCallable(functions, 'driverArrivedV1');
+      const driverArrived = httpsCallable(getFunctions(undefined, 'us-central1'), 'driverArrivedV1');
       await driverArrived({ rideId: ride.id });
-      toast({ title: '¡Llegaste!', description: 'El pasajero ha sido notificado.' });
     } catch (e: any) {
-      console.error(e);
-      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado.' });
+      toast({ variant: 'destructive', title: 'Error' });
     } finally { setIsProcessing(false); }
   };
 
   const handleTogglePause = async () => {
-    if (!firebaseApp || isProcessing) return;
-    setIsProcessing(true);
-    const isCurrentlyPaused = ride.status === 'paused';
-    const action = isCurrentlyPaused ? 'resume' : 'pause';
-
-    try {
-      const functions = getFunctions(undefined, 'us-central1');
-      const togglePauseV1 = httpsCallable(functions, 'togglePauseV1');
-      await togglePauseV1({ rideId: ride.id, action });
-      toast({ title: isCurrentlyPaused ? 'Viaje reanudado' : 'Viaje en espera' });
-    } catch (error: any) {
-      console.error('Error al pausar/reanudar:', error);
-      toast({ variant: 'destructive', title: 'Error', description: error.message });
-    } finally { setIsProcessing(false); }
-  };
-
-  const handleCompleteRide = async () => {
-    if (!firebaseApp || isProcessing) {
-      if (!firebaseApp) toast({ variant: 'destructive', title: 'Error', description: 'Faltan datos para completar el viaje.' });
+    if (!firebaseApp || isProcessing || !ride) return;
+    
+    // [VamO PRO] Safety Guard: only toggle if in valid states
+    if (ride.status !== 'in_progress' && ride.status !== 'paused') {
+      console.warn("[PAUSE_GUARD] Cannot toggle pause in status:", ride.status);
       return;
     }
 
     setIsProcessing(true);
     try {
-      const functions = getFunctions(undefined, 'us-central1');
-      const finishRideV1 = httpsCallable(functions, 'finishRideV1');
-      await finishRideV1({ rideId: ride.id });
-      toast({ title: '¡Viaje completado!', description: 'Procesando la liquidación final...' });
-    } catch (error: any) {
-      console.error('Error completando el viaje:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error al finalizar el viaje',
-        description: error.message || 'No se pudo marcar el viaje como completado.',
-      });
+      const togglePauseV1 = httpsCallable(getFunctions(undefined, 'us-central1'), 'togglePauseV1');
+      await togglePauseV1({ rideId: ride.id, action: ride.status === 'paused' ? 'resume' : 'pause' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message });
     } finally { setIsProcessing(false); }
   };
 
-  const handleCancelRide = async () => {
-    if (!firebaseApp || !user || isProcessing) return;
+  const handleCompleteRide = async () => {
+    if (!firebaseApp || isProcessing || !ride) return;
     setIsProcessing(true);
     try {
-      const functions = getFunctions(undefined, 'us-central1');
-      const cancelRideV1 = httpsCallable(functions, 'cancelRideV1');
-      await cancelRideV1({ rideId: ride.id, reason: 'cancelled_by_driver' });
-      toast({ title: 'Viaje cancelado' });
-    } catch (error: any) {
-      console.error('Error calling cancelRideV1:', error);
-      toast({ variant: 'destructive', title: 'Error al cancelar', description: error.message });
+      const finishRideV1 = httpsCallable(getFunctions(undefined, 'us-central1'), 'finishRideV1');
+      await finishRideV1({ rideId: ride.id });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error' });
     } finally { setIsProcessing(false); }
   };
 
-  const renderContent = () => {
-    if (ride.status === 'completed') {
-      return (
-        <div className="fixed inset-0 z-[60] bg-background overflow-auto pointer-events-auto">
-          <FinishedRideSummary
-            ride={ride}
-            userRole="driver"
-            onClose={() => {
-              window.location.href = '/driver/rides';
-            }}
-          />
-        </div>
-      );
-    }
+  // Removed handlePanic in favor of PanicButton component to avoid name mismatch
 
-    const baseEstimated = ride.pricing?.estimated?.total ?? (ride.pricing as any)?.estimatedTotal ?? 0;
-    const finalTotalWithWait = baseEstimated + waitCost;
-
-    let PrimaryAction = null;
-    let SecondaryAction = null;
-    let title = '';
-
-    switch (ride.status) {
-      case 'driver_assigned':
-        title = 'Yendo al origen';
-        PrimaryAction = (
-          <Button onClick={handleArrived} disabled={isProcessing} className="w-full h-16 rounded-2xl text-xl font-black bg-primary text-primary-foreground shadow-2xl" size="lg">
-             LO TENGO: LLEGUÉ
-          </Button>
-        );
-        SecondaryAction = (
-          <Button
-            onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${ride.origin.lat},${ride.origin.lng}`, '_blank')}
-            className="w-full h-12 rounded-xl bg-zinc-900 border border-white/5 text-zinc-400 font-bold"
-            variant="outline"
-          >
-            <VamoIcon name="route" className="mr-2 h-4 w-4" /> NAVEGAR MAPS
-          </Button>
-        );
-        break;
-
-      case 'driver_arrived':
-        title = 'Esperando al pasajero';
-        PrimaryAction = (
-          <Button onClick={handleStartRide} disabled={isProcessing} className="w-full h-16 rounded-2xl text-xl font-black bg-green-600 hover:bg-green-700 text-white shadow-[0_0_40px_rgba(22,163,74,0.3)]" size="lg">
-             INICIAR VIAJE
-          </Button>
-        );
-        break;
-
-      case 'in_progress':
-      case 'paused':
-        const isPaused = ride.status === 'paused';
-        title = isPaused ? 'Pausa activa' : 'Viaje en curso';
-        PrimaryAction = (
-          <Button 
-              onClick={() => setIsPreviewOpen(true)} 
-              disabled={isPaused || isProcessing} 
-              className="w-full h-16 rounded-2xl text-xl font-black bg-primary text-primary-foreground shadow-2xl" 
-              size="lg"
-          >
-              VIAJE FINALIZADO
-          </Button>
-        );
-        SecondaryAction = (
-          <div className="grid grid-cols-2 gap-3 mt-2">
-              <Button onClick={handleTogglePause} disabled={isProcessing} className="h-14 rounded-2xl font-black text-xs uppercase bg-zinc-900 border border-white/5 text-zinc-400">
-                  {isPaused ? 'REANUDAR' : 'PAUSAR'}
-              </Button>
-              <Button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${ride.destination.lat},${ride.destination.lng}`, '_blank')} className="h-14 rounded-2xl font-black text-xs uppercase bg-zinc-900 border border-white/5 text-zinc-400">
-                  NAVEGAR
-              </Button>
-          </div>
-        );
-        break;
-        
-      default:
-        return null;
-    }
-
-    return (
-      <main className="fixed inset-0 z-50 bg-background overflow-hidden">
-        
-        {/* MAP BACKGROUND */}
-        {mapsAvailable && (
-            <div className="absolute inset-0 z-0">
-                <Map
-                    defaultCenter={ride.origin}
-                    defaultZoom={16}
-                    gestureHandling="greedy"
-                    disableDefaultUI={true}
-                    clickableIcons={false}
-                    mapId="active-driver-map"
-                >
-                    <RideMap 
-                        status={ride.status}
-                        origin={ride.origin}
-                        destination={ride.destination}
-                        driverLocation={null}
-                        isExpanded={isExpanded}
-                    />
-                </Map>
-            </div>
-        )}
-
-        {/* WAIT TIMER DIALOG (Bloque 3/6 Fix) */}
-        <WaitTimerDialog
-            isOpen={isWaitTimerOpen}
-            onOpenChange={setIsWaitTimerOpen}
-            waitMinutes={waitMinutes}
-            waitCost={formatCurrency(waitCost)}
-            currentTotal={formatCurrency(finalTotalWithWait)}
-        />
-
-        {/* TOP STATUS OVERLAY (MINIMAL) */}
-        <div className="absolute top-6 inset-x-0 z-50 flex justify-center pointer-events-none">
-            <div className={cn("glass-morphism premium-shadow rounded-full px-5 py-2 flex items-center gap-2 pointer-events-auto border", isFemale ? "bg-pink-900/40 border-pink-500/30" : "border-white/5 whitespace-nowrap")}>
-                <div className={cn("w-2 h-2 rounded-full", title.includes('curso') ? 'bg-green-500 animate-pulse' : (isFemale ? 'bg-pink-500' : 'bg-primary'))} />
-                <span className="text-[10px] font-black uppercase tracking-widest text-white">{title}</span>
-            </div>
-        </div>
-
-        {/* UNIFIED VAMO SHEET */}
-        <VamoBottomSheet
-          isOpen={true}
-          isExpanded={isExpanded}
-          onToggleExpand={() => setIsExpanded(!isExpanded)}
-          minHeight="40vh"
-          maxHeight="75vh"
-        >
-             <div className="flex flex-col animate-in fade-in duration-300">
-                 {/* PASSENGER OVERVIEW */}
-                 <div className={cn("flex items-center justify-between gap-3 p-4 rounded-[1.5rem] border mb-4", isFemale ? "bg-pink-900/20 border-pink-500/20" : "bg-zinc-900/40 border-white/5")}>
-                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center border border-white/5 text-zinc-600">
-                           <VamoIcon name="user" className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-lg font-black text-white leading-none mb-1">{ride.passengerName || 'Pasajero'}</p>
-                            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight font-black">EN EL PUNTO DE ENCUENTRO</p>
-                        </div>
-                     </div>
-
-                     <div className="flex items-center gap-2">
-                        {isPanicButtonVisible(ride.status) && (
-                            <PanicButton 
-                                rideId={ride.id} 
-                                role="driver" 
-                                variant="minimal"
-                                className="w-10 h-10 rounded-full bg-red-600/20 text-red-600 shadow-none border border-red-600/20" 
-                            />
-                        )}
-                        <ChatTrigger 
-                            ride={ride}
-                            role="driver"
-                            onClick={() => setIsChatOpen(true)}
-                            className="w-10 h-10 rounded-full bg-zinc-900 border border-white/5 shadow-none"
-                        />
-                        <Button variant="ghost" size="icon" onClick={() => setIsExpanded(!isExpanded)} className="rounded-full h-8 w-8 text-zinc-600 hover:text-white">
-                            <VamoIcon name={isExpanded ? "chevron-down" : "chevron-up"} className="h-5 w-5" />
-                        </Button>
-                     </div>
-                 </div>
-
-                 {/* EXPANDABLE TRIP DATA */}
-                 {isExpanded && (
-                    <div className="space-y-4 mb-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        <div className={cn("rounded-2xl p-4 border", isFemale ? "bg-pink-900/10 border-pink-500/10" : "bg-zinc-900/30 border-border/50")}>
-                            <TripCard status={ride.status} origin={ride.origin} destination={ride.destination} />
-                        </div>
-                        
-                        <div className={cn("flex flex-col border rounded-2xl overflow-hidden", isFemale ? "bg-pink-900/30 border-pink-500/30" : "bg-zinc-900/50 border-border/60")}>
-                            <div className="flex items-center justify-between p-4 px-5">
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Total a cobrar</span>
-                                    <span className={cn("text-2xl font-black leading-none", isFemale ? "text-pink-500" : "text-primary")}>{formatCurrency(finalTotalWithWait)}</span>
-                                </div>
-                                <VamoIcon name="credit-card" className="h-6 w-6 text-zinc-700" />
-                            </div>
-                            
-                            {hasWaitData && waitMinutes !== '00:00' && (
-                                <div className="flex items-center justify-between px-5 py-3 bg-orange-500/10 border-t border-white/5">
-                                    <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Espera: {waitMinutes} min</span>
-                                    <span className="text-sm font-black text-orange-500">+{formatCurrency(waitCost)}</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                 )}
-                 
-                 {/* PRIMARY ACTIONS */}
-                 <div className="flex flex-col gap-3">
-                    {PrimaryAction}
-                    {SecondaryAction}
-                    
-                    {/* CANCEL ACTION (SUBTLE) */}
-                    {['driver_assigned', 'driver_arrived'].includes(ride.status) && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <button className={cn("mt-2 text-[10px] font-black uppercase tracking-widest transition-colors", isFemale ? "text-pink-500/50 hover:text-pink-400" : "text-zinc-600 hover:text-white")}>Cancelar Viaje</button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="rounded-[2.5rem] p-8 bg-zinc-950 border-zinc-800">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle className="text-2xl font-black uppercase text-center text-white">¿Cancelar?</AlertDialogTitle>
-                              <AlertDialogDescription className="text-center text-zinc-500 font-medium mt-2">Cancelar ahora afectará tu tasa de aceptación y nivel.</AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <div className="flex flex-col gap-3 mt-8">
-                              <Button variant="destructive" className="rounded-2xl h-14 font-black uppercase tracking-widest" onClick={handleCancelRide} disabled={isProcessing}>SÍ, CANCELAR</Button>
-                              <AlertDialogCancel className="rounded-2xl h-12 bg-transparent border-none text-zinc-500 font-bold">VOLVER</AlertDialogCancel>
-                            </div>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                    )}
-                 </div>
-             </div>
-
-             {/* RIDE SUMMARY PREVIEW MODAL */}
-             <AlertDialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-                <AlertDialogContent className="rounded-[2.5rem] p-0 overflow-hidden border-none bg-zinc-950 max-w-[95vw] md:max-w-[450px]">
-                    <div className="p-8 pb-4">
-                        <AlertDialogHeader>
-                            <AlertDialogTitle className="text-2xl font-black text-center text-white uppercase tracking-tight">Resumen Final</AlertDialogTitle>
-                            <AlertDialogDescription className="text-center text-zinc-500 uppercase text-[10px] font-black tracking-widest mt-2">
-                                Cobro automático procesado
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                    </div>
-
-                    <div className="px-8 py-4 space-y-4 max-h-[50vh] overflow-y-auto">
-                        {isLoadingPreview ? (
-                            <div className="flex flex-col items-center justify-center py-10 gap-4">
-                                <VamoIcon name="loader" className={cn("h-10 w-10 animate-spin", isFemale ? "text-pink-500" : "text-primary")} />
-                                <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Calculando...</p>
-                            </div>
-                        ) : previewData ? (
-                            <div className="space-y-4 animate-in fade-in duration-300">
-                                <div className={cn("rounded-3xl p-6 border space-y-4", isFemale ? "bg-pink-900/20 border-pink-500/20" : "bg-zinc-900/80 border-white/5")}>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-[10px] font-black text-zinc-500 uppercase">Tarifa Base</span>
-                                        <span className="font-bold text-white">{formatCurrency(previewData.breakdown?.baseFare || 0)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-[10px] font-black text-zinc-500 uppercase">Recorrido</span>
-                                        <span className="font-bold text-white">{formatCurrency(previewData.breakdown?.distanceFare || 0)}</span>
-                                    </div>
-                                    
-                                    {previewData.breakdown && previewData.breakdown.waitingFare > 0 && (
-                                        <div className="flex justify-between items-center border-t border-white/5 pt-4">
-                                            <span className="text-[10px] font-black text-orange-500 uppercase">Espera ({Math.floor((previewData.waitingSeconds || 0) / 60)} min)</span>
-                                            <span className="font-bold text-orange-500">+{formatCurrency(previewData.breakdown.waitingFare)}</span>
-                                        </div>
-                                    )}
-
-                                    <div className="pt-4 border-t border-white/10 flex justify-between items-center">
-                                        <span className="text-base font-black text-white uppercase">Total</span>
-                                        <span className={cn("text-3xl font-black", isFemale ? "text-pink-500" : "text-primary")}>{formatCurrency(previewData.totalFare)}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="text-center py-6 text-red-500 font-bold uppercase text-xs">Error al cargar resumen</div>
-                        )}
-                    </div>
-
-                    <div className="p-8 pt-4 bg-zinc-900/30 flex flex-col gap-4">
-                        <Button 
-                            className={cn("w-full h-16 rounded-2xl text-xl font-black shadow-2xl transition-all active:scale-[0.98]", isFemale ? "bg-pink-600 hover:bg-pink-700 text-white" : "bg-primary text-primary-foreground")} 
-                            onClick={handleCompleteRide} 
-                            disabled={isProcessing || isLoadingPreview || !previewData}
-                        >
-                            {isProcessing ? <VamoIcon name="loader" className="animate-spin" /> : 'CONFIRMAR COBRO'}
-                        </Button>
-                        <AlertDialogCancel className="w-full h-12 rounded-2xl border-none bg-transparent text-zinc-500 font-black text-[10px] uppercase">
-                            VOLVER AL VIAJE
-                        </AlertDialogCancel>
-                    </div>
-                </AlertDialogContent>
-             </AlertDialog>
-        </VamoBottomSheet>
-
-        {/* CHAT OVERLAY (VamO PRO v1.0) */}
-        {isChatOpen && (
-            <div className="fixed inset-0 z-[100] flex flex-col justify-end p-4 animate-in slide-in-from-bottom-5 duration-300">
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsChatOpen(false)} />
-                <div className="relative z-10 w-full max-w-lg mx-auto">
-                    <ChatContainer 
-                        ride={ride}
-                        role="driver"
-                        onClose={() => setIsChatOpen(false)}
-                    />
-                </div>
-            </div>
-        )}
-      </main>
-    );
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(val);
   };
 
-  return renderContent();
+  if (!isMounted || !ride) return null;
+
+  return (
+    <>
+      {finalRide ? (
+        <FinishedRideSummary 
+          ride={finalRide} 
+          userRole="driver"
+          onClose={() => {
+            setHasClosedReceipt(true);
+            setFinalRide(null);
+            if (onClose) onClose();
+            router.replace('/driver/rides');
+          }}
+        />
+      ) : (
+        <div className="flex flex-col min-h-screen bg-transparent relative overflow-hidden">
+          <div className="absolute inset-0 z-0">
+            <RideMap 
+              status={ride.status}
+              origin={ride.origin}
+              destination={ride.destination}
+              driverLocation={undefined}
+              isExpanded={isExpanded}
+            />
+          </div>
+
+          <div className="absolute top-6 inset-x-0 z-50 flex justify-center pointer-events-none">
+              <div className="bg-zinc-900/90 backdrop-blur-md border border-white/10 px-6 py-2 rounded-full shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-700 pointer-events-auto">
+                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Viaje en Curso</p>
+              </div>
+          </div>
+
+          <div className="fixed inset-x-0 bottom-0 z-40 p-6 pb-12 animate-in slide-in-from-bottom-6 duration-700 bg-gradient-to-t from-black/80 via-black/20 to-transparent">
+            <div className="max-w-md mx-auto space-y-4">
+                <TripCard 
+                    status={ride.status}
+                    origin={ride.origin}
+                    destination={ride.destination}
+                />
+
+                <div className="bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 flex flex-col gap-3 shadow-2xl">
+                    <div className="flex justify-between items-center text-xs px-1">
+                        <span className="font-bold text-white/40 uppercase tracking-tight">Tarifa del viaje</span>
+                        <span className="font-black text-white/80">{formatCurrency(pricing.total)}</span>
+                    </div>
+
+                    {pricing.wallet > 0 && (
+                        <div className="flex justify-between items-center text-xs px-1 text-emerald-400">
+                            <div className="flex items-center gap-1.5 font-bold uppercase tracking-tight">
+                                <Sparkles className="w-3 h-3" />
+                                <span>VamO Pay aplicado</span>
+                            </div>
+                            <span className="font-black">-{formatCurrency(pricing.wallet)}</span>
+                        </div>
+                    )}
+
+                    {pricing.subsidy > 0 && (
+                        <div className="flex justify-between items-center text-xs px-1 text-amber-500">
+                            <div className="flex items-center gap-1.5 font-bold uppercase tracking-tight">
+                                <Sparkles className="w-3 h-3" />
+                                <span>Subsidio VamO (Beneficio)</span>
+                            </div>
+                            <span className="font-black">-{formatCurrency(pricing.subsidy)}</span>
+                        </div>
+                    )}
+
+                    {waitCost > 0 && (
+                        <div className="flex justify-between items-center text-xs px-1 text-orange-400">
+                            <div className="flex items-center gap-1.5 font-bold uppercase tracking-tight">
+                                <VamoIcon name="clock" className="w-3 h-3" />
+                                <span>Espera acumulada ({waitMinutes}m)</span>
+                            </div>
+                            <span className="font-black">+{formatCurrency(waitCost)}</span>
+                        </div>
+                    )}
+
+                    <div className="h-px bg-white/5 my-1" />
+
+                    <div className="flex justify-between items-center p-4 rounded-2xl bg-zinc-800 shadow-inner border border-white/5">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.15em] leading-none mb-1">Cobrás en efectivo</span>
+                            {pricing.wallet > 0 && (
+                                <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-tighter italic">VamO Pay Sincronizado</span>
+                            )}
+                        </div>
+                        <span className="text-4xl font-black text-white tracking-tighter leading-none italic">
+                            {formatCurrency(pricing.cash + waitChargeApplied)}
+                        </span>
+                    </div>
+
+                    {/* ACTIONS */}
+                    <div className="grid grid-cols-4 gap-2 pt-2">
+                        <Button 
+                            onClick={() => handleOpenMaps(ride.status === 'driver_assigned' ? ride.origin.lat : ride.destination.lat, ride.status === 'driver_assigned' ? ride.origin.lng : ride.destination.lng)}
+                            className="h-16 rounded-[2.5rem] bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
+                        >
+                            <VamoIcon name="navigation" className="w-6 h-6" />
+                        </Button>
+                        <Button 
+                            onClick={ride.status === 'driver_assigned' ? handleArrived : (ride.status === 'driver_arrived' ? handleStartRide : handleCompleteRide)}
+                            disabled={isProcessing}
+                            className={cn(
+                                "col-span-2 h-16 rounded-[2.5rem] text-sm font-black uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]",
+                                ride.status === 'driver_assigned' ? 'bg-amber-500 hover:bg-amber-400' : 
+                                (ride.status === 'driver_arrived' ? 'bg-primary hover:bg-primary/90' : 'bg-emerald-600 hover:bg-emerald-500')
+                            )}
+                        >
+                            {isProcessing ? <VamoIcon name="loader" className="animate-spin w-5 h-5" /> : 
+                             (ride.status === 'driver_assigned' ? 'LLEGUÉ' : (ride.status === 'driver_arrived' ? 'INICIAR' : 'TERMINAR'))}
+                        </Button>
+                        <Button 
+                            onClick={() => setIsChatOpen(true)}
+                            className={cn(
+                                "h-16 rounded-[2.5rem] bg-zinc-800 text-white relative",
+                                (ride?.chatSummary?.unreadCountDriver || 0) > 0 && "ring-2 ring-primary animate-pulse"
+                            )}
+                        >
+                            <VamoIcon name="message-square" className="w-6 h-6" />
+                            {(ride?.chatSummary?.unreadCountDriver || 0) > 0 && (
+                                <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[10px] font-black px-2 py-0.5 rounded-full border-4 border-zinc-900 shadow-xl">
+                                    {ride?.chatSummary?.unreadCountDriver}
+                                </div>
+                            )}
+                        </Button>
+                    </div>
+
+                    {/* AUXILIARY ACTIONS (WAIT TIMER - Only for Mid-trip) */}
+                    {(ride.status === 'in_progress' || ride.status === 'paused') && (
+                        <Button 
+                            onClick={handleTogglePause}
+                            disabled={isProcessing}
+                            className={cn(
+                                "w-full h-14 rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all flex items-center justify-center gap-3",
+                                ride.status === 'paused' 
+                                    ? "bg-amber-500 text-black border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.3)]" 
+                                    : "bg-zinc-800/50 text-white/60 border border-white/5 hover:text-white"
+                            )}
+                        >
+                            <VamoIcon name="clock" className={cn("w-5 h-5", ride.status === 'paused' && "animate-pulse")} />
+                            <span>{ride.status === 'paused' ? 'REANUDAR VIAJE' : 'PONER EN ESPERA'}</span>
+                        </Button>
+                    )}
+                </div>
+
+                <SafetyToolkit ride={ride as WithId<Ride>} role="driver" />
+
+                {isPanicButtonVisible(ride.status) && <PanicButton rideId={ride.id} role="driver" />}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VamO PRO: Real-time Chat Overlay (Replaces legacy BottomSheet Branch) */}
+      {isChatOpen && (
+        <div className="fixed inset-0 z-[150] flex flex-col justify-end p-4 animate-in fade-in duration-300">
+            <div 
+              className="absolute inset-0 bg-black/60 backdrop-blur-md" 
+              onClick={() => setIsChatOpen(false)} 
+            />
+            <div className="relative z-10 w-full max-w-lg mx-auto h-[75vh] flex flex-col">
+                {ride?.id ? (
+                  <ChatContainer 
+                    ride={ride as WithId<Ride>} 
+                    role="driver" 
+                    onClose={() => setIsChatOpen(false)} 
+                  />
+                ) : (
+                   <div className="bg-zinc-900 p-10 rounded-[2.5rem] text-center border border-white/10 shadow-2xl">
+                      <VamoIcon name="alert-triangle" className="w-10 h-10 text-amber-500 mx-auto mb-4" />
+                      <p className="text-white font-black uppercase tracking-widest text-[10px]">Error: Ride ID Missing</p>
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => setIsChatOpen(false)}
+                        className="mt-4 text-zinc-500 hover:text-white uppercase text-[9px] font-bold"
+                      >
+                        Cerrar
+                      </Button>
+                   </div>
+                )}
+            </div>
+        </div>
+      )}
+
+      <WaitTimerDialog 
+        isOpen={isWaitTimerOpen} 
+        onOpenChange={setIsWaitTimerOpen}
+        waitMinutes={waitMinutes} 
+        waitCost={formatCurrency(waitCost)}
+        currentTotal={formatCurrency(pricing.cash + waitChargeApplied)}
+        isEarlyArrival={isEarlyArrival}
+        scheduledTime={scheduledTimeStr}
+      />
+    </>
+  );
 }

@@ -15,6 +15,12 @@ export function EmailVerificationGate({ children }: { children: React.ReactNode 
     const [isResending, setIsResending] = useState(false);
     const [isChecking, setIsChecking] = useState(false);
 
+    useEffect(() => {
+        if (!loading) {
+            console.log("[ONBOARDING_DEBUG] EmailVerificationGate - User:", user?.uid, "Verified:", !!user?.emailVerified);
+        }
+    }, [user, loading]);
+
     const performCheck = useCallback(async (isManual = false) => {
         if (!user || user.emailVerified) return;
         
@@ -58,11 +64,19 @@ export function EmailVerificationGate({ children }: { children: React.ReactNode 
 
     if (loading) return null; // Let the layout handle the initial loader
     if (!user) return <>{children}</>; // No user, no gate (handled by auth guard)
+
+    // Bypass verification gate for profile completion
+    const isProfileCompletion = typeof window !== 'undefined' && window.location.pathname.includes('/dashboard/complete-profile');
+    if (isProfileCompletion) {
+        return <>{children}</>;
+    }
     
-    // IF user is verified, a demo account, or ALREADY APPROVED by admin/muni, show children
+    // [VamO PRO] Friction Reduction: Allow passengers to see the dashboard without verification.
+    // Full verification will be required only for critical actions (requesting rides).
     if (user.emailVerified || 
         (user.email?.includes('demo_') && user.email?.endsWith('@vamo.com')) ||
-        profile?.approved === true) {
+        profile?.approved === true ||
+        profile?.role === 'passenger') {
         return <>{children}</>;
     }
 

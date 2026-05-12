@@ -19,7 +19,7 @@ export function useDriverRides(shouldListen: boolean) {
   const { user } = useUser();
   
   const [offers, setOffers] = useState<OfferWithId[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(shouldListen);
   const [error, setError] = useState<string | null>(null);
   const [newOfferIds, setNewOfferIds] = useState(new Set<string>());
 
@@ -32,8 +32,8 @@ export function useDriverRides(shouldListen: boolean) {
 
     setLoading(true);
     const driverId = user.uid;
-    console.log(`[DRIVER_OFFERS] listener attached`);
-    console.log(`[DRIVER_OFFERS] query params`, { driverId, status: "pending", limit: 20 });
+    console.log(`[DRIVER_OFFERS] UID: ${driverId} | Listening: ${shouldListen}`);
+    console.log(`[DRIVER_OFFERS] Query started: rideOffers where driverId == ${driverId} and status == pending`);
 
     const offersQuery = query(
       collection(firestore, "rideOffers"),
@@ -43,65 +43,87 @@ export function useDriverRides(shouldListen: boolean) {
     );
 
     const unsubscribe = onSnapshot(offersQuery, (snapshot) => {
-      const now = Timestamp.now();
-      console.log(`[DRIVER_OFFERS] snapshot count:`, snapshot.docs.length);
+      console.log(`[DRIVER_OFFERS] Snapshot received. Docs: ${snapshot.docs.length}`);
       
-      const validOffers: OfferWithId[] = snapshot.docs
-        .map(doc => {
-            const data = doc.data() as RideOffer;
-            console.log(`[DRIVER_OFFERS] offer received:`, doc.id, data);
-            return { ...data, id: doc.id };
-        })
-        // Relax filter with a 5-minute grace period (up from 1m) to handle substantial client clock skew.
-        .filter(offer => {
-            const isValid = offer.expiresAt && (offer.expiresAt.toMillis() + 300000) > now.toMillis();
-            if (!isValid) {
-                console.log(`[DRIVER_OFFERS] filtered out reason: expired locally. expiresAt=${offer.expiresAt?.toMillis()}, now=${now.toMillis()}`);
-            }
-            return isValid;
-        });
+      const rideMap = new Map<string, OfferWithId>();
+      
+      snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const mappedOffer: OfferWithId = {
+              id: doc.id,
+              rideId: data.rideId,
+              driverId: data.driverId,
+              passengerId: data.passengerId,
+              status: data.status,
+              sentAt: data.sentAt,
+              expiresAt: data.expiresAt,
+              finalizedAt: data.finalizedAt,
+              score: data.score,
+              distanceMeters: data.distanceMeters,
+              round: data.round,
+              origin: data.origin,
+              destination: data.destination,
+              serviceType: data.serviceType,
+              estimatedTotal: data.estimatedTotal,
+              passengerName: data.passengerName,
+              cityKey: data.cityKey,
+              offerBreakdown: data.offerBreakdown,
+              isDiscountApplied: data.isDiscountApplied,
+              compensationAmount: data.compensationAmount,
+              passengerPaysTotal: data.passengerPaysTotal,
+              driverReceivesTotal: data.driverReceivesTotal
+          };
 
-      setOffers(prevOffers => {
-          const prevOfferIds = new Set(prevOffers.map(o => o.id));
-          const newOffers = validOffers.filter(o => !prevOfferIds.has(o.id));
-
-          if (newOffers.length > 0) {
-              // The `id` property is now guaranteed to be a string.
-              const newIds = new Set(newOffers.map(o => o.id));
-              setNewOfferIds(newIds);
-              
-              setTimeout(() => {
-                  setNewOfferIds(currentNewIds => {
-                      const updatedIds = new Set(currentNewIds);
-                      newIds.forEach(id => updatedIds.delete(id));
-                      return updatedIds;
-                  });
-              }, 3000);
+          // [VamO AUDIT] Deduplicate by rideId. 
+          // If we have multiple offers for the same rideId, we keep the one with the higher round (if available) or just the latest doc.
+          const existing = rideMap.get(data.rideId);
+          if (!existing || (mappedOffer.round || 0) > (existing.round || 0)) {
+              rideMap.set(data.rideId, mappedOffer);
           }
-          return validOffers;
       });
+
+      const validOffers = Array.from(rideMap.values());
+      console.log(`[DRIVER_OFFERS] Deduplicated to ${validOffers.length} unique rides.`);
+
+      // Update offers state
+      setOffers(validOffers);
       
+      // Update loading state immediately after the first sync
       setLoading(false);
       setError(null);
 
+      // Handle "new offer" sound/notifications separately from state returns
+      const prevOfferIds = new Set(offers.map(o => o.id));
+      const newOffers = validOffers.filter(o => !prevOfferIds.has(o.id));
+
+      if (newOffers.length > 0 && prevOfferIds.size > 0) {
+          const newIds = new Set(newOffers.map(o => o.id));
+          setNewOfferIds(newIds);
+          
+          setTimeout(() => {
+              setNewOfferIds(currentNewIds => {
+                  const updatedIds = new Set(currentNewIds);
+                  newIds.forEach(id => updatedIds.delete(id));
+                  return updatedIds;
+              });
+          }, 3000);
+      }
+
     }, (err) => {
       console.error("[useDriverRides] Error in onSnapshot listener:", err);
-      if (err.message.includes('The query requires an index')) {
-          setError("Error de base de datos: Falta un índice. Revisa la consola de Firebase.");
-      } else {
-          setError("Error de conexión buscando ofertas.");
-      }
+      setError("Error de conexión buscando ofertas.");
       setOffers([]);
       setLoading(false);
     });
 
-    return () => unsubscribe();
-
-  }, [shouldListen, firestore, user]);
+    return () => {
+        console.log(`[DRIVER_OFFERS] listener detached for ${user?.uid}`);
+        unsubscribe?.();
+    };
+  }, [shouldListen, firestore, user?.uid]);
   
   const sortedOffers = useMemo(() => {
-    // Sort offers that are guaranteed to have an `expiresAt`
-    return [...offers].sort((a, b) => (a.expiresAt.seconds || 0) - (b.expiresAt.seconds || 0));
+    return [...offers].sort((a, b) => (a?.expiresAt?.seconds || 0) - (b?.expiresAt?.seconds || 0));
   }, [offers]);
 
   return { 

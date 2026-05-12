@@ -1,3 +1,4 @@
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
@@ -9,6 +10,7 @@ import {
     PromotionContext 
 } from "./types";
 import { getDb } from "./lib/firebaseAdmin";
+import { addFunds } from "./lib/wallet";
 
 // Module-level db removed.
 
@@ -31,7 +33,7 @@ export async function checkPromotionEligibility(
     }
 
     // 2. Date Checks
-    const now = admin.firestore.Timestamp.now();
+    const now = Timestamp.now();
     if (promotion.startsAt && promotion.startsAt.toMillis() > now.toMillis()) {
         return { eligible: false, reason: "La promoción aún no ha comenzado" };
     }
@@ -212,10 +214,17 @@ export const applyPromotionV1 = onCall({ cors: true, region: 'us-central1' }, as
                 // For topups, we add to the driver balance
                 // IMPORTANT: This assumes the topup transaction itself is being processed separately or here.
                 // If it's a bonus, we just add it to 'currentBalance'.
-                tx.update(userSnap.ref, {
-                    currentBalance: admin.firestore.FieldValue.increment(rewardApplied),
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
+                // [STAGE 2A] Unified Wallet Promotion Reward
+                // addFunds handles wallets.cashBalance, wallet_transactions and legacy mirror users.currentBalance
+                await addFunds(
+                    userId,
+                    rewardApplied,
+                    'topup_bonus', // Using topup_bonus for promo rewards
+                    `Promo: ${promo.name}`,
+                    tx,
+                    redemptionId
+                );
+
             } else if (promo.context === 'ride') {
                 // For rides, the reward is usually a discount handled during createRideV1 or settleRide.
                 // Here we might just record the intent if it's applied before payment.
@@ -227,7 +236,7 @@ export const applyPromotionV1 = onCall({ cors: true, region: 'us-central1' }, as
                 promotionId,
                 userId,
                 role: user.role,
-                redeemedAt: admin.firestore.FieldValue.serverTimestamp(),
+                redeemedAt: FieldValue.serverTimestamp(),
                 rewardApplied,
                 status: 'applied',
                 transactionId: promo.context === 'topup' ? contextId : undefined,

@@ -1,0 +1,35 @@
+import React from 'react';
+
+export function VamoTaxiBot({ className = "" }: { className?: string }) {
+    return (
+        <svg 
+            viewBox="0 0 200 200" 
+            fill="none" 
+            xmlns="http://www.w3.org/2000/svg"
+            className={className}
+        >
+            {/* Body */}
+            <rect x="40" y="80" width="120" height="60" rx="30" fill="#0A111F"/>
+            <rect x="55" y="60" width="90" height="40" rx="15" fill="#0A111F"/>
+            
+            {/* Windows */}
+            <path d="M65 65H135L145 90H55L65 65Z" fill="#1D7CFF" fillOpacity="0.3"/>
+            
+            {/* Lights (Eyes) */}
+            <circle cx="65" cy="110" r="12" fill="white"/>
+            <circle cx="65" cy="110" r="6" fill="#1D7CFF"/>
+            <circle cx="135" cy="110" r="12" fill="white"/>
+            <circle cx="135" cy="110" r="6" fill="#1D7CFF"/>
+            
+            {/* Smile */}
+            <path d="M85 125C90 130 110 130 115 125" stroke="white" strokeWidth="3" strokeLinecap="round"/>
+            
+            {/* Taxi Sign */}
+            <rect x="85" y="45" width="30" height="15" rx="4" fill="#FFD700"/>
+            
+            {/* Wheels */}
+            <circle cx="60" cy="140" r="10" fill="#121212"/>
+            <circle cx="140" cy="140" r="10" fill="#121212"/>
+        </svg>
+    );
+}

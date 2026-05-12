@@ -1,25 +1,21 @@
-
-// src/app/login/LoginPageClient.tsx
 'use client';
 
-// RESPONSIBILITY: Show the login/register form ONLY when there is no active session.
-// All post-auth routing decisions live in /auth/continue.
-
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useAuth, useFirestore } from '@/firebase';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { VamoLogo } from '@/components/branding/VamoLogo';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { VamoIcon } from '@/components/VamoIcon';
-import { Separator } from '@/components/ui/separator';
-import { signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword, signOut, User, sendEmailVerification } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth';
+import { getDoc, doc } from 'firebase/firestore';
 import { useFirebase } from '@/firebase/provider';
+import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
+import { Separator } from '@/components/ui/separator';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface LoginPageClientProps {
     fixedRole?: 'passenger' | 'driver';
@@ -29,71 +25,136 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
     const auth = useAuth();
     const firestore = useFirestore();
     const router = useRouter();
-    const searchParams = useSearchParams();
     const { toast } = useToast();
-    const { user, isInitializing } = useFirebase();
+    const { isInitializing } = useFirebase();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const { canInstall, triggerInstall } = usePWAInstall();
+    const [errors, setErrors] = useState<{email?: string, password?: string}>({});
 
-    // --- AUTH STATE ---
-    // User requested no automatic redirects. The form is always rendered.
+    // [VamO PRO RESILIENCE] Pre-fill email if provided via URL (Resume Flow)
+    React.useEffect(() => {
+        const urlEmail = new URLSearchParams(window.location.search).get('email');
+        if (urlEmail) {
+            console.log(`[AUTH_RESUME_FLOW] Pre-filling email: ${urlEmail}`);
+            setEmail(decodeURIComponent(urlEmail));
+        }
+    }, []);
 
-
-
-    // --- HANDLERS ---
-    const handleLoginSuccess = async (user: User) => {
-        console.log('🔑 [LOGIN_DEBUG] Login success. Delegating to /auth/continue. UID:', user.uid);
-
-        // Perform the driver status cleanup before delegating
-        if (firestore) {
-            try {
-                const userRef = doc(firestore, 'users', user.uid);
-                const snap = await getDoc(userRef);
-                if (!snap.exists()) {
-                    throw new Error('No pudimos encontrar tu perfil. Por favor, registrate primero.');
-                }
-                const data = snap.data();
-                if (data?.role === 'driver' && data?.driverStatus === 'in_ride') {
-                    console.log('🔑 [LOGIN_DEBUG] Driver was in_ride, resetting to inactive...');
-                    await updateDoc(userRef, { driverStatus: 'inactive' }).catch(() => {});
-                    await updateDoc(doc(firestore, 'drivers_locations', user.uid), { driverStatus: 'inactive' }).catch(() => {});
-                }
-            } catch (err: any) {
-                console.warn('🔑 [LOGIN_DEBUG] Non-critical cleanup error:', err.message);
-            }
+    const handleLoginSuccess = async () => {
+        const user = auth.currentUser;
+        if (!user || !firestore) {
+            router.replace('/auth/continue');
+            return;
         }
 
-        // Delegate all routing decisions to /auth/continue
-        router.replace('/auth/continue');
+        try {
+            const userDoc = await getDoc(doc(firestore, 'users', user.uid));
+            if (userDoc.exists()) {
+                const profile = userDoc.data();
+                console.log(`[AUTH_SUCCESS] Role: ${profile.role}, Status: ${profile.registrationStatus}`);
+
+                if (profile.role === 'admin') {
+                    router.push('/admin');
+                    return;
+                }
+
+                // [VamO PRO] Registration Status Guard
+                if (profile.registrationStatus !== 'active') {
+                    console.warn(`[AUTH_REDIRECT] User ${user.uid} has status ${profile.registrationStatus}. Redirecting to onboarding...`);
+                    if (profile.role === 'driver') {
+                        router.push('/driver/register');
+                    } else {
+                        router.push('/dashboard/complete-profile');
+                    }
+                    return;
+                }
+
+                if (profile.role === 'driver') {
+                    router.push('/driver');
+                } else if (profile.role === 'passenger') {
+                    router.push('/dashboard');
+                } else {
+                    router.push('/auth/continue');
+                }
+            } else {
+                console.warn("[AUTH_ERROR] Profile missing after successful login. Redirecting to repair...");
+                router.push('/auth/continue');
+            }
+        } catch (err) {
+            console.error("[AUTH_ERROR] Error fetching profile during login success:", err);
+            router.push('/auth/continue');
+        }
     };
 
-    const handleSignIn = async () => {
-        if (!email || !password) {
-            toast({ variant: 'destructive', title: 'Campos requeridos', description: 'Por favor, ingresá email y contraseña.' });
+    const handleSignIn = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        
+        // Inline Validation
+        const newErrors: {email?: string, password?: string} = {};
+        if (!email) newErrors.email = 'El email es obligatorio.';
+        if (!password) newErrors.password = 'La contraseña es obligatoria.';
+        
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
             return;
         }
-        if (!auth || !firestore) {
-            toast({ variant: 'destructive', title: 'Error de configuración', description: 'El servicio de autenticación no está disponible.' });
-            return;
-        }
+
+        if (!auth || !firestore) return;
+        
         setIsSubmitting(true);
+        setErrors({});
+
         try {
+            console.log(`[AUTH_LOGIN_ATTEMPT] Email: ${email}`);
             if (auth.currentUser) await signOut(auth);
             const { user: signedUser } = await signInWithEmailAndPassword(auth, email, password);
-            console.log('🔑 [LOGIN_DEBUG] signInWithEmailAndPassword SUCCESS. UID:', signedUser.uid);
-            toast({ title: '¡Bienvenido de nuevo!', description: 'Abriendo tu panel...' });
-            await handleLoginSuccess(signedUser);
-        } catch (error: any) {
-            let description = 'Credenciales incorrectas o el usuario no existe.';
-            if (['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential'].includes(error.code)) {
-                description = 'El email o la contraseña son incorrectos.';
-            } else if (error.code === 'auth/too-many-requests') {
-                description = 'Demasiados intentos. Por favor, intentá más tarde.';
+            
+            console.log(`[AUTH_STATE_CHANGED] User logged in: ${signedUser.uid}`);
+
+            // Role Guard (Strict Separation)
+            if (fixedRole) {
+                const userDoc = await getDoc(doc(firestore, 'users', signedUser.uid));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    if (userData.role && userData.role !== fixedRole) {
+                        console.warn(`[AUTH_INVALID_SESSION] Role mismatch: expected ${fixedRole}, got ${userData.role}. Cleaning up...`);
+                        await signOut(auth);
+                        const otherRole = userData.role === 'driver' ? 'conductor' : 'pasajero';
+                        toast({ 
+                            variant: 'destructive', 
+                            title: 'Acceso incorrecto', 
+                            description: `Tu cuenta es de ${otherRole}. Por favor, ingresá por el portal de ${otherRole}s.` 
+                        });
+                        setIsSubmitting(false);
+                        return;
+                    }
+                } else {
+                    console.warn(`[AUTH_INVALID_SESSION] No profile found for ${signedUser.uid}. Cleaning up...`);
+                    await signOut(auth);
+                    toast({ 
+                        variant: 'destructive', 
+                        title: 'Perfil no encontrado', 
+                        description: 'No pudimos encontrar tu perfil de usuario.' 
+                    });
+                    setIsSubmitting(false);
+                    return;
+                }
             }
-            toast({ variant: 'destructive', title: 'Error de inicio de sesión', description });
+
+            console.log(`[AUTH_SUCCESS] User ${signedUser.uid} validated.`);
+            await handleLoginSuccess();
+        } catch (error: any) {
+            console.error("[AUTH_LOGIN_FAILED]", error);
+            await signOut(auth); // [VamO PRO SECURITY] Ensure no partial session remains
+            console.log("[AUTH_SESSION_CLEARED] Session cleared after failed login.");
+
+            let desc = 'Credenciales incorrectas.';
+            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                desc = 'Email o contraseña incorrectos.';
+            }
+            toast({ variant: 'destructive', title: 'Error de acceso', description: desc });
         } finally {
             setIsSubmitting(false);
         }
@@ -101,7 +162,7 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
 
     const handlePasswordReset = async () => {
         if (!email) {
-            toast({ variant: 'destructive', title: 'Email requerido', description: 'Ingresá tu email para restablecer la contraseña.' });
+            setErrors({ email: 'Ingresá tu email para restablecer.' });
             return;
         }
         if (!auth) return;
@@ -116,188 +177,124 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
         }
     };
 
-    const handleSignUp = async (role: 'passenger' | 'driver') => {
-        if (!email || !password) {
-            toast({ variant: 'destructive', title: 'Campos requeridos', description: 'Ingresá email y contraseña para registrarte.' });
-            return;
-        }
-        if (!auth || !firestore) {
-            toast({ variant: 'destructive', title: 'Error de sistema', description: 'Firebase no está inicializado.' });
-            return;
-        }
-        setIsSubmitting(true);
-        try {
-            if (auth.currentUser) await signOut(auth);
-            const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password);
-            console.log('✅ [SIGNUP] Auth user created:', newUser.uid);
+    if (isInitializing || isSubmitting) {
+        return <VamoFullScreenLoader label={isSubmitting ? "Autenticando..." : "Cargando..."} />;
+    }
 
-            // CAPTURA: Primero URL, luego localStorage
-            const refParam = searchParams.get('ref') || (typeof window !== 'undefined' ? localStorage.getItem('vamo_captured_referral') : null);
-            const campaignParam = searchParams.get('campaign') || (typeof window !== 'undefined' ? localStorage.getItem('vamo_captured_campaign') : null);
-            
-            const isDriver = role === 'driver';
-            
-            console.log('📝 [SIGNUP] Creating user document in Firestore...');
-            
-            let userPayload: any;
-            
-            if (role === 'passenger') {
-                // Minimal payload for passengers as requested
-                userPayload = {
-                    uid: newUser.uid,
-                    role: 'passenger',
-                    name: '',
-                    email: newUser.email,
-                    createdAt: serverTimestamp(),
-                    profileCompleted: false
-                };
-            } else {
-                // Detailed payload for drivers (required for vetting)
-                userPayload = {
-                    uid: newUser.uid,
-                    email: newUser.email,
-                    name: '',
-                    role,
-                    profileCompleted: false,
-                    referredByCode: refParam ? refParam.toUpperCase().trim() : null,
-                    campaign: campaignParam ? campaignParam.trim() : null,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                    isSuspended: false,
-                    approved: false,
-                    currentBalance: 0,
-                    serviceTier: 'premium',
-                };
-            }
-
-            await setDoc(doc(firestore, 'users', newUser.uid), userPayload);
-            console.log('✅ [SIGNUP] Firestore user document created.');
-            
-            // --- NEW: Email Verification ---
-            await sendEmailVerification(newUser);
-            console.log('📧 [SIGNUP] Verification email sent.');
-
-            if (isDriver) {
-                console.log('🚛 [SIGNUP] Creating driver location document...');
-                await setDoc(doc(firestore, 'drivers_locations', newUser.uid), {
-                    geohash: null,
-                    currentLocation: null,
-                    lastSeenAt: serverTimestamp(),
-                    driverStatus: 'inactive',
-                    approved: false,
-                    isSuspended: false,
-                    pendingOffers: 0,
-                    updatedAt: serverTimestamp(),
-                });
-            }
-            toast({ title: '¡Registro exitoso!', description: 'Redirigiendo para completar tu perfil...' });
-            router.replace('/auth/continue');
-        } catch (error: any) {
-            let description = error.message;
-            if (error.code === 'auth/email-already-in-use') {
-                description = 'Este email ya está registrado. Por favor, iniciá sesión.';
-            } else if (error.code === 'auth/weak-password') {
-                description = 'La contraseña debe tener al menos 6 caracteres.';
-            }
-            toast({ variant: 'destructive', title: 'Error de registro', description });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    // --- RENDER ---
-    // User requested: "login abra login para poder ingresar los datos del usuario".
-    // We remove all auto-redirects and welcome screens. The form is ALWAYS displayed.
-    const isAuthBusy = isInitializing || isSubmitting;
     return (
-        <main className="container mx-auto max-w-md p-4 flex flex-col justify-center items-center min-h-screen">
-            {canInstall && (
-                <Card className="w-full mb-6 border-primary shadow-lg">
-                    <CardHeader className="text-center">
-                        <VamoIcon name="download" className="h-10 w-10 text-primary mx-auto mb-2" />
-                        <CardTitle className="text-2xl">Paso 1: Instalá VamO</CardTitle>
-                        <CardDescription>Para recibir notificaciones de viaje, instalá la aplicación en tu dispositivo.</CardDescription>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-[#121212] p-6 w-full overflow-hidden">
+            <div className="w-full max-w-[420px] flex flex-col items-center animate-in fade-in zoom-in duration-500">
+                
+                <div className="w-full flex justify-center mb-10">
+                    <div className="w-[140px]">
+                        <VamoLogo variant="login" priority />
+                    </div>
+                </div>
+                
+                <Card className="w-full bg-zinc-900 border-white/5 shadow-2xl rounded-[2.5rem]">
+                    <CardHeader className="text-center pb-6">
+                        <CardTitle className="text-2xl font-black text-white uppercase tracking-tight">
+                            {fixedRole === 'driver' ? 'Panel Conductor' : 'Acceso Pasajero'}
+                        </CardTitle>
+                        <CardDescription className="text-zinc-500 font-medium">Ingresá tus datos para continuar</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <Button onClick={triggerInstall} className="w-full" size="lg">
-                            <VamoIcon name="smartphone" className="mr-2" /> Instalar Aplicación
-                        </Button>
+                    <CardContent className="space-y-6">
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="email" className="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">Email</Label>
+                                <Input 
+                                    id="email" 
+                                    type="email" 
+                                    placeholder="tu@email.com"
+                                    value={email} 
+                                    onChange={e => { setEmail(e.target.value); setErrors(prev => ({...prev, email: undefined})); }}
+                                    className={errors.email ? 'h-12 border-red-500 bg-red-500/10 rounded-xl text-white' : 'h-12 bg-white/5 border-white/10 rounded-xl text-white focus:ring-indigo-500'}
+                                />
+                                {errors.email && <p className="text-red-500 text-[10px] font-black uppercase tracking-tighter ml-2 mt-1">{errors.email}</p>}
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center px-1">
+                                    <Label htmlFor="password" title="Contraseña" className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Contraseña</Label>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <button type="button" className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 uppercase tracking-tighter transition-colors">¿Olvidaste la clave?</button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent className="bg-zinc-900 border-white/5">
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle className="text-white">Restablecer Contraseña</AlertDialogTitle>
+                                                <AlertDialogDescription className="text-zinc-400">Te enviaremos un email para que puedas crear una nueva contraseña.</AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <Input 
+                                                type="email" 
+                                                placeholder="tu@email.com" 
+                                                value={email} 
+                                                onChange={e => setEmail(e.target.value)}
+                                                className="bg-white/5 border-white/10 text-white"
+                                            />
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel className="bg-zinc-800 text-white border-none">Cancelar</AlertDialogCancel>
+                                                <AlertDialogAction onClick={handlePasswordReset} className="bg-indigo-600 hover:bg-indigo-700">Enviar Link</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </div>
+                                <Input 
+                                    id="password" 
+                                    type="password" 
+                                    value={password} 
+                                    onChange={e => { setPassword(e.target.value); setErrors(prev => ({...prev, password: undefined})); }}
+                                    className={errors.password ? 'h-12 border-red-500 bg-red-500/10 rounded-xl text-white' : 'h-12 bg-white/5 border-white/10 rounded-xl text-white focus:ring-indigo-500'}
+                                />
+                                {errors.password && <p className="text-red-500 text-[10px] font-black uppercase tracking-tighter ml-2 mt-1">{errors.password}</p>}
+                            </div>
+
+                            <Button 
+                                onClick={(e) => handleSignIn(e)} 
+                                disabled={isSubmitting} 
+                                className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest rounded-xl shadow-xl shadow-indigo-600/10 active:scale-[0.98] transition-all"
+                            >
+                                {isSubmitting ? <VamoIcon name="loader" className="animate-spin" /> : 'INICIAR SESIÓN'}
+                            </Button>
+                        </div>
+
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <Separator className="bg-white/5" />
+                            </div>
+                            <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
+                                <span className="bg-zinc-900 px-4 text-zinc-600">O bien</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 pt-2">
+                            <Button 
+                                variant="outline"
+                                onClick={() => router.push(fixedRole === 'driver' ? '/driver/register' : '/register')}
+                                className="w-full h-12 border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10 text-indigo-400 font-bold rounded-xl transition-all"
+                            >
+                                CREAR CUENTA NUEVA
+                            </Button>
+                            
+                            {fixedRole === 'passenger' && (
+                                <div className="text-center">
+                                    <button 
+                                        type="button"
+                                        onClick={() => router.push('/driver/register')}
+                                        className="text-[10px] font-bold text-zinc-500 hover:text-white uppercase tracking-widest transition-all p-2"
+                                    >
+                                        ¿Querés manejar? <span className="text-indigo-400 underline underline-offset-4">Registrate como conductor</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </CardContent>
                 </Card>
-            )}
-
-            <Card className="w-full">
-                <CardHeader className="text-center">
-                    <h1 className="text-5xl font-bold text-foreground">
-                        Vam<span className="text-primary">O</span>
-                    </h1>
-                    <CardDescription className="pt-2">
-                        {canInstall ? 'Paso 2: Accedé o Registrate' : 'Accedé a tu cuenta o registrate'}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input id="email" type="email" placeholder="tu@email.com" value={email} onChange={e => setEmail(e.target.value)} disabled={isSubmitting} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="password">Contraseña</Label>
-                            <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} disabled={isSubmitting} />
-                        </div>
-                        <Button onClick={handleSignIn} disabled={isSubmitting || !auth || isAuthBusy} className="w-full">
-                            {isSubmitting ? 'Ingresando...' : 'Iniciar Sesión'}
-                        </Button>
-                    </div>
-
-                    <div className="text-center text-sm mt-4">
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button variant="link" className="text-muted-foreground p-0 h-auto" disabled={!auth}>¿Olvidaste tu contraseña?</Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Restablecer Contraseña</AlertDialogTitle>
-                                    <AlertDialogDescription>Ingresá tu email y te enviaremos un enlace para crear una nueva contraseña.</AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <div className="space-y-2">
-                                    <Label htmlFor="reset-email">Email</Label>
-                                    <Input id="reset-email" type="email" placeholder="tu@email.com" value={email} onChange={e => setEmail(e.target.value)} />
-                                </div>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={handlePasswordReset}>Enviar Correo</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    </div>
-
-                    <Separator className="my-6" />
-                    <div className="text-center space-y-4">
-                        {!fixedRole ? (
-                            <>
-                                <p className="text-sm text-muted-foreground">Si sos nuevo, colocá un email y una contraseña y seleccioná si sos pasajero o conductor.</p>
-                                <div className="flex gap-4 justify-center">
-                                    <Button variant="link" onClick={() => handleSignUp('passenger')} disabled={isSubmitting || !auth || isAuthBusy}>Pasajero</Button>
-                                    <Button variant="link" onClick={() => handleSignUp('driver')} disabled={isSubmitting || !auth || isAuthBusy}>Conductor</Button>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="space-y-3">
-                                <p className="text-xs text-muted-foreground">¿No tenés cuenta todavía?</p>
-                                <Button 
-                                    variant="outline" 
-                                    onClick={() => handleSignUp(fixedRole)} 
-                                    disabled={isSubmitting || !auth || isAuthBusy}
-                                    className="w-full h-12 border-primary/20 hover:bg-primary/5 text-primary font-bold"
-                                >
-                                    REGISTRARME COMO {fixedRole === 'passenger' ? 'PASAJERO' : 'CONDUCTOR'}
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
-        </main>
+                
+                <p className="mt-8 text-[10px] font-black text-zinc-700 uppercase tracking-[0.2em]">
+                    VamO Security Engine v6.1
+                </p>
+            </div>
+        </div>
     );
 }

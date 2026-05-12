@@ -1,15 +1,13 @@
-'use client';
-
 import React from 'react';
 import RideReceiptClient from './RideReceiptClient';
-import { useParams } from 'next/navigation';
 import { VamoIcon } from '@/components/VamoIcon';
 
-// This page is a client-side wrapper to correctly handle dynamic routes
-// within a client-side layout structure (e.g., /dashboard).
-export default function PassengerRideReceiptPage() {
-  const params = useParams();
-  const rideId = Array.isArray(params.rideId) ? params.rideId[0] : params.rideId;
+interface PageProps {
+  params: { rideId: string };
+}
+
+export default function PassengerRideReceiptPage({ params }: { params: PageProps['params'] }) {
+  const { rideId } = params;
 
   if (!rideId) {
     return (

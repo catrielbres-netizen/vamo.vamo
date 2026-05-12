@@ -1,3 +1,4 @@
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
@@ -11,16 +12,22 @@ import { normalizeCity } from "./lib/city";
 import { resolvePricingMunicipality } from "./lib/territoryResolver";
 import { canDriverReceiveOffers, canPassengerRequestRide } from "./eligibility";
 import { calculateRidePrice, PricingInput } from "./lib/pricing";
-import { calculateExpressDiscount } from "./lib/express";
+import { getExpressDiscountPercent } from "./lib/passengerProgress";
+import { lockWalletForRide, getOrCreateWallet, addFunds } from "./lib/wallet";
 import { checkPromotionEligibility } from "./promotions";
+import { calculateAndLockCredits, releaseLockedCredits, INCENTIVE_CONFIG } from "./lib/incentives";
+import { handleRideCancellationFinancials } from "./lib/refund";
 import { ensureServiceInvariants, sendNotification } from "./handlers";
+import { logLedgerEvent } from "./lib/audit";
+import { getPassengerRiskSummary } from "./lib/antifraud";
+import { calculateUserTrustScore } from "./lib/trustScoring";
 import {
     UserProfile, Ride, RideOffer, ServiceType, ExpressConfig,
     ExpressBudget, SystemConfig, Promotion, Place, PricingConfig,
-    CityConfig, Referral, UserReward
+    CityConfig, Referral, UserReward, PricingSnapshot, PaymentSnapshot
 } from "./types";
 
-const OFFER_DURATION_SECONDS = 20;
+const OFFER_DURATION_SECONDS = 60;
 const MAX_MATCHING_ATTEMPTS = 10;
 const MAX_BROADCAST_DRIVERS = 5;
 
@@ -33,27 +40,45 @@ function normalizeCityKey(input?: string | null): string | null {
         .toLowerCase();
 }
 
+/**
+ * [VamO PRO] Determine if a time belongs to NIGHT tariff (23:00 - 06:00 ARG)
+ */
+function getIsNight(date: Date): boolean {
+    const argentinaHour = parseInt(
+        new Intl.DateTimeFormat('es-AR', {
+            timeZone: 'America/Argentina/Buenos_Aires',
+            hour: 'numeric',
+            hour12: false
+        }).format(date),
+        10
+    );
+    return argentinaHour >= 23 || argentinaHour < 6;
+}
+
 async function isRawsonBroadcastEnabled(
     db: FirebaseFirestore.Firestore
 ): Promise<boolean> {
     try {
-        const snap = await db.doc("config/matching").get();
-        return snap.exists && snap.data()?.rawsonBroadcastEnabled === true;
+        // [VamO PRO] Unified config read
+        const sysSnap = await db.doc("system_config/global").get();
+        if (sysSnap.exists) {
+            const data = sysSnap.data();
+            if (data?.rawsonBroadcastEnabled !== undefined) return data.rawsonBroadcastEnabled;
+        }
+        return false;
     } catch (err) {
         console.error("MATCHING_CONFIG_READ_ERROR", err);
         return false;
     }
 }
 
-async function hasPendingOffersInRound(
+async function hasPendingOffersForRide(
     db: FirebaseFirestore.Firestore,
-    rideId: string,
-    round: number
+    rideId: string
 ): Promise<boolean> {
     const snap = await db
         .collection("rideOffers")
         .where("rideId", "==", rideId)
-        .where("round", "==", round)
         .where("status", "==", "pending")
         .limit(1)
         .get();
@@ -66,11 +91,20 @@ async function hasPendingOffersInRound(
  */
 async function getSystemConfig(): Promise<SystemConfig> {
     const db = getDb();
-    const snap = await db.doc('config/system').get();
-    if (!snap.exists) {
-        return { matchingEnabled: true, expressEnabled: true, globalMaintenance: false };
+    
+    // [VamO PRO] Unified config read
+    const sysSnap = await db.doc('system_config/global').get();
+    if (sysSnap.exists) {
+        return sysSnap.data() as SystemConfig;
     }
-    return snap.data() as SystemConfig;
+
+    return { 
+        matchingEnabled: true, 
+        expressEnabled: true, 
+        globalMaintenance: false,
+        maxMatchingAttempts: 10,
+        offerDurationSeconds: 60 
+    };
 }
 
 function distanceInKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -89,10 +123,10 @@ function distanceInKm(lat1: number, lng1: number, lat2: number, lng2: number): n
  * @param attempt 1-indexed attempt number
  */
 function getMatchingRadiusByAttempt(attempt: number): number {
-    if (attempt <= 1) return 1500;
-    if (attempt === 2) return 3000;
-    if (attempt === 3) return 5000;
-    return 10000;
+    if (attempt <= 1) return 2500;
+    if (attempt === 2) return 4000;
+    if (attempt === 3) return 6000;
+    return 8000;
 }
 
 export async function findNextDriverAndCreateOffer(rideId: string) {
@@ -107,7 +141,7 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
         const rideData = rideSnap.data() as Ride;
 
         if (rideData.status !== 'searching') {
-            logger.warn(`[MATCH_GUARD] ride not assignable. Current: ${rideData.status}`);
+            logger.warn(`[MATCH_GUARD] ride not assignable. Status: ${rideData.status}. RideId: ${rideId}`);
             return;
         }
 
@@ -129,85 +163,182 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
             return;
         }
 
-        const isRawsonBroadcast = (await isRawsonBroadcastEnabled(db)) || pricingMunicipalityKey === "rawson";
-
-        if (isRawsonBroadcast) {
-            const hasPending = await hasPendingOffersInRound(db, rideId, (rideData.matchingAttempts || 0) + 1);
-            if (hasPending) {
-                logger.warn(`[MATCH_GUARD] duplicate offer prevented (ongoing round)`);
-                return;
-            }
+        const hasPending = await hasPendingOffersForRide(db, rideId);
+        if (hasPending) {
+            logger.warn(`[MATCH_GUARD] Ride ${rideId} already has pending offers. Skipping redundant matching attempt.`);
+            return;
         }
 
-        const center = [rideData.origin.lat, rideData.origin.lng] as geofire.Geopoint; // origin location
+        const isRawsonBroadcast = (await isRawsonBroadcastEnabled(db)) || pricingMunicipalityKey === "rawson";
 
-        // Progressive radii based on matching attempts
-        const currentAttempts = (rideData.matchingAttempts || 0);
+        const center = [rideData.origin.lat, rideData.origin.lng] as geofire.Geopoint;
+        const currentAttempts = rideData.matchingAttempts || 0;
         const radiusInM = getMatchingRadiusByAttempt(currentAttempts + 1);
-
         const bounds = geofire.geohashQueryBounds(center, radiusInM);
-        logger.info(`[MATCH_DEBUG] Geohash query: attempt=${currentAttempts + 1}, center=[${center}], radius=${radiusInM}m, boundsCount=${bounds.length}`);
 
-        const snapshots = await Promise.all(bounds.map(b => {
-            return db.collection('drivers_locations')
-                .where('geohash', '>=', b[0])
-                .where('geohash', '<=', b[1])
-                .get();
-        }));
-        const geoCandidates: any[] = [];
+        logger.info(`[MATCH_DEBUG] Geofire Search: Ride=${rideId}, Origin=${center[0]},${center[1]}, Radius=${radiusInM}m, Attempt=${currentAttempts + 1}`);
 
-        snapshots.forEach((snap, index) => {
-            snap.forEach(doc => {
+        const isSimulation = (rideData as any).isSimulation === true;
+        
+        // [VamO PRO] Scheduled Priority Logic
+        const interestedIds = rideData.interestedDriverIds || [];
+        const hasInterested = interestedIds.length > 0;
+        
+        const geoCandidates: { id: string, distanceKm: number, walletBalance?: number }[] = [];
+        
+        if (hasInterested && currentAttempts === 0) {
+            logger.info(`[MATCH_DEBUG] Scheduled ride ${rideId} has ${interestedIds.length} interested drivers. Checking their eligibility first.`);
+            for (const id of interestedIds) {
+                const locSnap = await db.collection('drivers_locations').doc(id).get();
+                if (!locSnap.exists) continue;
+                const data = locSnap.data();
+                if (!data) continue;
+                
+                const lat = data.currentLocation?.latitude ?? data.currentLocation?.lat;
+                const lng = data.currentLocation?.longitude ?? data.currentLocation?.lng;
+                if (lat === undefined || lng === undefined) continue;
+                
+                const driverPos = [lat, lng] as geofire.Geopoint;
+                const distanceKm = geofire.distanceBetween(driverPos, center);
+                const isOnline = data.driverStatus === 'online';
+                const isApproved = data.approved === true;
+                const notSuspended = data.isSuspended !== true;
+
+                // Priority candidates must be online and approved
+                if (isOnline && isApproved && notSuspended) {
+                    geoCandidates.push({ id, distanceKm, walletBalance: data.walletBalance ?? 0 });
+                }
+            }
+            logger.info(`[MATCH_DEBUG] Found ${geoCandidates.length} eligible interested drivers.`);
+        }
+
+        // Fallback to geosearch if no interested drivers found or it's a retry
+        if (geoCandidates.length === 0) {
+            const snapshots = await Promise.all(bounds.map(b => {
+                return db.collection('drivers_locations')
+                    .where('geohash', '>=', b[0])
+                    .where('geohash', '<=', b[1])
+                    .get();
+            }));
+
+            snapshots.forEach((snap) => {
+                snap.forEach(doc => {
                 const data = doc.data();
-                if (!data.currentLocation) {
-                    logger.warn(`[MATCH_GUARD] missing driver location for ${doc.id}`);
+                const driverId = doc.id;
+                
+                const lat = data.currentLocation?.latitude ?? data.currentLocation?.lat;
+                const lng = data.currentLocation?.longitude ?? data.currentLocation?.lng;
+
+                if (lat === undefined || lng === undefined) {
+                    logger.warn(`[MATCH_DEBUG] Candidate ${driverId} discarded: Missing currentLocation coords in drivers_locations.`);
                     return;
                 }
                 
-                console.log(`[MATCH_DEBUG] driver candidate`, doc.id);
+                // [SIM_MATCHING] Isolation Guard
+                const isTestDriver = data.isTestDriver === true;
+                if (isSimulation && !isTestDriver) {
+                    logger.info(`[SIM_MATCHING] Skipping REAL driver ${driverId} for simulation ride ${rideId}`);
+                    return;
+                }
+                if (!isSimulation && isTestDriver) {
+                    logger.info(`[SIM_MATCHING] Skipping TEST driver ${driverId} for real ride ${rideId}`);
+                    return;
+                }
 
-                // [VamO PRO] Temporary memory isolation via cityKey removed.
-                // drivers_locations does not contain cityKey in the frontend schema.
-                // The geofire radius search strictly handles spatial proximity and 
-                // the subsequent profile check handles boundary constraints (operatingAreaId).
+                const driverPos = [lat, lng] as geofire.Geopoint;
+                const distanceKm = geofire.distanceBetween(driverPos, center);
+                const distanceM = distanceKm * 1000;
 
-                const distanceKm = geofire.distanceBetween([data.currentLocation.lat, data.currentLocation.lng], center);
+                const isOnline = data.driverStatus === 'online';
+                const isApproved = data.approved === true;
+                const notSuspended = data.isSuspended !== true; // Resilience: Allow if missing
 
-                if (distanceKm <= radiusInM / 1000) {
-                    if (data.driverStatus === 'online' && data.approved === true && data.isSuspended === false) {
-                        geoCandidates.push({ id: doc.id, distanceKm });
+                logger.info(`[MATCH_DEBUG] Candidate Found (Geo): ${driverId}, Dist=${distanceM.toFixed(1)}m, Status=${data.driverStatus}, Approved=${data.approved}, Suspended=${data.isSuspended}, isTest=${isTestDriver}`);
+
+                if (distanceM <= radiusInM) {
+                    // [ISOLATED_MATCHING] Logic separation
+                    if (!isSimulation) {
+                        // PRODUCTION RULE: Must be online, (approved OR pending_review) and not suspended
+                        const isEligible = isOnline && (isApproved || data.municipalStatus === 'pending_municipal_review') && notSuspended;
+                        
+                        // [VamO PRO] Wallet Balance Pre-Check (Optimization)
+                        const balance = data.walletBalance ?? 0;
+                        const negativeLimit = data.driverSubtype === 'professional' ? -15000 : -8000;
+                        const hasFunds = balance > negativeLimit;
+
+                        // [VamO PRO] Dynamic Pricing Preference Filter
+                        const dynamicApplied = (rideData.pricing as any)?.dynamic?.applied === true;
+                        const isProfessional = data.driverSubtype === 'professional';
+                        const acceptsDiscounted = data.driverPreferences?.acceptsDiscountedRides !== false;
+
+                        let satisfiesPreferences = true;
+                        if (dynamicApplied && isProfessional && !acceptsDiscounted) {
+                            satisfiesPreferences = false;
+                            logger.info(`[MATCH_DEBUG] Candidate ${driverId} (PROFESSIONAL) discarded: Ride has dynamic discount and driver does not accept discounted rides.`);
+                        }
+
+                        if (isEligible && hasFunds && satisfiesPreferences) {
+                            geoCandidates.push({ id: driverId, distanceKm, walletBalance: balance });
+                        } else {
+                            logger.warn(`[MATCH_DEBUG] Candidate ${driverId} discarded (REAL PASS): online=${isOnline}, approved=${isApproved}, status=${data.municipalStatus}, suspended=${!notSuspended}, hasFunds=${hasFunds}, satisfiesPreferences=${satisfiesPreferences} (bal: ${balance})`);
+                        }
                     } else {
-                        console.log(`[MATCH_DEBUG] driver rejected reason: Invalid state. Status: ${data.driverStatus}, Approved: ${data.approved}, Suspended: ${data.isSuspended}`);
-                        logger.info(`[MATCH_DEBUG] Candidate ${doc.id} discarded (initial pass). Status: ${data.driverStatus}, Approved: ${data.approved}, Suspended: ${data.isSuspended}`);
+                        // TEST RULE: Must be a test driver (guard at line 181 ensures this), online and not suspended. 
+                        // We allow non-approved test drivers to facilitate isolated testing.
+                        if (isOnline && notSuspended) {
+                            geoCandidates.push({ id: driverId, distanceKm });
+                            logger.info(`[MATCH_DEBUG] TEST Candidate ${driverId} accepted for simulation ride.`);
+                        } else {
+                            logger.warn(`[MATCH_DEBUG] TEST Candidate ${driverId} discarded (TEST PASS): online=${isOnline}, suspended=${!notSuspended}`);
+                        }
                     }
-                } else {
-                    console.log(`[MATCH_DEBUG] driver rejected reason: Out of radius (${distanceKm}km > ${radiusInM / 1000}km)`);
                 }
             });
         });
-        console.log(`[MATCH_DEBUG] candidate drivers count (geo-pass):`, geoCandidates.length);
-        logger.info(`[MATCH_DEBUG] First pass complete. geoCandidates found: ${geoCandidates.length}`);
+    }
+
+        const zone = rideData.origin.zoneName || "Unknown";
+        logger.info(`[MATCH_RADIUS] Zone: ${zone}, Attempt: ${currentAttempts + 1}, Radius: ${radiusInM}m, Candidates Found: ${geoCandidates.length}`);
 
         if (geoCandidates.length === 0) {
             const currentAttempts = (rideData.matchingAttempts || 0) + 1;
             logger.warn(`[MATCH_GUARD] no eligible drivers found within radius. Attempt: ${currentAttempts}`);
+            
+            await rideRef.update({
+                searchRadiusKmUsed: radiusInM / 1000,
+                lastMatchingFailureReason: 'NO_DRIVERS_NEARBY',
+                matchingAttempts: currentAttempts,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
             if (currentAttempts >= MAX_MATCHING_ATTEMPTS) {
                 logger.error(`[MATCH_DEBUG] Max attempts reached (${MAX_MATCHING_ATTEMPTS}). Cancelling ride ${rideId}.`);
-                await rideRef.update({
-                    status: 'cancelled',
-                    cancelledBy: 'system',
-                    cancelReason: 'NO_DRIVERS_NEARBY',
-                    matchingAttempts: currentAttempts,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    cancelledAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-                if (rideData.passengerId) {
-                    await db.doc(`users/${rideData.passengerId}`).update({ activeRideId: null });
-                }
-            } else {
-                await rideRef.update({
-                    matchingAttempts: currentAttempts,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                await db.runTransaction(async (tx) => {
+                    const rSnap = await tx.get(rideRef);
+                    if (!rSnap.exists) return;
+                    const rData = rSnap.data() as Ride;
+                    if (rData.status !== 'searching') return;
+
+                    // [VamO PRO] Unified Financial & Policy Handler (Must read before write)
+                    await handleRideCancellationFinancials({
+                        rideId,
+                        reason: 'MAX_MATCHING_ATTEMPTS_REACHED',
+                        actor: 'system',
+                        tx,
+                        rideData: rData
+                    });
+
+                    tx.update(rideRef, {
+                        status: 'cancelled',
+                        cancelledBy: 'system',
+                        cancelReason: 'MAX_MATCHING_ATTEMPTS_REACHED',
+                        cancelledAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp()
+                    });
+
+                    if (rData.passengerId) {
+                        tx.update(db.doc(`users/${rData.passengerId}`), { activeRideId: null });
+                    }
                 });
             }
             return;
@@ -216,67 +347,68 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
         geoCandidates.sort((a, b) => a.distanceKm - b.distanceKm);
         const topCandidates = geoCandidates.slice(0, 10);
 
-        const candidateProfiles = await Promise.all(topCandidates.map(async (c) => {
-            const userSnap = await db.doc(`users/${c.id}`).get();
-            const profile = userSnap.exists ? (userSnap.data() as UserProfile) : null;
-            return { ...c, profile };
-        }));
+        const round = (rideData.matchingAttempts || 0) + 1;
+        const finalCandidates: { id: string, distanceKm: number, profile: UserProfile }[] = [];
 
-        const finalCandidates = candidateProfiles.filter(c => {
-            const p = c.profile;
-            if (!p) {
-                logger.info(`[MATCH_DEBUG] Driver ${c.id} discarded: Profile not found in /users.`);
-                return false;
-            }
-            if (rideData.notifiedDrivers?.includes(c.id)) {
-                logger.info(`[MATCH_DEBUG] Driver ${c.id} discarded: Already notified.`);
-                return false;
-            }
-            if (rideData.operatingAreaId && p.operatingAreaId !== rideData.operatingAreaId) {
-                logger.info(`[MATCH_DEBUG] Driver ${c.id} discarded: Operating area mismatch (${p.operatingAreaId} vs ${rideData.operatingAreaId}).`);
-                return false;
-            }
-            if (rideData.preferredDriverGender && p.gender && p.gender !== rideData.preferredDriverGender) {
-                logger.info(`[MATCH_DEBUG] Driver ${c.id} discarded: Gender mismatch.`);
-                return false;
+        for (const candidate of topCandidates) {
+            const driverId = candidate.id;
+            const userSnap = await db.doc(`users/${driverId}`).get();
+            const p = userSnap.data() as UserProfile;
+
+            if (!userSnap.exists || !p) {
+                logger.warn(`[MATCH_DEBUG] Candidate ${driverId} discarded: Profile not found.`);
+                continue;
             }
 
-            const service = rideData.serviceType;
-            const hasService = (p.servicesOffered as any)?.[service];
-            const isNormalFallback = service === 'normal' && p.servicesOffered?.premium;
+            // [WALLET] Ensure driver has enough balance and is eligible
+            // Optimization: use walletBalance from drivers_locations if available
+            const cashBalance = (candidate as any).walletBalance;
 
-            if (!hasService && !isNormalFallback) {
-                console.log(`[MATCH_DEBUG] driver rejected reason: Service mismatch (requested: ${service})`);
-                logger.info(`[MATCH_DEBUG] Driver ${c.id} discarded: Service mismatch. Requested: ${service}, Offered: ${JSON.stringify(p.servicesOffered)}`);
-                return false;
+            const eligibility = canDriverReceiveOffers(p, rideData.serviceType, undefined, undefined, cashBalance);
+            
+            if (!eligibility.isEligible) {
+                logger.warn(`[MATCH_DEBUG] Candidate ${driverId} discarded (eligibility): ${eligibility.reason} (cash: ${cashBalance ?? 'MISSING_LOC'})`);
+                continue;
             }
 
-            return true;
-        });
-
-        console.log(`[MATCH_DEBUG] candidate drivers count (final):`, finalCandidates.length);
-        logger.info(`[MATCH_DEBUG] Profile filtering complete. finalCandidates: ${finalCandidates.length}`);
-
-        if (finalCandidates.length === 0) {
-            console.log(`[MATCH_DEBUG] no eligible drivers left after filters`);
-            logger.warn(`[MATCH_DEBUG] NO candidates left after profile filtering. Incrementing matchingAttempts.`);
-            await rideRef.update({ matchingAttempts: admin.firestore.FieldValue.increment(1) });
-            return;
+            finalCandidates.push({ id: driverId, distanceKm: candidate.distanceKm, profile: p });
         }
 
+        if (finalCandidates.length === 0) {
+            logger.warn(`[MATCH_GUARD] No drivers passed profile filters. Attempt: ${round}`);
+            await rideRef.update({
+                searchRadiusKmUsed: radiusInM / 1000,
+                lastMatchingFailureReason: 'DRIVERS_BUSY_OR_OFFLINE',
+                matchingAttempts: round,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+            return;
+        }
+        // --- Priority Sort & Selection ---
+
+        // [FASE 7.3] Priority sort: dentro del mismo pool de candidatos,
+        // conductores con priorityUntil > now van primero (sin excluir a nadie).
+        const nowMs = Date.now();
         finalCandidates.sort((a, b) => {
-            const pA = a.profile!;
-            const pB = b.profile!;
-            if (a.distanceKm !== b.distanceKm) return a.distanceKm - b.distanceKm;
-            if ((pB.acceptanceRate || 0) !== (pA.acceptanceRate || 0)) return (pB.acceptanceRate || 0) - (pA.acceptanceRate || 0);
-            const levelValues = { oro: 3, plata: 2, bronce: 1 };
-            const lvlA = levelValues[(pA.driverLevel || 'bronce').toLowerCase() as keyof typeof levelValues] || 0;
-            const lvlB = levelValues[(pB.driverLevel || 'bronce').toLowerCase() as keyof typeof levelValues] || 0;
-            return lvlB - lvlA;
+            const aHasPriority = (a.profile as any).priorityUntil?.toMillis
+                ? (a.profile as any).priorityUntil.toMillis() > nowMs
+                : false;
+            const bHasPriority = (b.profile as any).priorityUntil?.toMillis
+                ? (b.profile as any).priorityUntil.toMillis() > nowMs
+                : false;
+            if (aHasPriority && !bHasPriority) return -1;
+            if (!aHasPriority && bHasPriority) return 1;
+            // Mismo nivel de prioridad → menor distancia primero
+            return a.distanceKm - b.distanceKm;
+        });
+        finalCandidates.forEach(c => {
+            const hasPriority = (c.profile as any).priorityUntil?.toMillis
+                ? (c.profile as any).priorityUntil.toMillis() > nowMs
+                : false;
+            logger.info(`[PRIORITY_MATCH] driverId=${c.id} | hasPriority=${hasPriority} | distance=${(c.distanceKm * 1000).toFixed(0)}m`);
         });
 
-        const round = (rideData.matchingAttempts || 0) + 1;
-        const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + OFFER_DURATION_SECONDS * 1000);
+        const expiresAt = Timestamp.fromMillis(Date.now() + OFFER_DURATION_SECONDS * 1000);
 
         if (isRawsonBroadcast) {
             const winners = finalCandidates.slice(0, MAX_BROADCAST_DRIVERS);
@@ -286,23 +418,37 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
             const passengerSnap = await db.doc(`users/${rideData.passengerId}`).get();
             const passengerName = passengerSnap.data()?.name || "Pasajero";
 
+            // [VamO PRO] Anti-Fraud Trust Signal
+            const riskSummary = await getPassengerRiskSummary(rideData.passengerId);
+
             const batch = db.batch();
             for (const winner of winners) {
-                const offerId = `${rideId}_${winner.id}_round_${round}`;
+                const offerId = `${rideId}_${winner.id}`;
+                const finalPricing = (rideData.pricing || {}) as any;
                 const offerData: RideOffer = {
                     rideId,
                     driverId: winner.id,
                     passengerId: rideData.passengerId,
                     status: 'pending',
-                    sentAt: admin.firestore.FieldValue.serverTimestamp(),
+                    sentAt: FieldValue.serverTimestamp(),
                     expiresAt,
                     round,
                     origin: rideData.origin,
                     destination: rideData.destination,
                     serviceType: rideData.serviceType,
-                    estimatedTotal: rideData.pricing?.estimated?.total ?? 0,
+                    estimatedTotal: finalPricing.estimatedTotal ?? 0,
+                    cashToCollect: finalPricing.cashToCollect ?? 0,
+                    walletCoveredAmount: finalPricing.walletCoveredAmount ?? 0,
+                    pricing: {
+                        ...finalPricing,
+                        dynamic: finalPricing.dynamic || null
+                    } as any,
+                    paymentMethod: rideData.paymentMethod || 'cash',
+                    distanceKm: rideData.distanceKm || 0,
+                    durationMinutes: rideData.durationMinutes || 0,
                     passengerName,
-                    cityKey: pricingMunicipalityKey
+                    cityKey: pricingMunicipalityKey,
+                    passengerRiskSummary: riskSummary
                 };
                 batch.set(db.collection('rideOffers').doc(offerId), offerData);
                 console.log(`[MATCH_DEBUG] rideOffer created (broadcast):`, offerId);
@@ -311,17 +457,25 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
             batch.update(rideRef, {
                 currentOfferedDriverId: winnerIds[0],
                 matchingExpiresAt: expiresAt,
-                matchingAttempts: admin.firestore.FieldValue.increment(1),
-                notifiedDrivers: admin.firestore.FieldValue.arrayUnion(...winnerIds),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                lastOfferCreatedAt: admin.firestore.FieldValue.serverTimestamp()
+                matchingAttempts: round,
+                searchRadiusKmUsed: radiusInM / 1000,
+                notifiedDrivers: FieldValue.arrayUnion(...winnerIds),
+                updatedAt: FieldValue.serverTimestamp(),
+                lastOfferCreatedAt: FieldValue.serverTimestamp()
             });
+
+            // [VamO PRO] Increment pendingOffers for all notified drivers
+            for (const winnerId of winnerIds) {
+                batch.update(db.collection('drivers_locations').doc(winnerId), {
+                    pendingOffers: FieldValue.increment(1)
+                });
+            }
 
             await batch.commit();
             logger.info(`[MATCH_DEBUG] Broadcast round ${round} SUCCESS: ${winners.length} offers created.`);
 
             for (const winnerId of winnerIds) {
-                const offerId = `${rideId}_${winnerId}_round_${round}`;
+                const offerId = `${rideId}_${winnerId}`;
                 getFunctions().taskQueue('expireRideOfferTaskV1').enqueue(
                     { offerId, rideId },
                     { scheduleDelaySeconds: OFFER_DURATION_SECONDS }
@@ -339,21 +493,35 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
                 const passengerSnap = await tx.get(db.doc(`users/${rideData.passengerId}`));
                 const passengerName = passengerSnap.data()?.name || "Pasajero";
 
-                const offerId = `${rideId}_${nextDriverId}_round_${round}`;
+                // [VamO PRO] Anti-Fraud Trust Signal
+                const riskSummary = await getPassengerRiskSummary(rideData.passengerId);
+
+                const offerId = `${rideId}_${nextDriverId}`;
+                const finalPricing = (rideData.pricing || {}) as any;
                 const offerData: RideOffer = {
                     rideId,
                     driverId: nextDriverId,
                     passengerId: rideData.passengerId,
                     status: 'pending',
-                    sentAt: admin.firestore.FieldValue.serverTimestamp(),
+                    sentAt: FieldValue.serverTimestamp(),
                     expiresAt,
                     round,
                     origin: rideData.origin,
                     destination: rideData.destination,
                     serviceType: rideData.serviceType,
-                    estimatedTotal: rideData.pricing?.estimated?.total ?? 0,
+                    estimatedTotal: finalPricing.estimatedTotal ?? 0,
+                    cashToCollect: finalPricing.cashToCollect ?? 0,
+                    walletCoveredAmount: finalPricing.walletCoveredAmount ?? 0,
+                    pricing: {
+                        ...finalPricing,
+                        dynamic: finalPricing.dynamic || null
+                    } as any,
+                    paymentMethod: rideData.paymentMethod || 'cash',
+                    distanceKm: rideData.distanceKm || 0,
+                    durationMinutes: rideData.durationMinutes || 0,
                     passengerName,
-                    cityKey: pricingMunicipalityKey
+                    cityKey: pricingMunicipalityKey,
+                    passengerRiskSummary: riskSummary
                 };
 
                 tx.set(db.collection('rideOffers').doc(offerId), offerData);
@@ -361,14 +529,20 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
                 tx.update(rideRef, {
                     currentOfferedDriverId: nextDriverId,
                     matchingExpiresAt: expiresAt,
-                    matchingAttempts: admin.firestore.FieldValue.increment(1),
-                    notifiedDrivers: admin.firestore.FieldValue.arrayUnion(nextDriverId),
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    matchingAttempts: round,
+                    searchRadiusKmUsed: radiusInM / 1000,
+                    notifiedDrivers: FieldValue.arrayUnion(nextDriverId),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+
+                // [VamO PRO] Increment pendingOffers for the chosen driver
+                tx.update(db.collection('drivers_locations').doc(nextDriverId), {
+                    pendingOffers: FieldValue.increment(1)
                 });
                 logger.info(`[MATCH_DEBUG] Transaction SUCCESS: Offer ${offerId} created.`);
             });
 
-            const offerId = `${rideId}_${nextDriverId}_round_${round}`;
+            const offerId = `${rideId}_${nextDriverId}`;
             await getFunctions().taskQueue('expireRideOfferTaskV1').enqueue(
                 { offerId, rideId },
                 { scheduleDelaySeconds: OFFER_DURATION_SECONDS }
@@ -384,7 +558,7 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
 export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const db = getDb();
-    const { origin, destination, serviceType, dryRun, promotionId, preferredDriverGender, clientRequestId } = request.data;
+    const { origin, destination, serviceType, dryRun, promotionId, preferredDriverGender, clientRequestId, scheduledAt, paymentMethod = 'cash' } = request.data;
     const passengerId = request.auth.uid;
     // Log request receipt and payload
     console.log('[createRideV1] request recibido');
@@ -444,8 +618,8 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
       await pricingRef.set({
         DAY_BASE_FARE: 300,
         DAY_PRICE_PER_100M: 110,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       console.log('[createRideV1] created OK');
       // Re-read to verify
@@ -472,7 +646,7 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
     }
 
     const cityConfig = citySnap.data() as CityConfig;
-    const cityPricingConfig = cityConfig.pricing;
+    const cityPricingConfig = cityConfig.pricing; if (!cityPricingConfig) { logger.error('[createRideV1] cityConfig.pricing missing'); throw new HttpsError('failed-precondition', 'Error de configuraci�n de ciudad.'); }
     
     const pricePerKmFactor = (cityPricingConfig as any).NIGHT_PRICE_PER_100M > 1000 ? 1 : 10;
     (cityPricingConfig as any)._pricePerKmFactor = pricePerKmFactor;
@@ -482,26 +656,46 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
         throw new HttpsError('failed-precondition', 'La configuración de tarifas para esta ciudad no está disponible.');
     }
 
-    // Fixed municipal pricing: base fare + distance * price per 100m (no dynamic factors)
-    let total = 0;
-    let breakdown: any = null;
-    // Use DAY pricing regardless of time
-    const baseFare = pricingConfig.DAY_BASE_FARE;
-    const pricePer100m = pricingConfig.DAY_PRICE_PER_100M;
-    // Convert km to number of 100m units (1 km = 10 * 100m)
-    const distanceUnits = Math.round(effectiveDistKm * 10);
-    total = baseFare + distanceUnits * pricePer100m;
-    // Simple breakdown object for consistency
-    breakdown = { baseFare, distanceUnits, pricePer100m, total };
-    // Express rides have a fixed extra fee
+    // --- CENTRALIZED PRICING ENGINE (VamO PRO) ---
+    const evalDate = scheduledAt ? (typeof scheduledAt === 'number' ? new Date(scheduledAt) : (scheduledAt.toDate ? scheduledAt.toDate() : new Date(scheduledAt))) : new Date();
+    const isNight = getIsNight(evalDate);
+
+    const pricingResult = calculateRidePrice({
+        distanceKm: effectiveDistKm,
+        durationMin: durationMin,
+        serviceType,
+        isNight,
+    }, pricingConfig, (pricingConfig as any).dynamicPricing, pricingMunicipalityKey || undefined);
+
+    let total = pricingResult.total;
+    let breakdown = pricingResult.breakdown;
+    let dynamicSnapshot = pricingResult.dynamicSnapshot;
+
+    // [PRICING_AUDIT] Log base before express
+    console.log(`[PRICING_AUDIT] baseFare=${breakdown.baseFare}, distanceFare=${breakdown.distanceFare}, totalBase=${total}`);
+
+    // [FASE 7.1] Express discount: escala endurecida — sin descuento si rides < 3
+    const MAX_EXPRESS_DISCOUNT = 400;
+    const ridesThisWeek = passengerProfile?.passengerProgress?.ridesThisWeek ?? 0;
+    let expressDiscountAmount = 0;
     if (serviceType === 'express') {
-        total += 400;
-        breakdown.fapFee = 400;
+        const discountPercent = getExpressDiscountPercent(passengerProfile);
+        if (discountPercent > 0) {
+            const rawDiscount = Math.floor(total * (discountPercent / 100));
+            expressDiscountAmount = Math.min(rawDiscount, MAX_EXPRESS_DISCOUNT);
+            total = total - expressDiscountAmount;
+        }
+        breakdown.expressDiscountAmount = expressDiscountAmount;
+        breakdown.expressDiscountPercent = discountPercent > 0 ? discountPercent : 0;
+        console.log(`[EXPRESS_APPLY] ridesThisWeek=${ridesThisWeek} | discountPercent=${discountPercent}% | expressDiscountAmount=${expressDiscountAmount} | totalAfterDiscount=${total}`);
     }
+
+    console.log(`[PRICING_AUDIT] discountApplied=${expressDiscountAmount}, finalTotal=${total}`);
+    breakdown.total = total;
 
     if (dryRun) {
         logger.info('[CREATE_RIDE_GUARD] dryRun respected');
-        return { estimatedTotal: total, breakdown };
+        return { estimatedTotal: total, breakdown, dynamic: dynamicSnapshot || null };
     }
 
     // DEBUG: Log estimation details before proceeding
@@ -522,68 +716,192 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
       return { rideId: existingRide.id, resolvedCity: finalCity };
     }
 
+    // [WALLET] Pre-read passenger wallet balance (outside transaction, safe read)
+    let walletSnapshot = { cashBalance: 0, promoBalance: 0 };
+    try {
+        walletSnapshot = await getOrCreateWallet(passengerId);
+        logger.info(`[WALLET] Pre-ride balance: cash=${walletSnapshot.cashBalance}, promo=${walletSnapshot.promoBalance}`);
+    } catch (we) {
+        logger.warn(`[WALLET] Could not read wallet for ${passengerId}. Defaulting to cash.`, we);
+    }
+    const walletBalance = Math.max(0, (walletSnapshot.cashBalance || 0) + (walletSnapshot.promoBalance || 0));
+
+    // [FASE 2] Pre-generate rideId so credits can be locked with a deterministic ID before the ride TX completes
+    const newRideRef = db.collection('rides').doc();
+    const newRideId = newRideRef.id;
+
+    // [FASE 2] Lock passenger credits BEFORE building pricingModel (separate TX, best-effort)
+    let creditCoveredAmount = 0;
+    try {
+        const globalIncentiveBudget = Math.floor(total * (INCENTIVE_CONFIG.MAX_TOTAL_DISCOUNT_PERCENT / 100));
+        const creditResult = await db.runTransaction(async (creditTx) => {
+            return calculateAndLockCredits(passengerId, newRideId, total, globalIncentiveBudget, creditTx);
+        });
+        creditCoveredAmount = creditResult.creditAmount;
+        logger.info(`[CREDITS] available=${globalIncentiveBudget} | locked=${creditCoveredAmount} | rideId=${newRideId} | passengerId=${passengerId}`);
+    } catch (creditErr) {
+        // Non-fatal: if credit lock fails, ride proceeds without credit discount
+        logger.warn(`[CREDITS] Lock failed for ride ${newRideId}. Proceeding without credits.`, creditErr);
+        creditCoveredAmount = 0;
+    }
+
+    // [PRICING_FIX] Explicitly check if user wants to use wallet
+    const useWallet = paymentMethod !== 'cash';
+    const totalAfterCredits = Math.max(0, total - creditCoveredAmount);
+    
+    // walletCoveredAmount is only calculated if useWallet is true
+    const walletCoveredAmount = useWallet ? Math.min(walletBalance, totalAfterCredits) : 0;
+    const cashToCollectEstimate = Math.max(0, totalAfterCredits - walletCoveredAmount);
+    
+    const paymentSnapshot: PaymentSnapshot = {
+        selectedPaymentMethod: paymentMethod as any,
+        useWallet,
+        finalPassengerFare: total,
+        walletCoveredAmount,
+        cashAmount: cashToCollectEstimate,
+        source: "backend",
+        timestamp: FieldValue.serverTimestamp()
+    };
+    
+    const paymentMethodSnapshot = cashToCollectEstimate === 0 ? (creditCoveredAmount >= total ? 'credit' : 'wallet') : (walletCoveredAmount > 0 || creditCoveredAmount > 0 ? 'mixed' : 'cash');
+    logger.info(`[WALLET] Estimate: total=${total}, credits=${creditCoveredAmount}, wallet=${walletCoveredAmount}, cash=${cashToCollectEstimate}, method=${paymentMethodSnapshot}, useWallet=${useWallet}`);
+
     try {
         console.log('[createRideV1] starting transaction');
         const result = await db.runTransaction(async (tx) => {
             const passengerSnap = await tx.get(userRef);
             const passengerData = passengerSnap.data() as UserProfile;
+            
+            // [WALLET] Ensure unified wallet is the source of truth for eligibility
+            const wallet = await getOrCreateWallet(passengerId, tx);
             const tokenEmailVerified = request.auth?.token?.email_verified === true;
 
-            const eligibility = canPassengerRequestRide(passengerData, tokenEmailVerified);
-            if (!eligibility.isEligible) throw new HttpsError('failed-precondition', eligibility.reason || 'No eres elegible para solicitar un viaje.');
+            const eligibility = canPassengerRequestRide(passengerData, tokenEmailVerified, wallet.cashBalance);
+            if (!eligibility.isEligible) {
+                // If eligibility fails, release any locked credits before throwing
+                if (creditCoveredAmount > 0) {
+                    releaseLockedCredits(newRideId).catch(e => logger.warn(`[CREDITS] Release on eligibility fail`, e));
+                }
+                throw new HttpsError('failed-precondition', eligibility.reason || 'No eres elegible para solicitar un viaje.');
+            }
 
             if (passengerData.activeRideId) {
                 const activeRideSnap = await tx.get(db.doc(`rides/${passengerData.activeRideId}`));
                 if (activeRideSnap.exists && !['completed', 'cancelled'].includes(activeRideSnap.data()?.status)) {
+                    if (creditCoveredAmount > 0) {
+                        releaseLockedCredits(newRideId).catch(e => logger.warn(`[CREDITS] Release on activeRide fail`, e));
+                    }
                     throw new HttpsError('failed-precondition', 'Ya tenés un viaje activo.');
                 }
             }
 
-            const newRideRef = db.collection('rides').doc();
+            // [WALLET] Lock funds inside the transaction if there is wallet coverage
+            // CRITICAL: MUST HAPPEN BEFORE ANY WRITES (tx.set/tx.update)
+            let finalLockResult = null;
+            if (walletCoveredAmount > 0) {
+                try {
+                    finalLockResult = await lockWalletForRide(passengerId, newRideId, walletCoveredAmount, tx, paymentMethod as any);
+                    logger.info(`[WALLET] Locked $${finalLockResult.totalLocked} for ride ${newRideId}`);
+                } catch (lockErr: any) {
+                    // FATAL: If it's a VamO Pay trip and lock fails, we MUST abort.
+                    logger.error(`[WALLET] Lock FAILED for ride ${newRideId}. ABORTING RIDE CREATION.`, lockErr);
+                    throw new HttpsError('failed-precondition', `No se pudo reservar el saldo: ${lockErr.message || 'Error desconocido'}`);
+                }
+            }
 
-            // Simplified for brevity, normally would include full discount logic from original index.ts
+            // newRideRef is pre-generated above — reuse it here
+
+            // [PHS] PRICING_SNAPSHOT: Capture current city rates for non-retroactive settlement
+            const pricingSnapshot: PricingSnapshot = {
+                commission_particular: pricingConfig.commission_particular ?? (cityKey === 'rawson' ? 0.13 : 0.14),
+                commission_taxi_remis: pricingConfig.commission_taxi_remis ?? (cityKey === 'rawson' ? 0.07 : 0.08),
+                municipal_percentage: pricingConfig.municipal_percentage ?? (cityKey === 'rawson' ? 0.05 : 0.02),
+                cityKey: cityKey,
+                timestamp: FieldValue.serverTimestamp()
+            };
+            logger.info(`[PRICING_SNAPSHOT] Captured for ride ${newRideId}: particular=${pricingSnapshot.commission_particular}, taxiRemis=${pricingSnapshot.commission_taxi_remis}, muni=${pricingSnapshot.municipal_percentage}`);
+
             const pricingModel = {
-                estimated: { total, breakdown, configSnapshot: pricingConfig, calculatedAt: admin.firestore.FieldValue.serverTimestamp() },
-                originalTotal: total,
+                estimated: { total, breakdown, configSnapshot: pricingConfig, calculatedAt: FieldValue.serverTimestamp() },
+                dynamic: dynamicSnapshot || null,
+                estimatedTotal: total,
+                originalTotal: total + expressDiscountAmount,
+                estimatedDistanceMeters: Math.round(effectiveDistKm * 1000),
+                expressDiscountAmount,
+                creditCoveredAmount,
+                creditsApplied: creditCoveredAmount > 0,
+                serviceType,
                 driverReceivesTotal: total,
-                passengerPaysTotal: total,
-                compensationAmount: 0
+                passengerPaysTotal: cashToCollectEstimate,
+                walletCoveredAmount,
+                cashToCollect: cashToCollectEstimate,
+                paymentMethodSnapshot,
+                paymentSnapshot,
+                compensationAmount: 0,
+                pricingSnapshot, // Locked rates for Phase 2
+                tariffMode: isNight ? 'night' : 'day',
+                tariffEvaluatedAt: Timestamp.fromDate(evalDate)
             };
 
-            console.log('[createRideV1] tx.set ride');
+            const isScheduled = !!scheduledAt;
+            const rideStatus = isScheduled ? 'scheduled' : 'searching';
+
+            console.log('[createRideV1] tx.set ride. Status:', rideStatus);
             tx.set(newRideRef, {
                 passengerId, origin, destination, serviceType,
-                status: 'searching', city: finalCity,
+                status: rideStatus, 
+                city: finalCity,
                 cityKey, // mandatory field
                 clientRequestId: effectiveClientRequestId,
                 pricing: pricingModel,
+                paymentMethod: paymentMethodSnapshot,
+                paymentSnapshot,
+                scheduledAt: isScheduled ? (typeof scheduledAt === 'number' ? Timestamp.fromMillis(scheduledAt) : scheduledAt) : null,
                 legalAcceptance: {
                     termsVersion: passengerProfile.termsVersion || 'v1.2',
-                    acceptedAt: admin.firestore.Timestamp.now(),
+                    acceptedAt: Timestamp.now(),
                     userAgent,
                     ip: typeof ip === 'string' ? ip : ip[0]
                 },
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
                 passengerName: passengerData.name || 'Pasajero',
+                // [AUDIT] Financial metadata
+                walletLockStatus: finalLockResult ? 'locked' : (walletCoveredAmount > 0 ? 'pending' : 'none'),
+                walletLockedAmount: finalLockResult ? finalLockResult.totalLocked : 0,
+                walletLockTxId: finalLockResult ? `lock_${newRideId}` : null
             });
 
             console.log('[createRideV1] tx.update activeRideId');
             tx.update(userRef, { activeRideId: newRideRef.id });
+
             return { rideId: newRideRef.id, resolvedCity: finalCity };
         });
+
+        // Log OUTSIDE transaction
+        await logLedgerEvent({
+            eventType: 'offer_received',
+            actorId: passengerId,
+            actorRole: 'passenger',
+            rideId: result.rideId,
+            cityKey: result.resolvedCity || undefined,
+            metadata: { serviceType }
+        });
+
+        return { success: true, rideId: result.rideId };
 
         console.log('[MATCH_DEBUG] createRide completed');
         logger.info('[CREATE_RIDE_GUARD] transaction committed');
         
-        console.log('[MATCH_DEBUG] invoking matcher');
-        findNextDriverAndCreateOffer(result.rideId).catch(e => logger.error(`Proactive matching failed`, e));
+        // [MATCH_REMEDIATION] Proactive matching call removed. 
+        // We now rely solely on the onRideCreatedV1 trigger to ensure exactly one matching cycle starts.
+        // findNextDriverAndCreateOffer(result.rideId).catch(e => logger.error(`Proactive matching failed`, e));
         
         console.log('[createRideV1] success response sent', result.rideId);
         return { success: true, rideId: result.rideId };
     } catch (error: any) {
         console.log('[createRideV1] fatal error', error);
-        throw new HttpsError('internal', 'No se pudo crear el viaje.');
+        if (error instanceof HttpsError) throw error; throw new HttpsError('internal', error.message || 'No se pudo crear el viaje.');
     }
 });
 
@@ -603,11 +921,11 @@ export const ignoreRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
 
     const offerDoc = offersSnap.docs[0];
     await db.runTransaction(async (tx) => {
-        tx.update(offerDoc.ref, { status: 'rejected', finalizedAt: admin.firestore.FieldValue.serverTimestamp() });
+        tx.update(offerDoc.ref, { status: 'rejected', finalizedAt: FieldValue.serverTimestamp() });
         tx.update(db.doc(`rides/${rideId}`), {
             currentOfferedDriverId: null,
             matchingExpiresAt: null,
-            totalIgnores: admin.firestore.FieldValue.increment(1)
+            totalIgnores: FieldValue.increment(1)
         });
     });
 
@@ -643,29 +961,69 @@ export const acceptRideV2 = onCall({ cors: true, region: 'us-central1' }, async 
 
             const ride = rideSnap.data() as Ride;
             if (ride.status !== 'searching') {
-                logger.warn(`[ACCEPT_GUARD] ride already assigned. Current status: ${ride.status}`);
+                logger.warn(`[ACCEPT_GUARD] ride already assigned or unavailable. Current status: ${ride.status}`);
+                // [MATCH_REMEDIATION] Explicitly return success false or throw if already assigned to prevent double-processing
                 throw new HttpsError('failed-precondition', 'El viaje ya no está disponible para asignación.');
             }
 
             logger.info(`[MATCH_DEBUG] accepted winner: ${driverId} for ride ${rideId}`);
+
+            const driverSubtypeSnap = driverSnap.data()?.driverSubtype || 'particular';
+            const snapshot = (ride as any).pricing?.pricingSnapshot;
+            
+            let vamoRateSnap, municipalRateSnap;
+            
+            if (snapshot) {
+                municipalRateSnap = snapshot.municipal_percentage;
+                vamoRateSnap = driverSubtypeSnap === 'professional' 
+                    ? snapshot.commission_taxi_remis 
+                    : snapshot.commission_particular;
+                logger.info(`[ACCEPT_PRICING] Using snapshot for ride ${rideId}: vamo=${vamoRateSnap}, muni=${municipalRateSnap}`);
+            } else {
+                // Legacy fallback
+                vamoRateSnap     = driverSubtypeSnap === 'professional' ? 0.08 : 0.14;
+                municipalRateSnap = driverSubtypeSnap === 'professional' ? 0.00 : 0.02;
+                logger.info(`[ACCEPT_PRICING] Using legacy fallback for ride ${rideId}`);
+            }
 
             tx.update(db.doc(`rides/${rideId}`), {
                 status: 'driver_assigned',
                 driverId: driverId,
                 driverName: driverSnap.data()?.name || 'Conductor',
                 driverRating: driverSnap.data()?.rating || 5.0,
-                driverVehicle: driverSnap.data()?.vehicleModel || driverSnap.data()?.vehicleBrand || 'Vehículo',
-                driverPlate: driverSnap.data()?.plateNumber || 'N/A',
-                driverVehiclePhoto: driverSnap.data()?.vehicleFrontPhotoURL || null,
+                driverVehicle: driverSnap.data()?.vehicle ? `${driverSnap.data()?.vehicle?.brand} ${driverSnap.data()?.vehicle?.model} (${driverSnap.data()?.vehicle?.color})` : 'Vehículo pendiente de completar',
+                driverPlate: driverSnap.data()?.vehicle?.plate || 'N/A',
+                driverVehiclePhoto: driverSnap.data()?.vehiclePhotoFrontUrl || driverSnap.data()?.vehicleFrontPhotoURL || null,
                 driverPhotoUrl: driverSnap.data()?.photoURL || null,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                driverVehicleBrand: driverSnap.data()?.vehicle?.brand || null,
+                driverVehicleModel: driverSnap.data()?.vehicle?.model || null,
+                driverVehicleYear: driverSnap.data()?.vehicle?.year || null,
+                driverVehicleColor: driverSnap.data()?.vehicle?.color || null,
+                // [FASE 5] Commission snapshot — frozen at acceptance time
+                driverSubtypeSnapshot: driverSubtypeSnap,
+                commissionRateSnapshot: vamoRateSnap,
+                municipalRateSnapshot: municipalRateSnap,
+                updatedAt: FieldValue.serverTimestamp()
             });
+
             tx.update(db.doc(`users/${driverId}`), { activeRideId: rideId, driverStatus: 'in_ride' });
             tx.update(db.doc(`drivers_locations/${driverId}`), { driverStatus: 'in_ride' });
             tx.update(offerDoc.ref, {
                 status: 'accepted',
-                finalizedAt: admin.firestore.FieldValue.serverTimestamp()
+                finalizedAt: FieldValue.serverTimestamp()
             });
+        });
+
+        // Log OUTSIDE transaction
+        const rideSnap = await db.doc(`rides/${rideId}`).get();
+        const rideData = rideSnap.data();
+        await logLedgerEvent({
+            eventType: 'ride_accepted',
+            actorId: driverId,
+            actorRole: 'driver',
+            rideId: rideId,
+            passengerId: rideData?.passengerId || 'unknown',
+            cityKey: rideData?.cityKey || 'unknown',
         });
 
         // Cleanup other pending offers for this ride
@@ -681,7 +1039,7 @@ export const acceptRideV2 = onCall({ cors: true, region: 'us-central1' }, async 
                 if (doc.id !== offerDoc.id) {
                     batch.update(doc.ref, {
                         status: 'expired',
-                        finalizedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        finalizedAt: FieldValue.serverTimestamp(),
                         reason: 'ALREADY_ASSIGNED'
                     });
                     count++;
@@ -701,15 +1059,115 @@ export const acceptRideV2 = onCall({ cors: true, region: 'us-central1' }, async 
     }
 });
 
-export const scheduledRideWorker = onSchedule({ schedule: "every 1 minutes", timeZone: "America/Argentina/Buenos_Aires" }, async (event) => {
+export const scheduledRideWorkerV1 = onSchedule({ schedule: "every 1 minutes", timeZone: "America/Argentina/Buenos_Aires" }, async (event) => {
     const db = getDb();
-    const now = admin.firestore.Timestamp.now();
-    const snap = await db.collection('rides').where('status', '==', 'searching').get();
+    const now = Timestamp.now();
+    
+    // 1. Activation: Process 'scheduled' rides that are close to their time
+    const activationWindowMs = 15 * 60 * 1000; // 15 minutes
+    const scheduledSnap = await db.collection('rides')
+        .where('status', '==', 'scheduled')
+        .get();
 
-    for (const doc of snap.docs) {
+    for (const doc of scheduledSnap.docs) {
         const data = doc.data() as Ride;
-        if (data.currentOfferedDriverId && data.matchingExpiresAt && data.matchingExpiresAt > now) continue;
-        findNextDriverAndCreateOffer(doc.id).catch(e => logger.error(`Worker matching failed`, e));
+        if (!data.scheduledAt) continue;
+
+        const scheduledTime = (data.scheduledAt as any).toMillis ? (data.scheduledAt as any).toMillis() : new Date(data.scheduledAt as any).getTime();
+        const timeDiff = scheduledTime - now.toMillis();
+
+        if (timeDiff <= activationWindowMs) {
+            logger.info(`[RESERVATIONS] Activating ride ${doc.id}. Scheduled for: ${new Date(scheduledTime).toISOString()}`);
+            await doc.ref.update({
+                status: 'searching',
+                activatedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                matchingAttempts: 0 // Reset attempts for fresh start
+            });
+            // CRITICAL: findNextDriverAndCreateOffer will prioritize interested drivers
+            findNextDriverAndCreateOffer(doc.id).catch(e => logger.error(`Activation matching failed for ${doc.id}`, e));
+        }
+    }
+
+    // 2. Fallback: Expire stalled ride offers (Fix for Problem 1 - Avoids composite index)
+    const pendingOffersSnap = await db.collection('rideOffers')
+        .where('status', '==', 'pending')
+        .limit(500)
+        .get();
+    
+    const stalledOffers = pendingOffersSnap.docs.filter(doc => {
+        const data = doc.data() as RideOffer;
+        return data.expiresAt && (data.expiresAt as any).toMillis() < now.toMillis();
+    });
+    
+    if (stalledOffers.length > 0) {
+        logger.info(`[WORKER] Found ${stalledOffers.length} stalled offers. Expiring...`);
+        const batch = db.batch();
+        stalledOffers.forEach(doc => {
+            batch.update(doc.ref, { 
+                status: 'expired', 
+                finalizedAt: now,
+                reason: 'WORKER_TIMEOUT_FALLBACK'
+            });
+        });
+        await batch.commit();
+    }
+
+    // 3. Maintenance: Retry 'searching' rides that stalled or timed out (Fix for Problem 3)
+    const searchingSnap = await db.collection('rides').where('status', '==', 'searching').get();
+    for (const doc of searchingSnap.docs) {
+        const rideId = doc.id;
+        const data = doc.data() as Ride;
+        
+        // [VamO PRO] Fixed Timeout for Scheduled Rides
+        // Use activatedAt if it exists (for scheduled rides), fallback to createdAt
+        const referenceTime = (data as any).activatedAt || data.createdAt;
+        const createdAt = referenceTime.toMillis();
+        const searchingDurationSeconds = (now.toMillis() - createdAt) / 1000;
+
+        // Global Timeout: 5 minutes (300s)
+        if (searchingDurationSeconds > 300) {
+            logger.warn(`[WORKER] Ride ${rideId} timed out after ${searchingDurationSeconds}s. ReferenceTime: ${referenceTime.toDate().toISOString()}. Cancelling.`);
+            await db.runTransaction(async (tx) => {
+                const rSnap = await tx.get(doc.ref);
+                if (!rSnap.exists) return;
+                const rData = rSnap.data() as Ride;
+                if (rData.status !== 'searching') return;
+
+                // [VamO PRO] Unified Financial & Policy Handler (Must read before write)
+                await handleRideCancellationFinancials({
+                    rideId,
+                    reason: 'GLOBAL_SEARCH_TIMEOUT',
+                    actor: 'system',
+                    tx,
+                    rideData: rData
+                });
+
+                tx.update(doc.ref, {
+                    status: 'cancelled',
+                    cancelledBy: 'system',
+                    cancelReason: 'GLOBAL_SEARCH_TIMEOUT',
+                    updatedAt: now,
+                    cancelledAt: now
+                });
+
+                if (rData.passengerId) {
+                    tx.update(db.doc(`users/${rData.passengerId}`), { activeRideId: null });
+                }
+            });
+            continue;
+        }
+
+        // Rematching Fallback: If no pending offers, try again (Problem 1)
+        const hasPending = await hasPendingOffersForRide(db, rideId);
+        if (!hasPending) {
+            // Give it at least 5s since last update to avoid too frequent retries
+            const lastUpdate = (data.updatedAt as any).toMillis();
+            if (now.toMillis() - lastUpdate > 5000) {
+                logger.info(`[WORKER] Ride ${rideId} searching with no offers. Triggering rematch.`);
+                findNextDriverAndCreateOffer(rideId).catch(e => logger.error(`Worker rematch failed`, e));
+            }
+        }
     }
 });
 
@@ -732,18 +1190,51 @@ export const expireRideOfferTaskV1 = onTaskDispatched({
     const offerRef = db.doc(`rideOffers/${offerId}`);
     const snap = await offerRef.get();
     if (snap.exists && snap.data()?.status === 'pending') {
-        await offerRef.update({ status: 'expired', finalizedAt: admin.firestore.FieldValue.serverTimestamp() });
+        await offerRef.update({ status: 'expired', finalizedAt: FieldValue.serverTimestamp() });
     }
 });
 
 /**
  * [VamO PRO] Robust Matching Initialization
  */
+import { obs } from "./lib/observability";
+
 export const onRideCreatedV1 = onDocumentCreated({ document: "rides/{rideId}", region: 'us-central1' }, async (event: any) => {
+    const startTime = Date.now();
     const rideId = event.params.rideId;
-    logger.info(`[Matching] Triggered for rideId: ${rideId}. Backup check.`);
+    const db = getDb();
+    obs.info("RIDE_CREATED_TRIGGER", { rideId });
+    
+    const rideData = event.data?.data();
+    if (!rideData) return;
+
+    // [TRUST_SCORE] Calculate and snapshot passenger trust
+    try {
+        const trust = await calculateUserTrustScore(rideData.passengerId);
+        await db.collection('rides').doc(rideId).update({
+            'passengerTrustSnapshot': trust
+        });
+        obs.info("TRUST_SNAPSHOT_CREATED", { rideId, passengerId: rideData.passengerId, score: trust.score });
+    } catch (trustErr: any) {
+        obs.error("TRUST_SNAPSHOT_FAILED", trustErr, { rideId });
+    }
+
+    // [HEATMAP] Track demand hotspot
+    if (rideData?.origin?.lat && rideData?.origin?.lng) {
+        const geohash = geofire.geohashForLocation([rideData.origin.lat, rideData.origin.lng]);
+        const heatmapId = `demand_${geohash.substring(0, 6)}`;
+        await db.collection('heatmap_demand').doc(heatmapId).set({
+            geohash: geohash.substring(0, 6),
+            cityKey: rideData.cityKey || 'unknown',
+            count: admin.firestore.FieldValue.increment(1),
+            lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        obs.trackWrite("heatmap_demand", "set", { heatmapId });
+    }
+
     // scheduledRideWorker or proactive matching usually handles this, but we keep the trigger for robustness.
     await findNextDriverAndCreateOffer(rideId);
+    obs.trackLatency("onRideCreatedV1_Total", startTime, { rideId });
 });
 
 /**
@@ -778,8 +1269,8 @@ export const scheduledWeeklyResetV1 = onSchedule({
         const batch = db.batch();
         const chunk = allPointsSnap.docs.slice(i, i + 400);
         chunk.forEach(docSnap => {
-            batch.update(docSnap.ref, { weeklyPoints: 0, lastResetAt: admin.firestore.FieldValue.serverTimestamp() });
-            batch.update(usersRef.doc(docSnap.id), { weeklyPoints: 0, driverLevel: 'bronce', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+            batch.update(docSnap.ref, { weeklyPoints: 0, lastResetAt: FieldValue.serverTimestamp() });
+            batch.update(usersRef.doc(docSnap.id), { weeklyPoints: 0, driverLevel: 'bronce', updatedAt: FieldValue.serverTimestamp() });
         });
         await batch.commit();
     }
@@ -804,7 +1295,7 @@ export const scheduledMonthlyResetV1 = onSchedule({
         batch.update(doc.ref, {
             'passengerProgress.monthlyRides': 0,
             'passengerProgress.currentMonth': newMonth,
-            'updatedAt': admin.firestore.FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
         });
     });
     await batch.commit();
@@ -836,8 +1327,8 @@ export const togglePauseV1 = onCall({ cors: true, region: 'us-central1' }, async
             if (ride.status !== 'in_progress') throw new HttpsError('failed-precondition', 'El viaje no está en curso.');
             tx.update(rideRef, {
                 status: 'paused',
-                pauseStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                pauseStartedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
             });
         } else {
             if (ride.status !== 'paused') throw new HttpsError('failed-precondition', 'El viaje no está pausado.');
@@ -853,8 +1344,12 @@ export const togglePauseV1 = onCall({ cors: true, region: 'us-central1' }, async
             tx.update(rideRef, {
                 status: 'in_progress',
                 pauseStartedAt: null,
-                cumulativeWaitSeconds: admin.firestore.FieldValue.increment(addedWait),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                cumulativeWaitSeconds: FieldValue.increment(addedWait),
+                pauseHistory: FieldValue.arrayUnion({
+                    duration: addedWait,
+                    reason: 'driver_pause'
+                }),
+                updatedAt: FieldValue.serverTimestamp()
             });
         }
     });
@@ -911,15 +1406,7 @@ export const getRideSummaryPreviewV1 = onCall({ cors: true, region: 'us-central1
     const durationMin = Math.ceil(currentDurationSeconds / 60);
 
     // Re-run pricing algorithm
-    const argentinaHour = parseInt(
-        new Intl.DateTimeFormat('es-AR', {
-            timeZone: 'America/Argentina/Buenos_Aires',
-            hour: 'numeric',
-            hour12: false
-        }).format(new Date()),
-        10
-    );
-    const isNight = argentinaHour >= 23 || argentinaHour < 6;
+    const isNight = getIsNight(new Date());
 
     const pricingInput: PricingInput = {
         distanceKm: finalDistanceKm,
@@ -942,4 +1429,645 @@ export const getRideSummaryPreviewV1 = onCall({ cors: true, region: 'us-central1
             breakdown: priceResult.breakdown
         }
     };
+});
+/**
+ * [VamO PRO] Weekly Pool Settlement DRY-RUN
+ * This function simulates the payout process without modifying balances or resetting points.
+ * Targets Top 10 drivers with at least 10 trips.
+ */
+export const weeklyPoolSettlementDryRunV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
+    
+    // Authorization: Only admins can trigger dry-run
+    if (!(request.auth.token as any).admin) {
+        throw new HttpsError('permission-denied', 'Solo personal administrativo puede ejecutar esta simulación.');
+    }
+
+    const db = getDb();
+    const now = Timestamp.now();
+    
+    // Calculate weekId (Current week for testing purposes)
+    const getWeekId = () => {
+        const d = new Date();
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Argentina/Buenos_Aires',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const parts = formatter.formatToParts(d);
+        const y = parseInt(parts.find(p => p.type === 'year')?.value || '0');
+        const m = parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1;
+        const day = parseInt(parts.find(p => p.type === 'day')?.value || '0');
+        const argDate = new Date(y, m, day);
+        const firstDayOfYear = new Date(y, 0, 1);
+        const pastDaysOfYear = (argDate.getTime() - firstDayOfYear.getTime()) / 86400000;
+        const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+        return `${y}-W${String(weekNumber).padStart(2, '0')}`;
+    };
+
+    const weekId = getWeekId();
+    logger.info(`[DRY-RUN] Starting weekly pool settlement for week ${weekId}`);
+
+    const citiesSnap = await db.collection('cities').get();
+    const results: any[] = [];
+
+    for (const cityDoc of citiesSnap.docs) {
+        const cityKey = cityDoc.id;
+        const cityData = cityDoc.data();
+        const rewardsConfig = cityData.rewardsConfig || {};
+        const poolAmount = rewardsConfig.weeklyPoolAmount || 0;
+
+        if (poolAmount <= 0) {
+            logger.info(`[DRY-RUN] Skipping city ${cityKey} (Pool is 0)`);
+            continue;
+        }
+
+        // Fetch Top 10 drivers with at least 10 trips
+        const topDriversSnap = await db.collection('driver_points')
+            .where('weeklyTripsCount', '>=', 10)
+            .orderBy('weeklyPoints', 'desc')
+            .limit(10)
+            .get();
+
+        if (topDriversSnap.empty) {
+            logger.info(`[DRY-RUN] Skipping city ${cityKey} (No qualified drivers)`);
+            continue;
+        }
+
+        let totalAdjustedPoints = 0;
+        const driverPayouts: any[] = [];
+
+        // Pass 1: Multipliers and Adjusted Points
+        topDriversSnap.docs.forEach((doc, index) => {
+            const data = doc.data();
+            const rank = index + 1;
+            const points = data.weeklyPoints || 0;
+            
+            let multiplier = 1.0;
+            if (rank <= 2) multiplier = 1.5;
+            else if (rank <= 6) multiplier = 1.2;
+            else if (rank <= 10) multiplier = 1.0;
+
+            const adjPoints = points * multiplier;
+            totalAdjustedPoints += adjPoints;
+
+            driverPayouts.push({
+                driverId: doc.id,
+                driverName: data.driverName || 'Anónimo',
+                rank,
+                points,
+                multiplier,
+                adjPoints
+            });
+        });
+
+        // Pass 2: Final Prize Allocation
+        const cityResults = driverPayouts.map(d => {
+            const reward = totalAdjustedPoints > 0 
+                ? Math.floor((d.adjPoints / totalAdjustedPoints) * poolAmount) 
+                : 0;
+            return { ...d, reward };
+        });
+
+        const totalDistributed = cityResults.reduce((acc, curr) => acc + curr.reward, 0);
+
+        // Record in History
+        const historyId = `dryrun_${weekId}_${cityKey}_${Date.now()}`;
+        const historyData = {
+            cityKey,
+            weekId,
+            poolAmount,
+            totalAdjustedPoints,
+            totalDistributed,
+            isDryRun: true,
+            processedAt: now,
+            ranking: cityResults
+        };
+
+        await db.collection('weekly_pool_history').doc(historyId).set(historyData);
+        
+        results.push(historyData);
+        logger.info(`[DRY-RUN] City ${cityKey} processed. Total Rewards: $${totalDistributed} across ${cityResults.length} drivers.`);
+    }
+
+    return {
+        success: true,
+        weekId,
+        citiesProcessed: results.length,
+        data: results
+    };
+});
+
+/**
+ * [VamO PRO] Weekly Pool Payout MANUAL
+ * This function performs real balance increments based on the weekly pool logic.
+ * Requires an existing dry-run in history for safety.
+ */
+export const weeklyPoolPayoutManualV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
+    
+    // Authorization: Strict Admin check
+    if (!(request.auth.token as any).admin) {
+        throw new HttpsError('permission-denied', 'Solo personal administrativo puede ejecutar el payout real.');
+    }
+
+    const { cityKey } = request.data;
+    if (!cityKey) throw new HttpsError('invalid-argument', 'cityKey es obligatorio.');
+
+    const db = getDb();
+    const now = Timestamp.now();
+    
+    // Calculate current weekId
+    const getWeekId = () => {
+        const d = new Date();
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Argentina/Buenos_Aires',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const parts = formatter.formatToParts(d);
+        const y = parseInt(parts.find(p => p.type === 'year')?.value || '0');
+        const m = parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1;
+        const day = parseInt(parts.find(p => p.type === 'day')?.value || '0');
+        const argDate = new Date(y, m, day);
+        const firstDayOfYear = new Date(y, 0, 1);
+        const pastDaysOfYear = (argDate.getTime() - firstDayOfYear.getTime()) / 86400000;
+        const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+        return `${y}-W${String(weekNumber).padStart(2, '0')}`;
+    };
+
+    const weekId = getWeekId();
+    logger.info(`[PAYOUT] Attempting manual payout for city: ${cityKey}, week: ${weekId}`);
+
+    // 1. Safety Check: Verify recent dry-run exists
+    const dryRunSnap = await db.collection('weekly_pool_history')
+        .where('cityKey', '==', cityKey)
+        .where('weekId', '==', weekId)
+        .where('isDryRun', '==', true)
+        .limit(1)
+        .get();
+
+    if (dryRunSnap.empty) {
+        throw new HttpsError('failed-precondition', 'No se encontró un Dry-Run reciente para esta ciudad/semana. Ejecutá la simulación antes del pago real.');
+    }
+
+    // 2. Fetch City Data and Pool
+    const cityRef = db.doc(`cities/${cityKey}`);
+    const citySnap = await cityRef.get();
+    if (!citySnap.exists) throw new HttpsError('not-found', 'Ciudad no encontrada.');
+
+    const cityData = citySnap.data();
+    const poolAmount = cityData?.rewardsConfig?.weeklyPoolAmount || 0;
+    if (poolAmount <= 0) throw new HttpsError('failed-precondition', 'El pozo actual es 0.');
+
+    // 3. Fetch Top 10 Qualified Drivers
+    const topDriversSnap = await db.collection('driver_points')
+        .where('weeklyTripsCount', '>=', 10)
+        .orderBy('weeklyPoints', 'desc')
+        .limit(10)
+        .get();
+
+    if (topDriversSnap.empty) {
+        throw new HttpsError('failed-precondition', 'No hay conductores calificados para el reparto.');
+    }
+
+    // 4. Calculate Shares (Atomic logic replication)
+    let totalAdjustedPoints = 0;
+    const candidates: any[] = [];
+
+    topDriversSnap.docs.forEach((doc, index) => {
+        const data = doc.data();
+        const rank = index + 1;
+        const points = data.weeklyPoints || 0;
+        let multiplier = 1.0;
+        if (rank <= 2) multiplier = 1.5;
+        else if (rank <= 6) multiplier = 1.2;
+        else if (rank <= 10) multiplier = 1.0;
+        
+        const adjPoints = points * multiplier;
+        totalAdjustedPoints += adjPoints;
+        candidates.push({ driverId: doc.id, driverName: data.driverName || 'Anónimo', rank, points, multiplier, adjPoints });
+    });
+
+    const finalPayouts = candidates.map(c => {
+        const reward = totalAdjustedPoints > 0 ? Math.floor((c.adjPoints / totalAdjustedPoints) * poolAmount) : 0;
+        return { ...c, reward };
+    });
+
+    const totalDistributed = finalPayouts.reduce((acc, curr) => acc + curr.reward, 0);
+
+    // 5. Execute Payouts with Idempotency
+    const processedPayouts: any[] = [];
+    
+    for (const p of finalPayouts) {
+        if (p.reward <= 0) continue;
+
+        const payoutId = `weekly_pool_payout_${weekId}_${cityKey}_${p.driverId}`;
+        const transactionRef = db.doc(`platform_transactions/${payoutId}`);
+        const userRef = db.doc(`users/${p.driverId}`);
+
+        try {
+            await db.runTransaction(async (tx) => {
+                const txSnap = await tx.get(transactionRef);
+                if (txSnap.exists) {
+                    logger.warn(`[PAYOUT] Payout ${payoutId} already exists. Skipping.`);
+                    return;
+                }
+                // [STAGE 2A] Unified Wallet Payout
+                // addFunds handles wallets.cashBalance, wallet_transactions and legacy mirror users.currentBalance
+                await addFunds(
+                    p.driverId,
+                    p.reward,
+                    'ride_earning', // Using ride_earning for pool rewards as it represents operational gains
+                    `Premio Pozo Semanal: ${cityKey} ${weekId}`,
+                    tx,
+                    payoutId
+                );
+            });
+            processedPayouts.push({ ...p, status: 'paid' });
+        } catch (err) {
+            logger.error(`[PAYOUT] Error processing driver ${p.driverId}:`, err);
+            processedPayouts.push({ ...p, status: 'failed', error: String(err) });
+        }
+    }
+
+    // 6. Record Final History (Not dry-run)
+    const historyId = `settlement_${weekId}_${cityKey}_${Date.now()}`;
+    await db.collection('weekly_pool_history').doc(historyId).set({
+        cityKey,
+        weekId,
+        poolAmount,
+        totalDistributed,
+        isDryRun: false,
+        processedAt: now,
+        ranking: processedPayouts
+    });
+
+    return {
+        success: true,
+        weekId,
+        totalDistributed,
+        driversProcessed: processedPayouts.length,
+        results: processedPayouts
+    };
+});
+
+/**
+ * [VamO PRO] Weekly Pool RESET MANUAL
+ * This function resets the pool and driver points after a payout is confirmed.
+ */
+export const manualWeeklyPoolResetV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
+    if (!(request.auth.token as any).admin) {
+        throw new HttpsError('permission-denied', 'Solo personal administrativo puede ejecutar el reseteo.');
+    }
+
+    const { cityKey } = request.data;
+    if (!cityKey) throw new HttpsError('invalid-argument', 'cityKey es obligatorio.');
+
+    const db = getDb();
+    const now = Timestamp.now();
+
+    // 1. Safety Check: Verify payout (settlement) exists for this week
+    const getWeekId = () => {
+        const d = new Date();
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Argentina/Buenos_Aires',
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        });
+        const parts = formatter.formatToParts(d);
+        const y = parts.find(p => p.type === 'year')?.value || '0';
+        const m = parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1;
+        const day = parseInt(parts.find(p => p.type === 'day')?.value || '0');
+        const argDate = new Date(parseInt(y), m, day);
+        const firstDayOfYear = new Date(parseInt(y), 0, 1);
+        const pastDaysOfYear = (argDate.getTime() - firstDayOfYear.getTime()) / 86400000;
+        const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+        return `${y}-W${String(weekNumber).padStart(2, '0')}`;
+    };
+
+    const weekId = getWeekId();
+    
+    const settlementSnap = await db.collection('weekly_pool_history')
+        .where('cityKey', '==', cityKey)
+        .where('weekId', '==', weekId)
+        .where('isDryRun', '==', false)
+        .limit(1)
+        .get();
+
+    if (settlementSnap.empty) {
+        throw new HttpsError('failed-precondition', 'No se encontró un Payout real (Settlement) para esta ciudad/semana. No podés resetear sin haber pagado.');
+    }
+
+    const historyDoc = settlementSnap.docs[0];
+    const historyData = historyDoc.data();
+
+    if (historyData.resetCompleted) {
+        return { success: true, message: 'El reseteo ya fue completado para esta semana.', resetAt: historyData.resetAt };
+    }
+
+    // 2. Reset Pool Amount to Base ($50,000)
+    const cityRef = db.doc(`cities/${cityKey}`);
+    
+    // 3. Reset Global Driver Points
+    const driversToResetSnap = await db.collection('driver_points')
+        .where('weeklyPoints', '>', 0)
+        .get();
+
+    const driversByTripsSnap = await db.collection('driver_points')
+        .where('weeklyTripsCount', '>', 0)
+        .get();
+
+    // Merge unique doc IDs
+    const resetSet = new Set<string>();
+    driversToResetSnap.docs.forEach(d => resetSet.add(d.id));
+    driversByTripsSnap.docs.forEach(d => resetSet.add(d.id));
+
+    logger.info(`[RESET] Resetting pool for ${cityKey} and ${resetSet.size} drivers.`);
+
+    // Execute in batches of 400
+    const resetArray = Array.from(resetSet);
+    for (let i = 0; i < resetArray.length; i += 400) {
+        const batch = db.batch();
+        const chunk = resetArray.slice(i, i + 400);
+        chunk.forEach(id => {
+            batch.update(db.doc(`driver_points/${id}`), {
+                weeklyPoints: 0,
+                weeklyTripsCount: 0,
+                lastResetAt: now,
+                previousWeekId: weekId
+            });
+            // Optional: reset users mirror fields
+            batch.update(db.doc(`users/${id}`), {
+                weeklyPoints: 0,
+                updatedAt: now
+            });
+        });
+        await batch.commit();
+    }
+
+    // Finalize: Update City and History
+    const finalBatch = db.batch();
+    finalBatch.update(cityRef, {
+        'rewardsConfig.weeklyPoolAmount': 50000,
+        'rewardsConfig.lastResetAt': now
+    });
+    finalBatch.update(historyDoc.ref, {
+        resetCompleted: true,
+        resetAt: now
+    });
+    await finalBatch.commit();
+
+    return {
+        success: true,
+        weekId,
+        driversReset: resetSet.size,
+        resetAt: now
+    };
+});
+
+/**
+ * [VamO PRO] Weekly Pool AUTO-CLOSE (Scheduled)
+ * Runs every Monday at 03:00 AM ARG.
+ * Performs Payouts and Resets for all active cities.
+ */
+export const scheduledWeeklyPoolAutoCloseV1 = onSchedule({
+    schedule: '0 3 * * 1',
+    timeZone: 'America/Argentina/Buenos_Aires',
+    region: 'us-central1',
+    retryCount: 3,
+    memory: '512MiB'
+}, async (event) => {
+    logger.info('[WEEKLY_POOL_AUTO_START] Starting weekly liquidation cycle.');
+    
+    const db = getDb();
+    const now = Timestamp.now();
+    
+    // 1. Calculate weekId (The week that JUST ended)
+    const getWeekId = () => {
+        const d = new Date();
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Argentina/Buenos_Aires',
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        });
+        const parts = formatter.formatToParts(d);
+        const y = parts.find(p => p.type === 'year')?.value || '0';
+        const m = parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1;
+        const day = parseInt(parts.find(p => p.type === 'day')?.value || '0');
+        const argDate = new Date(parseInt(y), m, day);
+        const firstDayOfYear = new Date(parseInt(y), 0, 1);
+        const pastDaysOfYear = (argDate.getTime() - firstDayOfYear.getTime()) / 86400000;
+        const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+        return `${y}-W${String(weekNumber).padStart(2, '0')}`;
+    };
+
+    const weekId = getWeekId();
+    
+    // 2. Detect Active Cities
+    const citiesSnap = await db.collection('cities').get();
+    const activeCities = citiesSnap.docs.filter(doc => {
+        const data = doc.data();
+        return data.rewardsConfig?.weeklyPoolEnabled !== false && (data.rewardsConfig?.weeklyPoolAmount || 0) > 0;
+    });
+
+    if (activeCities.length === 0) {
+        logger.info('[WEEKLY_POOL_AUTO_FINISH] No active cities with rewards found.');
+        return;
+    }
+
+    // 3. Snapshot Rankings (Crucial: Fetch BEFORE any resets)
+    // We assume Top 10 global for now as per previous logic
+    const topDriversSnap = await db.collection('driver_points')
+        .where('weeklyTripsCount', '>=', 10)
+        .orderBy('weeklyPoints', 'desc')
+        .limit(10)
+        .get();
+
+    if (topDriversSnap.empty) {
+        logger.info('[WEEKLY_POOL_AUTO_FINISH] No qualified drivers found across all cities.');
+        return;
+    }
+
+    // 4. Process Each City
+    for (const cityDoc of activeCities) {
+        const cityKey = cityDoc.id;
+        const cityData = cityDoc.data();
+        const poolAmount = cityData.rewardsConfig?.weeklyPoolAmount || 0;
+
+        logger.info(`[WEEKLY_POOL_AUTO_CITY_START] Processing ${cityKey} | Pool: $${poolAmount}`);
+
+        // Check Idempotency
+        const historySnap = await db.collection('weekly_pool_history')
+            .where('cityKey', '==', cityKey)
+            .where('weekId', '==', weekId)
+            .where('isDryRun', '==', false)
+            .limit(1)
+            .get();
+
+        if (!historySnap.empty && historySnap.docs[0].data().resetCompleted) {
+            logger.info(`[WEEKLY_POOL_AUTO_CITY_SKIP] ${cityKey} already settled and reset.`);
+            continue;
+        }
+
+        try {
+            // A. Payout Logic
+            let totalAdjustedPoints = 0;
+            const candidates: any[] = [];
+            topDriversSnap.docs.forEach((doc, index) => {
+                const data = doc.data();
+                const rank = index + 1;
+                let mult = 1.0;
+                if (rank <= 2) mult = 1.5;
+                else if (rank <= 6) mult = 1.2;
+                const adj = (data.weeklyPoints || 0) * mult;
+                totalAdjustedPoints += adj;
+                candidates.push({ driverId: doc.id, name: data.driverName || 'Anónimo', rank, points: data.weeklyPoints, mult, adj });
+            });
+
+            const cityPayouts = candidates.map(c => ({
+                ...c,
+                reward: totalAdjustedPoints > 0 ? Math.floor((c.adj / totalAdjustedPoints) * poolAmount) : 0
+            }));
+
+            const processedPayouts = [];
+            for (const p of cityPayouts) {
+                if (p.reward <= 0) continue;
+                const payoutId = `weekly_pool_payout_${weekId}_${cityKey}_${p.driverId}`;
+                const transactionRef = db.doc(`platform_transactions/${payoutId}`);
+
+                await db.runTransaction(async (tx) => {
+                    const txSnap = await tx.get(transactionRef);
+                    if (txSnap.exists) return;
+                    // [STAGE 2A] Unified Wallet Payout
+                    // addFunds handles wallets.cashBalance, wallet_transactions and legacy mirror users.currentBalance
+                    await addFunds(
+                        p.driverId,
+                        p.reward,
+                        'ride_earning',
+                        `Premio Pozo Semanal (Auto): ${cityKey} ${weekId}`,
+                        tx,
+                        payoutId
+                    );
+                });
+                processedPayouts.push({ ...p, status: 'paid' });
+            }
+
+            logger.info(`[WEEKLY_POOL_AUTO_PAYOUT_SUCCESS] ${cityKey}: Paid ${processedPayouts.length} drivers.`);
+
+            // B. Record History & Reset City Pool
+            const historyId = `auto_settlement_${weekId}_${cityKey}_${Date.now()}`;
+            const historyRef = db.collection('weekly_pool_history').doc(historyId);
+            
+            const batch = db.batch();
+            batch.set(historyRef, {
+                cityKey, weekId, poolAmount, totalDistributed: processedPayouts.reduce((a, b) => a + b.reward, 0),
+                isDryRun: false, processedAt: now, ranking: processedPayouts, source: 'auto_cron'
+            });
+            batch.update(db.doc(`cities/${cityKey}`), {
+                'rewardsConfig.weeklyPoolAmount': 50000,
+                'rewardsConfig.lastResetAt': now
+            });
+            await batch.commit();
+
+            logger.info(`[WEEKLY_POOL_AUTO_RESET_SUCCESS] ${cityKey}: Pool reset to 50000.`);
+
+            // C. Finalize Settlement Status
+            await historyRef.update({ resetCompleted: true, resetAt: now });
+
+        } catch (err) {
+            logger.error(`[WEEKLY_POOL_AUTO_ERROR] Failed city ${cityKey}:`, err);
+        }
+    }
+
+    // 5. Global Driver Points Reset (Final Step)
+    const driversToResetSnap = await db.collection('driver_points')
+        .where('weeklyPoints', '>', 0)
+        .get();
+    
+    if (!driversToResetSnap.empty) {
+        const resetArray = driversToResetSnap.docs.map(d => d.id);
+        for (let i = 0; i < resetArray.length; i += 400) {
+            const batch = db.batch();
+            const chunk = resetArray.slice(i, i + 400);
+            chunk.forEach(id => {
+                batch.update(db.doc(`driver_points/${id}`), {
+                    weeklyPoints: 0, weeklyTripsCount: 0, lastResetAt: now, previousWeekId: weekId
+                });
+                batch.update(db.doc(`users/${id}`), {
+                    weeklyPoints: 0, updatedAt: now
+                });
+            });
+            await batch.commit();
+        }
+        logger.info(`[WEEKLY_POOL_AUTO_RESET_SUCCESS] Global reset for ${driversToResetSnap.size} drivers.`);
+    }
+
+    logger.info('[WEEKLY_POOL_AUTO_FINISH] All cities processed successfully.');
+});
+
+/**
+ * [VamO PRO] Join Scheduled Ride Interest
+ * Allows an approved driver to join the "interested" queue for a scheduled ride.
+ */
+export const joinScheduledRideInterestV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
+    const db = getDb();
+    const { rideId } = request.data;
+    const driverId = request.auth.uid;
+
+    if (!rideId) throw new HttpsError('invalid-argument', 'Falta rideId.');
+
+    try {
+        const result = await db.runTransaction(async (tx) => {
+            const rideRef = db.doc(`rides/${rideId}`);
+            const driverRef = db.doc(`users/${driverId}`);
+            
+            const [rideSnap, driverSnap] = await Promise.all([tx.get(rideRef), tx.get(driverRef)]);
+
+            if (!rideSnap.exists) throw new HttpsError('not-found', 'Viaje no encontrado.');
+            const ride = rideSnap.data() as Ride;
+
+            if (ride.status !== 'scheduled') {
+                throw new HttpsError('failed-precondition', 'El viaje ya no está en estado programado.');
+            }
+
+            const driver = driverSnap.data() as UserProfile;
+            if (!driver) throw new HttpsError('not-found', 'Perfil de conductor no encontrado.');
+
+            // Eligibility check: Approved or Active Municipal Status
+            const isApproved = driver.approved === true || driver.municipalStatus === 'active';
+            if (!isApproved) {
+                throw new HttpsError('permission-denied', 'Tu cuenta aún no está habilitada para tomar reservas.');
+            }
+
+            if (driver.activeRideId) {
+                throw new HttpsError('failed-precondition', 'Ya tenés un viaje activo.');
+            }
+
+            // [VamO PRO] City Isolation: Driver must belong to the same city as the ride
+            if (ride.cityKey !== driver.cityKey) {
+                throw new HttpsError('permission-denied', 'No podés anotarte en viajes de otra ciudad.');
+            }
+
+            const interestedIds = ride.interestedDriverIds || [];
+            if (interestedIds.includes(driverId)) {
+                return { success: true, alreadyJoined: true };
+            }
+
+            tx.update(rideRef, {
+                interestedDriverIds: FieldValue.arrayUnion(driverId),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            return { success: true, alreadyJoined: false };
+        });
+
+        return result;
+    } catch (error: any) {
+        logger.error(`[RESERVATIONS] Error in joinScheduledRideInterestV1 for ride ${rideId}`, error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', 'Error al procesar la solicitud.');
+    }
 });

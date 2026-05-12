@@ -1,0 +1,264 @@
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
+import { getDb } from "./lib/firebaseAdmin";
+import { UserProfile, RegistrationStatus } from "./types";
+import { normalizePhone } from "./lib/phone";
+
+/**
+ * [VamO SECURITY] completePassengerRegistrationV1
+ * Atomic and idempotent passenger registration handler.
+ * Replaces direct frontend writes to 'users' and 'wallets'.
+ */
+export const completePassengerRegistrationV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
+    const startTime = Date.now();
+    const auth = request.auth;
+    if (!auth) {
+        throw new HttpsError("unauthenticated", "User must be authenticated.");
+    }
+
+    const uid = auth.uid;
+    const email = auth.token.email || "";
+    const { device, referralCode } = request.data || {};
+    
+    logger.info(`[PASSENGER_AUTH_AUDIT][REGISTER_START] uid=${uid} email=${email}`, { data: request.data });
+    
+    const db = getDb();
+    const userRef = db.collection("users").doc(uid);
+    const walletRef = db.collection("wallets").doc(uid);
+
+    logger.info(`[PASSENGER_AUTH_AUDIT][AUTH_VERIFIED] UID: ${uid}`);
+
+    try {
+        logger.info(`[PASSENGER_AUTH_AUDIT][TX_START] Starting transaction for uid=${uid}`);
+        const result = await db.runTransaction(async (transaction) => {
+            const userSnap = await transaction.get(userRef);
+            const walletSnap = await transaction.get(walletRef);
+            
+            let userCreated = false;
+            let walletCreated = false;
+
+            // 1. Handle User Document
+            if (!userSnap.exists) {
+                const newUser: UserProfile = {
+                    uid,
+                    email,
+                    emailLower: email.toLowerCase().trim(),
+                    role: "passenger",
+                    profileCompleted: false,
+                    registrationStatus: "pending_profile",
+                    onboardingIncomplete: true,
+                    name: "",
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    referredByCode: referralCode || null,
+                };
+                transaction.set(userRef, newUser);
+                userCreated = true;
+                logger.info(`[PASSENGER_AUTH_AUDIT][USER_DOC_CREATED] uid=${uid}`);
+            } else {
+                logger.info(`[PASSENGER_AUTH_AUDIT][USER_DOC_EXISTS] uid=${uid}`);
+            }
+
+            // 2. Handle Wallet Document
+            if (!walletSnap.exists) {
+                transaction.set(walletRef, {
+                    userId: uid,
+                    balance: 0,
+                    currentBalance: 0,
+                    currency: "ARS",
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                walletCreated = true;
+                logger.info(`[PASSENGER_AUTH_AUDIT][WALLET_DOC_CREATED] uid=${uid}`);
+            } else {
+                logger.info(`[PASSENGER_AUTH_AUDIT][WALLET_DOC_EXISTS] uid=${uid}`);
+            }
+
+            return { userCreated, walletCreated };
+        });
+
+        const latency = Date.now() - startTime;
+        logger.info(`[PASSENGER_AUTH_AUDIT][REGISTER_SUCCESS] uid=${uid} latency=${latency}ms`, { ...result });
+
+        return { success: true, ...result };
+
+    } catch (error: any) {
+        logger.error(`[PASSENGER_AUTH_AUDIT][REGISTER_ERROR] uid=${uid}`, {
+            message: error.message,
+            code: error.code,
+            stack: error.stack
+        });
+        throw new HttpsError("internal", `Error en la registración: ${error.message || 'unknown'}`);
+    }
+});
+
+/**
+ * [VamO SECURITY] repairUserProfileV1
+ * Self-healing callable to restore missing Firestore/Wallet documents for existing Auth users.
+ */
+export const repairUserProfileV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
+    const startTime = Date.now();
+    const auth = request.auth;
+    if (!auth) throw new HttpsError("unauthenticated", "User must be authenticated.");
+
+    const uid = auth.uid;
+    const email = auth.token.email || "";
+    
+    logger.info(`[REPAIR_FUNCTION_START] uid=${uid} email=${email}`);
+
+    const db = getDb();
+    const userRef = db.collection("users").doc(uid);
+    const walletRef = db.collection("wallets").doc(uid);
+
+    try {
+        logger.info(`[REPAIR_TRANSACTION_START] Starting repair transaction for uid=${uid}`);
+        await db.runTransaction(async (transaction) => {
+            const userSnap = await transaction.get(userRef);
+            const walletSnap = await transaction.get(walletRef);
+
+            if (!userSnap.exists) {
+                transaction.set(userRef, {
+                    uid,
+                    email,
+                    emailLower: email.toLowerCase().trim(),
+                    role: "passenger",
+                    profileCompleted: false,
+                    registrationStatus: "pending_profile",
+                    onboardingIncomplete: true,
+                    name: "",
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+                logger.info(`[REPAIR_USER_CREATED] uid=${uid}`);
+            }
+
+            if (!walletSnap.exists) {
+                transaction.set(walletRef, {
+                    userId: uid,
+                    balance: 0,
+                    currentBalance: 0,
+                    currency: "ARS",
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                logger.info(`[REPAIR_WALLET_CREATED] uid=${uid}`);
+            }
+        });
+
+        const latency = Date.now() - startTime;
+        logger.info(`[REPAIR_FUNCTION_SUCCESS] uid=${uid} latency=${latency}ms`);
+        return { success: true };
+
+    } catch (error: any) {
+        logger.error(`[REPAIR_FUNCTION_ERROR] uid=${uid}`, {
+            message: error.message,
+            code: error.code,
+            stack: error.stack
+        });
+        throw new HttpsError("internal", `Error reparando el perfil: ${error.message}`);
+    }
+});
+
+/**
+ * [VamO SECURITY] completeDriverRegistrationV1
+ * Atomic and idempotent driver registration handler.
+ */
+export const completeDriverRegistrationV1 = onCall({ cors: true, region: "us-central1" }, async (request) => {
+    const startTime = Date.now();
+    const auth = request.auth;
+    if (!auth) throw new HttpsError("unauthenticated", "User must be authenticated.");
+
+    const uid = auth.uid;
+    const email = auth.token.email || "";
+    const { phone, cityKey, city } = request.data || {};
+    
+    logger.info(`[DRIVER_REGISTER_FUNCTION_START] uid=${uid} email=${email}`, { data: request.data });
+
+    const db = getDb();
+    const normalizedPhone = normalizePhone(phone);
+    
+    // [VamO SECURITY] Uniqueness check BEFORE transaction to avoid contention if possible, 
+    // but within transaction is safer for race conditions. 
+    // We'll do it inside the transaction below.
+
+    const userRef = db.collection("users").doc(uid);
+    const walletRef = db.collection("wallets").doc(uid);
+
+    try {
+        logger.info(`[DRIVER_REGISTER_TRANSACTION_START] Starting transaction for uid=${uid}`);
+        const result = await db.runTransaction(async (transaction) => {
+            const userSnap = await transaction.get(userRef);
+            const walletSnap = await transaction.get(walletRef);
+            
+            let userCreated = false;
+            let walletCreated = false;
+
+            if (!userSnap.exists) {
+                // [VamO SECURITY] Race condition check: phone must be unique
+                if (normalizedPhone) {
+                    const existingPhone = await transaction.get(
+                        db.collection("users").where("phoneNormalized", "==", normalizedPhone).limit(1)
+                    );
+                    if (!existingPhone.empty) {
+                        throw new HttpsError("already-exists", "Este número de teléfono ya está registrado.");
+                    }
+                }
+
+                const newUser = {
+                    uid,
+                    email,
+                    emailLower: email.toLowerCase().trim(),
+                    role: "driver",
+                    phone: phone || "",
+                    phoneNormalized: normalizedPhone || null,
+                    cityKey: cityKey || "",
+                    city: city || "",
+                    approved: false,
+                    municipalStatus: "pending_municipal_review",
+                    driverStatus: "offline",
+                    profileCompleted: false,
+                    registrationStatus: "pending_profile",
+                    onboardingIncomplete: true,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                };
+                transaction.set(userRef, newUser);
+                userCreated = true;
+                logger.info(`[DRIVER_REGISTER_USER_CREATED] uid=${uid}`);
+            } else {
+                logger.info(`[DRIVER_REGISTER_USER_EXISTS] uid=${uid}`);
+            }
+
+            if (!walletSnap.exists) {
+                transaction.set(walletRef, {
+                    userId: uid,
+                    balance: 0,
+                    currentBalance: 0,
+                    currency: "ARS",
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                walletCreated = true;
+                logger.info(`[DRIVER_REGISTER_WALLET_CREATED] uid=${uid}`);
+            } else {
+                logger.info(`[DRIVER_REGISTER_WALLET_EXISTS] uid=${uid}`);
+            }
+
+            return { userCreated, walletCreated };
+        });
+
+        const latency = Date.now() - startTime;
+        logger.info(`[DRIVER_REGISTER_FUNCTION_SUCCESS] uid=${uid} latency=${latency}ms`);
+        return { success: true, ...result };
+
+    } catch (error: any) {
+        logger.error(`[DRIVER_REGISTER_FUNCTION_ERROR] uid=${uid}`, {
+            message: error.message,
+            code: error.code,
+            stack: error.stack
+        });
+        throw new HttpsError("internal", `Error en la registración del conductor: ${error.message}`);
+    }
+});

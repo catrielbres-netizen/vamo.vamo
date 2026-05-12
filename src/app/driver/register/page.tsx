@@ -1,13 +1,5 @@
-import dynamic from 'next/dynamic';
+import DriverRegisterClient from '@/components/driver/DriverRegisterClient';
 
-const DriverRegisterClient = dynamic(
-  () => import('./DriverRegisterClient'),
-  { 
-    ssr: false, 
-    loading: () => <div className="min-h-screen bg-[#121212]" />
-  }
-);
-
-export default function Page() {
+export default function RegisterPage() {
   return <DriverRegisterClient />;
 }

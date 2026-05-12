@@ -18,18 +18,23 @@ import { Timestamp, doc, runTransaction, increment } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import RatingForm from './RatingForm';
-import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
 import { cn } from '@/lib/utils';
+import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
+import { ExpressReceiptProgress } from './ExpressProgressWidget';
+import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useRef, useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import confetti from 'canvas-confetti';
 
 function formatCurrency(value: number) {
   if (typeof value !== 'number' || isNaN(value)) return '$...';
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
+    minimumFractionDigits: 2
   }).format(value);
 }
 
@@ -54,47 +59,37 @@ export default function FinishedRideSummary({
   const firebaseApp = useFirebaseApp();
   const router = useRouter();
   const pointsAwardedRef = useRef(false);
+  const missionConfettiRef = useRef(false);
   const [isRatingSubmitted, setIsRatingSubmitted] = useState(false);
 
   useEffect(() => {
-    if (ride.status === 'completed' && !ride.vamoPointsAwarded && !pointsAwardedRef.current && userRole === 'passenger') {
-      if (!firestore || !ride.passengerId) return;
+    const isDriver = userRole === 'driver';
+    const missionDone = (ride.completedRide as any)?.missionCompleted;
+    
+    if (isDriver && missionDone && !missionConfettiRef.current) {
+        missionConfettiRef.current = true;
+        const duration = 3 * 1000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
 
-      pointsAwardedRef.current = true;
+        const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
-      const awardPoints = async () => {
-        const pointsForThisRide = (ride.serviceType === 'premium' || ride.serviceType === 'normal') ? 5 : 2;
-        const rideRef = doc(firestore, 'rides', ride.id);
-        const userProfileRef = doc(firestore, 'users', ride.passengerId);
+        const interval: any = setInterval(() => {
+            const timeLeft = animationEnd - Date.now();
 
-        try {
-          await runTransaction(firestore, async (transaction) => {
-            const userProfileDoc = await transaction.get(userProfileRef);
-            if (!userProfileDoc.exists()) {
-              throw new Error(`Profile for passenger ${ride.passengerId} not found.`);
+            if (timeLeft <= 0) {
+                return clearInterval(interval);
             }
 
-            const currentProfile = userProfileDoc.data() as UserProfile;
-            const newTotalPoints = (currentProfile.vamoPoints || 0) + pointsForThisRide;
-            const hasBonus = newTotalPoints >= 30;
-
-            transaction.update(userProfileRef, {
-              vamoPoints: newTotalPoints,
-              'stats.ridesCompleted': increment(1),
-              activeBonus: hasBonus,
-            });
-
-            transaction.update(rideRef, { vamoPointsAwarded: pointsForThisRide });
-          });
-        } catch (error) {
-          console.error('Failed to award points in transaction:', error);
-          pointsAwardedRef.current = false;
-        }
-      };
-
-      awardPoints();
+            const particleCount = 50 * (timeLeft / duration);
+            confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+            confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+        }, 250);
     }
-  }, [ride.status, ride.id, ride.passengerId, firestore, ride.vamoPointsAwarded, userRole, ride.serviceType]);
+  }, [ride.completedRide, userRole]);
+
+  // Puntos de pasajero y contador de viajes ahora se gestionan de forma segura en el backend (onRideSettlementV6).
+  // La UI ya no realiza escrituras directas para evitar fallos por white-screens o desconexiones.
 
   const fallbackNavigate = () => {
     const target = userRole === 'driver' ? '/driver/rides' : '/dashboard/ride';
@@ -121,6 +116,11 @@ export default function FinishedRideSummary({
     }
   }, [profile?.activeRideId]);
   */
+
+  const id = ride.id;
+  useEffect(() => {
+    console.log(`[RECEIPT_DIAGNOSTIC] ${id} status=${ride.status} hasCompletedRide=${!!ride.completedRide}`);
+  }, [ride.status, !!ride.completedRide, id]);
 
   const handleRatingSubmit = async (rating: number, comments: string) => {
     if (rating === 0 || !firebaseApp || isRatingSubmitted) {
@@ -156,19 +156,92 @@ export default function FinishedRideSummary({
     }
   };
 
-  const isProcessing = !ride.completedRide;
-  if (isProcessing) {
-      console.log('[RECEIPT_UI] summary fallback used due to missing completedRide');
-  } else {
-      console.log('[RECEIPT_UI] pricing source: completedRide');
+  const [showSkip, setShowSkip] = useState(false);
+  useEffect(() => {
+    if (!ride.completedRide) {
+        const timer = setTimeout(() => setShowSkip(true), 8000);
+        return () => clearTimeout(timer);
+    } else {
+        setShowSkip(false);
+    }
+  }, [!!ride.completedRide]);
+
+  const hasPricingFallback = !!((ride.pricing as any)?.estimatedTotal || (ride.pricing as any)?.finalTotal);
+  const isProcessing = !ride.completedRide && (!showSkip || !hasPricingFallback);
+  const settlementError = (ride as any).settlementError;
+
+  if (settlementError) {
+      return (
+        <Card className="m-4 border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-zinc-950">
+          <CardContent className="flex flex-col items-center justify-center py-20 space-y-4">
+            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
+                <VamoIcon name="alert-triangle" className="h-8 w-8 text-red-500" />
+            </div>
+            <p className="text-xl font-black text-white uppercase tracking-tighter text-center px-6">Error en la liquidación</p>
+            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest text-center px-10">
+                Hubo un problema al generar el recibo final. Los puntos y billetera se sincronizarán en breve.
+            </p>
+            <div className="p-3 bg-zinc-900 rounded-xl border border-white/5 w-[80%] overflow-hidden">
+                <p className="text-[8px] font-mono text-zinc-600 break-words">{settlementError}</p>
+            </div>
+            <div className="flex flex-col w-full px-6 gap-2 pt-4">
+                <Button 
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 h-14 font-black rounded-2xl"
+                    onClick={() => window.location.reload()}
+                >
+                    Reintentar ahora
+                </Button>
+                <Button 
+                    variant="ghost" 
+                    className="w-full text-[10px] font-black uppercase tracking-widest text-zinc-600"
+                    onClick={handleClose}
+                >
+                    Ver panel principal
+                </Button>
+            </div>
+          </CardContent>
+        </Card>
+      );
   }
 
-  const rideDate =
-    ride.completedAt instanceof Timestamp
-      ? format((ride.completedAt as Timestamp).toDate(), "d 'de' MMMM, HH:mm'hs'", { locale: es })
-      : ride.completedAt 
-        ? format(new Date(ride.completedAt as any), "d 'de' MMMM, HH:mm'hs'", { locale: es }) 
-        : 'Cargando fecha...';
+  if (isProcessing) {
+      return (
+        <Card className="m-4 border-none shadow-2xl rounded-[2.5rem] overflow-hidden">
+          <CardContent className="flex flex-col items-center justify-center py-20 space-y-4">
+            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-xl font-black text-primary uppercase tracking-tighter text-center">Generando recibo...</p>
+            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest text-center px-6">
+                {showSkip ? 'Sincronización demorada. Podés volver al panel y el recibo aparecerá en tu historial.' : 'Calculando tarifa final, puntos y comisiones...'}
+            </p>
+            {showSkip && (
+                <div className="flex flex-col w-full px-6 gap-2 mt-4">
+                    <Button 
+                        className="w-full bg-zinc-800 hover:bg-zinc-700 h-12 font-black rounded-xl text-xs uppercase tracking-widest"
+                        onClick={handleClose}
+                    >
+                        Ir al panel
+                    </Button>
+                    <p className="text-[8px] text-zinc-500 text-center uppercase font-bold">El viaje ya fue marcado como completado.</p>
+                </div>
+            )}
+          </CardContent>
+        </Card>
+      );
+  }
+
+  let rideDate = 'Cargando fecha...';
+  try {
+    if (ride.completedAt instanceof Timestamp) {
+      rideDate = format(ride.completedAt.toDate(), "d 'de' MMMM, HH:mm'hs'", { locale: es });
+    } else if (ride.completedAt) {
+      const d = new Date(ride.completedAt as any);
+      if (!isNaN(d.getTime())) {
+        rideDate = format(d, "d 'de' MMMM, HH:mm'hs'", { locale: es });
+      }
+    }
+  } catch(e) {
+    console.error("Invalid date for completedAt:", ride.completedAt);
+  }
 
   const totalFare = ride.completedRide?.totalFare || (ride.pricing as any)?.finalTotal || (ride.pricing as any)?.estimatedTotal || 0;
   const baseFare = ride.completedRide?.baseFare || 0;
@@ -179,21 +252,41 @@ export default function FinishedRideSummary({
   const baseAndDistanceFare = baseFare + distanceFare;
   const discountAmount = (ride.pricing as any)?.discountAmount ?? 0;
   const isDriver = userRole === 'driver';
-  const hasUserRated = isDriver ? !!ride.passengerRatingByDriver : !!ride.driverRatingByPassenger;
-
-  // Bloque 7: Points Rewards for Drivers
-  const pointsAwarded = ride.completedRide?.pointsAwarded ?? 0;
-  const currentPoints = profile?.rewardPoints || 0;
-  const currentLevel = profile?.driverLevel || 'bronce';
+  
+  // [VamO PRO] Driver Level Logic
+  const currentPoints = profile?.rewardPoints ?? profile?.weeklyPoints ?? 0;
+  let currentLevel = 'bronce';
+  if (currentPoints >= 100) currentLevel = 'oro';
+  else if (currentPoints >= 50) currentLevel = 'plata';
   
   const nextThreshold = currentLevel === 'bronce' ? 50 : currentLevel === 'plata' ? 100 : null;
   const pointsToNext = nextThreshold ? nextThreshold - currentPoints : 0;
 
+  // [VamO PRO] Feedback Logic: Determine what the user gave and what the user received.
+  const userRatingValue = isDriver ? ride.passengerRatingByDriver : ride.driverRatingByPassenger;
+  const userCommentText = isDriver ? ride.passengerComments : ride.driverComments;
+
+  const receivedRatingValue = isDriver ? ride.driverRatingByPassenger : ride.passengerRatingByDriver;
+  const receivedCommentText = isDriver ? ride.driverComments : ride.passengerComments;
+  const pointsAwarded = ride.completedRide?.pointsAwarded || (ride.serviceType === 'express' ? 2 : 5);
+
   return (
     <Card className="m-4 border-none shadow-2xl rounded-[2.5rem] overflow-hidden">
       <CardHeader className="pb-2">
-        <CardTitle className="text-2xl font-black text-primary uppercase tracking-tight">¡Viaje finalizado!</CardTitle>
+        <CardTitle className="text-2xl font-black text-primary uppercase tracking-tight flex items-center gap-2">
+            ¡Viaje finalizado!
+            {!ride.completedRide && (
+                <div className="bg-amber-500 text-black text-[8px] px-2 py-0.5 rounded-full animate-pulse">PROVISORIO</div>
+            )}
+        </CardTitle>
         <CardDescription className="text-[10px] font-bold uppercase tracking-widest">{`Recibo del ${rideDate}`}</CardDescription>
+        {!ride.completedRide && (
+            <div className="bg-amber-500/10 border border-amber-500/20 p-2 rounded-xl mt-2">
+                <p className="text-[8px] text-amber-500 font-bold uppercase text-center leading-tight">
+                    Sincronización de puntos y billetera demorada.<br/>Tarifa calculada según estimación inicial.
+                </p>
+            </div>
+        )}
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -214,45 +307,167 @@ export default function FinishedRideSummary({
           </div>
         </div>
 
-        <div className="border-t border-b py-4 space-y-2">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Tarifa base + distancia</span>
-            <span>{formatCurrency(baseAndDistanceFare)}</span>
-          </div>
+        {(() => {
+          const data = getRideFinancialSnapshot(ride);
+          const totalFare = data.totalFare;
+          const discountAmount = data.discountAmount;
+          const walletCoveredAmount = data.walletCoveredAmount;
+          const cashToCollect = data.cashToCollect;
+          const commissionAmount = data.commissionAmount;
+          const vamoSubsidyAmount = data.vamoSubsidyAmount;
+          const driverWalletCredit = data.driverWalletCredit;
+          const driverNetAmount = data.driverNetEarnings;
+          const originalTotal = data.originalTotal;
+          
+          const isFullyWallet = walletCoveredAmount >= (totalFare - discountAmount) && (totalFare - discountAmount) > 0;
+          const hasCash = cashToCollect > 0;
+          
+          return (
+            <>
+                {/* Tarifa Original (Vista Pasajero) o Valor del Viaje (Vista Conductor) */}
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-zinc-500 font-bold uppercase tracking-widest text-[9px]">
+                    {isDriver ? 'Valor del Viaje' : (data.dynamicApplied ? 'Tarifa Municipal' : 'Tarifa original')}
+                  </span>
+                  <span className={cn("font-bold text-white", !isDriver && (discountAmount > 0 || data.dynamicApplied) ? "line-through opacity-40" : "")}>
+                    {formatCurrency(data.dynamicApplied ? data.municipalBaseFare : originalTotal)}
+                  </span>
+                </div>
 
-          {waitingFare > 0 && (
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">
-                Costo por espera ({formatDuration(waitingSeconds)})
-              </span>
-              <span>{formatCurrency(waitingFare)}</span>
-            </div>
-          )}
+                {/* Descuento Tarifa Dinámica (Solo Vista Pasajero) */}
+                {!isDriver && data.dynamicApplied && (
+                  <div className="flex justify-between items-center text-xs font-black text-indigo-400">
+                    <div className="flex items-center gap-1.5">
+                      <VamoIcon name="sparkles" className="h-3 w-3" />
+                      <span className="uppercase tracking-tighter text-[9px]">Promoción VamO Smart</span>
+                    </div>
+                    <span>-{formatCurrency(data.dynamicDiscountAmount)}</span>
+                  </div>
+                )}
 
-          {discountAmount > 0 && (
-            <div className="flex justify-between items-center text-sm text-green-500">
-              <span className="text-muted-foreground">Descuento VamO</span>
-              <span>-{formatCurrency(discountAmount)}</span>
-            </div>
-          )}
-        </div>
+                {/* Descuento Pasajero (Solo Vista Pasajero) */}
+                {!isDriver && discountAmount > 0 && (
+                  <div className="flex justify-between items-center text-xs font-black text-emerald-400">
+                    <div className="flex items-center gap-1.5">
+                      <VamoIcon name="sparkles" className="h-3 w-3" />
+                      <span className="uppercase tracking-tighter text-[9px]">{data.discountReason || 'Beneficio VamO'}</span>
+                    </div>
+                    <span>-{formatCurrency(discountAmount)}</span>
+                  </div>
+                )}
 
-        <div className="flex flex-col gap-2 pt-2">
-          <div className="flex justify-between items-center font-bold text-lg">
-            <span>{isDriver ? 'Tarifa Total' : 'Total pagado'}</span>
-            <span className={cn(isDriver ? "text-white" : "text-primary")}>{formatCurrency(isDriver ? totalFare : (totalFare - discountAmount))}</span>
-          </div>
 
-          {isDriver && (ride.pricing as any)?.compensationAmount > 0 && (
-            <div className="flex justify-between items-center text-sm font-black text-green-500 bg-green-500/10 p-3 rounded-xl border border-green-500/20 animate-in zoom-in-95 duration-500">
-              <div className="flex items-center gap-2">
-                <VamoIcon name="shield-check" className="h-4 w-4" />
-                <span className="uppercase tracking-widest text-[10px]">Protección VamO</span>
+                {/* Tiempo de Espera (Vista Pasajero/Conductor) */}
+                {waitingFare > 0 && (
+                  <div className="flex justify-between items-center text-xs font-black text-orange-400/90">
+                    <div className="flex items-center gap-1.5">
+                      <VamoIcon name="clock" className="h-3 w-3" />
+                      <span className="uppercase tracking-widest text-[9px]">Tiempo de Espera ({formatDuration(waitingSeconds)})</span>
+                    </div>
+                    <span>+{formatCurrency(waitingFare)}</span>
+                  </div>
+                )}
+              <div className="flex flex-col gap-2 pt-2">
+                {/* Total de la operación */}
+                <div className="flex justify-between items-center font-black text-xl tracking-tighter">
+                  <span className="uppercase text-[10px] tracking-widest text-zinc-500">
+                    {isDriver ? 'Total del Viaje' : 'Total a Pagar'}
+                  </span>
+                  <span className={cn(isDriver ? "text-white" : "text-primary")}>
+                    {formatCurrency(totalFare - (!isDriver ? discountAmount : 0))}
+                  </span>
+                </div>
+
+                {/* Detalle de Cobro / Acreditación */}
+                <div className="space-y-2 pt-2 border-t border-dashed border-white/10 mt-1">
+                  {ride.paymentMethod === 'cash' ? (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex justify-between items-center text-md font-black text-white bg-zinc-900 p-4 rounded-2xl border border-white/5 shadow-inner">
+                        <span className="uppercase tracking-widest text-[9px]">{isDriver ? 'Cobrás en efectivo' : 'Efectivo a pagar'}</span>
+                        <span className="text-primary text-2xl tracking-tighter italic">{formatCurrency(cashToCollect)}</span>
+                      </div>
+                      {isDriver && (
+                        <p className="text-[7px] text-zinc-500 uppercase font-bold tracking-widest text-center px-2 mt-1 italic">
+                          Detalle financiero completo disponible en Billetera
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex justify-between items-center text-md font-black text-indigo-400 bg-indigo-500/5 p-4 rounded-2xl border border-indigo-500/10 shadow-inner">
+                        <div className="flex flex-col">
+                           <span className="uppercase tracking-widest text-[9px]">VamO Pay (Digital)</span>
+                           {isDriver && <span className="text-[7px] font-bold opacity-60">Acreditado en Billetera</span>}
+                        </div>
+                        <span className="text-2xl tracking-tighter italic">{formatCurrency(walletCoveredAmount)}</span>
+                      </div>
+                      {isDriver && (
+                         <p className="text-[7px] text-zinc-500 uppercase font-bold tracking-widest text-center px-2 mt-1 italic">
+                           Detalle financiero completo disponible en Billetera
+                         </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
               </div>
-              <span>+{formatCurrency((ride.pricing as any).compensationAmount)}</span>
+              
+            </>
+          );
+        })()}
+
+        {isDriver && (ride.pricing as any)?.compensationAmount > 0 && (
+          <div className="flex justify-between items-center text-sm font-black text-green-500 bg-green-500/10 p-3 rounded-xl border border-green-500/20 animate-in zoom-in-95 duration-500">
+            <div className="flex items-center gap-2">
+              <VamoIcon name="shield-check" className="h-4 w-4" />
+              <span className="uppercase tracking-widest text-[10px]">Protección VamO</span>
             </div>
-          )}
-        </div>
+            <span>+{formatCurrency((ride.pricing as any).compensationAmount)}</span>
+          </div>
+        )}
+
+        {isDriver && (ride.completedRide as any)?.missionCompleted && (
+          <div className="relative overflow-hidden">
+             {/* [VamO PRO] GESTO LINDO - REGALO GIGANTE ANIMADO */}
+             <motion.div 
+               initial={{ scale: 0.5, opacity: 0, y: 50 }}
+               animate={{ scale: 1, opacity: 1, y: 0 }}
+               transition={{ type: "spring", damping: 15, stiffness: 100 }}
+               className="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-6 rounded-[2.5rem] border border-white/30 shadow-[0_20px_50px_rgba(79,70,229,0.4)] relative overflow-hidden group"
+             >
+                {/* Background Sparkles */}
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 pointer-events-none" />
+                
+                <div className="relative z-10 flex flex-col items-center text-center py-2">
+                    <motion.div 
+                        animate={{ 
+                            rotate: [0, -10, 10, -10, 10, 0],
+                            scale: [1, 1.1, 1, 1.1, 1] 
+                        }}
+                        transition={{ repeat: Infinity, duration: 2 }}
+                        className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-2xl mb-4"
+                    >
+                        <VamoIcon name="gift" className="w-10 h-10 text-indigo-600" />
+                    </motion.div>
+                    
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/80 mb-1">¡Misión Cumplida!</p>
+                    <h3 className="text-3xl font-black text-white italic tracking-tighter mb-4">¡RECOMPENSA DESBLOQUEADA!</h3>
+                    
+                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 w-full">
+                        <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">Has ganado</p>
+                        <p className="text-4xl font-black text-white tabular-nums drop-shadow-md">
+                            {formatCurrency((ride.completedRide as any).missionBonus || 0)}
+                        </p>
+                    </div>
+                    
+                    <p className="mt-4 text-[9px] font-bold text-white/60 uppercase tracking-widest">Acreditado al instante en tu billetera</p>
+                </div>
+
+                {/* Animated Light Rays */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200%] h-[200%] bg-[conic-gradient(from_0deg,transparent_0deg,rgba(255,255,255,0.1)_10deg,transparent_20deg)] animate-[spin_10s_linear_infinite] pointer-events-none" />
+             </motion.div>
+          </div>
+        )}
 
         {isDriver && (
           <div className="mt-6 pt-6 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2 duration-700">
@@ -263,7 +478,7 @@ export default function FinishedRideSummary({
                     </div>
                     <div>
                         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-none mb-1">Recompensa</p>
-                        <p className="text-lg font-black text-white leading-none">+{pointsAwarded} Puntos {ride.serviceType === 'express' ? 'Express' : (ride.serviceType === 'premium' ? 'Premium' : 'Normal')}</p>
+                        <p className="text-lg font-black text-white leading-none">+{pointsAwarded} Puntos {ride.serviceType === 'express' ? 'Express' : 'Profesional'}</p>
                     </div>
                 </div>
                 <div className="text-right">
@@ -291,14 +506,50 @@ export default function FinishedRideSummary({
             ? `Pasajero: ${ride.passengerName || 'No disponible'}`
             : `Conductor: ${ride.driverName || 'No disponible'}`}
         </p>
+
+        {/* [VamO PRO] Rating Received Section (Audit Support) */}
+        {receivedRatingValue ? (
+            <div className="mx-6 p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 mb-4 animate-in fade-in duration-700">
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-indigo-400 text-center mb-2">Calificación Recibida</p>
+                <div className="flex flex-col items-center gap-2">
+                    <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                            <VamoIcon
+                                key={star}
+                                name="star"
+                                className={cn(
+                                    "w-4 h-4",
+                                    star <= receivedRatingValue ? "text-yellow-400 fill-yellow-400" : "text-zinc-800"
+                                )}
+                            />
+                        ))}
+                    </div>
+                    {receivedCommentText && (
+                        <p className="text-xs text-zinc-400 italic text-center px-2">"{receivedCommentText}"</p>
+                    )}
+                </div>
+            </div>
+        ) : null}
       </CardContent>
+
+      {/* [FASE 7.2] Express progress block — only for passengers */}
+      {!isDriver && (
+          <div className="px-6 pb-2">
+              <ExpressReceiptProgress
+                  profile={profile}
+                  className=""
+              />
+          </div>
+      )}
 
       <RatingForm
         participantName={isDriver ? ride.passengerName || 'Pasajero' : ride.driverName || 'Conductor'}
         participantRole={isDriver ? 'pasajero' : 'conductor'}
         photoURL={isDriver ? ride.passengerPhotoUrl : ride.driverPhotoUrl}
         onSubmit={handleRatingSubmit}
-        isSubmitted={hasUserRated || isRatingSubmitted}
+        isSubmitted={!!userRatingValue || isRatingSubmitted}
+        initialRating={userRatingValue || undefined}
+        initialComment={userCommentText || undefined}
         submitButtonText={isDriver ? 'Calificar y ver viajes' : 'Calificar y pedir otro viaje'}
       />
 

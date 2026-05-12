@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
-import { collection, query, orderBy, limit, doc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, doc, where, QueryConstraint } from 'firebase/firestore';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 import { Loader2, ShieldAlert, MapPin, Share2, Phone, Car } from 'lucide-react';
 import { APIProvider, Map, Marker } from '@vis.gl/react-google-maps';
 import { useDoc } from '@/firebase/firestore/use-doc';
@@ -29,15 +30,22 @@ export default function AdminAlertsPage() {
   const [isMuted, setIsMuted] = useState(false);
   const audioContextRef = React.useRef<AudioContext | null>(null);
   const sirenIntervalRef = React.useRef<any>(null);
+  const { cityKey: activeCityKey } = useMunicipalContext();
 
   const alertsQuery = useMemo(() => {
     if (!firestore) return null;
-    return query(
-      collection(firestore, 'panic_alerts'),
+    const constraints: QueryConstraint[] = [
       orderBy('createdAt', 'desc'),
       limit(50)
+    ];
+    if (activeCityKey) {
+      constraints.push(where('cityKey', '==', activeCityKey));
+    }
+    return query(
+      collection(firestore, 'panic_alerts'),
+      ...constraints
     );
-  }, [firestore]);
+  }, [firestore, activeCityKey]);
 
   const { data: alerts, isLoading } = useCollection<PanicAlert>(alertsQuery);
 
@@ -167,7 +175,7 @@ export default function AdminAlertsPage() {
                       )}>
                         {alert.resolved ? 'RESOLVIDA' : 'ALERTA CRÍTICA'}
                       </Badge>
-                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-tighter">VIAJE: {alert.rideId?.substring(0, 12)}...</span>
+                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-tighter">VIAJE: {alert.rideId?.substring(0, 12) || 'N/A'}...</span>
                       <span className="text-[10px] text-zinc-500 font-bold ml-auto md:ml-4 bg-zinc-900 px-2 py-1 rounded border border-zinc-800">
                         {alert.createdAt?.toDate ? format(alert.createdAt.toDate(), "d 'de' MMMM, HH:mm'hs'", { locale: es }) : 'RECIÉN AHORA'}
                       </span>
@@ -231,7 +239,7 @@ export default function AdminAlertsPage() {
                                 <VamoIcon name="check-circle" className="h-4 w-4" /> Caso Cerrado
                             </div>
                             <div className="text-[10px] text-zinc-500 font-medium">
-                                Procesado por {alert.resolvedBy?.substring(0, 8)}...
+                                Procesado por {alert.resolvedBy?.substring(0, 8) || 'SISTEMA'}...
                             </div>
                             {alert.resolvedAt && (
                                 <div className="text-[9px] text-zinc-600 italic font-bold">

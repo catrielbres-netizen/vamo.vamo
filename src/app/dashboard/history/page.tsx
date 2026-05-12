@@ -33,6 +33,11 @@ function formatCurrency(value?: number) {
 
 export default function RideHistoryPage() {
     const { completedRides, isHistoryLoading } = usePassengerData();
+    const [mounted, setMounted] = React.useState(false);
+
+    React.useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const sortedRides = useMemo(() => {
         if (!completedRides) return [];
@@ -43,43 +48,41 @@ export default function RideHistoryPage() {
         });
     }, [completedRides]);
 
-    // The main loading state is now handled by the layout.
-    // We just need to handle the empty state.
-    if (isHistoryLoading) {
+    if (isHistoryLoading || !mounted) {
         return (
-            <div className="space-y-3 pt-6">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
+            <div className="space-y-4 pt-6 animate-in fade-in duration-700">
+                {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="h-20 w-full rounded-2xl bg-white/5 border border-white/5 animate-pulse" />
+                ))}
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Historial de Viajes</CardTitle>
-                    <CardDescription>Aquí podés ver los detalles de tus viajes completados.</CardDescription>
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-1000 fill-mode-both">
+            <Card className="bg-zinc-950 border-white/5 rounded-[2rem] overflow-hidden shadow-2xl">
+                <CardHeader className="bg-zinc-900/20 border-b border-white/5 p-6">
+                    <CardTitle className="text-xl font-black italic uppercase tracking-tighter">Historial de Viajes</CardTitle>
+                    <CardDescription className="text-zinc-500 font-medium">Aquí podés ver los detalles de tus viajes completados.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-2">
                     {!sortedRides || sortedRides.length === 0 ? (
-                        <div className="text-center py-8">
-                            <VamoIcon name="file-text" className="mx-auto h-12 w-12 text-muted-foreground" />
-                            <p className="mt-4 text-muted-foreground">No has completado ningún viaje todavía.</p>
+                        <div className="text-center py-12 space-y-3">
+                            <VamoIcon name="file-text" className="mx-auto h-12 w-12 text-zinc-800" />
+                            <p className="text-xs font-black uppercase text-zinc-600 tracking-widest">No has completado ningún viaje todavía.</p>
                         </div>
                     ) : (
-                        <ul className="space-y-3">
+                        <ul className="space-y-1">
                             {sortedRides.map(ride => (
-                                <li key={ride.id} className="border rounded-lg hover:bg-accent transition-colors">
-                                    <Link href={`/dashboard/history/${ride.id}`} className="p-4 flex justify-between items-center">
-                                        <div>
-                                            <p className="font-semibold">Viaje a {ride.destination.address}</p>
-                                            <p className="text-sm text-muted-foreground">{formatTimestamp(ride.completedAt)}</p>
+                                <li key={ride.id} className="group">
+                                    <Link href={`/dashboard/history/${ride.id}`} className="p-4 flex justify-between items-center hover:bg-white/[0.02] rounded-2xl transition-all">
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-black text-white group-hover:text-indigo-400 transition-colors">Viaje a {ride.destination.address.split(',')[0]}</p>
+                                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">{formatTimestamp(ride.completedAt)}</p>
                                         </div>
                                         <div className="flex items-center gap-4">
-                                            <span className="font-semibold text-primary">{formatCurrency(ride.completedRide?.totalFare)}</span>
-                                            <VamoIcon name="chevron-right" className="h-4 w-4 text-muted-foreground" />
+                                            <span className="font-black italic text-white">{formatCurrency(ride.completedRide?.totalFare)}</span>
+                                            <VamoIcon name="chevron-right" className="h-4 w-4 text-zinc-700 group-hover:text-white transition-colors" />
                                         </div>
                                     </Link>
                                 </li>

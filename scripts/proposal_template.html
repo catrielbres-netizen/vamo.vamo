@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plan Maestro de Movilidad VamO</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --text-dark: #111827;
+            --text-body: #374151;
+            --text-muted: #6b7280;
+            --bg-page: #ffffff;
+            --bg-alt: #f3f4f6;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--text-body);
+            margin: 0;
+            padding: 0;
+            background: #e5e7eb;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm;
+            margin: 10mm auto;
+            background: var(--bg-page);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            position: relative;
+            box-sizing: border-box;
+            page-break-after: always;
+        }
+
+        @media print {
+            body { background: none; }
+            .page { margin: 0; box-shadow: none; }
+        }
+
+        /* Tipografía */
+        h1 { font-size: 38px; font-weight: 900; color: var(--text-dark); margin: 0; letter-spacing: -1.5px; line-height: 1; }
+        h2 { font-size: 24px; font-weight: 800; color: var(--primary); margin-top: 40px; margin-bottom: 15px; border-bottom: 2px solid var(--bg-alt); padding-bottom: 10px; }
+        h3 { font-size: 18px; font-weight: 700; color: var(--text-dark); margin-top: 25px; margin-bottom: 10px; }
+        p { font-size: 14px; line-height: 1.6; margin-bottom: 15px; }
+
+        /* Componentes */
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 60px; }
+        .logo { font-weight: 900; font-size: 32px; color: var(--text-dark); }
+        .logo span { color: var(--primary); }
+        .badge { background: var(--primary); color: white; padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+
+        .hero { background: var(--text-dark); color: white; padding: 40px; border-radius: 20px; margin-bottom: 40px; }
+        .hero h1 { color: white; margin-bottom: 20px; }
+        .hero p { font-size: 16px; color: var(--bg-alt); }
+
+        .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 30px 0; }
+        .feature-card { background: var(--bg-alt); padding: 20px; border-radius: 15px; border-left: 5px solid var(--primary); }
+        .feature-card h4 { margin: 0 0 10px 0; font-size: 16px; color: var(--text-dark); }
+        .feature-card p { margin: 0; font-size: 13px; color: var(--text-muted); }
+
+        .benefit-tag { display: inline-block; background: #d1fae5; color: #065f46; padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+
+        .stat-box { display: flex; justify-content: space-around; background: var(--primary); color: white; padding: 30px; border-radius: 20px; margin: 40px 0; text-align: center; }
+        .stat-item h5 { font-size: 28px; margin: 0; font-weight: 900; }
+        .stat-item span { font-size: 12px; opacity: 0.8; font-weight: 600; }
+
+        .footer { position: absolute; bottom: 20mm; left: 20mm; right: 20mm; border-top: 1px solid var(--bg-alt); padding-top: 15px; font-size: 10px; color: var(--text-muted); display: flex; justify-content: space-between; }
+
+        .level-badge { display: inline-block; padding: 3px 10px; border-radius: 5px; font-size: 10px; font-weight: 800; color: white; }
+        .level-oro { background: #fbbf24; }
+        .level-plata { background: #94a3b8; }
+        .level-bronce { background: #b45309; }
+
+        .mission-box { background: #fef3c7; border: 1px solid #fbbf24; padding: 15px; border-radius: 10px; margin: 15px 0; }
+
+        ul.check-list { list-style: none; padding: 0; }
+        ul.check-list li { position: relative; padding-left: 25px; margin-bottom: 10px; font-size: 14px; }
+        ul.check-list li::before { content: '✓'; position: absolute; left: 0; color: var(--secondary); font-weight: 900; }
+
+    </style>
+</head>
+<body>
+
+<!-- PÁGINA 1: PORTADA Y VISIÓN -->
+<div class="page">
+    <div class="header">
+        <div class="logo">Vam<span>O</span></div>
+        <div class="badge">Propuesta Estratégica 2026</div>
+    </div>
+
+    <div class="hero">
+        <h1 style="color:white;">Plan Maestro de Modernización del Transporte</h1>
+        <p>Una solución integral para la integración de Taxis, Remises y Conductores Particulares bajo un ecosistema de control municipal y prosperidad local.</p>
+    </div>
+
+    <h2>Resumen Ejecutivo</h2>
+    <p>El presente proyecto detalla la implementación de la plataforma VamO como eje central de la movilidad urbana. A diferencia de las plataformas internacionales, VamO está diseñado para fortalecer el transporte local, otorgar herramientas de control a la autoridad municipal y premiar la excelencia de los trabajadores del volante.</p>
+
+    <div class="feature-grid">
+        <div class="feature-card">
+            <h4>Integración Total</h4>
+            <p>Convivencia armónica de Taxis, Remis y Particulares con reglas claras y beneficios diferenciados.</p>
+        </div>
+        <div class="feature-card">
+            <h4>Control Soberano</h4>
+            <p>La Municipalidad define tarifas, zonas y requisitos, manteniendo la soberanía sobre sus calles.</p>
+        </div>
+    </div>
+
+    <h3>Objetivos del Proyecto</h3>
+    <ul class="check-list">
+        <li>Eliminar el transporte ilegal mediante una alternativa regulada y atractiva.</li>
+        <li>Garantizar la seguridad del vecino mediante trazabilidad GPS 100% auditable.</li>
+        <li>Incentivar la economía local permitiendo que el dinero de los viajes circule en la ciudad.</li>
+    </ul>
+
+    <footer style="margin-top: 100px;">
+        <div>VamO — Hacia una ciudad conectada</div>
+    </footer>
+
+    <div class="footer">
+        <div>VamO Platform · Movilidad Inteligente</div>
+        <div>Página 01</div>
+    </div>
+</div>
+
+<!-- PÁGINA 2: BENEFICIOS PROFESIONALES -->
+<div class="page">
+    <div class="header">
+        <div class="logo">Vam<span>O</span></div>
+    </div>
+
+    <h2>1. El Valor del Transporte Tradicional</h2>
+    <p>Taxis y Remises son los pilares de la movilidad. VamO no viene a competir con ellos, sino a potenciar su rentabilidad mediante tecnología de punta y costos operativos reducidos.</p>
+
+    <div class="feature-grid">
+        <div class="feature-card" style="border-left-color: var(--secondary);">
+            <div class="benefit-tag">PROFESIONALES</div>
+            <h4>Comisión Reducida (8%)</h4>
+            <p>Los Taxis y Remis habilitados disfrutan de la comisión más baja del mercado, maximizando sus ganancias netas.</p>
+        </div>
+        <div class="feature-card" style="border-left-color: var(--secondary);">
+            <div class="benefit-tag">PRIORIDAD</div>
+            <h4>Asignación Inteligente</h4>
+            <p>El sistema prioriza a las unidades profesionales en zonas de alta demanda y servicios Premium.</p>
+        </div>
+    </div>
+
+    <h3>Niveles de Excelencia (Gamificación)</h3>
+    <p>Inspiramos a los conductores a mejorar mediante un sistema de niveles que otorga beneficios reales en la ciudad:</p>
+    
+    <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+        <div style="flex:1; padding: 15px; border: 1px solid #e5e7eb; border-radius: 10px; text-align: center;">
+            <div class="level-badge level-oro">NIVEL ORO</div>
+            <p style="font-size: 11px; margin-top: 10px;">Acceso a Pool de Recompensas Semanal y descuentos máximos en Combustible.</p>
+        </div>
+        <div style="flex:1; padding: 15px; border: 1px solid #e5e7eb; border-radius: 10px; text-align: center;">
+            <div class="level-badge level-plata">NIVEL PLATA</div>
+            <p style="font-size: 11px; margin-top: 10px;">Prioridad de matching y beneficios en talleres mecánicos locales.</p>
+        </div>
+        <div style="flex:1; padding: 15px; border: 1px solid #e5e7eb; border-radius: 10px; text-align: center;">
+            <div class="level-badge level-bronce">NIVEL BRONCE</div>
+            <p style="font-size: 11px; margin-top: 10px;">Nivel de entrada con acceso a toda la red de seguridad VamO.</p>
+        </div>
+    </div>
+
+    <h3>Misiones y Bonos Diarios</h3>
+    <p>Para garantizar que la flota esté siempre disponible, VamO implementa misiones por cumplimiento de objetivos:</p>
+    <div class="mission-box">
+        <strong>Misión "Cero Brecha":</strong> Conductores que completan 25 viajes diarios reciben un **Bono Directo de $3.000**, absorbido íntegramente por la plataforma para incentivar la oferta.
+    </div>
+
+    <div class="footer">
+        <div>VamO Platform · Beneficios Profesionales</div>
+        <div>Página 02</div>
+    </div>
+</div>
+
+<!-- PÁGINA 3: PASAJEROS Y FIDELIZACIÓN -->
+<div class="page">
+    <div class="header">
+        <div class="logo">Vam<span>O</span></div>
+    </div>
+
+    <h2>2. Estrategia de Crecimiento de Demanda</h2>
+    <p>La clave de un sistema exitoso es la cantidad de pasajeros. VamO utiliza técnicas avanzadas de fidelización para captar al vecino y convertirlo en un usuario recurrente.</p>
+
+    <div class="feature-grid">
+        <div class="feature-card" style="border-left-color: var(--accent);">
+            <h4>Bonos de Bienvenida</h4>
+            <p>VamO regala saldos iniciales a cada nuevo usuario. Este costo es absorbido por la plataforma, NO por el conductor.</p>
+        </div>
+        <div class="feature-card" style="border-left-color: var(--accent);">
+            <h4>Descuentos Progresivos</h4>
+            <p>Los pasajeros que más usan el sistema desbloquean descuentos automáticos del 10% y 20% en sus viajes.</p>
+        </div>
+    </div>
+
+    <h3>VamO Points: El Primer Cashback Local</h3>
+    <p>Por cada viaje realizado, el pasajero acumula "VamO Points" (1% del valor del viaje). Al llegar a los 1000 puntos, el sistema le otorga un **Bono de $2.000 de regalo** para su próximo viaje.</p>
+
+    <div class="stat-box">
+        <div class="stat-item">
+            <h5>+45%</h5>
+            <span>Retención de Usuarios</span>
+        </div>
+        <div class="stat-item">
+            <h5>100%</h5>
+            <span>Costo Absorbido por VamO</span>
+        </div>
+    </div>
+
+    <h3>Reservas Programadas: Puntualidad Garantizada</h3>
+    <p>Pensado para viajes al aeropuerto, compromisos médicos o laborales, VamO permite programar viajes con hasta 7 días de antelación. El sistema gestiona inteligentemente la búsqueda para asegurar la puntualidad del servicio.</p>
+
+    <h3>Seguridad Garantizada: El F.A.P.</h3>
+    <p>El Fondo de Asistencia al Pasajero es el seguro de confianza de la ciudad. Financiado por la comisión del 16% de los conductores Express, este fondo asegura:</p>
+    <ul class="check-list">
+        <li>Respuesta ante incidentes en viaje.</li>
+        <li>Asistencia legal y médica inmediata.</li>
+        <li>Red de contención local sin depender de seguros nacionales burocráticos.</li>
+    </ul>
+
+    <div class="footer">
+        <div>VamO Platform · Experiencia del Usuario</div>
+        <div>Página 03</div>
+    </div>
+</div>
+
+<!-- PÁGINA 4: VAMOMUNI Y CONTROL -->
+<div class="page">
+    <div class="header">
+        <div class="logo">Vam<span>O</span></div>
+    </div>
+
+    <h2>3. VamoMuni: La Herramienta de Autoridad</h2>
+    <p>Este módulo es exclusivo para la gestión municipal, permitiendo que la autoridad competente tenga ojos en toda la ciudad en tiempo real.</p>
+
+    <div class="feature-grid">
+        <div class="feature-card">
+            <h4>Auditoría de Documentación</h4>
+            <p>Los agentes municipales revisan digitalmente cada DNI, Seguro, Licencia y Antecedentes Penales antes de otorgar la habilitación "VamO Active".</p>
+        </div>
+        <div class="feature-card">
+            <h4>Control de Vencimientos</h4>
+            <p>Alertas automáticas. Si a un taxi se le vence la licencia, el sistema le impide recibir viajes hasta que pase por la oficina municipal.</p>
+        </div>
+    </div>
+
+    <h3>Mapa en Vivo y Trazabilidad</h3>
+    <p>Desde el centro de monitoreo, la municipalidad puede ver la ubicación exacta de todas las unidades, identificar trayectos sospechosos y actuar proactivamente ante señales de alerta.</p>
+
+    <div style="padding: 20px; border: 2px solid var(--primary); border-radius: 15px; margin: 30px 0;">
+        <h4 style="margin-top:0;">El Valor de los Datos</h4>
+        <p style="margin-bottom:0;">VamO entrega mensualmente reportes de movilidad: ¿Por dónde se mueve la gente? ¿Cuáles son las zonas con menos transporte? ¿A qué hora colapsa el centro? Esta información es vital para la planificación urbana y de transporte público.</p>
+    </div>
+
+    <h3>Sanciones Disciplinarias</h3>
+    <p>La autoridad puede suspender o dar de baja a conductores por mal comportamiento, falta de higiene en el vehículo o cobros indebidos, garantizando la calidad del servicio en la ciudad.</p>
+
+    <div class="footer">
+        <div>VamO Platform · Herramientas de Control</div>
+        <div>Página 04</div>
+    </div>
+</div>
+
+<!-- PÁGINA 5: CONCLUSIÓN Y FIRMA -->
+<div class="page">
+    <div class="header">
+        <div class="logo">Vam<span>O</span></div>
+    </div>
+
+    <h2>4. Impacto Económico y Formalización</h2>
+    <p>VamO no solo moderniza el transporte, sino que formaliza una actividad que hoy ocurre en la oscuridad de grupos de chat informales.</p>
+
+    <div class="feature-grid">
+        <div class="feature-card" style="border-left-color: var(--secondary);">
+            <h4>Inclusión Financiera</h4>
+            <p>Permite que conductores cobren digitalmente y que pasajeros sin tarjeta de crédito puedan usar el sistema mediante carga de saldo en efectivo.</p>
+        </div>
+        <div class="feature-card" style="border-left-color: var(--secondary);">
+            <h4>Tributación Local</h4>
+            <p>A diferencia de otras apps, VamO está radicado en la ciudad, pagando tasas municipales y reinvirtiendo en el comercio local.</p>
+        </div>
+    </div>
+
+    <div style="margin-top: 60px; background: var(--bg-alt); padding: 40px; border-radius: 20px; text-align: center;">
+        <h2 style="margin-top:0; border:none; padding:0;">Conclusión</h2>
+        <p style="font-size: 16px; font-weight: 600;">Estamos listos para el lanzamiento.</p>
+        <p>VamO representa el equilibrio perfecto entre la innovación tecnológica y el control estatal. Es la oportunidad de darle a los ciudadanos una movilidad de primer mundo, cuidando al trabajador tradicional y garantizando la seguridad pública.</p>
+        <p style="font-style: italic; color: var(--text-muted);">Hagamos que la ciudad se mueva mejor. Hagámoslo con VamO.</p>
+    </div>
+
+    <!-- Firmas eliminadas a pedido -->
+
+    <div class="footer">
+        <div>VamO Platform · Propuesta Final 2026</div>
+        <div>Página 05</div>
+    </div>
+</div>
+
+</body>
+</html>
