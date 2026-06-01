@@ -19,22 +19,28 @@ import {
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
+import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 
 export default function TrafficDriversList() {
     const { profile } = useUser();
     const router = useRouter();
     const { toast } = useToast();
+    const telemetry = useTelemetry();
+    const { cityKey, cityName } = useMunicipalContext();
     const [drivers, setDrivers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
 
     const fetchDrivers = async () => {
+        if (!cityKey) return;
         setLoading(true);
         try {
             const functions = getFunctions(undefined, 'us-central1');
             const searchDrivers = httpsCallable(functions, 'searchTrafficDriversV1');
             const res = await searchDrivers({ 
+                cityKey: cityKey,
                 status: filterStatus || undefined,
                 query: searchQuery || undefined,
                 limit: 50 
@@ -52,12 +58,30 @@ export default function TrafficDriversList() {
     };
 
     useEffect(() => {
-        if (profile) fetchDrivers();
-    }, [profile, filterStatus]);
+        if (profile && cityKey) {
+            fetchDrivers();
+            telemetry.trackEvent({
+                type: 'municipal_operation',
+                eventName: 'traffic_drivers_list_loaded',
+                metadata: {
+                    cityKey: cityKey,
+                    filterStatus: filterStatus || 'all'
+                }
+            });
+        }
+    }, [profile, cityKey, filterStatus]);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         fetchDrivers();
+        telemetry.trackEvent({
+            type: 'municipal_operation',
+            eventName: 'traffic_drivers_searched',
+            metadata: {
+                query: searchQuery,
+                cityKey: cityKey || null
+            }
+        });
     };
 
     if (!profile) return null;
@@ -67,7 +91,7 @@ export default function TrafficDriversList() {
             {/* HEADER */}
             <div>
                 <h1 className="text-4xl font-black text-white tracking-tighter uppercase italic">Conductores Habilitados</h1>
-                <p className="text-zinc-500 font-medium">Búsqueda y fiscalización de flota activa en {profile.city}</p>
+                <p className="text-zinc-500 font-medium">Búsqueda y fiscalización de flota activa en {cityName}</p>
             </div>
 
             {/* SEARCH & FILTERS */}
@@ -130,7 +154,14 @@ export default function TrafficDriversList() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <StatusBadge status={driver.municipalStatus} />
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <StatusBadge status={driver.municipalStatus} />
+                                                {(driver.isSuspended || driver.trafficSuspended || driver.municipalSuspended || driver.adminSuspended || driver.municipalStatus === 'suspended_by_traffic') && (
+                                                    <Badge className="rounded-lg border-red-500/20 bg-red-500/10 text-[9px] font-black uppercase tracking-widest px-2 py-1 text-red-400">
+                                                        {driver.adminSuspended ? 'Susp. Admin' : (driver.municipalSuspended ? 'Susp. Municipal' : 'Susp. Tránsito')}
+                                                    </Badge>
+                                                )}
+                                            </div>
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex flex-col">

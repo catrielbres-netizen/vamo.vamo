@@ -9,6 +9,7 @@ import { useAuth, useUser } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { VamoLogo } from '@/components/branding/VamoLogo';
+import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 
 const navLinks = [
     { href: '/traffic',           label: 'Inicio',       icon: 'layout-dashboard' },
@@ -22,6 +23,7 @@ export function TrafficNavbar() {
     const router = useRouter();
     const auth = useAuth();
     const { profile } = useUser();
+    const { cityKey, setCityOverride, isGlobalAdmin } = useMunicipalContext();
 
     const handleLogout = async () => {
         if (auth) {
@@ -39,9 +41,26 @@ export function TrafficNavbar() {
                 </div>
                 <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 leading-none mb-1">VamO Control</p>
-                    <p className="text-sm font-black text-white italic tracking-tighter leading-none">TRÁNSITO {profile?.city?.toUpperCase()}</p>
+                    <p className="text-sm font-black text-white italic tracking-tighter leading-none">
+                        TRÁNSITO {isGlobalAdmin ? (cityKey ? cityKey.toUpperCase() : 'GLOBAL') : (profile?.city?.toUpperCase() || 'JURISDICCIÓN')}
+                    </p>
                 </div>
             </div>
+
+            {/* GLOBAL ADMIN CITY OVERRIDE */}
+            {isGlobalAdmin && (
+                <div className="mr-4 flex items-center gap-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Jurisdicción:</span>
+                    <select
+                        value={cityKey || 'rawson'}
+                        onChange={(e) => setCityOverride(e.target.value)}
+                        className="bg-zinc-900 border border-white/5 rounded-lg text-xs font-bold uppercase tracking-wider text-zinc-300 py-1 px-2.5 focus:outline-none"
+                    >
+                        <option value="rawson">Rawson</option>
+                        <option value="trelew">Trelew</option>
+                    </select>
+                </div>
+            )}
 
             {/* LINKS */}
             <div className="flex items-center gap-1 flex-1">

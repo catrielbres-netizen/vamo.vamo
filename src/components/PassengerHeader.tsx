@@ -7,7 +7,7 @@ import { ThemeSwitcher } from './ThemeSwitcher';
 import { VamoIcon } from './VamoIcon';
 import { VamoLogo } from '@/components/branding/VamoLogo';
 import { formatRating } from '@/lib/formatters';
-
+import { NotificationBell } from './NotificationBell';
 
 export function PassengerHeader({ userName, location }: { userName: string, location: string }) {
   const { user, profile } = useUser();
@@ -37,6 +37,7 @@ export function PassengerHeader({ userName, location }: { userName: string, loca
       </div>
       <div className="flex items-center gap-4">
         <ThemeSwitcher />
+        <NotificationBell role="passenger" />
         <Avatar className="border border-white/10 shadow-sm">
             <AvatarImage src={user?.photoURL || undefined} alt={userName} />
             <AvatarFallback className="bg-primary/10 text-primary font-bold">{getInitials(userName)}</AvatarFallback>

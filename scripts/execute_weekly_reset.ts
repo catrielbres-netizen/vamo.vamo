@@ -94,7 +94,7 @@ async function executeReset() {
         .get();
     
     console.log(`\n📋 RESUMEN DE RESETEO:`);
-    console.log(`- Pozo de ${cityKeyArg}: Volverá a $50.000 (actual: $${(await db.doc(`cities/${cityKeyArg}`).get()).data()?.rewardsConfig?.weeklyPoolAmount})`);
+    console.log(`- Pozo de ${cityKeyArg}: Volverá a $20.000 (actual: $${(await db.doc(`cities/${cityKeyArg}`).get()).data()?.rewardsConfig?.weeklyPoolAmount})`);
     console.log(`- Conductores a resetear (puntos > 0): ${driversToResetSnap.size}`);
 
     if (!isConfirmed) {
@@ -134,7 +134,7 @@ async function executeReset() {
     // Reset City & History
     const finalBatch = db.batch();
     finalBatch.update(db.doc(`cities/${cityKeyArg}`), {
-        'rewardsConfig.weeklyPoolAmount': 50000,
+        'rewardsConfig.weeklyPoolAmount': 20000,
         'rewardsConfig.lastResetAt': now
     });
     finalBatch.update(historyDoc.ref, {

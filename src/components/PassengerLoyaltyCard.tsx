@@ -25,19 +25,19 @@ export function PassengerLoyaltyCard() {
 
     if (points < TIER_1) {
         currentGoal = TIER_1;
-        nextRewardName = "Viaje Express Gratis";
+        nextRewardName = "Beneficio Inicial";
         missingPoints = TIER_1 - points;
-        message = `Te faltan ${missingPoints} puntos para tu primer beneficio`;
+        message = `Sumá puntos para desbloquear beneficios`;
     } else if (points < TIER_2) {
         currentGoal = TIER_2;
-        nextRewardName = "Descuento del 10%";
+        nextRewardName = "Recompensa en evaluación";
         missingPoints = TIER_2 - points;
-        message = `Te faltan ${missingPoints} puntos para tu próximo beneficio`;
+        message = `Sumá puntos para desbloquear beneficios`;
     } else if (points < TIER_3) {
         currentGoal = TIER_3;
         nextRewardName = "Beneficio Mayor";
         missingPoints = TIER_3 - points;
-        message = `Te faltan ${missingPoints} puntos para el beneficio mayor`;
+        message = `Sumá puntos para desbloquear beneficios`;
     } else {
         currentGoal = TIER_3;
         nextRewardName = "Beneficio Premium";

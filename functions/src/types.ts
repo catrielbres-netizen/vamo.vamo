@@ -3,15 +3,13 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 // src/functions/src/types.ts
 // This file is intended for Cloud Functions and uses the admin SDK types.
 
-import * as admin from 'firebase-admin';
-
 export type FirestoreTimestamp = Timestamp;
 export type FirestoreFieldValue = FieldValue;
 
-export type ServiceType = "professional" | "express";
+export type ServiceType = "professional" | "express" | "shared";
 export type VehicleType = "taxi" | "remis";
 
-export type Role = "admin" | "driver" | "passenger" | "admin_municipal" | "operator_municipal" | "treasury_municipal" | "auditor_municipal" | "traffic_municipal";
+export type Role = "admin" | "superadmin" | "driver" | "passenger" | "admin_municipal" | "operator_municipal" | "treasury_municipal" | "auditor_municipal" | "traffic_municipal" | "station_operator" | "municipal_admin" | "traffic_admin" | "traffic_operator" | "traffic";
 
 export type RideStatus =
     | "scheduled"
@@ -45,14 +43,7 @@ export const isPanicButtonVisible = (status: RideStatus): boolean => {
     return status === 'in_progress' || status === 'paused';
 };
 
-export function normalizeCityKey(city: string): string {
-    return city
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-}
+export { normalizeCityKey } from "./lib/city";
 
 export function buildMunicipalCode(cityKey: string, sequence: number): string {
     const prefix = cityKey.substring(0, 2).toUpperCase();
@@ -225,6 +216,7 @@ export interface Place {
 
 export interface PaymentSnapshot {
   selectedPaymentMethod: "cash" | "wallet" | "automatic" | "vamo_pay" | "mixed";
+  paymentLabel?: string;
   useWallet: boolean;
   finalPassengerFare: number;
   walletCoveredAmount: number;
@@ -251,8 +243,8 @@ export interface CompletedRide {
     distanceFare: number;
     waitingFare: number;
     totalFare: number;
-    baseCommissionRate: number;
-    finalCommissionRate: number;
+    baseCommissionRate?: number;
+    finalCommissionRate?: number;
     commissionAmount: number;
     originalTotal?: number;
     discountAmount?: number;
@@ -274,6 +266,7 @@ export interface CompletedRide {
     fapEligible?: boolean;
     driverSubtype?: string;
     expressDiscountAmount?: number;
+    vamoExpressCoverageAmount?: number;
     creditCoveredAmount?: number;
     platformSubsidyAmount?: number;
     passengerPaysTotal?: number;
@@ -283,6 +276,14 @@ export interface CompletedRide {
     municipalAmount?: number;
     vamoAmount?: number;
     driverEarnings?: number;
+    socialSubsidyAmount?: number;
+    // New fields for rentability audit
+    grossFare?: number;
+    passengerPays?: number;
+    driverGrossAmount?: number;
+    platformCommissionAmount?: number;
+    municipalShareAmount?: number;
+    netVamoRevenue?: number;
 }
 
 export interface RideChatMessage {
@@ -348,6 +349,9 @@ export interface Ride {
     matchingAttempts?: number;
     operatingAreaId?: string;
     preferredDriverGender?: string;
+    driverGenderPreference?: 'female' | 'any';
+    femaleDriverRequested?: boolean;
+    requestedByFemalePassenger?: boolean;
     driverLocationAtAccept?: {
         lat: number;
         lng: number;
@@ -374,6 +378,7 @@ export interface Ride {
         estimatedDurationSeconds?: number;
         surgeMultiplier?: number;
         discountAmount?: number | null;
+        originalTotal?: number;
         estimated?: {
             total: number;
             breakdown: any;
@@ -385,6 +390,7 @@ export interface Ride {
         passengerDiscountAmount?: number;
         vamoSubsidyAmount?: number;
         expressDiscountAmount?: number;
+        vamoExpressCoverageAmount?: number;
         creditCoveredAmount?: number;
         creditsApplied?: boolean;
         walletCoveredAmount?: number;
@@ -394,6 +400,20 @@ export interface Ride {
         commissionAmount?: number;
         commissionRate?: number;
         dynamic?: DynamicPricingSnapshot;
+        tariffMode?: 'day' | 'night' | string;
+        // --- Express Benefit Config ---
+        expressBenefitApplied?: boolean;
+        expressBenefitWeekId?: string;
+        expressUsesThisWeek?: number;
+        expressMaxUsesPerWeek?: number;
+        passengerWeeklyTripsCount?: number;
+        passengerExpressUnlockedAt?: any;
+        passengerExpressExpiresAt?: any;
+        originalFare?: number;
+        driverRecognizedFare?: number;
+        passengerPaysAmount?: number;
+        driverWalletCreditAmount?: number;
+        promoFundedBy?: string;
     };
     pricingVersion?: string;
     pauseStartedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
@@ -429,6 +449,87 @@ export interface Ride {
     durationMinutes?: number;
     cumulativeWaitSeconds?: number;
     paymentSnapshot?: PaymentSnapshot;
+    
+    // Payment & Commission metadata
+    paymentProvider?: string;
+    paymentMode?: "single_driver_no_split" | "marketplace_split" | string;
+    paymentStatus?: string;
+    mpPaymentId?: string;
+    mpPaymentStatus?: string;
+    mpPaymentStatusDetail?: string;
+    mpPreferenceId?: string;
+    vamoCommissionPercent?: number;
+    vamoCommissionAmount?: number;
+    marketplaceFeeApplied?: number;
+    commissionCollectionStatus?: "internal_only" | "automatic_marketplace_fee" | string;
+    driverGrossAmount?: number;
+    splitApplied?: boolean;
+    paidAt?: FirestoreTimestamp | FirestoreFieldValue | null;
+    
+    // VamO Compartido V1
+    rideType?: 'standard' | 'shared';
+    isSharedRide?: boolean;
+    sharedGroupId?: string;
+    sharedRequestIds?: string[];
+    passengerIds?: string[];
+    sharedPassengerCount?: number;
+    pickupStops?: Place[];
+    dropoffStops?: Place[];
+    orderedStops?: Array<{
+        type: 'pickup' | 'dropoff';
+        requestId: string;
+        passengerId: string;
+        location: Place;
+        status?: 'pending' | 'arrived' | 'completed' | 'skipped';
+        fareToCollect?: number;
+        passengerName?: string;
+        arrivedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
+        completedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
+        updatedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
+    }>;
+    sharedPassengers?: Array<{
+        passengerId: string;
+        passengerName: string;
+        pickupAddress: string;
+        dropoffAddress: string;
+        status: string;
+    }>;
+    routePlan?: Array<{
+        order: number;
+        type: 'pickup' | 'dropoff';
+        passengerId: string;
+        passengerName: string;
+        address: string;
+        status: string;
+    }>;
+    sharedFarePerPassenger?: number;
+    individualFareReference?: number;
+    driverBenefitAmount?: number;
+    driverBenefitPercent?: number;
+    totalFare?: number;
+    cashExpected?: number;
+    sharedPricingSnapshot?: any;
+    routeCompatibilitySnapshot?: any;
+    sharedSettlementStatus?: 'pending_shared_settlement' | 'settling' | 'settled' | 'not_applicable' | 'failed' | 'none';
+    sharedFinancialSummary?: any;
+    sharedReceiptsGenerated?: boolean | 'not_applicable';
+    sharedReceiptsGeneratedAt?: any;
+
+    // Digital Stands (Paradas Digitales)
+    stationDispatch?: boolean;
+    stationDispatchType?: 'core_radius' | 'support_radius' | null;
+    stationSupportPotential?: boolean;
+    stationSupportFallback?: boolean;
+    stationSupportReason?: string | null;
+    stationId?: string | null;
+    stationName?: string | null;
+    stationDistanceMeters?: number | null;
+    stationDispatchStatus?: 'pending_assignment' | 'assigned_to_driver' | 'pending_reassignment' | 'accepted_by_driver' | 'released_to_general_matching' | null;
+    stationDispatchExpiresAt?: FirestoreTimestamp | null;
+    stationAssignedDriverId?: string | null;
+    stationReleasedToGeneralMatching?: boolean;
+    stationReleasedAt?: FirestoreTimestamp | null;
+    stationReleaseReason?: string | null;
 }
 
 export interface DriverStats {
@@ -500,17 +601,22 @@ export interface UserProfile {
     itvExpiry?: any;
     canonExpiry?: any;
     canonStatus?: CanonStatus;
+    criminalRecordExpiry?: any;
+    criminalRecordStatus?: string;
+    docsStatus?: string;
     driverSubtype?: DriverSubtype;
     servicesOffered?: {
         express: boolean;
         professional: boolean;
     };
     passengerExpressBenefitActive?: boolean;
-    passengerExpressDiscountPercent?: 10 | 15;
+    passengerExpressDiscountPercent?: number;
     passengerProgress?: {
         ridesThisWeek: number;
         weekIdentifier: string; 
-        currentLevel: 'none' | 'unlocked_10' | 'unlocked_15';
+        weeklySubsidySpent?: number;
+        currentLevel?: 'none' | 'unlocked_10' | 'unlocked_15';
+        expressUsesThisWeek?: number;
     };
     vehicleOwnerId?: string;       
     authorizedDriverIds?: string[]; 
@@ -523,6 +629,9 @@ export interface UserProfile {
         acceptsDiscountedRides: boolean;
         acceptsPets: boolean;
     };
+    mpLinked?: boolean;
+    mpAccountStatus?: "linked" | "expired" | "revoked" | "error";
+    mpLinkedAt?: any;
     expressAccess?: {
         unlockLevel: number;
         bonus20Available: number;
@@ -572,6 +681,8 @@ export interface UserProfile {
     weeklyCancellationsResetAt?: FirestoreTimestamp | null;
     passengerCancellationBlockedUntil?: FirestoreTimestamp | null;
     passengerStatus?: "active" | "limited" | "blocked";
+    isSpecialVerified?: boolean;
+    specialVerifiedType?: 'retired' | 'disabled' | null;
     lastCancellationAt?: FirestoreTimestamp | null;
     blockedUntil?: FirestoreTimestamp | null;
     operatingAreaId?: string;
@@ -619,6 +730,26 @@ export interface UserProfile {
     watchdogReleaseCount?: number;
     openPanicClaims?: number;
     securityClaimsCount?: number;
+    activeSharedRequestId?: string | null; // VamO Compartido V1
+    sharedRideAlphaTester?: boolean;
+    stationId?: string;
+    stationName?: string;
+    mustChangePassword?: boolean;
+    trafficSuspended?: boolean;
+    trafficSuspensionReason?: string | null;
+    trafficSuspendedAt?: any;
+    trafficSuspendedBy?: string | null;
+    trafficSuspensionResolvedAt?: any;
+    trafficSuspensionResolvedBy?: string | null;
+    municipalSuspended?: boolean;
+    municipalSuspensionReason?: string | null;
+    municipalSuspendedAt?: any;
+    municipalSuspendedBy?: string | null;
+    adminSuspended?: boolean;
+    adminSuspensionReason?: string | null;
+    adminSuspendedAt?: any;
+    adminSuspendedBy?: string | null;
+    suspensionSource?: 'traffic' | 'municipal' | 'admin' | null;
 }
 
 export interface CityLedger {
@@ -786,6 +917,8 @@ export interface Wallet {
     promoBalance: number;
     lockedCash: number;
     lockedPromo: number;
+    lockedRideId?: string | null;
+    lockedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
     updatedAt: FirestoreTimestamp | FirestoreFieldValue;
 }
 
@@ -857,6 +990,7 @@ export interface DriverPoints {
 export interface RewardsConfig {
     weeklyPoolAmount: number;
     minPointsToQualify: number;
+    weeklyPoolContributionPerRide?: number;
     totalWeeklyPoints?: number;
     qualifiedDriversCount?: number;
 }
@@ -902,6 +1036,19 @@ export interface RideOffer {
     acknowledgedBy?: string;
     updatedAt?: FirestoreTimestamp | FirestoreFieldValue;
     passengerRiskSummary?: PassengerRiskSummary;
+
+    // VamO Compartido V1
+    rideType?: 'standard' | 'shared';
+    isSharedRide?: boolean;
+    sharedGroupId?: string;
+    sharedPassengerCount?: number;
+    sharedFarePerPassenger?: number;
+    pickupStopsCount?: number;
+    dropoffStopsCount?: number;
+    orderedStopsPreview?: Array<{
+        type: 'pickup' | 'dropoff';
+        location: Place;
+    }>;
 }
 
 export interface RideRequest {
@@ -944,6 +1091,11 @@ export interface PricingConfig {
     ASSISTANCE_FEE: number;
     assistanceEnabled: boolean;
     dynamicPricing?: DynamicPricingConfig;
+    sharedRideMaxOriginRadiusMeters?: number; // VamO Compartido V1
+    nightSurchargeEnabled?: boolean;
+    nightStartHour?: number;
+    nightEndHour?: number;
+    timezone?: string;
     createdAt?: any;
     updatedAt?: any;
 }
@@ -974,12 +1126,14 @@ export interface DynamicPricingSnapshot {
     calculatedAt: FirestoreTimestamp | FirestoreFieldValue;
     cityKey: string;
     source: 'backend';
+    isSpecialVerifiedDiscountApplied?: boolean;
+    specialDiscountAmount?: number;
 }
 
 export interface PricingSnapshot {
     commission_particular: number;
     commission_taxi_remis: number;
-    municipal_percentage: number;
+    municipal_percentage?: number;
     cityKey: string;
     timestamp: any;
 }
@@ -1083,6 +1237,7 @@ export interface WeeklyPool {
 export interface WeeklyPoolDriver {
     driverId: string;
     completedTrips: number;
+    weeklyPoints: number;
     multiplier: number;
     rank: number;
     estimatedPayout: number;
@@ -1314,7 +1469,153 @@ export interface FapClaim {
     updatedAt: any;
 }
 
+
 export interface FapCounter {
     year: number;
     lastNumber: number;
+}
+
+/** 
+ * VamO Compartido V1 
+ */
+export type SharedRideRequestStatus = 
+    | 'proposed' 
+    | 'forming' 
+    | 'pending_confirmation' 
+    | 'confirmed' 
+    | 'assigned' 
+    | 'pickup_pending'
+    | 'picked_up'
+    | 'dropoff_pending'
+    | 'dropped_off'
+    | 'completed'
+    | 'cancelled' 
+    | 'expired' 
+    | 'no_show' 
+    | 'undeclared_companion';
+
+export type SharedRideGroupStatus = 
+    | 'forming' 
+    | 'pending_passenger_confirmation' 
+    | 'searching_driver' 
+    | 'driver_assigned' 
+    | 'ready_for_driver'
+    | 'completed' 
+    | 'cancelled' 
+    | 'expired';
+
+export interface SharedRideRequest {
+    id: string;
+    passengerId: string;
+    passengerName: string;
+    cityKey: string;
+    origin: Place;
+    destination: Place;
+    status: SharedRideRequestStatus;
+    roleInGroup?: 'creator' | 'joined';
+    individualFareReference: number;
+    sharedFareEstimate?: number;
+    finalFareCash?: number;
+    paymentMethod: 'cash';
+    passengerSavingAmount?: number;
+    passengerSavingPercent?: number;
+    confirmationExpiresAt?: FirestoreTimestamp | null;
+    groupId?: string | null;
+    finalRideId?: string | null;
+    pickupStatus?: 'pending' | 'arrived' | 'picked_up';
+    dropoffStatus?: 'pending' | 'dropped_off';
+    noShow?: boolean;
+    undeclaredCompanion?: boolean;
+    createdAt: FirestoreTimestamp | FirestoreFieldValue;
+    updatedAt: FirestoreTimestamp | FirestoreFieldValue;
+    passengerReceipt?: any;
+    operationalReceipt?: any;
+    sharedRideNoticeAccepted?: boolean;
+    sharedRideNoticeAcceptedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
+    expiresAt?: FirestoreTimestamp | FirestoreFieldValue | null;
+    manualCreation?: boolean;
+}
+export interface SharedRideFeatureConfig {
+    enabled: boolean;
+    beta: boolean;
+    cities: string[];
+    requireAlphaTester: boolean;
+    driverSearchEnabled?: boolean;
+}
+
+export interface SharedRideGroup {
+    id: string;
+    cityKey: string;
+    status: SharedRideGroupStatus;
+    requestIds: string[];
+    passengerIds: string[];
+    passengers?: Array<{
+        passengerId: string;
+        passengerName?: string;
+        roleInGroup: 'creator' | 'joined';
+        joinedAt: FirestoreTimestamp | FirestoreFieldValue;
+        status: string;
+        pickupAddress: string;
+        dropoffAddress: string;
+    }>;
+    occupiedSeats: number;
+    maxSeats: number;
+    paymentMethod: 'cash';
+    estimatedIndividualFare: number;
+    sharedFarePerPassenger: number;
+    estimatedSharedTotal: number;
+    estimatedDriverTotal: number;
+    driverBenefitAmount: number;
+    driverBenefitPercent: number;
+    passengerSavingAmount: number;
+    passengerSavingPercent: number;
+    pickupStops: Place[];
+    dropoffStops: Place[];
+    orderedStops: Array<{
+        type: 'pickup' | 'dropoff';
+        requestId: string;
+        location: Place;
+    }>;
+    routeCompatibility?: any;
+    driverId?: string | null;
+    finalRideId?: string | null;
+    expiresAt: FirestoreTimestamp;
+    confirmationExpiresAt?: FirestoreTimestamp | null;
+    driverSearchStartsAt?: FirestoreTimestamp | null;
+    driverSearchTriggeredAt?: FirestoreTimestamp | null;
+    closingExpiresAt?: FirestoreTimestamp | null;
+    isPubliclyJoinable?: boolean;
+    launchReason?: 'min_passengers_reached' | 'group_full' | 'ttl_expired' | 'manual' | null;
+    minPassengersToLaunch?: number;
+    hasMinimumPassengers?: boolean;
+    creatorPassengerId?: string;
+    createdByPassengerId?: string;
+    createdAt: FirestoreTimestamp | FirestoreFieldValue;
+    updatedAt: FirestoreTimestamp | FirestoreFieldValue;
+    driverSearchBlockedForBeta?: boolean;
+    driverSearchBlockedReason?: string;
+    driverSearchBlockedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
+}
+
+export interface MpAccount {
+    userId: string;
+    mpUserId?: string;
+    status: "linked" | "expired" | "revoked" | "error";
+    linkedAt: any;
+    updatedAt: any;
+    expiresAt?: any;
+    country?: string;
+    scope?: string;
+    accessToken?: string;
+    refreshToken?: string;
+    publicKey?: string;
+    lastError?: string;
+}
+
+export interface MpOAuthState {
+    id: string;
+    userId: string;
+    createdAt: any;
+    expiresAt: any;
+    used: boolean;
 }

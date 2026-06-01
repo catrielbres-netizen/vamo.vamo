@@ -53,6 +53,12 @@ type DriverProfile = {
   driverRiskScore?: number;
   driverRiskLevel?: 'low' | 'medium' | 'high' | 'blocked';
   riskReasons?: string[];
+  docsStatus?: string;
+  licenseExpiry?: any;
+  insuranceExpiry?: any;
+  criminalRecordExpiry?: any;
+  criminalRecordStatus?: string;
+  documents?: Record<string, string>;
 };
 
 function formatCurrency(value: number) {
@@ -371,6 +377,55 @@ export default function AdminDriverDetailPage() {
                     >
                         Ver Legajo Municipal Completo →
                     </Button>
+                </CardContent>
+            </Card>
+
+            <Card className="border-zinc-800 bg-black/40 backdrop-blur-xl">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Estado Documental</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center pb-2 border-b border-zinc-800/50">
+                            <span className="text-xs font-bold text-zinc-300">DNI Frente/Dorso</span>
+                            <Badge variant="outline" className={driver.documents?.dniFront ? "border-green-500/30 text-green-500 bg-green-500/5 text-[9px]" : "border-zinc-500/30 text-zinc-500 bg-zinc-500/5 text-[9px]"}>
+                                {driver.documents?.dniFront ? 'CARGADO' : 'FALTANTE'}
+                            </Badge>
+                        </div>
+                        <div className="flex flex-col pb-2 border-b border-zinc-800/50 gap-1">
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs font-bold text-zinc-300">Licencia</span>
+                                <Badge variant="outline" className={!driver.documents?.license ? "border-red-500/30 text-red-500 bg-red-500/5 text-[9px]" : (driver.licenseExpiry && driver.licenseExpiry.toMillis() < Date.now()) ? "border-red-500/30 text-red-500 bg-red-500/5 text-[9px]" : "border-green-500/30 text-green-500 bg-green-500/5 text-[9px]"}>
+                                    {!driver.documents?.license ? 'FALTANTE' : (driver.licenseExpiry && driver.licenseExpiry.toMillis() < Date.now()) ? 'VENCIDA' : 'VIGENTE'}
+                                </Badge>
+                            </div>
+                            {driver.licenseExpiry && (
+                                <span className="text-[10px] font-medium text-zinc-500">Vence: {new Date(driver.licenseExpiry.toMillis()).toLocaleDateString('es-AR')}</span>
+                            )}
+                        </div>
+                        <div className="flex flex-col pb-2 border-b border-zinc-800/50 gap-1">
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs font-bold text-zinc-300">Seguro</span>
+                                <Badge variant="outline" className={!driver.documents?.insurance ? "border-red-500/30 text-red-500 bg-red-500/5 text-[9px]" : (driver.insuranceExpiry && driver.insuranceExpiry.toMillis() < Date.now()) ? "border-red-500/30 text-red-500 bg-red-500/5 text-[9px]" : "border-green-500/30 text-green-500 bg-green-500/5 text-[9px]"}>
+                                    {!driver.documents?.insurance ? 'FALTANTE' : (driver.insuranceExpiry && driver.insuranceExpiry.toMillis() < Date.now()) ? 'VENCIDO' : 'VIGENTE'}
+                                </Badge>
+                            </div>
+                            {driver.insuranceExpiry && (
+                                <span className="text-[10px] font-medium text-zinc-500">Vence: {new Date(driver.insuranceExpiry.toMillis()).toLocaleDateString('es-AR')}</span>
+                            )}
+                        </div>
+                        <div className="flex flex-col pb-2 border-zinc-800/50 gap-1">
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs font-bold text-zinc-300">Antecedentes Penales</span>
+                                <Badge variant="outline" className={!driver.documents?.criminalRecord ? "border-amber-500/30 text-amber-500 bg-amber-500/5 text-[9px]" : (driver.criminalRecordExpiry && driver.criminalRecordExpiry.toMillis() < Date.now()) ? "border-orange-500/30 text-orange-500 bg-orange-500/5 text-[9px]" : "border-green-500/30 text-green-500 bg-green-500/5 text-[9px]"}>
+                                    {!driver.documents?.criminalRecord ? 'FALTANTE' : (driver.criminalRecordExpiry && driver.criminalRecordExpiry.toMillis() < Date.now()) ? 'VENCIDO (NO BLOQUEA)' : 'VIGENTE'}
+                                </Badge>
+                            </div>
+                            {driver.criminalRecordExpiry && (
+                                <span className="text-[10px] font-medium text-zinc-500">Vence: {new Date(driver.criminalRecordExpiry.toMillis()).toLocaleDateString('es-AR')}</span>
+                            )}
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
 

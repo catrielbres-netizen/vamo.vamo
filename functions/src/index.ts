@@ -27,7 +27,13 @@ export * from "./welcome";
 export * from "./fraud";
 export * from "./municipalTreasury";
 export * from "./municipalUsers";
-export * from "./traffic";
+export {
+  getTrafficStatsV1,
+  searchTrafficDriversV1,
+  updateDriverMunicipalStatusV1,
+  requestDriverDocumentV1,
+  updateTrafficSuspensionV1
+} from "./traffic";
 export * from "./municipal";
 export * from "./users";
 export * from "./documents";
@@ -45,7 +51,11 @@ export * from "./aggregations";
 export * from "./alerts";
 export * from "./ai";
 export * from "./forecasting";
-
+export * from "./sharedRides";
+export * from "./admin";
+export * from "./weeklyPool";
+export * from "./mercadopago_oauth";
+export * from "./payments";
 
 // Note: Ensure all sub-modules use getDb() from ./lib/firebaseAdmin 
 // to avoid "default Firebase app does not exist" errors.

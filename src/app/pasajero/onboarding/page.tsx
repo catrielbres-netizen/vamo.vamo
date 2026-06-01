@@ -306,6 +306,7 @@ export default function OnboardingPasajeroPage() {
                                             <SelectItem value="rawson">Rawson / Playa</SelectItem>
                                             <SelectItem value="trelew">Trelew</SelectItem>
                                             <SelectItem value="comodoro">Comodoro Rivadavia</SelectItem>
+                                            <SelectItem value="parana">Paraná</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

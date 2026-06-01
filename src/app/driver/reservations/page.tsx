@@ -13,6 +13,7 @@ import { es } from 'date-fns/locale';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { featureFlags } from '@/config/features';
 
 export default function DriverReservationsPage() {
     const { profile } = useUser();
@@ -24,12 +25,13 @@ export default function DriverReservationsPage() {
     useEffect(() => {
         if (!firestore) return;
 
-        console.log("🔍 [RESERVAS] Iniciando escucha de viajes programados para:", driverCity || "TODAS LAS CIUDADES");
+        console.log("🔍 [RESERVAS] Iniciando escucha. driverCity:", driverCity || "TODAS");
 
+        // Query simple sin filtro de ciudad (evita requerir índice compuesto en Firestore)
+        // El filtro de ciudad se aplica en el cliente
         const q = query(
             collection(firestore, 'rides'),
-            where('status', 'in', ['scheduled', 'searching']),
-            where('cityKey', '==', driverCity)
+            where('status', 'in', ['scheduled', 'searching'])
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -37,10 +39,16 @@ export default function DriverReservationsPage() {
                 let list = snapshot.docs
                     .map(doc => ({ id: doc.id, ...doc.data() } as any))
                     .filter(ride => {
-                        // VALIDATION: Log warning if a ride in this city lacks a cityKey (shouldn't happen with new backend)
-                        if (!ride.cityKey) {
-                            console.warn('[RESERVAS] Ride sin cityKey detectado', ride.id);
+                        // Filtro de ciudad en el cliente (fuzzy match igual que el contador del layout)
+                        if (driverCity) {
+                            const c = (ride.cityKey || '').toLowerCase();
+                            const dc = driverCity.toLowerCase();
+                            const cityOk = c === dc || c.includes(dc) || dc.includes(c);
+                            if (!cityOk) return false;
                         }
+
+                        // Excluir simulaciones
+                        if (ride.isSimulation === true) return false;
 
                         // Si está en 'searching', solo mostrar si estoy interesado
                         if (ride.status === 'searching' && !ride.interestedDriverIds?.includes(profile?.id || profile?.uid || '')) {
@@ -50,18 +58,17 @@ export default function DriverReservationsPage() {
                         return true;
                     });
                 
-                console.log("🔍 [RESERVAS] Viajes encontrados antes de ordenar:", list.length);
+                console.log("🔍 [RESERVAS] Viajes encontrados:", list.length, list.map((r: any) => r.id));
 
-                list.sort((a, b) => {
+                list.sort((a: any, b: any) => {
                     const timeA = typeof a.scheduledAt?.toMillis === 'function' ? a.scheduledAt.toMillis() : (a.scheduledAt?.seconds ? a.scheduledAt.seconds * 1000 : 0);
                     const timeB = typeof b.scheduledAt?.toMillis === 'function' ? b.scheduledAt.toMillis() : (b.scheduledAt?.seconds ? b.scheduledAt.seconds * 1000 : 0);
                     return timeA - timeB;
                 });
                 
-                console.log("🔍 [RESERVAS] Lista final a mostrar:", list);
                 setReservations(list);
             } catch (error) {
-                console.error("❌ [RESERVAS] Error crítico procesando la lista:", error);
+                console.error("❌ [RESERVAS] Error:", error);
             } finally {
                 setLoading(false);
             }
@@ -73,8 +80,8 @@ export default function DriverReservationsPage() {
         return () => unsubscribe();
     }, [driverCity, firestore]);
 
-    // Un conductor puede ver la bolsa si tiene cualquier forma de habilitación activa
-    const isEligibleDriver = profile?.approved === true || profile?.municipalStatus === 'active';
+    // Un conductor puede ver la bolsa si tiene cualquier forma de habilitación activa o si está en Plan B y está aprobado
+    const isEligibleDriver = profile?.approved === true || (!featureFlags.vamoParticularModeEnabled && profile?.municipalStatus === 'active');
     if (!profile) return null;
 
     return (
@@ -88,7 +95,7 @@ export default function DriverReservationsPage() {
                 <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex gap-3 items-center">
                     <VamoIcon name="alert-triangle" className="w-5 h-5 text-amber-400 shrink-0" />
                     <p className="text-xs font-medium text-amber-300 leading-relaxed">
-                        Podés ver las reservas, pero para anotarte necesitás tener la habilitación municipal activa.
+                        Podés ver las reservas, pero para anotarte necesitás tener tu cuenta aprobada y documentación vigente.
                     </p>
                 </div>
             )}

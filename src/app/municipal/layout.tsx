@@ -8,17 +8,20 @@ import { GlobalPanicListener } from '@/components/GlobalPanicListener';
 import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
 import { DemoWrapper } from './components/DemoWrapper';
 
+import { useAppMode } from '@/hooks/useAppMode';
+
 export default function MunicipalLayout({ children }: { children: React.ReactNode }) {
+  const { appMode, loading: appModeLoading } = useAppMode();
   const { user, profile, loading } = useUser();
   const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = React.useState(false);
 
+
+
   // 2. NO SESSION or WRONG ROLE:
   const allowedRoles = ['admin', 'superadmin', 'admin_municipal', 'operator_municipal', 'treasury_municipal', 'auditor_municipal', 'traffic_municipal'];
-  // TODO SECURITY: remover bypass temporal de superadmin después de reparar guards por claims.
-  const isSuperAdminEmergency = user?.uid === "9oOsPaBsp8XkcTLjSTEJbdzMafa2" || user?.email === "superadmin@vamo.local";
-  const isAuthorized = (user && profile && allowedRoles.includes(profile.role)) || isSuperAdminEmergency;
+  const isAuthorized = !!user && !!profile && allowedRoles.includes(profile.role);
 
   const isPublicPage = Boolean(pathname && (
     pathname.includes('login') || 
@@ -36,11 +39,6 @@ export default function MunicipalLayout({ children }: { children: React.ReactNod
   React.useEffect(() => {
     if (!mounted || loading || (!!user && !profile) || isPublicPage) return;
     
-    if (isSuperAdminEmergency) {
-        console.log(`[SUPERADMIN_EMERGENCY_BYPASS] uid=${user?.uid} email=${user?.email} pathname=${pathname} allowed=true`);
-        return;
-    }
-
     if (!user || !isAuthorized) {
         console.error(`[AUTH_ROUTE_DEBUG] /municipal FORBIDDEN. Role: ${profile?.role}. Redirecting to /login/municipal`, {
             uid: user?.uid,
@@ -53,7 +51,27 @@ export default function MunicipalLayout({ children }: { children: React.ReactNod
     } else {
         console.log(`[AUTH_ROUTE_DEBUG] /municipal ACCESS_GRANTED. Role: ${profile?.role}`);
     }
-  }, [user, profile, loading, isAuthorized, isPublicPage, router, pathname, mounted, isSuperAdminEmergency]);
+  }, [user, profile, loading, isAuthorized, isPublicPage, router, pathname, mounted]);
+
+  if (!appModeLoading && !appMode.municipalEnabled) {
+    return (
+      <div className="min-h-screen bg-[#050912] text-white flex items-center justify-center p-6 font-sans">
+        <div className="max-w-md w-full p-8 rounded-3xl bg-[#0A111F] border border-white/5 text-center space-y-6 shadow-2xl">
+          <div className="w-16 h-16 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center justify-center mx-auto text-indigo-500 text-2xl">
+            🔒
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-lg font-black uppercase tracking-wider text-indigo-400 italic">
+              Módulo Reservado
+            </h2>
+            <p className="text-sm text-zinc-400 leading-relaxed font-medium">
+              Este módulo está reservado para la versión municipal de VamO.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!mounted || pathname === '/municipal') {
     return <VamoFullScreenLoader label="Cargando sistema municipal..." />;
@@ -85,9 +103,11 @@ export default function MunicipalLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col relative overflow-hidden">
         <GlobalPanicListener />
         <main className="flex-1 p-8 lg:p-12 overflow-y-auto">
-          <DemoWrapper>
-            {children}
-          </DemoWrapper>
+          <React.Suspense fallback={<VamoFullScreenLoader label="Cargando interfaz..." />}>
+            <DemoWrapper>
+              {children}
+            </DemoWrapper>
+          </React.Suspense>
         </main>
       </div>
     </div>

@@ -136,6 +136,9 @@ export interface Ride {
   currentOfferedDriverId?: string | null;
   matchingExpiresAt?: FirestoreTimestamp | null;
   notifiedDrivers?: string[]; // The new source of truth for rounds
+  driverGenderPreference?: 'female' | 'any';
+  femaleDriverRequested?: boolean;
+  requestedByFemalePassenger?: boolean;
 
   driverLocationAtAccept?: {
     lat: number;

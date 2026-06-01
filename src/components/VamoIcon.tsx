@@ -220,6 +220,7 @@ const ICON_ALIASES: { [key: string]: IconName } = {
   "qr-code": "qr-code",
   "qrcode": "qr-code",
   "qrCode": "qr-code",
+  "cash": "banknote",
 };
 
 export type IconName = keyof typeof icons;

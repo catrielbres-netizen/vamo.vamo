@@ -3,12 +3,13 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * VamO Weekly Pool Payout Executor (ADMIN ONLY)
- * This script performs REAL balance increments.
- * ⚠️ WARNING: Money will be moved if --confirm is present.
+ * VamO Weekly Pool Payout Executor v2 (ADMIN ONLY)
+ * Realiza el pago REAL del pozo semanal v2.
+ * ⚠️ WARNING: Solo ejecutar con --confirm. Mueve dinero real.
+ * Reglas: Top 30, bloques fijos proporcionales, weeklyTripsCount.
  */
 
-const cityKeyArg = process.argv[2];
+const cityKeyArg  = process.argv[2];
 const isConfirmed = process.argv.includes('--confirm');
 
 if (!cityKeyArg) {
@@ -18,7 +19,6 @@ if (!cityKeyArg) {
     process.exit(1);
 }
 
-// 1. Project Detection
 let projectId = process.env.FIREBASE_PROJECT_ID;
 if (!projectId) {
     try {
@@ -40,6 +40,12 @@ if (admin.apps.length === 0) {
 }
 const db = admin.firestore();
 
+// ── Constantes v2 (sincronizadas con weeklyPool.ts) ──────────────────────────
+const BASE_POOL_AMOUNT = 20000;
+const MAX_POOL_AMOUNT  = 600000;
+const TOP_N            = 30;
+const MIN_TRIPS        = 1;
+
 function getWeekId(): string {
     const d = new Date();
     const formatter = new Intl.DateTimeFormat('en-US', {
@@ -47,25 +53,35 @@ function getWeekId(): string {
         year: 'numeric', month: '2-digit', day: '2-digit'
     });
     const parts = formatter.formatToParts(d);
-    const y = parts.find(p => p.type === 'year')?.value || '0';
-    const m = parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1;
-    const day = parseInt(parts.find(p => p.type === 'day')?.value || '0');
-    const argDate = new Date(parseInt(y), m, day);
+    const y   = parts.find(p => p.type === 'year')?.value  || '0';
+    const m   = parseInt(parts.find(p => p.type === 'month')?.value || '0') - 1;
+    const day = parseInt(parts.find(p => p.type === 'day')?.value   || '0');
+    const argDate        = new Date(parseInt(y), m, day);
     const firstDayOfYear = new Date(parseInt(y), 0, 1);
-    const pastDaysOfYear = (argDate.getTime() - firstDayOfYear.getTime()) / 86400000;
-    const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+    const pastDays       = (argDate.getTime() - firstDayOfYear.getTime()) / 86400000;
+    const weekNumber     = Math.ceil((pastDays + firstDayOfYear.getDay() + 1) / 7);
     return `${y}-W${String(weekNumber).padStart(2, '0')}`;
+}
+
+function getBlockPayout(rank: number, poolTotal: number): number {
+    const ratio = Math.min(1, poolTotal / MAX_POOL_AMOUNT);
+    if (rank <= 3)  return Math.floor(50000 * ratio);
+    if (rank <= 10) return Math.floor(25000 * ratio);
+    if (rank <= 20) return Math.floor(15000 * ratio);
+    if (rank <= 30) return Math.floor(12500 * ratio);
+    return 0;
 }
 
 async function executePayout() {
     const weekId = getWeekId();
     console.log('====================================================');
-    console.log('💰 VamO Weekly Pool Payout - MODO ADMINISTRADOR');
+    console.log('💰 VamO Weekly Pool Payout v2 - MODO ADMINISTRADOR');
+    console.log(`   TOP ${TOP_N} | BASE $${BASE_POOL_AMOUNT} | TOPE $${MAX_POOL_AMOUNT.toLocaleString()}`);
     console.log('====================================================');
     console.log(`📍 Ciudad: ${cityKeyArg.toUpperCase()}`);
     console.log(`📅 Semana: ${weekId}`);
 
-    // 1. Dry-Run Guard
+    // 1. Guardia: dry-run previo obligatorio
     const dryRunSnap = await db.collection('weekly_pool_history')
         .where('cityKey', '==', cityKeyArg)
         .where('weekId', '==', weekId)
@@ -74,96 +90,125 @@ async function executePayout() {
         .get();
 
     if (dryRunSnap.empty) {
-        console.error('❌ ERROR: No se encontró una simulación (Dry-Run) previa.');
-        console.error('Debes ejecutar primero: npx tsx scripts/run_weekly_pool_dryrun.ts ' + cityKeyArg);
+        console.error('❌ ERROR: No se encontró simulación previa (Dry-Run).');
+        console.error('Ejecutá primero: npx tsx scripts/run_weekly_pool_dryrun.ts ' + cityKeyArg);
         process.exit(1);
     }
-    console.log('✅ Simulación previa detectada. Validando ranking...');
+    console.log('✅ Simulación previa detectada.');
 
-    // 2. Fetch Data (Identical to Cloud Function)
-    const citySnap = await db.doc(`cities/${cityKeyArg}`).get();
-    const poolAmount = citySnap.data()?.rewardsConfig?.weeklyPoolAmount || 0;
-
-    const topDriversSnap = await db.collection('driver_points')
-        .where('weeklyTripsCount', '>=', 10)
-        .orderBy('weeklyPoints', 'desc')
-        .limit(10)
+    // 2. Guardia: no pagar dos veces
+    const existingSnap = await db.collection('weekly_pool_history')
+        .where('cityKey', '==', cityKeyArg)
+        .where('weekId', '==', weekId)
+        .where('isDryRun', '==', false)
+        .limit(1)
         .get();
 
-    if (topDriversSnap.empty) {
-        console.error('❌ Error: No hay conductores calificados.');
+    if (!existingSnap.empty) {
+        console.error('❌ ERROR: Ya existe un pago real para esta semana y ciudad.');
+        process.exit(1);
+    }
+
+    // 3. Calcular distribución (misma lógica que weeklyPool.ts v2)
+    const citySnap  = await db.doc(`cities/${cityKeyArg}`).get();
+    const poolAmount = Math.min(
+        citySnap.data()?.rewardsConfig?.weeklyPoolAmount || BASE_POOL_AMOUNT,
+        MAX_POOL_AMOUNT
+    );
+
+    let topSnap = await db.collection('driver_points')
+        .where('weekId', '==', weekId)
+        .where('cityKey', '==', cityKeyArg)
+        .where('weeklyTripsCount', '>=', MIN_TRIPS)
+        .orderBy('weeklyTripsCount', 'desc')
+        .limit(TOP_N + 5)
+        .get();
+
+    if (topSnap.empty) {
+        console.warn('⚠️  Fallback: sin filtro cityKey (docs legados).');
+        topSnap = await db.collection('driver_points')
+            .where('weekId', '==', weekId)
+            .where('weeklyTripsCount', '>=', MIN_TRIPS)
+            .orderBy('weeklyTripsCount', 'desc')
+            .limit(TOP_N + 5)
+            .get();
+    }
+
+    if (topSnap.empty) {
+        console.error('❌ No hay conductores calificados.');
         return;
     }
 
-    let totalAdjustedPoints = 0;
-    const candidates: any[] = [];
-    topDriversSnap.docs.forEach((doc, index) => {
-        const data = doc.data();
-        const rank = index + 1;
-        let mult = 1.0;
-        if (rank <= 2) mult = 1.5;
-        else if (rank <= 6) mult = 1.2;
-        const adj = data.weeklyPoints * mult;
-        totalAdjustedPoints += adj;
-        candidates.push({ driverId: doc.id, name: data.driverName || 'Anónimo', rank, points: data.weeklyPoints, mult, adj });
+    const sorted = topSnap.docs
+        .map(d => ({ id: d.id, ...d.data() as any }))
+        .sort((a, b) => {
+            if (b.weeklyTripsCount !== a.weeklyTripsCount) return b.weeklyTripsCount - a.weeklyTripsCount;
+            const aT = a.lastUpdated?.toMillis?.() || 0;
+            const bT = b.lastUpdated?.toMillis?.() || 0;
+            return aT - bT;
+        })
+        .slice(0, TOP_N);
+
+    const finalPayouts = sorted.map((d, idx) => {
+        const rank   = idx + 1;
+        const reward = getBlockPayout(rank, poolAmount);
+        return { rank, driverId: d.id, name: d.driverName || 'Anónimo', trips: d.weeklyTripsCount || 0, reward };
     });
 
-    const finalPayouts = candidates.map(c => ({
-        ...c,
-        reward: totalAdjustedPoints > 0 ? Math.floor((c.adj / totalAdjustedPoints) * poolAmount) : 0
-    }));
-
-    console.log('\n📋 RESUMEN DE LIQUIDACIÓN:');
-    console.table(finalPayouts.map(p => ({
-        Pos: p.rank,
-        Nombre: p.name,
-        Puntos: p.points,
-        Multi: p.mult,
-        Premio: `$${p.reward.toLocaleString()}`
-    })));
-    
-    console.log('----------------------------------------------------');
     const totalDist = finalPayouts.reduce((a, b) => a + b.reward, 0);
-    console.log(`TOTAL A REPARTIR: $${totalDist.toLocaleString()}`);
+
+    console.log('\n📋 RESUMEN DE LIQUIDACIÓN v2:');
+    console.log('─────────────────────────────────────────────────────────');
+    finalPayouts.forEach(p => {
+        console.log(`  #${String(p.rank).padEnd(3)} ${p.name.padEnd(16)} ${p.trips} viajes → $${p.reward.toLocaleString()}`);
+    });
+    console.log('─────────────────────────────────────────────────────────');
+    console.log(`TOTAL A REPARTIR: $${totalDist.toLocaleString()} / Pozo: $${poolAmount.toLocaleString()}`);
 
     if (!isConfirmed) {
         console.log('\n🔍 MODO PREVIEW: No se realizó ningún pago.');
-        console.log('⚠️ Para ejecutar el PAGO REAL, agregá --confirm al final.');
+        console.log('⚠️  Para el PAGO REAL agregá --confirm al final.');
         return;
     }
 
-    // 3. Execution (Real Payout)
+    // 4. Ejecución real (con idempotencia)
     console.log('\n🚀 INICIANDO PAGO REAL...');
-    const now = admin.firestore.Timestamp.now();
+    const now       = admin.firestore.Timestamp.now();
     const processed = [];
 
     for (const p of finalPayouts) {
         if (p.reward <= 0) continue;
-        const payoutId = `weekly_pool_payout_${weekId}_${cityKeyArg}_${p.driverId}`;
+        const payoutId      = `weekly_pool_payout_v2_${weekId}_${cityKeyArg}_${p.driverId}`;
         const transactionRef = db.doc(`platform_transactions/${payoutId}`);
-        const userRef = db.doc(`users/${p.driverId}`);
+        const walletRef      = db.doc(`wallets/${p.driverId}`);
+        const movRef         = db.collection('wallet_movements').doc();
 
         try {
             await db.runTransaction(async (tx) => {
                 const txSnap = await tx.get(transactionRef);
-                if (txSnap.exists) return; // Idempotencia
-
+                if (txSnap.exists) {
+                    console.log(`⏭️  ${p.name}: ya pagado (idempotente).`);
+                    return;
+                }
                 tx.set(transactionRef, {
-                    type: 'reward_payout',
-                    category: 'weekly_pool',
-                    amount: p.reward,
-                    driverId: p.driverId,
-                    cityKey: cityKeyArg,
-                    weekId,
-                    status: 'completed',
+                    type: 'weekly_pool_payout', category: 'weekly_pool',
+                    amount: p.reward, driverId: p.driverId,
+                    cityKey: cityKeyArg, weekId, rank: p.rank,
+                    status: 'completed', poolVersion: 'v2', createdAt: now
+                });
+                tx.set(walletRef, {
+                    balance: admin.firestore.FieldValue.increment(p.reward),
+                    lastUpdated: now, userId: p.driverId
+                }, { merge: true });
+                tx.set(movRef, {
+                    userId: p.driverId, type: 'weekly_pool_bonus',
+                    amount: p.reward, direction: 'credit',
+                    weekId, source: 'weekly_pool', rank: p.rank,
+                    description: `Premio Pozo Semanal VamO - Puesto #${p.rank}`,
                     createdAt: now
                 });
-                tx.update(userRef, {
-                    currentBalance: admin.firestore.FieldValue.increment(p.reward),
-                    updatedAt: now
-                });
             });
-            console.log(`✅ Pago de $${p.reward} acreditado a ${p.name}`);
+            console.log(`✅ $${p.reward.toLocaleString()} acreditados a ${p.name} (puesto #${p.rank})`);
             processed.push({ ...p, status: 'paid' });
         } catch (e) {
             console.error(`❌ Error pagando a ${p.name}:`, e);
@@ -171,11 +216,12 @@ async function executePayout() {
         }
     }
 
-    // 4. Record Final Settlement
-    const historyId = `settlement_adm_${weekId}_${cityKeyArg}_${Date.now()}`;
+    // 5. Registrar liquidación
+    const historyId = `settlement_adm_v2_${weekId}_${cityKeyArg}_${Date.now()}`;
     await db.collection('weekly_pool_history').doc(historyId).set({
         cityKey: cityKeyArg, weekId, poolAmount, totalDistributed: totalDist,
-        isDryRun: false, source: 'admin_executor', processedAt: now, ranking: processed
+        isDryRun: false, source: 'admin_executor_v2',
+        processedAt: now, poolVersion: 'v2', topN: TOP_N, ranking: processed
     });
 
     console.log('\n✅ PAGO FINALIZADO.');

@@ -15,9 +15,10 @@ export function safeNumber(value: unknown, fallback = 0): number {
 }
 
 export function formatDistance(meters: unknown): string {
-    const m = safeNumber(meters, 0);
-    if (m === 0) return '—';
-    if (m < 1000) return `${m.toFixed(0)}m`;
+    if (meters === null || meters === undefined) return '—';
+    const m = typeof meters === 'number' ? meters : Number(meters);
+    if (!Number.isFinite(m) || m < 0) return '—';
+    if (m < 1000) return `${m.toFixed(0)} m`;
     return `${(m / 1000).toFixed(1)} km`;
 }
 

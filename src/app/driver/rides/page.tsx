@@ -40,9 +40,8 @@ const statusMessages: Record<string, {title: string, description: string, icon: 
 export default function DriverRidesPage() {
   const { profile, rides: availableOffers, newRideIds, ready, error } = useDriverData();
 
-  
-  const isPendingReview = !profile.approved && profile.municipalStatus === 'pending_municipal_review';
-  const statusKey = profile.municipalStatus || 'unverified';
+  const isPendingReview = profile.planBStatus === 'pending_docs' || profile.planBStatus === 'pending_approval';
+  const statusKey = isPendingReview ? 'pending_review' : (profile.approved ? 'approved' : 'unverified');
   const message = statusMessages[statusKey] || statusMessages.unverified;
 
   const isOnline = profile?.driverStatus === 'online';
@@ -57,9 +56,9 @@ export default function DriverRidesPage() {
         {isPendingReview && (
             <Alert variant="default" className="border-indigo-500/50 bg-indigo-500/10 rounded-2xl">
                 <VamoIcon name="clock" className="h-4 w-4 text-indigo-400" />
-                <AlertTitle className="text-indigo-400 font-bold">Cuenta en Revisión</AlertTitle>
+                <AlertTitle className="text-indigo-400 font-bold">Documentación en revisión</AlertTitle>
                 <AlertDescription className="text-indigo-500/80 text-xs">
-                    Estamos validando tu documentación municipal. Podrás recibir viajes una vez aprobado.
+                    Estamos validando tus datos y documentación. Podrás recibir viajes cuando tu cuenta esté aprobada.
                 </AlertDescription>
             </Alert>
         )}

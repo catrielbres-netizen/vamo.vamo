@@ -18,6 +18,8 @@ import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { EmailVerificationCard } from '@/components/EmailVerificationCard';
 import { ThemeSwitcher } from '@/components/ThemeSwitcher';
 import { DriverRealtimeProvider, useDriverData } from '@/context/DriverRealtimeProvider';
+import { WeeklyPoolProvider } from '@/context/WeeklyPoolProvider';
+import { useWeeklyPool } from '@/hooks/useWeeklyPool';
 import { GlobalOfferOverlay } from '@/components/GlobalOfferOverlay';
 import { useActiveRide } from '@/hooks/useActiveRide';
 import { doc, serverTimestamp, updateDoc, setDoc, collection, query, where, limit, onSnapshot } from 'firebase/firestore';
@@ -36,7 +38,11 @@ import { AuthGuard } from '@/features/auth/AuthGuard';
 import { TermsGuard } from '@/features/auth/TermsGuard';
 import { useBackNavigationLock } from '@/hooks/useBackNavigationLock';
 import { NotificationToggle } from '@/components/NotificationToggle';
-import { useTelemetry } from '@/lib/telemetry';
+import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
+import { cn } from '@/lib/utils';
+import DriverSuspensionBanner from '@/components/driver/DriverSuspensionBanner';
+import { featureFlags } from '@/config/features';
+import { NotificationBell } from '@/components/NotificationBell';
 
 const MAX_ACCURACY_METERS = 3000;
 const MIN_DISTANCE_UPDATE_METERS = 25;
@@ -116,8 +122,10 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
     <DriverErrorBoundary>
       <AuthGuard allowedRoles={['driver', 'admin']} fallbackPath="/driver/login">
         <DriverRealtimeProvider>
-          <GlobalOfferOverlay />
-          <DriverLayoutWithAuth>{children}</DriverLayoutWithAuth>
+          <WeeklyPoolProvider>
+            <GlobalOfferOverlay />
+            <DriverLayoutWithAuth>{children}</DriverLayoutWithAuth>
+          </WeeklyPoolProvider>
         </DriverRealtimeProvider>
       </AuthGuard>
     </DriverErrorBoundary>
@@ -144,6 +152,7 @@ function DriverLayoutWithAuth({ children }: { children: ReactNode }) {
  */
 function DriverLayoutInner({ children, authUser, profile }: { children: ReactNode, authUser: any, profile: any }) {
   const { wallet, location, ready } = useDriverData();
+  const { driverStats } = useWeeklyPool();
   const telemetry = useTelemetry();
   const router = useRouter();
   const pathname = usePathname();
@@ -225,6 +234,10 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
     const unsub = onSnapshot(q, (snap) => {
       const count = snap.docs.filter(d => {
         const data = d.data();
+
+        // Excluir simulaciones
+        if (data.isSimulation === true) return false;
+
         const cityMatch = () => {
             const c = (data.cityKey || '').toLowerCase();
             const dc = driverCity.toLowerCase();
@@ -288,35 +301,17 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
     }
   }, [profile, pathname, router]);
 
-  // [VamO PRO] Municipal Status Watcher (Force Offline + Notification)
-  const prevMuniStatus = useRef<string | null>(null);
+  // [VamO PRO] Suspension Watcher (Force Offline)
   useEffect(() => {
     if (!profile || !firestore || !authUser?.uid) return;
     
-    // Defensive fallback for municipalStatus
-    const currentStatus = profile.municipalStatus || (profile.profileCompleted ? 'pending_municipal_review' : undefined);
-    console.log("🔍 [MUNI_DEBUG] Current status check:", currentStatus);
-    const isNowObserved = currentStatus === 'municipal_observed' && prevMuniStatus.current !== 'municipal_observed';
-    
-    if (isNowObserved) {
-        toast({
-            variant: 'destructive',
-            title: '⚠ Observación Municipal',
-            description: 'Se han detectado observaciones en tu documentación. Tenés 1 hora para corregirlas antes de que tu cuenta sea inhabilitada.',
-            duration: 10000,
-        });
-    }
+    const isSuspended =
+        profile.isSuspended === true ||
+        profile.trafficSuspended === true ||
+        profile.adminSuspended === true;
 
-    // Force offline if status is no longer active AND grace period expired
-    const now = new Date();
-    const graceUntil = profile.observationGraceUntil?.toDate 
-        ? profile.observationGraceUntil.toDate() 
-        : (profile.observationGraceUntil ? new Date(profile.observationGraceUntil) : null);
-    
-    const hasGrace = graceUntil && graceUntil > now;
-
-    if (profile.driverStatus === 'online' && currentStatus && currentStatus !== 'active' && !hasGrace) {
-        console.log("🚫 [MUNI_ENFORCEMENT] Non-active status and no grace period. Going offline.");
+    if (profile.driverStatus === 'online' && isSuspended) {
+        console.log("🚫 [SUSPENSION_ENFORCEMENT] Suspended. Going offline.");
         const userProfileRef = doc(firestore, 'users', authUser.uid);
         const driverLocationRef = doc(firestore, 'drivers_locations', authUser.uid);
         updateDoc(userProfileRef, { driverStatus: 'offline', updatedAt: serverTimestamp() });
@@ -324,12 +319,10 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
         toast({
             variant: 'destructive',
             title: 'Desconectado',
-            description: 'Tu habilitación municipal ya no está activa. No podés recibir viajes.',
+            description: 'Tu cuenta ha sido suspendida. No podés recibir viajes.',
         });
     }
-
-    prevMuniStatus.current = currentStatus || null;
-  }, [profile?.municipalStatus, profile?.driverStatus, profile?.observationGraceUntil, firestore, authUser?.uid, toast]);
+  }, [profile?.driverStatus, profile?.isSuspended, profile?.trafficSuspended, profile?.adminSuspended, firestore, authUser?.uid, toast]);
 
   // [VamO PRO] Unified Geolocation Engine
   // Manages tracking, mocking, and UI state in a single effect to prevent battery drain.
@@ -394,7 +387,6 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
       const payload: any = {
         driverStatus: profile?.driverStatus || 'offline',
         driverName: `${profile?.name || ''} ${profile?.surname || ''}`.trim() || 'Conductor',
-        driverPhone: profile?.phone || '',
         plateNumber: profile?.plateNumber || '',
         photoURL: profile?.photoURL || '',
         vehicle: profile?.vehicle || null,
@@ -580,6 +572,12 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
 
   if (!profile?.profileCompleted) return <main>{children}</main>;
 
+  const isSuspended =
+    profile.isSuspended === true ||
+    profile.trafficSuspended === true ||
+    profile.municipalSuspended === true ||
+    profile.adminSuspended === true;
+
   return (
     <>
       <TermsGuard 
@@ -588,6 +586,7 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
       />
       <CancellationModal />
       <div className="container mx-auto max-w-md p-4">
+        <DriverSuspensionBanner profile={profile} />
         <div className="flex justify-between items-center mb-6">
           <div>
             <p className="text-sm text-muted-foreground">Hola, {profile?.name} 👋</p>
@@ -596,9 +595,20 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
                <span className="font-bold text-sm text-foreground">{formatRating(profile?.averageRating)}</span>
                <span className="text-muted-foreground mx-1">•</span>
                <span className="font-medium text-sm">📍 {profile?.city || 'VamO'}</span>
+               
+               {/* [VamO PRO] Weekly Points Badge */}
+               <div className="flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 animate-in fade-in zoom-in duration-700">
+                  <VamoIcon name="award" className="w-3 h-3 text-primary" />
+                  <span className="text-[10px] font-black text-primary">
+                    {driverStats?.weeklyPoints || 0} pts
+                  </span>
+               </div>
             </div>
           </div>
-          <ThemeSwitcher />
+          <div className="flex items-center gap-4">
+              <ThemeSwitcher />
+              <NotificationBell role="driver" />
+          </div>
         </div>
         
         {!shouldShowActiveRide && (
@@ -607,7 +617,11 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
                   <div className="flex items-center justify-between p-4 rounded-lg bg-card border mb-6">
                       <div className="flex flex-col">
                           <Label htmlFor="online-toggle" className="font-semibold">{profile.driverStatus === 'online' ? "Estás En Línea" : "Estás Desconectado"}</Label>
-                          <span className="text-xs text-muted-foreground">{profile.driverStatus === 'online' ? "Listo para recibir viajes." : "Activá para empezar a trabajar."}</span>
+                          <span className="text-xs text-muted-foreground">
+                              {isSuspended 
+                                  ? "No podés conectarte porque tu cuenta está suspendida." 
+                                  : (profile.driverStatus === 'online' ? "Listo para recibir viajes." : "Activá para empezar a trabajar.")}
+                          </span>
                       </div>
                        <div className="flex items-center gap-4">
                            {process.env.NODE_ENV === 'development' && (
@@ -624,7 +638,12 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
                               id="online-toggle" 
                               checked={profile.driverStatus === 'online'} 
                               onCheckedChange={handleOnlineToggle} 
-                              disabled={!profile?.profileCompleted || profile.driverRiskLevel === 'blocked' || (profile.currentBalance ?? 0) <= (profile.driverSubtype === 'professional' ? -15000 : -8000)}
+                              disabled={
+                                  !profile?.profileCompleted || 
+                                  profile.driverRiskLevel === 'blocked' || 
+                                  (profile.currentBalance ?? 0) <= (profile.driverSubtype === 'professional' ? -15000 : -8000) ||
+                                  isSuspended
+                              }
                            />
                        </div>
                   </div>
@@ -715,12 +734,27 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
                             </Link>
                         </TabsTrigger>
                         <TabsTrigger value="reservations" asChild>
-                            <Link href="/driver/reservations" className="gap-1.5 text-xs px-3 py-1.5 flex items-center justify-center relative">
-                                <VamoIcon name="calendar" className="w-4 h-4" /> Reservas
+                            <Link
+                                href="/driver/reservations"
+                                className={cn(
+                                    "gap-1.5 text-xs px-3 py-1.5 flex items-center justify-center relative transition-all duration-300",
+                                    scheduledRidesCount > 0
+                                        ? "bg-indigo-600 text-white rounded-md shadow-[0_0_12px_rgba(99,102,241,0.5)] font-black"
+                                        : ""
+                                )}
+                            >
+                                <VamoIcon
+                                    name="calendar"
+                                    className={cn(
+                                        "w-4 h-4 transition-all",
+                                        scheduledRidesCount > 0 ? "text-white animate-pulse" : ""
+                                    )}
+                                />
+                                Reservas
                                 {scheduledRidesCount > 0 && (
                                     <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center">
-                                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-500 opacity-75" />
-                                        <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-indigo-600 text-white font-black" style={{ fontSize: '8px' }}>
+                                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
+                                        <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white text-indigo-700 font-black" style={{ fontSize: '8px' }}>
                                             {scheduledRidesCount > 9 ? '9+' : scheduledRidesCount}
                                         </span>
                                     </span>
@@ -742,33 +776,8 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
                                 <VamoIcon name="user" className="w-4 h-4" /> Perfil
                             </Link>
                         </TabsTrigger>
-                        {/* Tab de Habilitación para todos los conductores */}
-                        <TabsTrigger value="muni-status" asChild>
-                            <Link href="/driver/muni-status" className="gap-1.5 text-xs px-3 py-1.5 flex items-center justify-center relative">
-                                <VamoIcon name="landmark" className="w-4 h-4" /> Habilitación
-                                {/* Punto rojo indicador si no está activo */}
-                                {profile?.municipalStatus !== 'active' && (
-                                    <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-500 inline-block absolute right-1 top-2" />
-                                )}
-                            </Link>
-                        </TabsTrigger>
                     </TabsList>
               </Tabs>
-
-              {/* Banner municipal compacto para conductores que no están activos */}
-              {profile?.municipalStatus !== 'active' && (
-                  <button
-                      onClick={() => router.push('/driver/muni-status')}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-left mb-2 hover:bg-amber-500/15 transition-colors"
-                  >
-                      <VamoIcon name="landmark" className="h-4 w-4 text-amber-400 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-amber-400 truncate">Habilitación pendiente</p>
-                          <p className="text-[10px] text-zinc-500 truncate">No podés operar hasta completar tu trámite</p>
-                      </div>
-                      <VamoIcon name="chevron-right" className="h-4 w-4 text-zinc-600 shrink-0" />
-                  </button>
-              )}
 
 
               <div className="space-y-4 mb-4">

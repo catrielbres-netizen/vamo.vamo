@@ -48,11 +48,11 @@ export const PassengerTripCard: React.FC<PassengerTripCardProps> = ({
     <div className="w-full rounded-3xl p-5 mb-4 border border-white/10 shadow-lg bg-gradient-to-tr from-zinc-900 to-zinc-800 animate-in fade-in duration-700">
       <div className="flex items-center gap-4 mb-5 pb-5 border-b border-white/10">
         <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl bg-white/5 border border-white/10 shadow-inner">
-          {serviceType === 'express' ? '⚡' : '🛡️'}
+          {serviceType === 'express' ? '⚡' : serviceType === 'shared' ? '👥' : '🛡️'}
         </div>
         <div className="flex flex-col">
           <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-0.5 drop-shadow-sm">Servicio</span>
-          <span className="text-sm font-black text-white uppercase drop-shadow-sm">{serviceType === 'express' ? 'Express' : 'Profesional'}</span>
+          <span className="text-sm font-black text-white uppercase drop-shadow-sm">{serviceType === 'express' ? 'Express' : serviceType === 'shared' ? 'Compartido' : 'Profesional'}</span>
         </div>
         {(displayPrice != null) ? (
           <div className="ml-auto text-right flex flex-col gap-1 animate-in fade-in zoom-in duration-300 min-w-[140px]">

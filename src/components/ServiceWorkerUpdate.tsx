@@ -5,9 +5,22 @@ import { Button } from '@/components/ui/button';
 import { VamoIcon } from './VamoIcon';
 import { toast } from '@/hooks/use-toast';
 
+import { useUser } from '@/firebase';
+
 export function ServiceWorkerUpdate() {
+  const { profile } = useUser();
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
   const [showReload, setShowReload] = useState(false);
+  const [deferredUpdate, setDeferredUpdate] = useState(false);
+
+  const hasActiveRide = !!profile?.activeRideId;
+
+  useEffect(() => {
+    if (!hasActiveRide && deferredUpdate) {
+      setShowReload(true);
+      setDeferredUpdate(false);
+    }
+  }, [hasActiveRide, deferredUpdate]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
@@ -15,7 +28,11 @@ export function ServiceWorkerUpdate() {
     // Registrar el evento de cambio en el Service Worker
     const onUpdate = (registration: ServiceWorkerRegistration) => {
       setWaitingWorker(registration.waiting);
-      setShowReload(true);
+      if (hasActiveRide) {
+        setDeferredUpdate(true);
+      } else {
+        setShowReload(true);
+      }
     };
 
     navigator.serviceWorker.getRegistration().then(registration => {

@@ -4,6 +4,7 @@ import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { Wallet, WalletTransaction, WalletTransactionType } from '../types';
 import { getDb } from './firebaseAdmin';
+import { emitLedgerEvent } from './ledger';
 
 /**
  * REGLAS DE BILLETERA VamO (HARDENING):
@@ -126,13 +127,13 @@ export async function lockWalletForRide(
     let currentLockedCash = wallet.lockedCash || 0;
     let currentLockedPromo = wallet.lockedPromo || 0;
     const lastUpdate = wallet.updatedAt ? (wallet.updatedAt as any).toMillis() : 0;
-    const isStale = (Date.now() - lastUpdate) > 30 * 60 * 1000; // 30 minutes
+    const isStale = (Date.now() - lastUpdate) > 15 * 60 * 1000; // Reducido a 15 minutos para mayor agilidad en producción
 
     if (isStale && (currentLockedCash > 0 || currentLockedPromo > 0)) {
-        logger.warn(`[WALLET_RECOVERY] Detected STALE locks for user ${userId}. Clearing ghosts: cash=${currentLockedCash}, promo=${currentLockedPromo}`);
+        logger.warn(`[WALLET_RECOVERY] STALE LOCKS DETECTED | userId=${userId} | cash=${currentLockedCash} | promo=${currentLockedPromo} | age=${Math.round((Date.now() - lastUpdate) / 1000)}s`);
+        // En lugar de solo limpiar la variable local, marcamos que necesitamos resetear los campos en la DB
         currentLockedCash = 0;
         currentLockedPromo = 0;
-        // The subsequent update will set them to the new values
     }
 
     // 2. Calcular disponible real
@@ -162,6 +163,8 @@ export async function lockWalletForRide(
         tx.update(walletRef, {
             lockedPromo: (isStale ? 0 : (wallet.lockedPromo || 0)) + promoToLock,
             lockedCash: (isStale ? 0 : (wallet.lockedCash || 0)) + cashToLock,
+            lockedRideId: rideId,
+            lockedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp()
         });
 
@@ -227,8 +230,10 @@ export async function releaseLockedWallet(userId: string, rideId: string, cashTo
     if (finalCashRelease <= 0 && finalPromoRelease <= 0) return;
 
     tx.update(walletRef, {
-        lockedCash: FieldValue.increment(-finalCashRelease),
-        lockedPromo: FieldValue.increment(-finalPromoRelease),
+        lockedCash: Math.max(0, (wallet.lockedCash || 0) - finalCashRelease),
+        lockedPromo: Math.max(0, (wallet.lockedPromo || 0) - finalPromoRelease),
+        lockedRideId: null,
+        lockedAt: null,
         updatedAt: FieldValue.serverTimestamp()
     });
 
@@ -333,6 +338,8 @@ export async function consumeLockedWallet(
         promoBalance: newPromoBalance,
         lockedCash: newLockedCash,
         lockedPromo: newLockedPromo,
+        lockedRideId: null,
+        lockedAt: null,
         updatedAt: FieldValue.serverTimestamp()
     };
 
@@ -422,8 +429,15 @@ export async function addFunds(
 
     // IF TX PROVIDED: We assume READS were done outside to comply with Firestore rules
     // Rule: "Transactions require all reads before writes"
-    // We only perform WRITES here. Note: balanceAfter will be slightly inaccurate in ledger 
-    // unless we pass the current state, but we prioritize transaction stability.
+    // NEW: We still check idempotency if customTxId is provided.
+    if (customTxId) {
+        const existing = await tx.get(txRef);
+        if (existing.exists) {
+            logger.warn(`[WALLET_ADD_FUNDS] Duplicate call blocked for txId: ${customTxId}`);
+            return;
+        }
+    }
+
     const isPromoType = ['welcome_bonus', 'topup_bonus', 'cashback_reward'].includes(type);
     const cashDelta = isPromoType ? 0 : amount;
     const promoDelta = isPromoType ? amount : 0;
@@ -446,6 +460,82 @@ export async function addFunds(
         type, note, createdAt: FieldValue.serverTimestamp(),
         balanceAfterNote: "Managed by Atomic Batch"
     });
+
+    // [LEDGER] Record to centralized ledger
+    await emitLedgerEvent({
+        eventType: 'wallet_funds_added',
+        userId,
+        amount: cashDelta + promoDelta,
+        currency: 'ARS',
+        referenceType: 'payment',
+        referenceId: customTxId || txId,
+        idempotencyKey: `ledger_add_${customTxId || txId}`,
+        source: 'wallet_lib',
+        metadata: { type, note }
+    }, tx);
+}
+
+/**
+ * [VamO PRO] Reversa de fondos de forma segura (Refunds / Chargebacks)
+ */
+export async function reverseFunds(
+    userId: string,
+    amount: number,
+    type: 'mp_payment_refunded' | 'mp_payment_charged_back',
+    note: string,
+    tx: admin.firestore.Transaction,
+    referenceId: string // e.g. "mp_12345"
+) {
+    const db = getDb();
+    const walletRef = db.doc(`wallets/${userId}`);
+    const reverseTxId = `reverse_${referenceId}`;
+    const txRef = db.collection('wallet_transactions').doc(reverseTxId);
+
+    // 1. Verificar idempotencia de la reversa
+    const existingReverse = await tx.get(txRef);
+    if (existingReverse.exists) {
+        logger.warn(`[WALLET_REVERSE] Reversal already processed: ${reverseTxId}`);
+        return;
+    }
+
+    // 2. Ejecutar reversa
+    // Permitimos saldo negativo si el usuario ya gastó el dinero (deuda financiera)
+    tx.set(walletRef, {
+        cashBalance: FieldValue.increment(-amount),
+        updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    // [LEGACY_UI_MIRROR]
+    tx.update(db.doc(`users/${userId}`), {
+        currentBalance: FieldValue.increment(-amount),
+        updatedAt: FieldValue.serverTimestamp()
+    });
+
+    tx.set(txRef, {
+        userId, 
+        amount: -amount, 
+        cashAmount: -amount, 
+        promoAmount: 0,
+        type: 'adjustment', 
+        note, 
+        createdAt: FieldValue.serverTimestamp(),
+        referenceId: referenceId
+    });
+
+    // [LEDGER] Record to centralized ledger
+    await emitLedgerEvent({
+        eventType: type === 'mp_payment_refunded' ? 'mp_payment_refunded' : 'mp_payment_charged_back',
+        userId,
+        amount: -amount,
+        currency: 'ARS',
+        referenceType: 'payment',
+        referenceId: referenceId,
+        idempotencyKey: `ledger_${reverseTxId}`,
+        source: 'wallet_lib',
+        metadata: { note }
+    }, tx);
+
+    logger.info(`[WALLET_REVERSE] SUCCESS | userId=${userId} | amount=${amount} | ref=${referenceId}`);
 }
 
 /**

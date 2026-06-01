@@ -8,7 +8,7 @@ import {
     onSnapshot, 
     doc 
 } from 'firebase/firestore';
-import { useFirestore, useFirebaseApp } from '@/firebase';
+import { useFirestore, useFirebaseApp, useUser } from '@/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { RideChatMessage, Ride } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -28,6 +28,8 @@ interface ChatContainerProps {
 export function ChatContainer({ ride, role, onClose }: ChatContainerProps) {
     const firestore = useFirestore();
     const firebaseApp = useFirebaseApp();
+    const { user } = useUser();
+    const currentUserId = user?.uid;
     const [messages, setMessages] = useState<RideChatMessage[]>([]);
     const [inputText, setInputText] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -112,9 +114,9 @@ export function ChatContainer({ ride, role, onClose }: ChatContainerProps) {
                 isInitial: isInitialLoad.current 
             });
 
-            if (!isInitialLoad.current) {
+            if (!isInitialLoad.current && currentUserId) {
                 const added = snapshot.docChanges().filter(c => c.type === 'added');
-                const newFromOther = added.some(c => c.doc.data().senderRole !== role);
+                const newFromOther = added.some(c => c.doc.data().senderId !== currentUserId);
                 if (newFromOther) {
                     playNotificationSound();
                 }
@@ -138,7 +140,7 @@ export function ChatContainer({ ride, role, onClose }: ChatContainerProps) {
         });
 
         return () => unsubscribe();
-    }, [firestore, rideId]);
+    }, [firestore, rideId, currentUserId]);
 
     // 2. Marcar como leído al abrir o recibir mensajes (si no es admin)
     useEffect(() => {

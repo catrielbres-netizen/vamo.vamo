@@ -57,7 +57,21 @@ export const canDriverGoOnline = (
 ): EligibilityResult => {
   if (!profile) return { isEligible: false, reason: "Perfil no encontrado", code: "NOT_FOUND" };
   if (profile.role !== "driver") return { isEligible: false, reason: "El usuario no es conductor", code: "INVALID_ROLE" };
-  if (profile.isSuspended) return { isEligible: false, reason: "Tu cuenta está suspendida", code: "SUSPENDED" };
+  if (profile.isSuspended || profile.adminSuspended || profile.municipalSuspended || profile.trafficSuspended) {
+      const isTraffic = profile.trafficSuspended || (profile.isSuspended && profile.suspensionSource === 'traffic');
+      const isMunicipal = profile.municipalSuspended || (profile.isSuspended && profile.suspensionSource === 'municipal');
+      const isAdmin = profile.adminSuspended || (profile.isSuspended && profile.suspensionSource === 'admin');
+
+      let message = "Tu cuenta está suspendida.";
+      if (isAdmin) {
+          message = "Suspendido por Administración VamO.";
+      } else if (isMunicipal) {
+          message = "Suspendido por Municipalidad.";
+      } else if (isTraffic) {
+          message = "Suspendido preventivamente por el área de Tránsito.";
+      }
+      return { isEligible: false, reason: message, code: "SUSPENDED" };
+  }
   
   if (profile.blockedUntil && (profile.blockedUntil as any).toMillis() > Date.now()) {
       const dateStr = new Date((profile.blockedUntil as any).toMillis()).toLocaleString('es-AR');

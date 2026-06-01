@@ -23,7 +23,7 @@ export const requestMunicipalWithdrawalV1 = onCall({ cors: true, region: 'us-cen
     const userSnap = await db.doc(`users/${uid}`).get();
     const user = userSnap.data() as UserProfile;
 
-    const isAuthorized = user.role === 'admin' || (user.role === 'admin_municipal' && user.cityKey === cityKey);
+    const isAuthorized = user.role === 'admin' || user.role === 'superadmin' || (user.role === 'admin_municipal' && user.cityKey === cityKey);
 
     if (!isAuthorized) {
         throw new HttpsError('permission-denied', 'No tienes permiso para solicitar retiros en esta ciudad.');
@@ -78,7 +78,7 @@ export const approveMunicipalWithdrawalV1 = onCall({ cors: true, region: 'us-cen
     const userSnap = await db.doc(`users/${uid}`).get();
     const user = userSnap.data() as UserProfile;
 
-    if (user.role !== 'admin_municipal' && user.role !== 'admin') {
+    if (user.role !== 'admin_municipal' && user.role !== 'admin' && user.role !== 'superadmin') {
         throw new HttpsError('permission-denied', 'No autorizado.');
     }
 
@@ -91,7 +91,7 @@ export const approveMunicipalWithdrawalV1 = onCall({ cors: true, region: 'us-cen
 
         if (req.status !== 'pending') throw new HttpsError('failed-precondition', 'La solicitud ya no está pendiente.');
         
-        if (req.requestedBy === uid && user.role !== 'admin') {
+        if (req.requestedBy === uid && user.role !== 'admin' && user.role !== 'superadmin') {
             throw new HttpsError('failed-precondition', 'No puedes aprobar tu propia solicitud.');
         }
 
@@ -108,7 +108,7 @@ export const approveMunicipalWithdrawalV1 = onCall({ cors: true, region: 'us-cen
         });
 
         // Double approval rule for municipal admins, single for global admin
-        const newStatus = approvals.length >= 2 || user.role === 'admin' ? 'approved' : 'pending';
+        const newStatus = approvals.length >= 2 || user.role === 'admin' || user.role === 'superadmin' ? 'approved' : 'pending';
 
         tx.update(requestRef, {
             approvals,
@@ -146,7 +146,7 @@ export const rejectMunicipalWithdrawalV1 = onCall({ cors: true, region: 'us-cent
 
         // Only requester can cancel, admins can reject
         const isRequester = req.requestedBy === uid;
-        const isAuthorized = isRequester || user.role === 'admin_municipal' || user.role === 'admin';
+        const isAuthorized = isRequester || user.role === 'admin_municipal' || user.role === 'admin' || user.role === 'superadmin';
 
         if (!isAuthorized) throw new HttpsError('permission-denied', 'No tienes permiso para esta acción.');
 
@@ -182,7 +182,7 @@ export const executeMunicipalWithdrawalV1 = onCall({ cors: true, region: 'us-cen
     const userSnap = await db.doc(`users/${uid}`).get();
     const user = userSnap.data() as UserProfile;
 
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
         throw new HttpsError('permission-denied', 'Solo administradores de plataforma pueden ejecutar retiros.');
     }
 
@@ -256,7 +256,7 @@ export const syncMunicipalAccountsV1 = onCall({ cors: true, region: 'us-central1
     const userSnap = await db.doc(`users/${uid}`).get();
     const user = (userSnap.data() as UserProfile) || {};
 
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
         throw new HttpsError('permission-denied', 'Solo administradores globales pueden sincronizar cuentas.');
     }
 

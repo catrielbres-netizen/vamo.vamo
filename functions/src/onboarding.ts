@@ -196,14 +196,23 @@ export const completeDriverRegistrationV1 = onCall({ cors: true, region: "us-cen
             let walletCreated = false;
 
             if (!userSnap.exists) {
-                // [VamO SECURITY] Race condition check: phone must be unique
+                // [VamO SECURITY] Uniqueness check using phone_index collection
                 if (normalizedPhone) {
-                    const existingPhone = await transaction.get(
-                        db.collection("users").where("phoneNormalized", "==", normalizedPhone).limit(1)
-                    );
-                    if (!existingPhone.empty) {
-                        throw new HttpsError("already-exists", "Este número de teléfono ya está registrado.");
+                    const phoneIndexRef = db.collection("phone_index").doc(normalizedPhone);
+                    const phoneSnap = await transaction.get(phoneIndexRef);
+                    
+                    if (phoneSnap.exists && phoneSnap.data()?.uid !== uid) {
+                        logger.error(`[PHONE_SECURITY] Duplicate phone detected in phone_index: ${normalizedPhone} for UID ${uid}. Existing UID: ${phoneSnap.data()?.uid}`);
+                        throw new HttpsError("already-exists", "Este número de teléfono ya está registrado con otra cuenta.");
                     }
+
+                    // Reservar el teléfono en el índice
+                    transaction.set(phoneIndexRef, {
+                        uid,
+                        emailLower: email.toLowerCase().trim(),
+                        role: "driver",
+                        createdAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
                 }
 
                 const newUser = {

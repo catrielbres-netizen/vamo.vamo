@@ -4,6 +4,7 @@
 import React, { useRef, useState } from 'react';
 import { useUser, useFirestore, useFirebaseApp, useFirebase } from '@/firebase/auth/use-user';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ThemeCustomizer } from '@/components/settings/ThemeCustomizer';
 import { Progress } from '@/components/ui/progress';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,6 +15,8 @@ import { signOut } from 'firebase/auth';
 import { useAuth } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { MercadoPagoLinkCard } from '@/components/MercadoPagoLinkCard';
+import { featureFlags } from '@/config/features';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, updateDoc, arrayUnion, arrayRemove, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
@@ -237,12 +240,19 @@ export default function ProfilePage() {
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="w-full grid grid-cols-5 h-14 bg-zinc-900/50 rounded-2xl p-1 mb-6">
-          <TabsTrigger value="general" className="rounded-xl font-bold text-xs">Datos</TabsTrigger>
-          <TabsTrigger value="pro" className="rounded-xl font-bold text-xs">VamO PRO</TabsTrigger>
-          <TabsTrigger value="identity" className="rounded-xl font-bold text-xs">Identidad</TabsTrigger>
-          <TabsTrigger value="referral" className="rounded-xl font-bold text-xs">Referidos</TabsTrigger>
-          <TabsTrigger value="security" className="rounded-xl font-bold text-xs">Seguridad</TabsTrigger>
+        <TabsList className="w-full grid grid-cols-3 sm:grid-cols-7 h-auto sm:h-14 bg-zinc-900/50 rounded-2xl p-1 gap-1 mb-6">
+          <TabsTrigger value="general" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Datos</TabsTrigger>
+          <TabsTrigger value="pro" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">VamO PRO</TabsTrigger>
+          <TabsTrigger value="pagos" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0 relative">
+            Pagos
+            {!profile?.mpLinked && featureFlags.mercadoPagoRequiredEnabled && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="identity" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Identidad</TabsTrigger>
+          <TabsTrigger value="referral" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Referidos</TabsTrigger>
+          <TabsTrigger value="security" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Emergencia</TabsTrigger>
+          <TabsTrigger value="theme" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Personalizar</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-4 animate-in fade-in duration-300">
@@ -367,6 +377,25 @@ export default function ProfilePage() {
                     </p>
                 </CardContent>
             </Card>
+        </TabsContent>
+
+        <TabsContent value="pagos" className="space-y-4 animate-in fade-in duration-300">
+            <div className="mb-2 px-1">
+                <h2 className="text-xl font-black text-white">Métodos de Pago</h2>
+                <p className="text-xs text-zinc-500 mt-1">Vinculá tu cuenta de Mercado Pago para habilitar pagos digitales y validar tu identidad.</p>
+            </div>
+            <MercadoPagoLinkCard
+                mpAccountStatus={profile?.mpAccountStatus}
+                mpLinkedAt={(profile as any)?.mpLinkedAt}
+            />
+            {featureFlags.mercadoPagoRequiredEnabled && !profile?.mpLinked && (
+                <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl">
+                    <p className="text-xs font-black text-orange-400 uppercase tracking-widest mb-1">Requerido para viajar</p>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                        Para solicitar viajes en VamO necesitás vincular tu cuenta de Mercado Pago. Esto nos permite validar tu identidad de forma segura.
+                    </p>
+                </div>
+            )}
         </TabsContent>
 
         <TabsContent value="identity" className="space-y-4 animate-in fade-in duration-300">
@@ -580,6 +609,10 @@ export default function ProfilePage() {
                     )}
                 </CardContent>
             </Card>
+        </TabsContent>
+        
+        <TabsContent value="theme" className="space-y-4 animate-in fade-in duration-300">
+            <ThemeCustomizer />
         </TabsContent>
       </Tabs>
     </div>

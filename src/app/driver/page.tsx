@@ -38,7 +38,7 @@ export default function DriverWelcomePage() {
                 Bienvenido a VamO Conductor
             </h1>
             <p className="text-zinc-400 text-sm max-w-xs mx-auto leading-relaxed mb-10">
-                Registrate para trabajar con respaldo municipal y recibir viajes en tu ciudad.
+                Registrate para trabajar en la plataforma y recibir viajes en tu ciudad.
             </p>
             
             <div className="w-full max-w-sm space-y-4">

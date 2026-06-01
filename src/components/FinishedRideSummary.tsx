@@ -21,6 +21,8 @@ import RatingForm from './RatingForm';
 import { cn } from '@/lib/utils';
 import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
 import { ExpressReceiptProgress } from './ExpressProgressWidget';
+import { SharedDriverReceiptSummary } from './SharedDriverReceiptSummary';
+import { SharedPassengerReceipt } from './SharedPassengerReceipt';
 import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useRef, useState } from 'react';
@@ -229,6 +231,64 @@ export default function FinishedRideSummary({
       );
   }
 
+  // --- MODO COMPARTIDO (FASE 4B-2) ---
+  if (ride.rideType === 'shared' || (ride as any).isSharedRide === true) {
+      const settlementStatus = (ride as any).sharedSettlementStatus;
+      const receiptsGenerated = (ride as any).sharedReceiptsGenerated;
+      const isDriver = userRole === 'driver';
+
+      // Pantallas de espera y estados especiales (Similares a RideReceipt)
+      if (settlementStatus === 'pending_shared_settlement' || settlementStatus === 'settling') {
+          return (
+            <Card className="m-4 border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-zinc-950 p-12 text-center flex flex-col items-center gap-4">
+                <VamoIcon name="loader" className="w-10 h-10 text-primary animate-spin" />
+                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none">Sincronizando...</h3>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                    Estamos procesando la liquidación compartida.
+                </p>
+                <Button onClick={handleClose} variant="ghost" className="text-[8px] font-black uppercase text-zinc-700 mt-4">Volver al panel</Button>
+            </Card>
+          );
+      }
+
+      if (settlementStatus === 'not_applicable') {
+          return (
+            <Card className="m-4 border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-zinc-950 p-12 text-center flex flex-col items-center gap-4">
+                <VamoIcon name="info" className="w-10 h-10 text-zinc-500" />
+                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none">Viaje Sin Cobro</h3>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                    Este viaje compartido no generó cargos financieros.
+                </p>
+                <Button onClick={handleClose} className="w-full bg-white text-black font-black uppercase rounded-2xl h-14 mt-4">SALIR</Button>
+            </Card>
+          );
+      }
+
+      if (settlementStatus === 'settled' && receiptsGenerated !== true) {
+        return (
+          <Card className="m-4 border-none shadow-2xl rounded-[2.5rem] overflow-hidden bg-zinc-950 p-12 text-center flex flex-col items-center gap-4">
+              <VamoIcon name="loader" className="w-8 h-8 text-primary animate-spin" />
+              <h3 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none">Cerrando Ciclo...</h3>
+          </Card>
+        );
+      }
+
+      // Render Final (Diferenciado por Rol)
+      return (
+        <div className="m-4 space-y-4">
+           {isDriver 
+             ? <SharedDriverReceiptSummary ride={ride} /> 
+             : <SharedPassengerReceipt ride={ride} />
+           }
+           <div className="px-4 pb-4">
+              <Button onClick={handleClose} className="w-full h-14 bg-white text-black font-black uppercase tracking-widest rounded-2xl shadow-xl">
+                 {isDriver ? 'VOLVER A MIS VIAJES' : 'VOLVER AL INICIO'}
+              </Button>
+           </div>
+        </div>
+      );
+  }
+
   let rideDate = 'Cargando fecha...';
   try {
     if (ride.completedAt instanceof Timestamp) {
@@ -318,8 +378,9 @@ export default function FinishedRideSummary({
           const driverWalletCredit = data.driverWalletCredit;
           const driverNetAmount = data.driverNetEarnings;
           const originalTotal = data.originalTotal;
+          const passengerPaysTotal = (ride.completedRide as any)?.passengerPaysTotal ?? (totalFare - discountAmount);
           
-          const isFullyWallet = walletCoveredAmount >= (totalFare - discountAmount) && (totalFare - discountAmount) > 0;
+          const isFullyWallet = walletCoveredAmount >= passengerPaysTotal && passengerPaysTotal > 0;
           const hasCash = cashToCollect > 0;
           
           return (
@@ -327,7 +388,7 @@ export default function FinishedRideSummary({
                 {/* Tarifa Original (Vista Pasajero) o Valor del Viaje (Vista Conductor) */}
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-zinc-500 font-bold uppercase tracking-widest text-[9px]">
-                    {isDriver ? 'Valor del Viaje' : (data.dynamicApplied ? 'Tarifa Municipal' : 'Tarifa original')}
+                    {isDriver ? 'Tarifa reconocida' : 'Tarifa del viaje'}
                   </span>
                   <span className={cn("font-bold text-white", !isDriver && (discountAmount > 0 || data.dynamicApplied) ? "line-through opacity-40" : "")}>
                     {formatCurrency(data.dynamicApplied ? data.municipalBaseFare : originalTotal)}
@@ -350,9 +411,33 @@ export default function FinishedRideSummary({
                   <div className="flex justify-between items-center text-xs font-black text-emerald-400">
                     <div className="flex items-center gap-1.5">
                       <VamoIcon name="sparkles" className="h-3 w-3" />
-                      <span className="uppercase tracking-tighter text-[9px]">{data.discountReason || 'Beneficio VamO'}</span>
+                      <span className="uppercase tracking-tighter text-[9px]">
+                        {(ride.pricing as any)?.expressDiscountAmount > 0 ? 'Beneficio Express VamO' : (data.discountReason || 'Beneficio VamO')}
+                      </span>
                     </div>
                     <span>-{formatCurrency(discountAmount)}</span>
+                  </div>
+                )}
+                
+                {/* Cobertura VamO Express (Vista Conductor) */}
+                {isDriver && (ride.pricing as any)?.vamoExpressCoverageAmount > 0 && (
+                    <div className="flex justify-between items-center text-xs font-black text-indigo-400 bg-indigo-500/5 p-2 rounded-lg border border-indigo-500/10 mt-1">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-tighter">Cubierto por VamO Express</span>
+                        <span className="text-[8px] opacity-60 font-medium italic">Se acreditará en tu billetera</span>
+                      </div>
+                      <span>+{formatCurrency((ride.pricing as any).vamoExpressCoverageAmount)}</span>
+                    </div>
+                )}
+
+                {/* Comisión VamO (Vista Conductor) */}
+                {isDriver && commissionAmount > 0 && (
+                  <div className="flex justify-between items-center text-xs font-black text-rose-400/80">
+                    <div className="flex items-center gap-1.5">
+                      <VamoIcon name="percent" className="h-3 w-3" />
+                      <span className="uppercase tracking-widest text-[9px]">Comisión VamO</span>
+                    </div>
+                    <span>-{formatCurrency(commissionAmount)}</span>
                   </div>
                 )}
 
@@ -371,44 +456,132 @@ export default function FinishedRideSummary({
                 {/* Total de la operación */}
                 <div className="flex justify-between items-center font-black text-xl tracking-tighter">
                   <span className="uppercase text-[10px] tracking-widest text-zinc-500">
-                    {isDriver ? 'Total del Viaje' : 'Total a Pagar'}
+                    {isDriver ? 'Neto final conductor' : 'Total a pagar'}
                   </span>
-                  <span className={cn(isDriver ? "text-white" : "text-primary")}>
-                    {formatCurrency(totalFare - (!isDriver ? discountAmount : 0))}
+                  <span className={cn(isDriver ? "text-emerald-400" : "text-primary")}>
+                    {formatCurrency(isDriver ? driverNetAmount : passengerPaysTotal)}
                   </span>
                 </div>
-
-                {/* Detalle de Cobro / Acreditación */}
-                <div className="space-y-2 pt-2 border-t border-dashed border-white/10 mt-1">
-                  {ride.paymentMethod === 'cash' ? (
-                    <div className="flex flex-col gap-1">
+                
+                {isDriver && (
+                  <div className="flex justify-between items-center font-bold text-sm tracking-tighter mt-1 opacity-70">
+                    <span className="uppercase text-[9px] tracking-widest text-zinc-400">
+                      Pagado por pasajero
+                    </span>
+                    <span className="text-zinc-300">
+                      {formatCurrency(passengerPaysTotal)}
+                    </span>
+                  </div>
+                )}
+                      {/* Forma de Pago Seleccionada */}
+                <div className="space-y-2 pt-4 border-t border-dashed border-white/10 mt-2">
+                  <span className="uppercase text-[10px] tracking-widest text-zinc-500 font-black">
+                    Forma de pago
+                  </span>
+                  
+                  {ride.paymentMethod === 'cash' || ride.paymentMethod === 'efectivo' ? (
+                    <div className="flex flex-col gap-1 mt-1">
                       <div className="flex justify-between items-center text-md font-black text-white bg-zinc-900 p-4 rounded-2xl border border-white/5 shadow-inner">
-                        <span className="uppercase tracking-widest text-[9px]">{isDriver ? 'Cobrás en efectivo' : 'Efectivo a pagar'}</span>
-                        <span className="text-primary text-2xl tracking-tighter italic">{formatCurrency(cashToCollect)}</span>
+                        <div className="flex flex-col">
+                           <span className="uppercase tracking-widest text-[10px] text-zinc-400">Estado del pago</span>
+                           <span className="text-[9px] font-bold mt-1 text-emerald-400">{isDriver ? 'Pendiente cobro en efectivo' : 'Pendiente pago en efectivo'}</span>
+                        </div>
+                        <span className="text-emerald-400 text-2xl tracking-tighter italic">{formatCurrency(cashToCollect)}</span>
                       </div>
-                      {isDriver && (
-                        <p className="text-[7px] text-zinc-500 uppercase font-bold tracking-widest text-center px-2 mt-1 italic">
-                          Detalle financiero completo disponible en Billetera
-                        </p>
-                      )}
+                    </div>
+                  ) : ride.paymentMethod === 'wallet' || ride.paymentMethod === 'vamo_wallet' ? (
+                    <div className="flex flex-col gap-1 mt-1">
+                      <div className="flex justify-between items-center text-md font-black text-white bg-indigo-500/10 p-4 rounded-2xl border border-indigo-500/20 shadow-inner">
+                        <div className="flex flex-col">
+                           <span className="uppercase tracking-widest text-[10px] text-indigo-300">Estado del pago</span>
+                           <span className="text-[9px] font-bold mt-1 text-indigo-400">Pagado con Billetera VamO</span>
+                        </div>
+                        <span className="text-indigo-400 text-2xl tracking-tighter italic">{formatCurrency(walletCoveredAmount)}</span>
+                      </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-1">
-                      <div className="flex justify-between items-center text-md font-black text-indigo-400 bg-indigo-500/5 p-4 rounded-2xl border border-indigo-500/10 shadow-inner">
+                    <div className="flex flex-col gap-1 mt-1">
+                      <div className="flex justify-between items-center text-md font-black text-white bg-blue-500/10 p-4 rounded-2xl border border-blue-500/20 shadow-inner">
                         <div className="flex flex-col">
-                           <span className="uppercase tracking-widest text-[9px]">VamO Pay (Digital)</span>
-                           {isDriver && <span className="text-[7px] font-bold opacity-60">Acreditado en Billetera</span>}
+                           <span className="uppercase tracking-widest text-[10px] text-blue-300">Estado del pago</span>
+                           {ride.paymentStatus === 'approved' ? (
+                               <span className="text-[9px] font-bold mt-1 text-blue-400">
+                                   Pagado (Mercado Pago)
+                               </span>
+                           ) : (
+                               <span className="text-[9px] font-bold mt-1 text-blue-400">
+                                   Pendiente (Mercado Pago)
+                               </span>
+                           )}
+                           {/* Sandbox test check */}
+                           {ride.paymentStatus === 'approved' && ride.mpIsSandbox && (
+                               <span className="text-[8px] font-bold mt-2 text-orange-400">Pago de prueba registrado correctamente. No se movió dinero real.</span>
+                           )}
                         </div>
-                        <span className="text-2xl tracking-tighter italic">{formatCurrency(walletCoveredAmount)}</span>
+                        <span className="text-blue-400 text-2xl tracking-tighter italic">{formatCurrency(passengerPaysTotal)}</span>
                       </div>
-                      {isDriver && (
-                         <p className="text-[7px] text-zinc-500 uppercase font-bold tracking-widest text-center px-2 mt-1 italic">
-                           Detalle financiero completo disponible en Billetera
-                         </p>
+                      {!isDriver && ride.paymentStatus !== 'approved' && (
+                        <div className="mt-2">
+                           <MercadoPagoPaymentButton ride={ride as any} amount={Math.max(0, passengerPaysTotal)} />
+                        </div>
                       )}
                     </div>
                   )}
                 </div>
+
+                {/* Detalle Mercado Pago */}
+                {(ride as any).paymentProvider === 'mercadopago' && (
+                  <div className="mt-4 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <VamoIcon name="credit-card" className="w-4 h-4 text-blue-400" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">Medio de pago: Mercado Pago</span>
+                    </div>
+                    <div className="space-y-1 mt-2 border-t border-blue-500/10 pt-2">
+                      <div className="flex justify-between text-[10px] font-bold text-zinc-400">
+                        <span className="uppercase">Comisión VamO ({(ride as any).vamoCommissionPercent || 18}%)</span>
+                        <span>{formatCurrency((ride as any).vamoCommissionAmount || 0)}</span>
+                      </div>
+                      
+                      {(ride as any).paymentMode === 'single_driver_no_split' ? (
+                        <>
+                          <div className="flex justify-between text-[10px] font-bold text-zinc-400">
+                            <span className="uppercase">Split automático</span>
+                            <span className="text-amber-500">No aplicado</span>
+                          </div>
+                          {isDriver && (
+                            <div className="flex justify-between text-[10px] font-bold text-zinc-400 mt-1">
+                              <span className="uppercase">Neto estimado</span>
+                              <span>{formatCurrency(((ride as any).pricing?.totalAmount || totalFare) - ((ride as any).vamoCommissionAmount || 0))}</span>
+                            </div>
+                          )}
+                          {isDriver && (
+                            <p className="mt-3 text-[8px] leading-relaxed font-bold uppercase tracking-widest text-zinc-500 text-center italic">
+                              Comisión VamO registrada internamente. En esta etapa no fue retenida automáticamente por Mercado Pago.
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex justify-between text-[10px] font-bold text-zinc-400">
+                            <span className="uppercase">Retención MP (Marketplace Fee)</span>
+                            <span className="text-emerald-500">Aplicada</span>
+                          </div>
+                          {isDriver && (
+                            <div className="flex justify-between text-[10px] font-bold text-zinc-400 mt-1">
+                              <span className="uppercase">Neto en tu cuenta</span>
+                              <span>{formatCurrency((ride as any).driverGrossAmount || (((ride as any).pricing?.totalAmount || totalFare) - ((ride as any).vamoCommissionAmount || 0)))}</span>
+                            </div>
+                          )}
+                          {isDriver && (
+                            <p className="mt-3 text-[8px] leading-relaxed font-bold uppercase tracking-widest text-zinc-500 text-center italic">
+                              Comisión VamO {(ride as any).vamoCommissionPercent || 18}% retenida automáticamente por Mercado Pago mediante marketplace.
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
 
               </div>
               

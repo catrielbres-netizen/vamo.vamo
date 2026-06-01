@@ -674,8 +674,8 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
     // [PRICING_AUDIT] Log base before express
     console.log(`[PRICING_AUDIT] baseFare=${breakdown.baseFare}, distanceFare=${breakdown.distanceFare}, totalBase=${total}`);
 
-    // [FASE 7.1] Express discount: escala endurecida — sin descuento si rides < 3
-    const MAX_EXPRESS_DISCOUNT = 400;
+    // [FASE B] Express discount: 20% cap 2000
+    const MAX_EXPRESS_DISCOUNT = 2000;
     const ridesThisWeek = passengerProfile?.passengerProgress?.ridesThisWeek ?? 0;
     let expressDiscountAmount = 0;
     if (serviceType === 'express') {
@@ -683,11 +683,15 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
         if (discountPercent > 0) {
             const rawDiscount = Math.floor(total * (discountPercent / 100));
             expressDiscountAmount = Math.min(rawDiscount, MAX_EXPRESS_DISCOUNT);
-            total = total - expressDiscountAmount;
+            // DO NOT mutate 'total' here to keep it as gross fare.
+        } else {
+            if (!dryRun) {
+                throw new HttpsError('failed-precondition', 'Beneficio Express vencido o no disponible. Completá 5 viajes esta semana para desbloquearlo.');
+            }
         }
         breakdown.expressDiscountAmount = expressDiscountAmount;
         breakdown.expressDiscountPercent = discountPercent > 0 ? discountPercent : 0;
-        console.log(`[EXPRESS_APPLY] ridesThisWeek=${ridesThisWeek} | discountPercent=${discountPercent}% | expressDiscountAmount=${expressDiscountAmount} | totalAfterDiscount=${total}`);
+        console.log(`[EXPRESS_APPLY] ridesThisWeek=${ridesThisWeek} | discountPercent=${discountPercent}% | expressDiscountAmount=${expressDiscountAmount} | totalGross=${total}`);
     }
 
     console.log(`[PRICING_AUDIT] discountApplied=${expressDiscountAmount}, finalTotal=${total}`);
@@ -695,7 +699,15 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
 
     if (dryRun) {
         logger.info('[CREATE_RIDE_GUARD] dryRun respected');
-        return { estimatedTotal: total, breakdown, dynamic: dynamicSnapshot || null };
+        const isExpressBlocked = serviceType === 'express' && expressDiscountAmount === 0;
+        return { 
+            estimatedTotal: total, 
+            breakdown, 
+            dynamic: dynamicSnapshot || null, 
+            expressDiscountAmount,
+            expressBlockedReason: isExpressBlocked ? 'weekly_expired' : null,
+            message: isExpressBlocked ? 'Completá 5 viajes esta semana para desbloquear Express.' : null
+        };
     }
 
     // DEBUG: Log estimation details before proceeding
@@ -747,7 +759,8 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
 
     // [PRICING_FIX] Explicitly check if user wants to use wallet
     const useWallet = paymentMethod !== 'cash';
-    const totalAfterCredits = Math.max(0, total - creditCoveredAmount);
+    const totalAfterExpress = Math.max(0, total - expressDiscountAmount);
+    const totalAfterCredits = Math.max(0, totalAfterExpress - creditCoveredAmount);
     
     // walletCoveredAmount is only calculated if useWallet is true
     const walletCoveredAmount = useWallet ? Math.min(walletBalance, totalAfterCredits) : 0;
@@ -756,7 +769,7 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
     const paymentSnapshot: PaymentSnapshot = {
         selectedPaymentMethod: paymentMethod as any,
         useWallet,
-        finalPassengerFare: total,
+        finalPassengerFare: totalAfterExpress, // Monto post-express
         walletCoveredAmount,
         cashAmount: cashToCollectEstimate,
         source: "backend",
@@ -815,24 +828,24 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
             const pricingSnapshot: PricingSnapshot = {
                 commission_particular: pricingConfig.commission_particular ?? (cityKey === 'rawson' ? 0.13 : 0.14),
                 commission_taxi_remis: pricingConfig.commission_taxi_remis ?? (cityKey === 'rawson' ? 0.07 : 0.08),
-                municipal_percentage: pricingConfig.municipal_percentage ?? (cityKey === 'rawson' ? 0.05 : 0.02),
+                // municipal_percentage removed in Version B
                 cityKey: cityKey,
                 timestamp: FieldValue.serverTimestamp()
             };
-            logger.info(`[PRICING_SNAPSHOT] Captured for ride ${newRideId}: particular=${pricingSnapshot.commission_particular}, taxiRemis=${pricingSnapshot.commission_taxi_remis}, muni=${pricingSnapshot.municipal_percentage}`);
+            logger.info(`[PRICING_SNAPSHOT] Captured for ride ${newRideId}: particular=${pricingSnapshot.commission_particular}, taxiRemis=${pricingSnapshot.commission_taxi_remis}`);
 
             const pricingModel = {
                 estimated: { total, breakdown, configSnapshot: pricingConfig, calculatedAt: FieldValue.serverTimestamp() },
                 dynamic: dynamicSnapshot || null,
-                estimatedTotal: total,
-                originalTotal: total + expressDiscountAmount,
+                estimatedTotal: total, // Tarifa bruta (Gross Fare)
+                originalTotal: total, // Igual a estimatedTotal si no hay otros descuentos previos
                 estimatedDistanceMeters: Math.round(effectiveDistKm * 1000),
                 expressDiscountAmount,
                 creditCoveredAmount,
                 creditsApplied: creditCoveredAmount > 0,
                 serviceType,
                 driverReceivesTotal: total,
-                passengerPaysTotal: cashToCollectEstimate,
+                passengerPaysTotal: cashToCollectEstimate + walletCoveredAmount + creditCoveredAmount, // El subtotal que paga el pasajero (incluyendo billetera/créditos)
                 walletCoveredAmount,
                 cashToCollect: cashToCollectEstimate,
                 paymentMethodSnapshot,
@@ -971,19 +984,19 @@ export const acceptRideV2 = onCall({ cors: true, region: 'us-central1' }, async 
             const driverSubtypeSnap = driverSnap.data()?.driverSubtype || 'particular';
             const snapshot = (ride as any).pricing?.pricingSnapshot;
             
-            let vamoRateSnap, municipalRateSnap;
+            let vamoRateSnap;
             
             if (snapshot) {
-                municipalRateSnap = snapshot.municipal_percentage;
                 vamoRateSnap = driverSubtypeSnap === 'professional' 
                     ? snapshot.commission_taxi_remis 
                     : snapshot.commission_particular;
-                logger.info(`[ACCEPT_PRICING] Using snapshot for ride ${rideId}: vamo=${vamoRateSnap}, muni=${municipalRateSnap}`);
+                
+                // Safety fallback
+                if (vamoRateSnap === undefined) vamoRateSnap = driverSubtypeSnap === 'professional' ? 0.12 : 0.18;
+                logger.info(`[ACCEPT_PRICING] Using snapshot for ride ${rideId}: vamo=${vamoRateSnap}`);
             } else {
-                // Legacy fallback
-                vamoRateSnap     = driverSubtypeSnap === 'professional' ? 0.08 : 0.14;
-                municipalRateSnap = driverSubtypeSnap === 'professional' ? 0.00 : 0.02;
-                logger.info(`[ACCEPT_PRICING] Using legacy fallback for ride ${rideId}`);
+                vamoRateSnap = driverSubtypeSnap === 'professional' ? 0.12 : 0.18;
+                logger.info(`[ACCEPT_PRICING] Fallback to current rates for ride ${rideId}`);
             }
 
             tx.update(db.doc(`rides/${rideId}`), {
@@ -1002,7 +1015,6 @@ export const acceptRideV2 = onCall({ cors: true, region: 'us-central1' }, async 
                 // [FASE 5] Commission snapshot — frozen at acceptance time
                 driverSubtypeSnapshot: driverSubtypeSnap,
                 commissionRateSnapshot: vamoRateSnap,
-                municipalRateSnapshot: municipalRateSnap,
                 updatedAt: FieldValue.serverTimestamp()
             });
 

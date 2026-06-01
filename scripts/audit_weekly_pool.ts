@@ -94,9 +94,9 @@ async function runAudit(cityKey: string = 'rawson') {
     console.log(`🚗 Rides Counted this week: ${rideCount}`);
 
     // 3. Expected Pool Calculation
-    const BASE_POOL = 50000;
+    const BASE_POOL = 20000;
     const POOL_PER_RIDE = 100;
-    const MAX_POOL = 300000;
+    const MAX_POOL = 600000;
     
     const expectedPool = Math.min(MAX_POOL, BASE_POOL + (rideCount * POOL_PER_RIDE));
     const drift = actualPoolAmount - expectedPool;
@@ -108,11 +108,11 @@ async function runAudit(cityKey: string = 'rawson') {
         console.warn(`⚠️ Pool drift detected: $${drift.toLocaleString()} (Expected ${expectedPool} vs Actual ${actualPoolAmount})`);
     }
 
-    // 4. Analyze Top 10 Ranking
-    console.log('\n🏆 TOP 10 RANKING ANALYZER:');
+    // 4. Analyze Top 30 Ranking
+    console.log('\n🏆 TOP 30 RANKING ANALYZER:');
     const topSnap = await db.collection('driver_points')
-        .orderBy('weeklyPoints', 'desc')
-        .limit(15) // Fetch extra to check for ties and qualification
+        .orderBy('weeklyTripsCount', 'desc')
+        .limit(35) // Fetch extra para mostrar conductores fuera del top
         .get();
 
     if (topSnap.empty) {
@@ -120,80 +120,62 @@ async function runAudit(cityKey: string = 'rawson') {
         return;
     }
 
-    const top10 = topSnap.docs.slice(0, 10);
-    let totalAdjustedPoints = 0;
+    // Bloque de premios base
+    function getBlockPayout(rank: number, poolTotal: number): number {
+        const ratio = Math.min(1, poolTotal / 600000);
+        if (rank <= 3)  return Math.floor(50000 * ratio);
+        if (rank <= 10) return Math.floor(25000 * ratio);
+        if (rank <= 20) return Math.floor(15000 * ratio);
+        if (rank <= 30) return Math.floor(12500 * ratio);
+        return 0;
+    }
+
+    const top30 = topSnap.docs.slice(0, 30);
+    let totalEstimatedPayout = 0;
     const driverResults: any[] = [];
 
-    // First pass: Calculate multipliers and adjusted points
-    top10.forEach((doc, index) => {
+    top30.forEach((doc, index) => {
         const data = doc.data();
         const rank = index + 1;
-        const points = data.weeklyPoints || 0;
         const trips = data.weeklyTripsCount || 0;
-        
-        let multiplier = 0;
-        if (rank <= 2) multiplier = 1.5;
-        else if (rank <= 6) multiplier = 1.2;
-        else if (rank <= 10) multiplier = 1.0;
-
-        const isQualified = trips >= 10;
-        const adjustedPoints = points * (isQualified ? multiplier : 0);
-        totalAdjustedPoints += adjustedPoints;
-
-        driverResults.push({
-            id: doc.id,
-            name: data.driverName || 'Unknown',
-            points,
-            trips,
-            rank,
-            multiplier,
-            isQualified,
-            adjustedPoints
-        });
+        const points = data.weeklyPoints || 0;
+        const payout = getBlockPayout(rank, actualPoolAmount);
+        totalEstimatedPayout += payout;
+        driverResults.push({ id: doc.id, name: data.driverName || 'Unknown', points, trips, rank, payout });
     });
 
-    // Second pass: Calculate estimated payout
-    let totalEstimatedPayout = 0;
-    console.log('----------------------------------------------------------------------------------------------------');
-    console.log('Pos | Driver Name | Points | Trips | Multi | Qualified | Adj. Pts | Estimated Reward');
-    console.log('----------------------------------------------------------------------------------------------------');
-    
+    // Second pass: Show table with block payouts
+    console.log('--------------------------------------------------------------------------------------------------------------');
+    console.log('Pos | Driver Name | Viajes | Puntos | Premio Estimado');
+    console.log('--------------------------------------------------------------------------------------------------------------');
+
     driverResults.forEach(d => {
-        const payout = totalAdjustedPoints > 0 ? (d.adjustedPoints / totalAdjustedPoints) * actualPoolAmount : 0;
-        totalEstimatedPayout += payout;
-        
         console.log(
             `${String(d.rank).padEnd(3)} | ` +
             `${d.name.padEnd(12).substring(0, 12)} | ` +
+            `${String(d.trips).padEnd(6)} | ` +
             `${String(d.points).padEnd(6)} | ` +
-            `${String(d.trips).padEnd(5)} | ` +
-            `${String(d.multiplier).padEnd(5)} | ` +
-            `${(d.isQualified ? '✅' : '❌').padEnd(9)} | ` +
-            `${String(Math.floor(d.adjustedPoints)).padEnd(8)} | ` +
-            `$${Math.floor(payout).toLocaleString()}`
+            `$${d.payout.toLocaleString()}`
         );
     });
 
-    console.log('----------------------------------------------------------------------------------------------------');
-    console.log(`💰 Total Estimated Payout: $${Math.floor(totalEstimatedPayout).toLocaleString()}`);
-    
-    if (Math.floor(totalEstimatedPayout) <= actualPoolAmount) {
-        console.log(`✅ Payout Safety OK (Total rewards do not exceed pool)`);
+    console.log('--------------------------------------------------------------------------------------------------------------');
+    console.log(`💰 Total Distribuido: $${totalEstimatedPayout.toLocaleString()}`);
+
+    if (totalEstimatedPayout <= actualPoolAmount || actualPoolAmount === 0) {
+        console.log(`✅ Payout Safety OK`);
     } else {
-        console.error(`❌ PAYOUT ERROR: Total rewards ($${totalEstimatedPayout}) exceed Pool ($${actualPoolAmount})!`);
+        console.error(`❌ PAYOUT ERROR: Total ($${totalEstimatedPayout}) excede el pozo ($${actualPoolAmount})!`);
     }
 
-    // 5. Detect Ties
-    const pointsArray = driverResults.map(d => d.points);
-    const hasTies = new Set(pointsArray).size !== pointsArray.length;
-    if (hasTies) {
-        console.log('\nℹ️ Ties detected in Top 10. Ranking order depends on Firestore fetch order (or timestamp if implemented).');
-    }
-
-    // 6. Qualification Warning
-    const unqualiedInTop = driverResults.filter(d => !d.isQualified);
-    if (unqualiedInTop.length > 0) {
-        console.warn(`\n⚠️ Warning: ${unqualiedInTop.length} drivers in Top 10 have < 10 trips and will receive $0.`);
+    // Drivers fuera del Top 30
+    const outsideTop = topSnap.docs.slice(30);
+    if (outsideTop.length > 0) {
+        console.log(`\n⚠️  ${outsideTop.length} conductores fuera del Top 30 (no cobran):`);
+        outsideTop.forEach((doc, i) => {
+            const d = doc.data();
+            console.log(`   #${31 + i} - ${d.driverName || doc.id} | ${d.weeklyTripsCount || 0} viajes`);
+        });
     }
 
     console.log('\n====================================================');

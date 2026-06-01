@@ -13,16 +13,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // 2. NO SESSION or WRONG ROLE:
   const allowedRoles = ['admin', 'superadmin'];
-  // TODO SECURITY: remover bypass temporal de superadmin después de reparar guards por claims.
-  const isSuperAdminEmergency = user?.uid === "9oOsPaBsp8XkcTLjSTEJbdzMafa2" || user?.email === "superadmin@vamo.local";
-  const isAuthorized = (user && profile && allowedRoles.includes(profile.role)) || isSuperAdminEmergency;
+  const isAuthorized = !!user && !!profile && allowedRoles.includes(profile.role);
 
   React.useEffect(() => {
     if (loading || (!!user && !profile)) return;
-    if (isSuperAdminEmergency) {
-        console.log(`[SUPERADMIN_EMERGENCY_BYPASS] uid=${user?.uid} email=${user?.email} pathname=/admin allowed=true`);
-        return;
-    }
 
     if (!user || !isAuthorized) {
         console.error(`[AUTH_ROUTE_DEBUG] /admin FORBIDDEN. Role: ${profile?.role}. Redirecting to /login`, {
@@ -35,7 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     } else {
         console.log(`[AUTH_ROUTE_DEBUG] /admin ACCESS_GRANTED. Role: ${profile?.role}`);
     }
-  }, [user, profile, loading, isAuthorized, isSuperAdminEmergency, router]);
+  }, [user, profile, loading, isAuthorized, router]);
 
   // 1. Loading state
   const isResolvingSession = loading || (!!user && !profile);
@@ -52,7 +46,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex min-h-screen w-full flex-col bg-[#0a0a0a] text-zinc-100 font-sans">
       <AdminNavbar />
       <GlobalPanicListener />
-      <main className="flex-1 p-6">{children}</main>
+      <main className="flex-1 p-6">
+        <React.Suspense fallback={<VamoFullScreenLoader label="Cargando interfaz..." />}>
+          {children}
+        </React.Suspense>
+      </main>
     </div>
   );
 }

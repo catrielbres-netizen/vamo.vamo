@@ -1,7 +1,8 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { onDocumentWritten, onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { featureFlags, PLAN_B_DRIVER_SUBTYPE } from "./config/features";
 import * as logger from "firebase-functions/logger";
 import { UserProfile } from "./types";
 import { computeDriverRiskProfile } from "./lib/driverRisk";
@@ -88,6 +89,7 @@ export const unifiedUserClaimsManagerV1 = onDocumentWritten({
             // [SIM_GUARD] Sync critical driver metadata to drivers_locations for matching engine
             if (role === 'driver') {
                 const driverLocationRef = admin.firestore().doc(`drivers_locations/${uid}`);
+                const driverRef = admin.firestore().doc(`drivers/${uid}`);
                 
                 // [VamO SECURITY] Enforce Express pricing rules during sync
                 const isExpress = after.driverSubtype === 'express';
@@ -101,14 +103,37 @@ export const unifiedUserClaimsManagerV1 = onDocumentWritten({
                     acceptsDiscountedRides: isExpress ? true : (after.driverPreferences?.acceptsDiscountedRides ?? true)
                 };
 
-                await driverLocationRef.set({ 
-                    isTestDriver: afterAny?.isTestDriver === true,
-                    approved: afterAny?.approved === true,
-                    municipalStatus: afterAny?.municipalStatus || 'pending_review',
-                    driverSubtype: afterAny?.driverSubtype || 'express',
-                    driverPreferences: finalPreferences
+                const genderVal = after.gender || (after as any).driverGender || 'not_specified';
+
+                const stationId = after.stationId || null;
+                const stationName = after.stationName || null;
+
+                 await driverLocationRef.set({ 
+                     isTestDriver: afterAny?.isTestDriver === true,
+                     approved: afterAny?.approved === true,
+                     municipalStatus: afterAny?.municipalStatus || 'pending_review',
+                     driverSubtype: afterAny?.driverSubtype || 'express',
+                     driverPreferences: finalPreferences,
+                     driverGender: genderVal,
+                     stationId,
+                     stationName,
+                     cityKey: afterAny?.cityKey || null,
+                     isSuspended: afterAny?.isSuspended === true,
+                     activeRideId: afterAny?.activeRideId || null
+                 }, { merge: true });
+
+                // Automatically ensure drivers collection has a valid matching-compliant record
+                await driverRef.set({
+                    driverId: uid,
+                    isSuspended: after.isSuspended === true || (after as any).disabled === true,
+                    approved: after.approved === true,
+                    driverGender: genderVal,
+                    stationId,
+                    stationName,
+                    updatedAt: FieldValue.serverTimestamp()
                 }, { merge: true });
-                logger.info(`[SYNC_GUARD] Synced driver data to drivers_locations/${uidPart} | Dynamic: ${finalPreferences.acceptsDiscountedRides}`);
+
+                logger.info(`[SYNC_GUARD] Synced driver data, drivers record and station fields (${stationId}) for ${uidPart} | Gender: ${genderVal}`);
             }
         } catch (error: any) {
             logger.error(`[CLAIMS_SYNC_ERR] ${uidPart}`, error);
@@ -164,20 +189,30 @@ export const completeDriverOnboardingV1 = onCall({ cors: true, region: "us-centr
     const finalCityName = data.cityKey ? (data.cityKey.charAt(0).toUpperCase() + data.cityKey.slice(1)) : (userData.city || 'Rawson');
     const normalizedPhone = normalizePhone(data.phone);
 
-    // [VamO SECURITY] Uniqueness check for drivers completing onboarding
-    if (normalizedPhone) {
-        const existingPhoneQuery = await firestore.collection("users")
-            .where("phoneNormalized", "==", normalizedPhone)
-            .limit(2)
-            .get();
-
-        const duplicate = existingPhoneQuery.docs.find(doc => doc.id !== uid);
-        if (duplicate) {
-            throw new HttpsError("already-exists", "Este número de teléfono ya está registrado con otra cuenta.");
-        }
+    const hasMercadoPago = !!userData.mpLinked || !!(userData as any).mp_seller_id || !!(userData as any).mercadopago_seller_id;
+    let initialPlanBStatus = 'under_review';
+    if (!hasMercadoPago) {
+        initialPlanBStatus = 'mp_required';
+    } else {
+        // En Fase 6 se activarán las ciudades. Por ahora quedan en city_waiting_activation o under_review
+        initialPlanBStatus = 'city_waiting_activation';
     }
 
-    const updatePayload = {
+    const extraData: any = {};
+    if (featureFlags.vamoParticularModeEnabled) {
+        extraData.driverSubtype = PLAN_B_DRIVER_SUBTYPE; // Forzado en Plan B
+    }
+
+    const parseExpiry = (dateStr?: string) => {
+        if (!dateStr) return null;
+        const parts = dateStr.split('-');
+        if (parts.length !== 3) return null;
+        const [year, month, day] = parts;
+        const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+        return admin.firestore.Timestamp.fromDate(date);
+    };
+
+    const updatePayload: any = {
         name: data.name,
         phone: data.phone,
         phoneNormalized: normalizedPhone,
@@ -190,42 +225,73 @@ export const completeDriverOnboardingV1 = onCall({ cors: true, region: "us-centr
         vehicleColor: data.vehicle?.color || null,
         plateNumber: data.plateNumber,
         carModelYear: data.carModelYear,
-        driverSubtype: data.driverSubtype,
+        ...extraData,
+        commissionRate: 0.18,     // Forzado en Plan B
+        commissionPercent: 18,    // Forzado en Plan B
         documents: docs,
-        // Visual Inspection Photos (Phase 5)
-        vehicleFrontPhotoURL: data.vehiclePhotoFrontUrl, // Mirroring for compatibility
+        vehicleFrontPhotoURL: data.vehiclePhotoFrontUrl,
         vehicleBackPhotoURL: data.vehiclePhotos?.back || null,
         vehicleInteriorPhotoURL: data.vehiclePhotos?.interior || null,
         vehiclePhotos: data.vehiclePhotos || null,
-        
         cityKey: finalCityKey,
         city: finalCityName,
         municipalStatus: 'pending_municipal_review',
+        planBStatus: initialPlanBStatus, // Nuevo estado simplificado
         driverStatus: 'offline',
         profileCompleted: true,
         onboardingCompleted: true,
         onboardingIncomplete: false,
-        approved: false,
-        docsStatus: 'municipal_review',
-        documentsManagedByMunicipality: true,
-        
-        // Legal Acceptance (Unified)
+        approved: false, // Nunca habilitar como true desde el frontend
+        docsStatus: 'under_review', // Changed from municipal_review to under_review
+        documentsManagedByMunicipality: false, // We are doing it ourselves for Plan B initially
+        licenseExpiry: parseExpiry(data.licenseExpiryStr),
+        insuranceExpiry: parseExpiry(data.insuranceExpiryStr),
+        criminalRecordExpiry: parseExpiry(data.criminalRecordExpiryStr),
         termsAccepted: true,
         driverTermsAccepted: true,
         acceptedDriverTerms: true,
         termsVersion: data.termsVersion || 'v1.3',
         termsAcceptedAt: FieldValue.serverTimestamp(),
         legalAccepted: true,
-        
         updatedAt: FieldValue.serverTimestamp(),
         claimsVersion: (userData.claimsVersion || 1) + 1
     };
 
     try {
-        await userRef.update(updatePayload);
+        await firestore.runTransaction(async (transaction) => {
+            const currentSnap = await transaction.get(userRef);
+            if (!currentSnap.exists) throw new HttpsError('not-found', 'User profile not found.');
+            const currentData = currentSnap.data() as UserProfile;
+            
+            if (currentData.profileCompleted === true) {
+                throw new HttpsError('already-exists', 'Onboarding has already been completed.');
+            }
+
+            // [VamO SECURITY] Uniqueness check INSIDE transaction using phone_index
+            if (normalizedPhone) {
+                const phoneIndexRef = firestore.collection("phone_index").doc(normalizedPhone);
+                const phoneSnap = await transaction.get(phoneIndexRef);
+
+                if (phoneSnap.exists && phoneSnap.data()?.uid !== uid) {
+                    logger.error(`[PHONE_SECURITY] Onboarding duplicate phone: ${normalizedPhone} for UID ${uid}. Existing UID: ${phoneSnap.data()?.uid}`);
+                    throw new HttpsError("already-exists", "Este número de teléfono ya está registrado con otra cuenta.");
+                }
+
+                transaction.set(phoneIndexRef, {
+                    uid,
+                    emailLower: currentData.emailLower || "",
+                    role: "driver",
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+            }
+
+            transaction.update(userRef, updatePayload);
+        });
+
         logger.info(`[ONBOARDING_SUCCESS] ${uidPart} | City: ${finalCityKey}`);
         return { success: true, cityKey: finalCityKey };
     } catch (error: any) {
+        if (error instanceof HttpsError) throw error;
         logger.error(`[ONBOARDING_WRITE_ERR] ${uidPart}`, error);
         throw new HttpsError('internal', 'Failed to update driver profile.');
     }
@@ -248,29 +314,45 @@ export const syncWalletBalanceToLocationV1 = onDocumentUpdated({
 
     const driverLocationRef = db.doc(`drivers_locations/${userId}`);
     
-    // We only update if the document already exists
+    // [VamO PRO] Risk Update on Balance Change — ALWAYS update user profile
+    const userRef = db.collection('users').doc(userId);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) return;
+
+    const userData = userSnap.data() as UserProfile;
+    const riskProfile = computeDriverRiskProfile(userData, { cashBalance: newData?.cashBalance || 0 });
+
+    const batch = db.batch();
+    
+    // 1. Sync User Profile (Main source of truth for blocking)
+    batch.update(userRef, {
+        ...riskProfile,
+        currentBalance: newData?.cashBalance || 0,
+        updatedAt: FieldValue.serverTimestamp()
+    });
+
+    // 2. Sync Location (For matching engine optimization)
     const locSnap = await driverLocationRef.get();
     if (locSnap.exists) {
-        // [VamO PRO] Risk Update on Balance Change
-        const userSnap = await db.collection('users').doc(userId).get();
-        const userData = userSnap.data() as UserProfile;
-        const riskProfile = computeDriverRiskProfile(userData, { cashBalance: newData?.cashBalance || 0 });
-
-        const batch = db.batch();
         batch.update(driverLocationRef, {
             walletBalance: newData?.cashBalance || 0,
             driverRiskLevel: riskProfile.driverRiskLevel,
             driverRiskScore: riskProfile.driverRiskScore,
             updatedAt: FieldValue.serverTimestamp()
         });
-        batch.update(userSnap.ref, {
-            ...riskProfile,
-            updatedAt: FieldValue.serverTimestamp()
-        });
-
-        await batch.commit();
-        logger.info(`[WALLET_SYNC] userId=${userId.substring(0,6)} balance=${newData?.cashBalance} risk=${riskProfile.driverRiskLevel}`);
     }
+
+    await batch.commit();
+
+    logger.info(`[DRIVER_FINANCIAL_UNLOCK_CHECK]`, {
+        driverId: userId,
+        previousBalance: oldData?.cashBalance,
+        newBalance: newData?.cashBalance,
+        wasBlocked: userData.driverRiskLevel === 'blocked',
+        newLevel: riskProfile.driverRiskLevel,
+        unlocked: userData.driverRiskLevel === 'blocked' && riskProfile.driverRiskLevel !== 'blocked',
+        reasons: riskProfile.riskReasons
+    });
 });
 
 /**
@@ -316,6 +398,26 @@ export const updateDriverStatusV1 = onCall({ cors: true, region: "us-central1" }
         }
     }
 
+    // Fetch stationId and stationName with fallback checks for old drivers
+    let stationId = userData.stationId || null;
+    let stationName = userData.stationName || null;
+
+    if (!stationId) {
+        const dSnap = await firestore.collection('drivers').doc(uid).get();
+        if (dSnap.exists && dSnap.data()?.stationId) {
+            stationId = dSnap.data()?.stationId;
+            stationName = dSnap.data()?.stationName || "Parada";
+        }
+    }
+
+    if (!stationId) {
+        const mpSnap = await firestore.collection('municipal_profiles').doc(uid).get();
+        if (mpSnap.exists && mpSnap.data()?.stationId) {
+            stationId = mpSnap.data()?.stationId;
+            stationName = mpSnap.data()?.stationName || "Parada";
+        }
+    }
+
     const batch = firestore.batch();
     
     const driverLocationRef = firestore.collection('drivers_locations').doc(uid);
@@ -330,6 +432,8 @@ export const updateDriverStatusV1 = onCall({ cors: true, region: "us-central1" }
     batch.update(userRef, { 
         ...riskProfile,
         driverStatus: status, 
+        stationId: stationId || null,
+        stationName: stationName || null,
         updatedAt: FieldValue.serverTimestamp() 
     });
 
@@ -341,6 +445,12 @@ export const updateDriverStatusV1 = onCall({ cors: true, region: "us-central1" }
         walletBalance: currentBalance,
         driverRiskLevel: riskProfile.driverRiskLevel,
         driverRiskScore: riskProfile.driverRiskScore,
+        driverGender: userData.gender || (userData as any).driverGender || 'not_specified',
+        stationId: stationId || null,
+        stationName: stationName || null,
+        cityKey: userData.cityKey || null,
+        isSuspended: userData.isSuspended === true,
+        activeRideId: userData.activeRideId || null,
         updatedAt: FieldValue.serverTimestamp() 
     };
 

@@ -44,6 +44,15 @@ export const confirmWalletTopupV1 = onCall({ cors: true, region: 'us-central1' }
 
     if (!orderId) throw new HttpsError('invalid-argument', 'ERROR: orderId es obligatorio.');
 
+    const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
+    const callerRole = request.auth.token.r || request.auth.token.role || "";
+    const isAuthorized = ['admin', 'superadmin', 'treasury_municipal'].includes(callerRole);
+
+    if (!isEmulator && !isAuthorized) {
+        logger.warn(`[WALLET_TOPUP_UNAUTHORIZED] Attempted manual topup confirmation without proper permissions. UID: ${request.auth.uid}, Role: ${callerRole}, Order: ${orderId}`);
+        throw new HttpsError('permission-denied', 'No tienes permisos para confirmar recargas manualmente.');
+    }
+
     const db = getDb();
     const orderRef = db.collection('wallet_topup_orders').doc(orderId);
     // Deterministic IDs for ledger locks

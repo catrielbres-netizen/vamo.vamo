@@ -5,43 +5,23 @@ import { Progress } from '@/components/ui/progress';
 import { VamoIcon } from './VamoIcon';
 import { cn } from '@/lib/utils';
 import { UserProfile } from '@/lib/types';
+import { getWeekIdentifierART } from '@/lib/timeUtils';
 
 // -------------------------------------------------------
-// Tabla de niveles Express — DEBE COINCIDIR con
-// functions/src/lib/passengerProgress.ts (Fase 7.1)
+// Regla Express: 5 viajes para desbloquear.
+// Máximo 3 usos por semana. 20% max $2000.
 // -------------------------------------------------------
-export interface ExpressTier {
-    minRides: number;
-    discount: number;
-    label: string;
-}
 
-export const EXPRESS_TIERS: ExpressTier[] = [
-    { minRides: 0,  discount: 0,  label: 'Sin descuento' },
-    { minRides: 3,  discount: 5,  label: '5% Express'    },
-    { minRides: 6,  discount: 8,  label: '8% Express'    },
-    { minRides: 10, discount: 10, label: '10% Express'   },
-    { minRides: 15, discount: 12, label: '12% Express'   },
-    { minRides: 25, discount: 15, label: '15% Express'   },
-];
+export function getExpressTierInfo(ridesThisWeek: number, usesThisWeek: number = 0) {
+    const minRides = 5;
+    const maxUses = 3;
+    const isUnlocked = ridesThisWeek >= minRides;
+    const usesLeft = isUnlocked ? Math.max(0, maxUses - usesThisWeek) : 0;
+    
+    const ridesNeeded = isUnlocked ? 0 : minRides - ridesThisWeek;
+    const progressPct = isUnlocked ? 100 : Math.min((ridesThisWeek / minRides) * 100, 100);
 
-export function getExpressTierInfo(ridesThisWeek: number) {
-    // Nivel actual
-    const currentTier = [...EXPRESS_TIERS].reverse().find(t => ridesThisWeek >= t.minRides)
-        ?? EXPRESS_TIERS[0];
-    // Siguiente nivel
-    const nextTier = EXPRESS_TIERS.find(t => t.minRides > ridesThisWeek) ?? null;
-    const ridesNeeded = nextTier ? nextTier.minRides - ridesThisWeek : 0;
-
-    // Progreso dentro del tramo actual → siguiente
-    const prevMin = currentTier.minRides;
-    const nextMin = nextTier?.minRides ?? currentTier.minRides;
-    const rangeSize = nextMin - prevMin;
-    const progressPct = rangeSize > 0
-        ? Math.min(((ridesThisWeek - prevMin) / rangeSize) * 100, 100)
-        : 100;
-
-    return { currentTier, nextTier, ridesNeeded, progressPct };
+    return { isUnlocked, usesLeft, ridesNeeded, progressPct, maxUses, usesThisWeek };
 }
 
 // -------------------------------------------------------
@@ -55,18 +35,53 @@ interface ExpressProgressWidgetProps {
 }
 
 export function ExpressProgressWidget({ profile, className, compact = false }: ExpressProgressWidgetProps) {
-    const rides = profile?.passengerProgress?.ridesThisWeek ?? 0;
-    const { currentTier, nextTier, ridesNeeded, progressPct } = getExpressTierInfo(rides);
+    const currentWeekId = getWeekIdentifierART(new Date());
+    const isCurrentWeek = profile?.passengerProgress?.weekIdentifier === currentWeekId;
+    const rides = isCurrentWeek ? (profile?.passengerProgress?.ridesThisWeek ?? 0) : 0;
+    const uses = isCurrentWeek ? (profile?.passengerProgress?.expressUsesThisWeek ?? 0) : 0;
+    const { isUnlocked, usesLeft, ridesNeeded, progressPct, maxUses } = getExpressTierInfo(rides, uses);
 
     if (compact) {
-        // Una sola línea para mostrar debajo del botón de servicio
-        if (currentTier.discount === 0 && !nextTier) return null;
+        if (!isUnlocked && rides === 0) return null;
         return (
-            <p className={cn('text-[10px] font-bold text-zinc-500 text-center leading-snug', className)}>
-                {currentTier.discount > 0
-                    ? `⚡ ${currentTier.discount}% activo esta semana · ${ridesNeeded > 0 ? `${ridesNeeded} viajes para ${nextTier?.discount}%` : '¡Nivel máximo!'}`
-                    : `⚡ Completá ${ridesNeeded} viajes para activar ${nextTier?.discount}% Express`}
-            </p>
+            <div className={cn("bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/10 p-3 rounded-2xl flex flex-col gap-2 shadow-xl", className)}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className={cn("w-6 h-6 rounded-full flex items-center justify-center", isUnlocked ? "bg-indigo-500/20" : "bg-white/5")}>
+                            <VamoIcon name="zap" className={cn("w-3.5 h-3.5", isUnlocked ? "text-indigo-400" : "text-zinc-500")} />
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-white leading-tight">
+                                {isUnlocked ? 'Express Activado' : 'Desbloquea Express'}
+                            </span>
+                            <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
+                                {rides} viajes esta semana
+                            </span>
+                        </div>
+                    </div>
+                    {isUnlocked ? (
+                        <div className="flex flex-col items-end">
+                            <span className="text-[10px] font-black text-indigo-400 border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                                {usesLeft} usos disp.
+                            </span>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-end">
+                            <span className="text-[10px] font-black text-amber-500">
+                                Faltan {ridesNeeded} viajes
+                            </span>
+                        </div>
+                    )}
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                    <span className="text-[9px] font-bold text-zinc-400">
+                        {isUnlocked ? `Ahorraste $${profile?.passengerProgress?.expressSavedAmountThisWeek || 0} esta semana` : 'Reinicia cada lunes'}
+                    </span>
+                    <span className="text-[9px] font-black text-indigo-400 uppercase flex items-center gap-1 hover:text-indigo-300 transition-colors">
+                        Ver Beneficios <VamoIcon name="chevron-right" className="w-3 h-3" />
+                    </span>
+                </div>
+            </div>
         );
     }
 
@@ -78,9 +93,14 @@ export function ExpressProgressWidget({ profile, className, compact = false }: E
                     <div className="w-7 h-7 rounded-full bg-indigo-500/10 flex items-center justify-center">
                         <VamoIcon name="zap" className="w-3.5 h-3.5 text-indigo-400" />
                     </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
-                        Progreso Express
-                    </span>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400 leading-tight">
+                            Beneficio Semanal Express
+                        </span>
+                        <span className="text-[8px] font-black text-zinc-500 uppercase tracking-wider">
+                            Reinicia cada lunes · No es mensual
+                        </span>
+                    </div>
                 </div>
                 <span className="text-[11px] font-black text-white">
                     {rides} viaje{rides !== 1 ? 's' : ''} esta semana
@@ -90,52 +110,50 @@ export function ExpressProgressWidget({ profile, className, compact = false }: E
             {/* Descuento actual */}
             <div className="flex items-center justify-between px-1">
                 <div>
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Tu descuento ahora</p>
+                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Estado</p>
                     <p className={cn(
                         'text-xl font-black leading-tight',
-                        currentTier.discount > 0 ? 'text-indigo-400' : 'text-zinc-600'
+                        isUnlocked ? 'text-indigo-400' : 'text-zinc-600'
                     )}>
-                        {currentTier.discount > 0 ? `${currentTier.discount}%` : '0%'}
+                        {isUnlocked ? `Activado` : 'Inactivo'}
                     </p>
                     <p className="text-[9px] text-zinc-600 font-bold">
-                        {currentTier.discount > 0 ? currentTier.label : 'Sin descuento aún'}
+                        {isUnlocked ? '20% off (max $2000)' : 'Faltan viajes'}
                     </p>
                 </div>
-                {nextTier && (
+                {!isUnlocked ? (
                     <div className="text-right">
-                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Próximo nivel</p>
-                        <p className="text-xl font-black text-white leading-tight">{nextTier.discount}%</p>
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Para activar</p>
+                        <p className="text-xl font-black text-white leading-tight">5 viajes</p>
                         <p className="text-[9px] text-amber-500 font-bold">
                             {ridesNeeded === 1 ? '¡Falta 1 viaje!' : `Faltan ${ridesNeeded} viajes`}
                         </p>
                     </div>
-                )}
-                {!nextTier && (
+                ) : (
                     <div className="text-right">
-                        <span className="text-[9px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-1 rounded-full uppercase tracking-widest">
-                            ⚡ Nivel máximo
+                        <span className={cn("text-[9px] font-black border px-2 py-1 rounded-full uppercase tracking-widest",
+                            usesLeft > 0 ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20" : "bg-zinc-800 text-zinc-500 border-zinc-700")}>
+                            {usesLeft > 0 ? `⚡ Quedan ${usesLeft} usos` : 'Agotado'}
                         </span>
                     </div>
                 )}
             </div>
 
             {/* Barra de progreso */}
-            {nextTier && (
+            {!isUnlocked && (
                 <div className="space-y-1">
                     <Progress value={progressPct} className="h-1.5 bg-white/5 [&>div]:bg-indigo-500" />
                     <p className="text-[9px] text-zinc-600 font-bold text-right">
-                        {rides} / {nextTier.minRides} viajes para {nextTier.discount}%
+                        {rides} / 5 viajes para activar
                     </p>
                 </div>
             )}
 
             {/* Mensaje motivacional */}
             <p className="text-[10px] text-zinc-500 italic leading-snug px-0.5">
-                {currentTier.discount === 0
-                    ? `Completá ${ridesNeeded} viaje${ridesNeeded !== 1 ? 's' : ''} Express esta semana para desbloquear tu primer descuento.`
-                    : nextTier
-                        ? `Llevás ${rides} viajes. Tenés ${currentTier.discount}% Express. Te faltan ${ridesNeeded} para llegar al ${nextTier.discount}%.`
-                        : `¡Felicitaciones! Tenés el máximo descuento Express: 15%. Seguí así.`}
+                {!isUnlocked
+                    ? `Completá ${ridesNeeded} viaje${ridesNeeded !== 1 ? 's' : ''} Express esta semana para desbloquear tu beneficio. Reinicia cada lunes.`
+                    : `Beneficio Express: ${uses} de ${maxUses} usados esta semana.`}
             </p>
         </div>
     );
@@ -151,8 +169,11 @@ interface ExpressReceiptProgressProps {
 }
 
 export function ExpressReceiptProgress({ profile, className }: ExpressReceiptProgressProps) {
-    const rides = profile?.passengerProgress?.ridesThisWeek ?? 0;
-    const { currentTier, nextTier, ridesNeeded, progressPct } = getExpressTierInfo(rides);
+    const currentWeekId = getWeekIdentifierART(new Date());
+    const isCurrentWeek = profile?.passengerProgress?.weekIdentifier === currentWeekId;
+    const rides = isCurrentWeek ? (profile?.passengerProgress?.ridesThisWeek ?? 0) : 0;
+    const uses = isCurrentWeek ? (profile?.passengerProgress?.expressUsesThisWeek ?? 0) : 0;
+    const { isUnlocked, usesLeft, ridesNeeded, progressPct, maxUses } = getExpressTierInfo(rides, uses);
 
     return (
         <div className={cn(
@@ -161,9 +182,14 @@ export function ExpressReceiptProgress({ profile, className }: ExpressReceiptPro
         )}>
             <div className="flex items-center gap-2 mb-1">
                 <VamoIcon name="zap" className="w-4 h-4 text-indigo-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
-                    Tu progreso Express
-                </span>
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400 leading-tight">
+                        Tu Progreso Express (Semanal)
+                    </span>
+                    <span className="text-[8px] font-black text-indigo-400/60 uppercase tracking-wider">
+                        Reinicia cada lunes · No es mensual
+                    </span>
+                </div>
             </div>
 
             {/* Rides count pill */}
@@ -173,30 +199,31 @@ export function ExpressReceiptProgress({ profile, className }: ExpressReceiptPro
                         {rides} viaje{rides !== 1 ? 's' : ''} esta semana
                     </p>
                     <p className="text-[10px] text-zinc-500 font-bold">
-                        {currentTier.discount > 0
-                            ? `Descuento activo: ${currentTier.discount}%`
-                            : 'Sin descuento activo aún'}
+                        {isUnlocked
+                            ? `Beneficio Express: ${uses} de ${maxUses} usados`
+                            : 'Beneficio inactivo aún'}
                     </p>
                 </div>
-                {nextTier ? (
+                {!isUnlocked ? (
                     <div className="text-right">
                         <p className="text-[10px] text-amber-400 font-black">
                             {ridesNeeded === 1 ? '¡Falta 1 viaje!' : `Faltan ${ridesNeeded} viajes`}
                         </p>
-                        <p className="text-[9px] text-zinc-500 font-bold">para el {nextTier.discount}%</p>
+                        <p className="text-[9px] text-zinc-500 font-bold">para activar</p>
                     </div>
                 ) : (
-                    <span className="text-[9px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-1 rounded-full uppercase tracking-widest">
-                        Nivel máximo
+                    <span className={cn("text-[9px] font-black border px-2 py-1 rounded-full uppercase tracking-widest",
+                            usesLeft > 0 ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20" : "bg-zinc-800 text-zinc-500 border-zinc-700")}>
+                        {usesLeft > 0 ? `Quedan ${usesLeft} usos` : 'Agotado'}
                     </span>
                 )}
             </div>
 
-            {nextTier && (
+            {!isUnlocked && (
                 <div className="space-y-1">
                     <Progress value={progressPct} className="h-1 bg-white/5 [&>div]:bg-indigo-500" />
                     <p className="text-[9px] text-zinc-600 font-bold text-right">
-                        {rides} / {nextTier.minRides}
+                        {rides} / 5
                     </p>
                 </div>
             )}

@@ -8,8 +8,8 @@ import { CancellationNoticeProvider } from '@/context/CancellationNoticeProvider
 import ReferralTracker from '@/components/ReferralTracker';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
 import { TelemetryProvider } from '@/lib/telemetry/TelemetryProvider';
+import { VamoThemeProvider } from '@/context/VamoThemeContext';
 
 const queryClient = new QueryClient();
 
@@ -22,16 +22,18 @@ export default function ClientProviders({ children }: { children: React.ReactNod
       disableTransitionOnChange
     >
       <FirebaseProvider>
-        <TelemetryProvider>
-          <QueryClientProvider client={queryClient}>
-            <MapsProvider>
-              <ReferralTracker />
-              <CancellationNoticeProvider>
-                {children}
-              </CancellationNoticeProvider>
-            </MapsProvider>
-          </QueryClientProvider>
-        </TelemetryProvider>
+        <VamoThemeProvider>
+          <TelemetryProvider>
+            <QueryClientProvider client={queryClient}>
+              <MapsProvider>
+                <ReferralTracker />
+                <CancellationNoticeProvider>
+                  {children}
+                </CancellationNoticeProvider>
+              </MapsProvider>
+            </QueryClientProvider>
+          </TelemetryProvider>
+        </VamoThemeProvider>
       </FirebaseProvider>
     </ThemeProvider>
   );

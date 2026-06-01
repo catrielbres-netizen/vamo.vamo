@@ -165,6 +165,7 @@ export default function MunicipalPassengersPage() {
                                 <th className="px-5 py-3">Estado</th>
                                 <th className="px-5 py-3">Viajes (C/T/X)</th>
                                 <th className="px-5 py-3">Trust Score</th>
+                                <th className="px-5 py-3">Beneficio Social</th>
                                 <th className="px-5 py-3">Fraude</th>
                                 <th className="px-5 py-3">Última Actividad</th>
                                 <th className="px-5 py-3 text-right">Acción</th>
@@ -172,11 +173,11 @@ export default function MunicipalPassengersPage() {
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {loading ? (
-                                <tr><td colSpan={7} className="px-5 py-12 text-center">
+                                <tr><td colSpan={8} className="px-5 py-12 text-center">
                                     <div className="w-6 h-6 border-2 border-indigo-500/20 border-t-indigo-400 rounded-full animate-spin mx-auto" />
                                 </td></tr>
                             ) : indexBuilding ? (
-                                <tr><td colSpan={7} className="px-5 py-16 text-center">
+                                <tr><td colSpan={8} className="px-5 py-16 text-center">
                                     <div className="flex flex-col items-center gap-3">
                                         <VamoIcon name="alert-triangle" className="h-8 w-8 text-amber-500" />
                                         <div className="space-y-1">
@@ -186,18 +187,36 @@ export default function MunicipalPassengersPage() {
                                     </div>
                                 </td></tr>
                             ) : passengers.length === 0 ? (
-                                <tr><td colSpan={7} className="px-5 py-16 text-center text-zinc-600 italic">
+                                <tr><td colSpan={8} className="px-5 py-16 text-center text-zinc-600 italic">
                                     No se encontraron pasajeros con estos filtros.
                                 </td></tr>
                             ) : passengers.map(p => {
                                 const status = getPassengerStatus(p);
                                 const stats = p.passengerStats || { completedRides: 0, totalRides: 0, cancelledRides: 0 };
-                                const trustScore = p.trustScore ?? 100; // Default if not present
+                                const trustScore = p.trustScore ?? 100;
+
+                                const handleToggleVerification = async (type: 'retired' | 'disabled' | null) => {
+                                    try {
+                                        const fns = getFunctions(undefined, 'us-central1');
+                                        const updateFn = httpsCallable(fns, 'updatePassengerSpecialStatusV1');
+                                        await updateFn({ passengerId: p.uid, isVerified: type !== null, type, cityKey });
+                                        toast({ title: 'Éxito', description: `Pasajero actualizado` });
+                                        loadPassengers(true);
+                                    } catch (e: any) {
+                                        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar.' });
+                                    }
+                                };
+
                                 return (
                                     <tr key={p.uid} className="hover:bg-white/[0.02] transition-colors">
                                         <td className="px-5 py-3">
                                             <div className="flex items-center gap-2">
                                                 <p className="font-bold text-white">{p.name ?? '—'}</p>
+                                                {p.isSpecialVerified && (
+                                                    <div className="bg-emerald-500/20 text-emerald-400 p-1 rounded-md" title="Verificado Social">
+                                                        <VamoIcon name="shield-check" className="w-3 h-3" />
+                                                    </div>
+                                                )}
                                             </div>
                                             <p className="text-[10px] text-zinc-500">{p.phone} · {p.email}</p>
                                         </td>
@@ -222,13 +241,42 @@ export default function MunicipalPassengersPage() {
                                                             "h-full rounded-full transition-all",
                                                             trustScore >= 80 ? "bg-emerald-500" :
                                                             trustScore >= 50 ? "bg-amber-500" : "bg-red-500"
-                                                        )}
-                                                        style={{ width: `${trustScore}%` }}
-                                                    />
-                                                </div>
-                                                <span className="text-[10px] font-bold text-zinc-400">{trustScore}</span>
-                                            </div>
-                                        </td>
+                                                         )}
+                                                         style={{ width: `${trustScore}%` }}
+                                                     />
+                                                 </div>
+                                                 <span className="text-[10px] font-bold text-zinc-400">{trustScore}</span>
+                                             </div>
+                                         </td>
+                                         <td className="px-5 py-3">
+                                             <div className="flex flex-col gap-1.5">
+                                                 {p.isSpecialVerified ? (
+                                                     <div className="flex flex-col gap-1">
+                                                         <span className="text-[10px] font-black bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30 w-fit">
+                                                             {p.specialVerifiedType === 'retired' ? 'JUBILADO' : 'DISCAPACITADO'}
+                                                         </span>
+                                                         <button 
+                                                            onClick={() => handleToggleVerification(null)}
+                                                            className="text-[9px] text-zinc-500 hover:text-red-400 underline text-left"
+                                                         >
+                                                             Quitar beneficio
+                                                         </button>
+                                                     </div>
+                                                 ) : (
+                                                     <select 
+                                                        className="bg-black/20 border border-white/5 text-[10px] text-zinc-400 rounded-md px-2 py-1 outline-none focus:border-indigo-500/50"
+                                                        onChange={(e) => {
+                                                            if (e.target.value) handleToggleVerification(e.target.value as any);
+                                                        }}
+                                                        value=""
+                                                     >
+                                                         <option value="">Sin beneficio</option>
+                                                         <option value="retired">Jubilado (+10%)</option>
+                                                         <option value="disabled">Discapacitado (+10%)</option>
+                                                     </select>
+                                                 )}
+                                             </div>
+                                         </td>
                                         <td className="px-5 py-3">
                                             {p.fraudAlertsCount > 0 ? (
                                                 <span className="text-[10px] font-black bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30">

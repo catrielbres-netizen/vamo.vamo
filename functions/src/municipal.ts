@@ -21,7 +21,7 @@ export const approveDriverV1 = onCall({ cors: true, region: 'us-central1' }, asy
         const operatorSnap = await db.doc(`users/${operatorUid}`).get();
         const operator = operatorSnap.data() as UserProfile;
 
-        if (!operator || (operator.role !== 'admin' && operator.role !== 'admin_municipal')) {
+        if (!operator || (operator.role !== 'admin' && operator.role !== 'superadmin' && operator.role !== 'admin_municipal')) {
             throw new HttpsError('permission-denied', 'No tienes permisos.');
         }
 
@@ -57,17 +57,45 @@ export const approveDriverV1 = onCall({ cors: true, region: 'us-central1' }, asy
 
             const timestamp = FieldValue.serverTimestamp();
 
+            const updates = {
+                municipalSuspended: false,
+                municipalSuspensionReason: null,
+                municipalSuspendedAt: null,
+                municipalSuspendedBy: null,
+            };
+
+            const isTraffic = !!user.trafficSuspended;
+            const isAdmin = !!user.adminSuspended;
+            const isMuni = false;
+
+            const finalIsSuspended = isTraffic || isMuni || isAdmin;
+            let finalSuspensionSource: 'admin' | 'municipal' | 'traffic' | null = null;
+            if (isAdmin) {
+                finalSuspensionSource = 'admin';
+            } else if (isMuni) {
+                finalSuspensionSource = 'municipal';
+            } else if (isTraffic) {
+                finalSuspensionSource = 'traffic';
+            }
+
             tx.update(muniRef, {
                 municipalStatus: 'active',
                 enabledAt: timestamp,
                 enabledBy: operatorUid,
                 municipalObservation: null,
+                ...updates,
+                isSuspended: finalIsSuspended,
+                suspensionSource: finalSuspensionSource,
                 updatedAt: timestamp
             });
 
             tx.update(userRef, {
                 approved: true,
                 municipalStatus: 'active',
+                ...updates,
+                isSuspended: finalIsSuspended,
+                suspensionSource: finalSuspensionSource,
+                suspensionReason: isAdmin ? user.adminSuspensionReason : (isMuni ? null : (isTraffic ? user.trafficSuspensionReason : null)),
                 updatedAt: timestamp
             });
 
@@ -83,6 +111,7 @@ export const approveDriverV1 = onCall({ cors: true, region: 'us-central1' }, asy
             // [SYNC_FIX] Ensure drivers_locations knows about the approval for matching
             tx.set(db.doc(`drivers_locations/${driverId}`), {
                 approved: true,
+                isSuspended: finalIsSuspended,
                 updatedAt: timestamp
             }, { merge: true });
 
@@ -225,6 +254,35 @@ export const updateMunicipalStatusV1 = onCall({ cors: true, region: 'us-central1
                 updatedAt: timestamp
             };
 
+            const target = userSnap.data() as UserProfile;
+
+            const suspensionUpdates: any = {};
+            if (status.startsWith('suspended_') || status === 'rejected_by_municipality') {
+                suspensionUpdates.municipalSuspended = true;
+                suspensionUpdates.municipalSuspensionReason = observation || 'Suspensión por la Municipalidad';
+                suspensionUpdates.municipalSuspendedAt = timestamp;
+                suspensionUpdates.municipalSuspendedBy = operatorUid;
+            } else {
+                suspensionUpdates.municipalSuspended = false;
+                suspensionUpdates.municipalSuspensionReason = null;
+                suspensionUpdates.municipalSuspendedAt = null;
+                suspensionUpdates.municipalSuspendedBy = null;
+            }
+
+            const isTraffic = target.trafficSuspended === undefined ? false : !!target.trafficSuspended;
+            const isAdmin = target.adminSuspended === undefined ? false : !!target.adminSuspended;
+            const isMuni = suspensionUpdates.municipalSuspended;
+
+            const finalIsSuspended = isTraffic || isMuni || isAdmin;
+            let finalSuspensionSource: 'admin' | 'municipal' | 'traffic' | null = null;
+            if (isAdmin) {
+                finalSuspensionSource = 'admin';
+            } else if (isMuni) {
+                finalSuspensionSource = 'municipal';
+            } else if (isTraffic) {
+                finalSuspensionSource = 'traffic';
+            }
+
             if (status === 'municipal_observed') {
                 const GRACE_MS = 48 * 60 * 60 * 1000;
                 const graceUntil = Timestamp.fromMillis(Date.now() + GRACE_MS);
@@ -240,14 +298,34 @@ export const updateMunicipalStatusV1 = onCall({ cors: true, region: 'us-central1
                 userUpdates.approved = true;
                 muniUpdates.observationGraceUntil = null;
                 userUpdates.observationGraceUntil = null;
+            } else if (status.startsWith('suspended_') || status === 'rejected_by_municipality') {
+                userUpdates.approved = false;
+                muniUpdates.observationGraceUntil = null;
+                userUpdates.observationGraceUntil = null;
             } else {
                 userUpdates.approved = false;
                 muniUpdates.observationGraceUntil = null;
                 userUpdates.observationGraceUntil = null;
             }
+
+            userUpdates.isSuspended = finalIsSuspended;
+            userUpdates.suspensionSource = finalSuspensionSource;
+            userUpdates.suspensionReason = isAdmin ? target.adminSuspensionReason : (isMuni ? suspensionUpdates.municipalSuspensionReason : (isTraffic ? target.trafficSuspensionReason : null));
+
+            Object.assign(userUpdates, suspensionUpdates);
+            Object.assign(muniUpdates, suspensionUpdates);
+            muniUpdates.isSuspended = finalIsSuspended;
+            muniUpdates.suspensionSource = finalSuspensionSource;
             
             tx.update(muniRef, muniUpdates);
             tx.update(userRef, userUpdates);
+
+            // Sync with drivers_locations
+            tx.set(db.doc(`drivers_locations/${driverId}`), {
+                approved: userUpdates.approved !== undefined ? userUpdates.approved : (target.approved || false),
+                isSuspended: finalIsSuspended,
+                updatedAt: timestamp
+            }, { merge: true });
 
             tx.set(db.collection('municipal_audit_log').doc(), {
                 driverId,
@@ -468,7 +546,7 @@ export const listMunicipalDriversV1 = onCall({ cors: true, region: 'us-central1'
         const operatorSnap = await db.doc(`users/${operatorUid}`).get();
         const operator = operatorSnap.data() as UserProfile;
 
-        if (!operator || (operator.role !== 'admin' && operator.role !== 'admin_municipal')) {
+        if (!operator || (operator.role !== 'admin' && operator.role !== 'superadmin' && operator.role !== 'admin_municipal')) {
             throw new HttpsError('permission-denied', 'No tienes permisos.');
         }
 
@@ -571,7 +649,7 @@ export const getMunicipalDashboardStatsV1 = onCall({ cors: true, region: 'us-cen
         const operatorSnap = await db.doc(`users/${operatorUid}`).get();
         const operator = operatorSnap.data() as UserProfile;
 
-        if (!operator || (operator.role !== 'admin' && operator.role !== 'admin_municipal')) {
+        if (!operator || (operator.role !== 'admin' && operator.role !== 'superadmin' && operator.role !== 'admin_municipal')) {
             throw new HttpsError('permission-denied', 'No tienes permisos.');
         }
 
@@ -646,7 +724,7 @@ export const updateMunicipalPricingV1 = onCall({ cors: true, region: 'us-central
         const operatorSnap = await db.doc(`users/${operatorUid}`).get();
         const operator = operatorSnap.data() as UserProfile;
 
-        if (!operator || (operator.role !== 'admin' && operator.role !== 'admin_municipal')) {
+        if (!operator || (operator.role !== 'admin' && operator.role !== 'superadmin' && operator.role !== 'admin_municipal')) {
             throw new HttpsError('permission-denied', 'No tienes permisos.');
         }
 
@@ -818,7 +896,7 @@ export const listMunicipalPassengersV1 = onCall({ cors: true, region: 'us-centra
         const operatorSnap = await db.doc(`users/${operatorUid}`).get();
         const operator = operatorSnap.data() as UserProfile;
 
-        if (!operator || (operator.role !== 'admin' && operator.role !== 'admin_municipal')) {
+        if (!operator || (operator.role !== 'admin' && operator.role !== 'superadmin' && operator.role !== 'admin_municipal')) {
             throw new HttpsError('permission-denied', 'No tienes permisos.');
         }
 
@@ -902,6 +980,56 @@ export const listMunicipalPassengersV1 = onCall({ cors: true, region: 'us-centra
         };
 
     } catch (error: any) {
+        throw new HttpsError('failed-precondition', error.message);
+    }
+});
+/**
+ * [VamO MUNICIPAL] Update Passenger Special Status (Retired/Disabled Verification)
+ */
+export const updatePassengerSpecialStatusV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'No autorizado.');
+    
+    const db = getDb();
+    const { passengerId, isVerified, type, cityKey } = request.data;
+    const operatorUid = request.auth.uid;
+
+    if (!passengerId) throw new HttpsError('invalid-argument', 'passengerId es obligatorio.');
+
+    try {
+        const operatorSnap = await db.doc(`users/${operatorUid}`).get();
+        const operator = operatorSnap.data() as UserProfile;
+
+        if (!operator || (operator.role !== 'admin' && operator.role !== 'superadmin' && operator.role !== 'admin_municipal')) {
+            throw new HttpsError('permission-denied', 'No tienes permisos para esta acción.');
+        }
+
+        if (operator.role === 'admin_municipal' && cityKey !== operator.cityKey) {
+            throw new HttpsError('permission-denied', 'No puedes gestionar pasajeros de otra ciudad.');
+        }
+
+        await db.doc(`users/${passengerId}`).update({
+            isSpecialVerified: !!isVerified,
+            specialVerifiedType: isVerified ? (type || null) : null,
+            updatedAt: FieldValue.serverTimestamp()
+        });
+
+        // Audit Log
+        await db.collection('municipal_audit_log').add({
+            action: isVerified ? 'passenger_social_benefit_granted' : 'passenger_social_benefit_revoked',
+            cityKey: cityKey || operator.cityKey || 'rawson',
+            operatorId: operatorUid,
+            operatorName: operator.name || 'Admin',
+            passengerId,
+            benefitType: type || 'none',
+            timestamp: FieldValue.serverTimestamp(),
+            message: `${isVerified ? 'Otorgó' : 'Quitó'} beneficio social (${type || '—'}) al pasajero ${passengerId}`
+        });
+
+        logger.info(`[MUNI_PASSENGER_VERIFIED] Passenger ${passengerId} status updated by ${operatorUid}: verified=${isVerified}, type=${type}`);
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error(`[MUNI_PASSENGER_VERIFY_ERROR] Error:`, error);
         throw new HttpsError('failed-precondition', error.message);
     }
 });

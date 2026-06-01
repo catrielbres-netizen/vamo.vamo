@@ -5,7 +5,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
+import { getAuth, connectAuthEmulator, onAuthStateChanged, signOut, type Auth, type User } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, doc, setDoc, type Firestore } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator, type Functions } from 'firebase/functions';
 import { getStorage, connectStorageEmulator, type FirebaseStorage } from 'firebase/storage';

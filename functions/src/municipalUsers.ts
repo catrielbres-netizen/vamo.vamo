@@ -20,7 +20,7 @@ export const createMunicipalUserV1 = onCall({ cors: true, region: 'us-central1' 
     const callerSnap = await db.doc(`users/${uid}`).get();
     const caller = callerSnap.data() as UserProfile;
 
-    const isGlobalAdmin = caller.role === 'admin';
+    const isGlobalAdmin = caller.role === 'admin' || caller.role === 'superadmin';
     const isLocalAdmin = caller.role === 'admin_municipal' && caller.cityKey === cityKey;
 
     if (!isGlobalAdmin && !isLocalAdmin) {
@@ -94,7 +94,7 @@ export const updateMunicipalUserV1 = onCall({ cors: true, region: 'us-central1' 
 
     const cityKey = target.cityKey;
 
-    const isGlobalAdmin = caller.role === 'admin';
+    const isGlobalAdmin = caller.role === 'admin' || caller.role === 'superadmin';
     const isLocalAdmin = caller.role === 'admin_municipal' && caller.cityKey === cityKey;
 
     if (!isGlobalAdmin && !isLocalAdmin) {

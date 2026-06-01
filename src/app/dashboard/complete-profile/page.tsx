@@ -39,7 +39,9 @@ function CompletePassengerProfileContent() {
     const [phone, setPhone] = useState('');
     const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>('');
     const [photoURL, setPhotoURL] = useState<string | null>(null);
-    const [cityKey, setCityKey] = useState<'rawson' | 'trelew' | 'comodoro' | ''>('rawson');
+    const [cityKey, setCityKey] = useState<string>('rawson');
+    const [customCity, setCustomCity] = useState('');
+    const [femaleDriverOnly, setFemaleDriverOnly] = useState(false);
     const [referralCodeInput, setReferralCodeInput] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
@@ -212,6 +214,8 @@ function CompletePassengerProfileContent() {
             const updateProfile = httpsCallable(functions, 'updateProfileV1');
             
             const normalizedPhone = phone.replace(/[\s\-\+()]/g, '');
+            const finalCityKey = cityKey === 'other' ? customCity.toLowerCase().replace(/[^a-z0-9]/g, '') : cityKey;
+            const finalCityLabel = cityKey === 'other' ? customCity : (cityKey === 'rawson' ? 'Rawson / Playa Unión' : cityKey);
             
             await updateProfile({
                 name,
@@ -220,7 +224,11 @@ function CompletePassengerProfileContent() {
                 phone: normalizedPhone,
                 gender,
                 photoURL,
-                cityKey,
+                cityKey: finalCityKey,
+                cityLabel: finalCityLabel,
+                passengerPreferences: {
+                    femaleDriverOnly: gender === 'female' ? femaleDriverOnly : false
+                },
                 profileCompleted: true,
                 termsAccepted: true,
                 termsVersion: CURRENT_TERMS_VERSION,
@@ -386,7 +394,7 @@ function CompletePassengerProfileContent() {
                     </div>
 
                     <div className="space-y-2">
-                        <Label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Ciudad Operativa</Label>
+                        <Label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Ciudad / Localidad</Label>
                         <Select value={cityKey} onValueChange={(val: any) => setCityKey(val)}>
                             <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl text-white focus:ring-indigo-500">
                                 <SelectValue placeholder="Seleccionar Ciudad" />
@@ -395,10 +403,24 @@ function CompletePassengerProfileContent() {
                                 <SelectItem value="rawson">Rawson / Playa Unión</SelectItem>
                                 <SelectItem value="trelew">Trelew</SelectItem>
                                 <SelectItem value="comodoro">Comodoro Rivadavia</SelectItem>
+                                <SelectItem value="parana">Paraná</SelectItem>
+                                <SelectItem value="other">Otra localidad...</SelectItem>
                             </SelectContent>
                         </Select>
                         <p className="text-[10px] text-zinc-600 px-1">Seleccioná tu ciudad principal para ver conductores cercanos.</p>
                     </div>
+
+                    {cityKey === 'other' && (
+                        <div className="space-y-2">
+                            <Label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Ingresá tu localidad</Label>
+                            <Input 
+                                placeholder="Ej: Gaiman" 
+                                value={customCity} 
+                                onChange={e => setCustomCity(e.target.value)} 
+                                className="h-12 bg-white/5 border-white/5 rounded-xl text-white placeholder:text-zinc-700 focus:ring-indigo-500" 
+                            />
+                        </div>
+                    )}
 
                     <div className="space-y-2">
                         <Label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Género</Label>
@@ -413,6 +435,30 @@ function CompletePassengerProfileContent() {
                             </SelectContent>
                         </Select>
                     </div>
+
+                    {gender === 'female' && (
+                        <div className="flex flex-col gap-4 p-4 bg-pink-500/10 rounded-2xl border border-pink-500/20 mx-1 mt-2">
+                            <div className="flex items-start gap-3">
+                                <Checkbox 
+                                    id="femaleDriver" 
+                                    checked={femaleDriverOnly} 
+                                    onCheckedChange={(checked) => setFemaleDriverOnly(checked === true)}
+                                    className="mt-1 border-pink-500/50 data-[state=checked]:bg-pink-600 data-[state=checked]:border-pink-600"
+                                />
+                                <div className="grid gap-1.5 leading-none">
+                                    <label
+                                        htmlFor="femaleDriver"
+                                        className="text-[11px] font-bold text-pink-400 cursor-pointer select-none uppercase tracking-wide"
+                                    >
+                                        Soy mujer y quiero poder pedir conductora mujer
+                                    </label>
+                                    <p className="text-[9px] text-zinc-400 font-medium leading-relaxed mt-1">
+                                        VamO priorizará conductoras mujeres cuando solicites un viaje. Si no hay disponibles, te avisaremos.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="space-y-2">
                         <Label className="text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">¿Te invitó alguien? (Opcional)</Label>

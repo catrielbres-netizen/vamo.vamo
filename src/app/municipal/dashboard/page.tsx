@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useUser, useFirestore } from '@/firebase';
-import { collection, query, where, getCountFromServer, doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getCountFromServer, doc, setDoc, onSnapshot, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { MunicipalProfile, MunicipalExpressStatus, normalizeCityKey } from '@/lib/types';
 import Link from 'next/link';
 import { VamoIcon } from '@/components/VamoIcon';
@@ -89,9 +89,95 @@ export default function MunicipalDashboardPage() {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [searching, setSearching] = useState(false);
 
-    const fetchDashboard = async () => {
+    // Paradas Digitales live states
+    const [stationStats, setStationStats] = useState({
+        totalRadio: 0,
+        assignedByOperator: 0,
+        releasedTimeout: 0,
+        reassignedCount: 0
+    });
+    const [stationLogs, setStationLogs] = useState<any[]>([]);
+
+    const db = useFirestore();
+
+    // Listen to Paradas Digitales data in real-time
+    useEffect(() => {
+        if (!db || !cityKey) return;
+
+        console.log("[STATION_DISPATCH_REALTIME_LISTEN] Subscribing for city:", cityKey);
+
+        // 1. Live rides listener for KPIs
+        const qRides = query(
+            collection(db, 'rides'),
+            where('cityKey', '==', cityKey),
+            where('stationDispatch', '==', true)
+        );
+
+        const unsubscribeRides = onSnapshot(qRides, (snapshot) => {
+            let totalRadio = 0;
+            let assignedByOperator = 0;
+            let releasedTimeout = 0;
+            let reassignedCount = 0;
+
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                totalRadio++;
+                
+                const status = data.stationDispatchStatus;
+                if (status === 'assigned_to_driver' || status === 'accepted_by_driver') {
+                    assignedByOperator++;
+                } else if (data.stationReleasedToGeneralMatching === true && data.stationReleaseReason === 'operator_timeout') {
+                    releasedTimeout++;
+                }
+
+                if (data.stationReassignmentAttempts > 0) {
+                    reassignedCount += data.stationReassignmentAttempts;
+                }
+            });
+
+            setStationStats({
+                totalRadio,
+                assignedByOperator,
+                releasedTimeout,
+                reassignedCount
+            });
+        }, (err) => {
+            console.error("Error listening to station rides:", err);
+        });
+
+        // 2. Live dispatch logs listener (sorted in-memory to bypass index requirement)
+        const qLogs = query(
+            collection(db, 'station_dispatch_logs'),
+            where('cityKey', '==', cityKey)
+        );
+
+        const unsubscribeLogs = onSnapshot(qLogs, (snapshot) => {
+            const logs: any[] = [];
+            snapshot.forEach(doc => {
+                logs.push({ id: doc.id, ...doc.data() });
+            });
+            
+            // Sort by timestamp desc in-memory
+            logs.sort((a, b) => {
+                const tA = a.timestamp?.toMillis ? a.timestamp.toMillis() : new Date(a.timestamp || 0).getTime();
+                const tB = b.timestamp?.toMillis ? b.timestamp.toMillis() : new Date(b.timestamp || 0).getTime();
+                return tB - tA;
+            });
+            
+            setStationLogs(logs.slice(0, 15));
+        }, (err) => {
+            console.error("Error listening to station logs:", err);
+        });
+
+        return () => {
+            unsubscribeRides();
+            unsubscribeLogs();
+        };
+    }, [db, cityKey]);
+
+    const fetchDashboard = async (isSilent = false) => {
         if (!cityKey) return;
-        setLoading(true);
+        if (!isSilent) setLoading(true);
         try {
             const fns = getFunctions(undefined, 'us-central1');
             const statsFn = httpsCallable(fns, 'getMunicipalDashboardStatsV1');
@@ -103,13 +189,17 @@ export default function MunicipalDashboardPage() {
         } catch (e) {
             console.error('Error fetching dashboard stats:', e);
         } finally {
-            setLoading(false);
+            if (!isSilent) setLoading(false);
         }
     };
 
     useEffect(() => {
         if (cityKey) {
-            fetchDashboard();
+            fetchDashboard(false);
+            const interval = setInterval(() => {
+                fetchDashboard(true);
+            }, 5000);
+            return () => clearInterval(interval);
         }
     }, [cityKey]);
 
@@ -144,7 +234,7 @@ export default function MunicipalDashboardPage() {
     const [metricsLoading, setMetricsLoading] = useState(true);
     const [indexError, setIndexError] = useState(false);
 
-    const db = useFirestore();
+
 
     useEffect(() => {
         if (!db || !cityKey) return;
@@ -306,6 +396,95 @@ export default function MunicipalDashboardPage() {
                         )}
                     </div>
                 )}
+            </div>
+
+            {/* 🚏 Paradas Digitales Panel */}
+            <div className="space-y-6 bg-gradient-to-br from-indigo-950/20 via-zinc-900/40 to-zinc-900/10 border border-white/5 p-8 rounded-[2.5rem] relative overflow-hidden backdrop-blur-md">
+                <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl -z-10" />
+                
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-emerald-400 font-black uppercase tracking-[0.25em] text-[10px]">MONITOR OPERATIVO EN VIVO</span>
+                        </div>
+                        <h2 className="text-2xl font-black text-white italic uppercase tracking-tight mt-1">Paradas Digitales VamO</h2>
+                        <p className="text-zinc-500 text-xs mt-1">Prioridad de matching y control en tiempo real dentro del radio de 500m</p>
+                    </div>
+                </div>
+
+                {/* Metrics Grid */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+                    <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-5 hover:bg-white/[0.04] transition-all duration-300">
+                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Viajes Generados en Radio</p>
+                        <p className="text-3xl font-black text-white italic tracking-tighter mt-2">{stationStats.totalRadio}</p>
+                        <p className="text-[9px] text-zinc-600 uppercase font-bold mt-1">Total dentro de 500m</p>
+                    </div>
+                    <div className="bg-emerald-500/[0.02] border border-emerald-500/10 rounded-3xl p-5 hover:bg-emerald-500/[0.04] transition-all duration-300">
+                        <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Asignados por Operador</p>
+                        <p className="text-3xl font-black text-emerald-400 italic tracking-tighter mt-2">{stationStats.assignedByOperator}</p>
+                        <p className="text-[9px] text-emerald-600/70 uppercase font-bold mt-1">Despachados con éxito</p>
+                    </div>
+                    <div className="bg-amber-500/[0.02] border border-amber-500/10 rounded-3xl p-5 hover:bg-amber-500/[0.04] transition-all duration-300">
+                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Liberados por Timeout</p>
+                        <p className="text-3xl font-black text-amber-400 italic tracking-tighter mt-2">{stationStats.releasedTimeout}</p>
+                        <p className="text-[9px] text-amber-600/70 uppercase font-bold mt-1">Liberados a matching general</p>
+                    </div>
+                    <div className="bg-blue-500/[0.02] border border-blue-500/10 rounded-3xl p-5 hover:bg-blue-500/[0.04] transition-all duration-300">
+                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Reasignados</p>
+                        <p className="text-3xl font-black text-blue-400 italic tracking-tighter mt-2">{stationStats.reassignedCount}</p>
+                        <p className="text-[9px] text-blue-600/70 uppercase font-bold mt-1">Intentos de reasignación</p>
+                    </div>
+                </div>
+
+                {/* Timeline Logs */}
+                <div className="mt-8">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-2">
+                        <VamoIcon name="activity" className="h-4 w-4 text-indigo-400" />
+                        Registro de Trazabilidad en Tiempo Real
+                    </h3>
+                    
+                    {stationLogs.length === 0 ? (
+                        <div className="bg-white/[0.01] border border-white/5 rounded-3xl p-8 text-center text-zinc-600 text-sm italic">
+                            No hay actividad reciente en las paradas de la ciudad.
+                        </div>
+                    ) : (
+                        <div className="bg-black/20 border border-white/5 rounded-[2rem] overflow-hidden max-h-[300px] overflow-y-auto divide-y divide-white/5 font-mono text-xs text-zinc-300">
+                            {stationLogs.map((log) => {
+                                const actionColors: Record<string, string> = {
+                                    'assigned_to_driver': 'text-emerald-400',
+                                    'driver_accepted': 'text-emerald-500 font-bold',
+                                    'released_to_general_matching': 'text-amber-400',
+                                    'pending_reassignment': 'text-indigo-400',
+                                };
+                                const indicatorColors: Record<string, string> = {
+                                    'assigned_to_driver': 'bg-emerald-400',
+                                    'driver_accepted': 'bg-emerald-500 animate-pulse',
+                                    'released_to_general_matching': 'bg-amber-400',
+                                    'pending_reassignment': 'bg-indigo-400',
+                                };
+                                const colorClass = actionColors[log.action] || 'text-zinc-400';
+                                const indicatorClass = indicatorColors[log.action] || 'bg-zinc-500';
+                                const timeStr = log.timestamp?.toDate ? log.timestamp.toDate().toLocaleTimeString('es-AR') : new Date(log.timestamp).toLocaleTimeString('es-AR');
+                                
+                                return (
+                                    <div key={log.id} className="p-4 hover:bg-white/[0.02] flex flex-col md:flex-row md:items-center justify-between gap-2 transition-colors">
+                                        <div className="flex items-center gap-3">
+                                            <span className={cn("w-2 h-2 rounded-full", indicatorClass)} />
+                                            <span className="text-[10px] text-zinc-500 font-bold">{timeStr}</span>
+                                            <span className={cn("font-bold uppercase text-[10px]", colorClass)}>{log.action?.replace(/_/g, ' ')}</span>
+                                            <span className="text-zinc-400">{log.details}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3 text-[10px] text-zinc-500 self-end md:self-auto">
+                                            {log.rideId && <span>Viaje: <span className="text-zinc-400">...{log.rideId.slice(-6)}</span></span>}
+                                            {log.driverId && <span>Móvil: <span className="text-zinc-400">...{log.driverId.slice(-6)}</span></span>}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Pendientes recientes */}

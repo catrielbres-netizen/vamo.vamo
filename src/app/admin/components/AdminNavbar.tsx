@@ -13,6 +13,7 @@ import { VamoLogo } from '@/components/branding/VamoLogo';
 import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdminAlertsCenter } from '@/components/admin/AdminAlertsCenter';
+import { featureFlags } from '@/config/features';
 
 const navLinks = [
     { href: '/admin/dashboard', label: 'Dashboard', icon: 'layout' },
@@ -68,13 +69,16 @@ export function AdminNavbar() {
                     <SelectItem value="trelew">Trelew</SelectItem>
                     <SelectItem value="madryn">Madryn</SelectItem>
                     <SelectItem value="cordoba">Córdoba</SelectItem>
+                    <SelectItem value="parana">Paraná</SelectItem>
                 </SelectContent>
             </Select>
         </div>
 
-        <Link href="/municipal/dashboard" className="px-4 py-2 rounded-xl bg-indigo-600/10 text-indigo-400 text-[10px] font-black uppercase hover:bg-indigo-600/20 transition-all border border-indigo-500/20">
-            Ir a VamoMuni
-        </Link>
+        {featureFlags.municipalModeEnabled && (
+          <Link href="/municipal/dashboard" className="px-4 py-2 rounded-xl bg-indigo-600/10 text-indigo-400 text-[10px] font-black uppercase hover:bg-indigo-600/20 transition-all border border-indigo-500/20">
+              Ir a VamoMuni
+          </Link>
+        )}
 
         <div className="flex-1 flex items-center gap-4 overflow-x-auto no-scrollbar ml-4">
             {navLinks.map(link => (

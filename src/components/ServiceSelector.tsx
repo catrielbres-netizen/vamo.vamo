@@ -4,6 +4,7 @@ import React from 'react';
 import { VamoIcon } from "./VamoIcon";
 import { useUser } from '@/firebase';
 import { ExpressProgressWidget, getExpressTierInfo, EXPRESS_TIERS } from './ExpressProgressWidget';
+import { featureFlags } from '@/config/features';
 
 const SERVICES = [
   { id: 'professional', label: '🛡️ Profesional', desc: 'Servicio habilitado de Taxis y Remises.' },
@@ -34,7 +35,11 @@ export function ServiceSelector({ value, onChange }: ServiceSelectorProps) {
 
   const visibleServices = SERVICES.map(s =>
     s.id === 'express' ? { ...s, desc: expressDesc } : s
-  ).filter(s => s.id !== 'express' || canSeeExpress);
+  ).filter(s => {
+    if (s.id === 'express' && !canSeeExpress) return false;
+    if (s.id === 'professional' && !featureFlags.taxiRemisEnabled) return false;
+    return true;
+  });
 
   return (
     <div className="mx-4 mb-4 grid gap-3">

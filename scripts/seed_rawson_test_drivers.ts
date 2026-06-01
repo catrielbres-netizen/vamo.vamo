@@ -79,6 +79,7 @@ async function seedDrivers() {
     for (const d of drivers) {
         const userRef = db.collection('users').doc(d.id);
         const locRef = db.collection('drivers_locations').doc(d.id);
+        const driverRef = db.collection('drivers').doc(d.id);
 
         const userData = {
             name: d.name,
@@ -121,9 +122,18 @@ async function seedDrivers() {
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         };
 
+        const driverDocData = {
+            approved: true,
+            isSuspended: false,
+            cityKey: 'rawson',
+            isTestDriver: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
         currentBatch.set(userRef, userData, { merge: true });
         currentBatch.set(locRef, locData, { merge: true });
-        count += 2;
+        currentBatch.set(driverRef, driverDocData, { merge: true });
+        count += 3;
 
         if (count >= batchLimit) {
             await currentBatch.commit();

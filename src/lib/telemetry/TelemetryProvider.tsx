@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useFirestore, useUser } from '@/firebase';
 import { TelemetryService } from './index';
+import { setTelemetryService } from './logger';
 
 const TelemetryContext = createContext<TelemetryService | null>(null);
 
@@ -24,6 +25,8 @@ export function TelemetryProvider({ children }: { children: React.ReactNode }) {
                 ...event
             }, throttleMs);
         };
+
+        setTelemetryService(telemetry);
 
         return telemetry;
     }, [db, user?.uid, profile?.role, profile?.cityKey]);

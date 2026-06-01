@@ -28,33 +28,40 @@ export function TrafficLoginForm() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      if (!firestore) throw new Error("Firestore not initialized");
-      const userDoc = await getDoc(doc(firestore, 'users', user.uid));
-      
-      if (!userDoc.exists()) {
-        await signOut(auth);
-        setError("Acceso denegado. Perfil de tránsito no encontrado.");
-        setLoading(false);
-        return;
+      const tokenResult = await user.getIdTokenResult();
+      const claims = tokenResult.claims;
+
+      let profile: any = null;
+      if (firestore) {
+        const userDoc = await getDoc(doc(firestore, 'users', user.uid));
+        if (userDoc.exists()) {
+          profile = userDoc.data();
+        }
       }
 
-      const profile = userDoc.data() as UserProfile;
+      const { resolveUserRole } = await import('@/lib/utils');
+      const resolvedRole = resolveUserRole(profile, claims);
 
       // Roles permitidos para panel de Tránsito
-      const validTrafficRoles = ['traffic_municipal', 'admin'];
+      const validTrafficRoles = [
+        'admin',
+        'superadmin',
+        'traffic',
+        'traffic_admin',
+        'traffic_operator',
+        'traffic_municipal',
+        'admin_municipal',
+        'municipal_admin',
+      ];
       
-      if (!validTrafficRoles.includes(profile.role)) {
+      if (!resolvedRole || !validTrafficRoles.includes(resolvedRole)) {
         await signOut(auth);
         setError("Esta cuenta no tiene permisos para el área de Tránsito.");
         setLoading(false);
         return;
       }
 
-      if (profile.role === 'admin') {
-        router.push('/admin');
-      } else {
-        router.push('/traffic');
-      }
+      router.push('/traffic');
 
     } catch (err: any) {
       console.error("Traffic Login error:", err);

@@ -33,7 +33,7 @@ export function AuthGuard({
 }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, profile, loading } = useUser();
+  const { user, profile, role, loading } = useUser();
 
   // [VamO SAFETY] If the driver just completed onboarding, sessionStorage has a flag.
   // We must NOT redirect to login while Firebase re-hydrates the session after
@@ -68,33 +68,28 @@ export function AuthGuard({
   
   // A session is considered "resolving" if:
   // - auth is loading, OR
-  // - we have a user but no profile yet, OR
+  // - we have a user but no profile and no role yet, OR
   // - the onboarding flag is set and user hasn't been confirmed yet
-  const isResolving = loading || (!!user && !profile && !isProfileCompletion) || (onboardingFlag && !user);
+  const isResolving = loading || (!!user && !profile && !role && !isProfileCompletion) || (onboardingFlag && !user);
 
   // --- [VamO PRO] Strict Onboarding Status ---
   const registrationStatus = (profile as any)?.registrationStatus;
-  const isPassenger = profile?.role === 'passenger';
+  const isPassenger = role === 'passenger' || profile?.role === 'passenger';
   const isIncompletePassenger = isPassenger && registrationStatus !== 'active';
   const shouldRedirectToOnboarding = profile && isIncompletePassenger && !isProfileCompletion;
-
-  // TODO SECURITY: remover bypass temporal de superadmin después de reparar guards por claims.
-  const isSuperAdminEmergency = user?.uid === "9oOsPaBsp8XkcTLjSTEJbdzMafa2" || user?.email === "superadmin@vamo.local";
 
   useEffect(() => {
     if (isResolving) return;
 
-    if (isSuperAdminEmergency) {
-        console.log(`[SUPERADMIN_EMERGENCY_BYPASS] uid=${user?.uid} email=${user?.email} pathname=${pathname} allowed=true`);
-        return;
-    }
-
     const logPrefix = `[AUTH_ROUTE_DEBUG] ${pathname}`;
+    const activeRole = role || profile?.role;
     const debugData = {
         uid: user?.uid,
         email: user?.email,
         pathname,
         firestoreRole: profile?.role,
+        resolvedRole: role,
+        activeRole,
         registrationStatus: (profile as any)?.registrationStatus,
         allowedRoles,
         onboardingFlag,
@@ -107,9 +102,9 @@ export function AuthGuard({
       return;
     }
 
-    // 2. Profile Missing Block (for non-completion paths)
-    if (!profile && !isProfileCompletion) {
-      console.warn(`${logPrefix} REDIRECT: Profile missing. Target: ${fallbackPath}`, debugData);
+    // 2. Profile/Role Missing Block (for non-completion paths)
+    if (!profile && !role && !isProfileCompletion) {
+      console.warn(`${logPrefix} REDIRECT: Profile/Role missing. Target: ${fallbackPath}`, debugData);
       router.replace(fallbackPath);
       return;
     }
@@ -122,15 +117,15 @@ export function AuthGuard({
     }
 
     // 4. Role Authorization Block
-    if (profile && allowedRoles.length > 0 && profile.role !== 'superadmin' && !allowedRoles.includes(profile.role)) {
-      console.error(`${logPrefix} FORBIDDEN: Role ${profile.role} not in ${allowedRoles}. Target: ${fallbackPath}`, debugData);
+    if (activeRole && allowedRoles.length > 0 && activeRole !== 'superadmin' && !allowedRoles.includes(activeRole)) {
+      console.error(`${logPrefix} FORBIDDEN: Role ${activeRole} not in ${allowedRoles}. Target: ${fallbackPath}`, debugData);
       router.replace(fallbackPath);
       return;
     }
 
     // If we reach here, access is valid.
     console.log(`${logPrefix} ACCESS_GRANTED`, debugData);
-  }, [user, profile, isResolving, allowedRoles, fallbackPath, router, pathname, isProfileCompletion, registrationStatus, shouldRedirectToOnboarding, onboardingFlag]);
+  }, [user, profile, role, isResolving, allowedRoles, fallbackPath, router, pathname, isProfileCompletion, registrationStatus, shouldRedirectToOnboarding, onboardingFlag]);
 
   // Block rendering while resolving or if invalid
   if (isResolving || shouldRedirectToOnboarding) {
@@ -141,12 +136,14 @@ export function AuthGuard({
     } />;
   }
 
-  if (!user || (!profile && !isProfileCompletion)) {
+  const activeRole = role || profile?.role;
+
+  if (!user || (!profile && !role && !isProfileCompletion)) {
     console.log("[AUTH_GUARD_BLOCK_DASHBOARD] Rendering redirect state (No User/Profile)");
     return <VamoFullScreenLoader label="Redirigiendo..." />;
   }
 
-  if (profile && allowedRoles.length > 0 && profile.role !== 'superadmin' && !allowedRoles.includes(profile.role)) {
+  if (activeRole && allowedRoles.length > 0 && activeRole !== 'superadmin' && !allowedRoles.includes(activeRole)) {
     console.log("[AUTH_GUARD_BLOCK_DASHBOARD] Rendering redirect state (Unauthorized Role)");
     return <VamoFullScreenLoader label="Redirigiendo..." />;
   }

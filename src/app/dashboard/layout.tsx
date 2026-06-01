@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useBackNavigationLock } from '@/hooks/useBackNavigationLock';
 import { PassengerLoyaltyCard } from '@/components/PassengerLoyaltyCard';
 import { AuthGuard } from '@/features/auth/AuthGuard';
-import { useTelemetry } from '@/lib/telemetry';
+import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
 import { PassengerDashboardSkeleton } from '@/components/skeletons/PassengerDashboardSkeleton';
 
 // This component contains the actual UI, only rendered when `profile` is guaranteed to exist.
@@ -133,12 +133,15 @@ function PassengerDashboard({ children, profile, user }: { children: React.React
           </div>
           {!isVisuallyLocked && (
               <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-                  <TabsList className="grid w-full grid-cols-4">
+                  <TabsList className="grid w-full grid-cols-5">
                       <TabsTrigger value="ride" className="gap-2">
                           <VamoIcon name="car" className="w-4 h-4" /> Inicio
                       </TabsTrigger>
                       <TabsTrigger value="history" className="gap-2">
                           <VamoIcon name="file-text" className="w-4 h-4" /> Viajes
+                      </TabsTrigger>
+                      <TabsTrigger value="rewards" className="gap-2">
+                          <VamoIcon name="gift" className="w-4 h-4" /> Premios
                       </TabsTrigger>
                       <TabsTrigger value="wallet" className="gap-2">
                           <VamoIcon name="wallet" className="w-4 h-4" /> Billetera

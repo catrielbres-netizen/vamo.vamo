@@ -4,6 +4,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useUser, useFirestore, useFirebaseApp } from '@/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ThemeCustomizer } from '@/components/settings/ThemeCustomizer';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VamoIcon } from '@/components/VamoIcon';
@@ -11,20 +12,22 @@ import { UserProfile, VerificationStatus, DriverLevel } from '@/lib/types';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+// getFunctions / httpsCallable moved to DriverReferralsPanel (P1)
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { doc, updateDoc, collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useDriverStats } from '@/hooks/useDriverStats';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { NotificationToggle } from '@/components/NotificationToggle';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { arrayUnion, arrayRemove } from 'firebase/firestore';
+
+
 import {
   Dialog,
   DialogContent,
@@ -36,8 +39,20 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { ShieldAlert, Trash, Pencil, MessageSquare, QrCode } from 'lucide-react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { LazyQRCode } from '@/components/LazyQRCode';
 import { formatRating } from '@/lib/formatters';
+import dynamic from 'next/dynamic';
+
+// Lazy-loaded heavy sub-panels (P1 optimization)
+// Referrals and Ratings have their own Firestore listeners — load only when tab is visited.
+const DriverReferralsPanel = dynamic(
+  () => import('@/components/DriverReferralsPanel').then((m) => m.DriverReferralsPanel),
+  { ssr: false, loading: () => <Skeleton className="h-32 w-full rounded-2xl" /> }
+);
+const DriverRatingsPanel = dynamic(
+  () => import('@/components/DriverRatingsPanel').then((m) => m.DriverRatingsPanel),
+  { ssr: false, loading: () => <Skeleton className="h-20 w-full rounded-2xl" /> }
+);
 
 const verificationStatusBadge: Record<NonNullable<VerificationStatus> | 'default', { text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
     unverified: { text: 'No Verificado', variant: 'destructive' },
@@ -99,12 +114,9 @@ export default function DriverProfilePage() {
   const [services, setServices] = useState(profile?.servicesOffered || { express: true, premium: true });
   const [isSavingServices, setIsSavingServices] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
-  const [referrals, setReferrals] = useState<any[]>([]);
-  const [loadingReferrals, setLoadingReferrals] = useState(true);
-  const [recentRatings, setRecentRatings] = useState<any[]>([]);
-  const [loadingRatings, setLoadingRatings] = useState(true);
+  // isGeneratingCode / referrals / ratings state moved to DriverReferralsPanel / DriverRatingsPanel
   const [isSavingPreferences, setIsSavingPreferences] = useState(false);
+  const [isLinkingMp, setIsLinkingMp] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- STRICT ONBOARDING REDIRECT ---
@@ -115,121 +127,18 @@ export default function DriverProfilePage() {
     }
   }, [profile, router]);
 
-  useEffect(() => {
-    if (!user || !firestore) return;
-    
-    const q = query(
-        collection(firestore, 'referrals'),
-        where('referrerId', '==', user.uid),
-        orderBy('createdAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const refs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setReferrals(refs);
-        setLoadingReferrals(false);
-    }, (error) => {
-        console.error("Error fetching referrals:", error);
-        setLoadingReferrals(false);
-    });
-
-    return () => unsubscribe();
-  }, [user, firestore]);
-
-  // [VamO PRO] Fetch recent ratings with comments
-  useEffect(() => {
-    if (!user || !firestore) return;
-    
-    const q = query(
-        collection(firestore, 'rides'),
-        where('driverId', '==', user.uid),
-        where('status', '==', 'completed'),
-        orderBy('completedAt', 'desc'),
-        limit(20)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const ratedRides = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter((r: any) => !!r.driverRatingByPassenger && !!r.driverComments)
-            .slice(0, 3);
-        setRecentRatings(ratedRides);
-        setLoadingRatings(false);
-    }, (error) => {
-        console.error("Error fetching ratings:", error);
-        setLoadingRatings(false);
-    });
-
-    return () => unsubscribe();
-  }, [user, firestore]);
+  // Referrals & Ratings listeners moved to DriverReferralsPanel / DriverRatingsPanel (P1 optimization).
+  // They open onSnapshot only when the respective tab is first visited.
 
   // [VamO PRO] Public Profile is synced automatically via Cloud Functions (backend)
   // on every relevant change to users or municipal_profiles documents.
 
-  const handleGenerateCode = async () => {
-    if (!firebaseApp || isGeneratingCode) return;
-    
-    setIsGeneratingCode(true);
-    try {
-        const functions = getFunctions(firebaseApp, 'us-central1');
-        const generateCode = httpsCallable<any, { referralCode: string }>(functions, 'generateReferralCodeV1');
-        const result = await generateCode();
-        if (result.data?.referralCode) {
-            toast({ title: "Código generado", description: "Ya podés invitar a otros conductores." });
-        }
-    } catch (error: any) {
-        console.error("Error generating code:", error);
-        toast({ 
-            variant: 'destructive', 
-            title: "Error al generar código", 
-            description: "No pudimos generar tu código. Reintentá en unos minutos." 
-        });
-    } finally {
-        setIsGeneratingCode(false);
-    }
-  };
-
-  const handleShare = async () => {
-    const code = profile?.referralCode;
-    if (!code) {
-        handleGenerateCode();
-        return;
-    }
-
-    const registrationLink = `https://vamoapp.online/driver?ref=${code}`;
-    const shareText = `Sumate a manejar con VamO y ganá más 🚀\nRegistrate desde mi link:\n${registrationLink}`;
-    const shareData = {
-        title: 'VamO Conductor 🚀',
-        text: shareText,
-    };
-
-    if (navigator.share) {
-        try {
-            await navigator.share(shareData);
-        } catch (err: any) {
-            if (err.name !== 'AbortError') {
-                console.error('Share failed', err);
-                copyToClipboard(shareText);
-            }
-        }
-    } else {
-        copyToClipboard(shareText);
-    }
-  };
+  // handleGenerateCode / handleShare / copyToClipboard moved to DriverReferralsPanel (P1).
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
-        .then(() => {
-            toast({ title: "Código copiado", description: "Pegalo y compartilo con otros conductores." });
-        })
-        .catch((err) => {
-            console.error('Clipboard copy failed', err);
-            toast({ 
-                variant: 'destructive', 
-                title: "Error al copiar", 
-                description: "No se pudo copiar el código. Intentá seleccionarlo manualmente." 
-            });
-        });
+        .then(() => toast({ title: "Código copiado" }))
+        .catch(() => toast({ variant: 'destructive', title: "Error al copiar" }));
   };
 
   const handleLogout = async () => {
@@ -346,6 +255,25 @@ export default function DriverProfilePage() {
     }
   }
 
+  const handleLinkMercadoPago = async () => {
+    if (!firebaseApp) return;
+    setIsLinkingMp(true);
+    try {
+        const functions = getFunctions(firebaseApp, 'us-central1');
+        const getUrl = httpsCallable(functions, 'createMercadoPagoOAuthUrlV1');
+        const result = await getUrl();
+        const data = result.data as { url: string };
+        if (data.url) {
+            window.location.href = data.url;
+        }
+    } catch (e: any) {
+        console.error("Error linking MP:", e);
+        toast({ variant: 'destructive', title: 'Error', description: e.message || 'No se pudo iniciar la vinculación.' });
+    } finally {
+        setIsLinkingMp(false);
+    }
+  };
+
   const { weeklyRevenue, weeklyRides, loading: statsLoading } = useDriverStats();
   const isLoading = userLoading || !profile;
 
@@ -375,6 +303,11 @@ export default function DriverProfilePage() {
   const isPremiumTier = profile.serviceTier === 'premium';
   const missingPhotos = !profile.photoURL || !profile.vehicleFrontPhotoURL;
 
+  const isTraffic = profile?.trafficSuspended || (profile?.isSuspended && profile?.suspensionSource === 'traffic');
+  const isMunicipal = profile?.municipalSuspended || (profile?.isSuspended && profile?.suspensionSource === 'municipal');
+  const isAdmin = profile?.adminSuspended || (profile?.isSuspended && profile?.suspensionSource === 'admin');
+  const activeSuspension = isTraffic || isMunicipal || isAdmin;
+
   return (
     <div className="w-full max-w-lg mx-auto space-y-6 pb-20">
       <div className="mb-6 px-1">
@@ -383,12 +316,14 @@ export default function DriverProfilePage() {
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="w-full grid grid-cols-5 h-14 bg-zinc-900/50 rounded-2xl p-1 mb-6">
-          <TabsTrigger value="general" className="rounded-xl font-bold text-[10px] uppercase">Perfil</TabsTrigger>
-          <TabsTrigger value="docs" className="rounded-xl font-bold text-[10px] uppercase">Docs</TabsTrigger>
-          <TabsTrigger value="pro" className="rounded-xl font-bold text-[10px] uppercase">PRO</TabsTrigger>
-          <TabsTrigger value="referral" className="rounded-xl font-bold text-[10px] uppercase">Refs</TabsTrigger>
-          <TabsTrigger value="security" className="rounded-xl font-bold text-[10px] uppercase">SOS</TabsTrigger>
+        <TabsList className="w-full grid grid-cols-4 sm:grid-cols-7 h-auto sm:h-14 bg-zinc-900/50 rounded-2xl p-1 gap-1 mb-6 overflow-x-auto">
+          <TabsTrigger value="general" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Perfil</TabsTrigger>
+          <TabsTrigger value="docs" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Docs</TabsTrigger>
+          <TabsTrigger value="payments" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Pagos</TabsTrigger>
+          <TabsTrigger value="pro" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">PRO</TabsTrigger>
+          <TabsTrigger value="referral" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Refs</TabsTrigger>
+          <TabsTrigger value="security" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">SOS</TabsTrigger>
+          <TabsTrigger value="theme" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Diseño</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-4 animate-in fade-in duration-300">
@@ -396,13 +331,20 @@ export default function DriverProfilePage() {
           <Card className="rounded-3xl border-indigo-500/20 bg-gradient-to-br from-zinc-900 to-indigo-900/10 shadow-xl overflow-hidden mb-6">
                 <CardContent className="p-6">
                     <div className="flex flex-col items-center gap-4 text-center">
-                        <div className="p-4 bg-white rounded-3xl shadow-2xl">
-                            <QRCodeCanvas 
+                        <div className="relative p-4 bg-white rounded-3xl shadow-2xl overflow-hidden">
+                            <LazyQRCode
                                 value={`${typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.online'}/verify/driver/${user?.uid}`}
                                 size={180}
                                 level="H"
                                 marginSize={2}
                             />
+                            {activeSuspension && (
+                                <div className="absolute inset-0 bg-red-600/80 rounded-3xl flex flex-col items-center justify-center text-white p-4 text-center select-none backdrop-blur-[2px]">
+                                    <VamoIcon name="shield-off" className="w-12 h-12 text-white animate-bounce" />
+                                    <span className="text-[10px] font-black uppercase tracking-wider mt-2">Operación Bloqueada</span>
+                                    <span className="text-[8px] opacity-90 mt-1 font-semibold leading-tight">Esta credencial no está habilitada para operar</span>
+                                </div>
+                            )}
                         </div>
                         <div>
                             <h3 className="text-xl font-black text-white italic uppercase tracking-tighter flex items-center justify-center gap-2">
@@ -663,6 +605,64 @@ export default function DriverProfilePage() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="payments" className="space-y-4 animate-in fade-in duration-300">
+          <Card className="border-blue-500/30 bg-blue-500/5">
+              <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-blue-500 text-lg flex gap-2 items-center">
+                        <VamoIcon name="credit-card" className="w-5 h-5" /> 
+                        Mercado Pago
+                    </CardTitle>
+                    <Badge variant={profile.mpAccountStatus === 'linked' ? 'default' : profile.mpAccountStatus === 'expired' ? 'destructive' : 'secondary'} className="uppercase font-black text-[9px]">
+                        {profile.mpAccountStatus === 'linked' ? 'Vinculado' :
+                         profile.mpAccountStatus === 'expired' ? 'Vencido' : 'No Vinculado'}
+                    </Badge>
+                  </div>
+                  <CardDescription className="text-blue-400 font-medium text-xs">
+                      Vinculá tu cuenta para recibir tus ganancias automáticamente al finalizar cada viaje con tarjeta.
+                  </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                  <div className="p-4 bg-background/40 rounded-xl border border-border/50 text-center">
+                      {profile.mpAccountStatus === 'linked' ? (
+                          <div className="flex flex-col items-center gap-2">
+                              <div className="w-12 h-12 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center">
+                                  <VamoIcon name="check" className="w-6 h-6" />
+                              </div>
+                              <p className="text-sm font-bold text-white mt-2">Cuenta Vinculada</p>
+                              <p className="text-xs text-muted-foreground">Ya estás listo para cobrar con Mercado Pago.</p>
+                              <Button variant="outline" size="sm" onClick={handleLinkMercadoPago} disabled={isLinkingMp} className="mt-2">
+                                  {isLinkingMp ? "Cargando..." : "Actualizar Vinculación"}
+                              </Button>
+                          </div>
+                      ) : profile.mpAccountStatus === 'expired' ? (
+                          <div className="flex flex-col items-center gap-2">
+                              <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center">
+                                  <VamoIcon name="alert-triangle" className="w-6 h-6" />
+                              </div>
+                              <p className="text-sm font-bold text-red-400 mt-2">Autorización Vencida</p>
+                              <p className="text-xs text-muted-foreground">Debés renovar el permiso de Mercado Pago.</p>
+                              <Button variant="default" size="sm" onClick={handleLinkMercadoPago} disabled={isLinkingMp} className="mt-2 bg-blue-600 hover:bg-blue-700">
+                                  {isLinkingMp ? "Cargando..." : "Re-vincular Mercado Pago"}
+                              </Button>
+                          </div>
+                      ) : (
+                          <div className="flex flex-col items-center gap-2">
+                              <div className="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                                  <VamoIcon name="link" className="w-6 h-6" />
+                              </div>
+                              <p className="text-sm font-bold text-white mt-2">No estás vinculado</p>
+                              <p className="text-xs text-muted-foreground">Vinculá tu cuenta para automatizar cobros.</p>
+                              <Button variant="default" size="sm" onClick={handleLinkMercadoPago} disabled={isLinkingMp} className="mt-2 bg-blue-600 hover:bg-blue-700 w-full font-bold">
+                                  {isLinkingMp ? "Cargando..." : "Vincular Mercado Pago"}
+                              </Button>
+                          </div>
+                      )}
+                  </div>
+              </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="pro" className="space-y-4 animate-in fade-in duration-300">
           <Card className="border-indigo-500/20 bg-indigo-500/5 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -723,43 +723,9 @@ export default function DriverProfilePage() {
                             Ver Todo el Historial
                         </Button>
                     </div>
-                    
-                    {loadingRatings ? (
-                        <Skeleton className="h-20 w-full rounded-2xl" />
-                    ) : recentRatings.length === 0 ? (
-                        <div className="p-6 bg-zinc-900/30 rounded-2xl border border-dashed border-white/5 text-center">
-                            <p className="text-xs text-zinc-500 font-medium">Aún no recibiste comentarios de pasajeros.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {recentRatings.map((ride) => (
-                                <div key={ride.id} className="p-4 bg-zinc-950/40 rounded-2xl border border-white/5 hover:bg-zinc-950/60 transition-colors">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex gap-0.5">
-                                            {[1, 2, 3, 4, 5].map((s) => (
-                                                <VamoIcon 
-                                                    key={s} 
-                                                    name="star" 
-                                                    className={cn(
-                                                        "w-3 h-3",
-                                                        s <= (ride.driverRatingByPassenger || 0) ? "text-yellow-400 fill-yellow-400" : "text-zinc-800"
-                                                    )} 
-                                                />
-                                            ))}
-                                        </div>
-                                        <span className="text-[9px] font-bold text-zinc-600 uppercase">
-                                            {ride.completedAt?.toDate?.().toLocaleDateString() || 'Reciente'}
-                                        </span>
-                                    </div>
-                                    {ride.driverComments ? (
-                                        <p className="text-xs text-zinc-300 italic leading-relaxed">"{ride.driverComments}"</p>
-                                    ) : (
-                                        <p className="text-[10px] text-zinc-600 font-bold uppercase italic">Sin comentarios</p>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
+
+                    {/* P1: DriverRatingsPanel lazy-loaded — opens onSnapshot only on mount */}
+                    <DriverRatingsPanel />
                 </div>
             </CardContent>
           </Card>
@@ -780,91 +746,13 @@ export default function DriverProfilePage() {
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
-                <div className="bg-background/80 p-5 rounded-2xl border flex flex-col items-center gap-4 text-center">
-                    <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Código de referido</p>
-                    <div className="flex items-center gap-3">
-                        <span className="text-3xl font-black tracking-tight font-mono text-primary">
-                            {isGeneratingCode ? (
-                                <VamoIcon name="loader" className="animate-spin h-6 w-6 text-primary" />
-                            ) : (
-                                profile.referralCode || 'SIN CÓDIGO'
-                            )}
-                        </span>
-                        <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            className="h-10 w-10 text-primary hover:bg-primary/10 rounded-full"
-                            onClick={handleShare}
-                            disabled={isGeneratingCode || !profile.referralCode}
-                        >
-                            <VamoIcon name="share-2" className="h-5 w-5" />
-                        </Button>
-                    </div>
-                    {!profile.referralCode && !isGeneratingCode ? (
-                        <Button 
-                            variant="default" 
-                            className="w-full h-12 font-bold rounded-xl"
-                            onClick={handleGenerateCode}
-                        >
-                            Generar mi Código
-                        </Button>
-                    ) : (
-                        <Button 
-                            variant="default" 
-                            className="w-full h-12 font-bold rounded-xl"
-                            onClick={handleShare}
-                            disabled={isGeneratingCode || !profile.referralCode}
-                        >
-                            {isGeneratingCode ? 'Generando...' : 'Compartir Código'}
-                        </Button>
-                    )}
-                </div>
-
-                <div className="space-y-3">
-                    <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest px-1">Referidos ({referrals.length})</p>
-                    
-                    {loadingReferrals ? (
-                        <div className="space-y-2">
-                            <Skeleton className="h-12 w-full rounded-xl" />
-                        </div>
-                    ) : referrals.length === 0 ? (
-                        <div className="py-8 text-center bg-zinc-900/10 rounded-2xl border border-dashed border-white/5">
-                            <p className="text-xs text-muted-foreground">Aún no tienes referidos.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {referrals.map((ref: any) => (
-                                <div key={ref.id} className="flex items-center justify-between p-4 bg-muted/20 rounded-xl border border-border/50">
-                                    <div className="flex items-center gap-3">
-                                        <div className={cn(
-                                            "h-8 w-8 rounded-full flex items-center justify-center",
-                                            ref.status === 'rewarded' ? "bg-green-500/20 text-green-500" : "bg-muted text-muted-foreground"
-                                        )}>
-                                            <VamoIcon name="user" className="h-4 w-4" />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-bold truncate max-w-[120px]">
-                                                {ref.referredUserName || `Chofer ${ref.referredId.substring(0,6)}...`}
-                                            </span>
-                                            <span className={cn(
-                                                "text-[10px] font-bold uppercase",
-                                                ref.status === 'rewarded' ? "text-green-500" : "text-amber-500"
-                                            )}>
-                                                {ref.status === 'rewarded' ? '🏆 Acreditado' : '⏳ Pendiente'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="text-[10px] text-muted-foreground">
-                                        {ref.createdAt?.toDate?.().toLocaleDateString() || '...'}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                {/* P1: DriverReferralsPanel lazy-loaded — opens onSnapshot only on mount */}
+                <DriverReferralsPanel />
             </CardContent>
           </Card>
         </TabsContent>
+
+
 
         <TabsContent value="security" className="space-y-4 animate-in fade-in duration-300">
             <Card className="rounded-3xl border-red-500/20 bg-gradient-to-b from-red-500/10 to-zinc-900/40 shadow-xl overflow-hidden">
@@ -925,6 +813,10 @@ export default function DriverProfilePage() {
                     )}
                 </CardContent>
             </Card>
+        </TabsContent>
+        
+        <TabsContent value="theme" className="space-y-4 animate-in fade-in duration-300">
+            <ThemeCustomizer />
         </TabsContent>
       </Tabs>
     </div>

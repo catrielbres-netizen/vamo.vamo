@@ -36,6 +36,12 @@ export const CITIES: Record<string, CityMetadata> = {
         name: 'Córdoba',
         center: { lat: -31.4201, lng: -64.1888 },
         zoom: 12
+    },
+    parana: {
+        key: 'parana',
+        name: 'Paraná',
+        center: { lat: -31.7333, lng: -60.5297 },
+        zoom: 13
     }
 };
 

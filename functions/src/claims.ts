@@ -247,6 +247,11 @@ export const reviewAssistanceCaseV1 = onCall({ cors: true, region: 'us-central1'
     const userSnap = await db.doc(`users/${uid}`).get();
     const user = userSnap.data() as UserProfile;
 
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
+        logger.warn(`[CLAIMS_UNAUTHORIZED] FAP review unauthorized attempt. UID: ${uid}, Role: ${user?.role}`);
+        throw new HttpsError('permission-denied', 'Solo administradores pueden revisar casos F.A.P.');
+    }
+
     await db.runTransaction(async (tx) => {
         const claimRef = db.collection('fap_claims').doc(claimId);
         const claimSnap = await tx.get(claimRef);
@@ -298,7 +303,7 @@ export const resolveAssistanceCaseV1 = onCall({ cors: true, region: 'us-central1
     const userSnap = await db.doc(`users/${uid}`).get();
     const user = userSnap.data() as UserProfile;
 
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
         throw new HttpsError('permission-denied', 'Solo administradores pueden resolver casos F.A.P.');
     }
 

@@ -53,6 +53,7 @@ async function verifyAdmin() {
         // 4. Update Firestore Profile (just in case)
         console.log("📄 Updating Firestore profile...");
         await db.collection('users').doc(uid).set({
+            role: 'admin',
             emailVerified: true,
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });

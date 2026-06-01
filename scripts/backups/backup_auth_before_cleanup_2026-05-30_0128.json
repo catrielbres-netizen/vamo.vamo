@@ -1,0 +1,1035 @@
+[
+  {
+    "uid": "0FrRxji9i2U5C8rf9aJK0cU34wp1",
+    "email": "test_conductor_auditoria_2@vamo.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "test_conductor_auditoria_2@vamo.com",
+        "email": "test_conductor_auditoria_2@vamo.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 1
+    },
+    "creationTime": "Sat, 09 May 2026 19:10:59 GMT",
+    "lastSignInTime": "Sat, 09 May 2026 19:10:59 GMT"
+  },
+  {
+    "uid": "1BIk2VyuwEZLmHRVbXE52rhFYen2",
+    "email": "cesareduardobres@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "cesareduardobres@gmail.com",
+        "email": "cesareduardobres@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Wed, 06 May 2026 01:37:36 GMT",
+    "lastSignInTime": "Tue, 26 May 2026 04:44:28 GMT"
+  },
+  {
+    "uid": "5SKxbjELe1e297UXprYrwy8UR4t1",
+    "email": "no@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "no@gmail.com",
+        "email": "no@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Sat, 09 May 2026 03:48:01 GMT",
+    "lastSignInTime": "Sat, 09 May 2026 03:48:01 GMT"
+  },
+  {
+    "uid": "5SLbFpdNRoaEs7Vf9g5zi1RYFE43",
+    "email": "h@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "h@gmail.com",
+        "email": "h@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Sun, 10 May 2026 14:48:21 GMT",
+    "lastSignInTime": "Sun, 10 May 2026 14:50:34 GMT"
+  },
+  {
+    "uid": "5uciHVFlZZYPS1pXsRCIuePZwJC3",
+    "email": "test_focus_stability@vamo.app",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "test_focus_stability@vamo.app",
+        "email": "test_focus_stability@vamo.app",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Sat, 09 May 2026 02:08:23 GMT",
+    "lastSignInTime": "Sat, 09 May 2026 02:08:23 GMT"
+  },
+  {
+    "uid": "68HVTYzcmaVK2WWDXkcepQRuI4l1",
+    "email": "bresgianella@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "bresgianella@gmail.com",
+        "email": "bresgianella@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Thu, 07 May 2026 00:08:16 GMT",
+    "lastSignInTime": "Thu, 07 May 2026 00:41:54 GMT"
+  },
+  {
+    "uid": "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+    "email": "autorcompositoreducisneros@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "autorcompositoreducisneros@gmail.com",
+        "email": "autorcompositoreducisneros@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Tue, 05 May 2026 18:45:46 GMT",
+    "lastSignInTime": "Tue, 26 May 2026 01:14:29 GMT"
+  },
+  {
+    "uid": "9JqmNNhGDiVwS4wg9kyd6h93F1H2",
+    "email": "benjabress@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "benjabress@gmail.com",
+        "email": "benjabress@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "",
+      "v": 1
+    },
+    "creationTime": "Sun, 10 May 2026 22:17:55 GMT",
+    "lastSignInTime": "Sun, 10 May 2026 22:17:55 GMT"
+  },
+  {
+    "uid": "9oOsPaBsp8XkcTLjSTEJbdzMafa2",
+    "email": "superadmin@vamo.local",
+    "displayName": "Super Admin VamO",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "superadmin@vamo.local",
+        "displayName": "Super Admin VamO",
+        "email": "superadmin@vamo.local",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "superadmin",
+      "role": "superadmin",
+      "admin": true,
+      "superadmin": true,
+      "cities": [
+        "*"
+      ],
+      "permissions": [
+        "*"
+      ],
+      "v": 1
+    },
+    "creationTime": "Fri, 08 May 2026 03:35:31 GMT",
+    "lastSignInTime": "Mon, 18 May 2026 18:28:08 GMT"
+  },
+  {
+    "uid": "AViEwI2sDYNuzHVC3evFHBitMdA3",
+    "email": "chabelaedu@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "chabelaedu@gmail.com",
+        "email": "chabelaedu@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Fri, 08 May 2026 12:00:26 GMT",
+    "lastSignInTime": "Mon, 25 May 2026 17:41:21 GMT"
+  },
+  {
+    "uid": "Cl5LileqKWXjiKI8ZvG4Rx5mqm62",
+    "email": "smoke_test_pasajero_final@vamo.app",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "smoke_test_pasajero_final@vamo.app",
+        "email": "smoke_test_pasajero_final@vamo.app",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Fri, 08 May 2026 14:55:37 GMT",
+    "lastSignInTime": "Fri, 08 May 2026 15:06:40 GMT"
+  },
+  {
+    "uid": "DLXfWJPmiccnh6eVO1TJ2LDp5QX2",
+    "email": "1@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "1@gmail.com",
+        "email": "1@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Tue, 12 May 2026 16:37:58 GMT",
+    "lastSignInTime": "Tue, 12 May 2026 16:37:58 GMT"
+  },
+  {
+    "uid": "IeJ5bWoVn2eafgY0U5C0RTJWNWD2",
+    "email": "test_verification_ai@vamo.app",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "test_verification_ai@vamo.app",
+        "email": "test_verification_ai@vamo.app",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Tue, 12 May 2026 10:03:07 GMT",
+    "lastSignInTime": "Tue, 12 May 2026 10:03:07 GMT"
+  },
+  {
+    "uid": "Jyp8iHQT6ngf0Uk5E6o1fdNzyjl2",
+    "email": "test_smart_pricing_passenger@vamo.app",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "test_smart_pricing_passenger@vamo.app",
+        "email": "test_smart_pricing_passenger@vamo.app",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Mon, 11 May 2026 22:46:27 GMT",
+    "lastSignInTime": "Mon, 11 May 2026 22:46:27 GMT"
+  },
+  {
+    "uid": "KpLE62pC55eHGuQSgFrCjY4qCX23",
+    "email": "v@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "v@gmail.com",
+        "email": "v@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sun, 10 May 2026 14:44:37 GMT",
+    "lastSignInTime": "Sun, 10 May 2026 14:44:37 GMT"
+  },
+  {
+    "uid": "LBSnlwiSGOeQTex6l3d3VGyCVf42",
+    "email": "lm.grano@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "lm.grano@gmail.com",
+        "email": "lm.grano@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sun, 10 May 2026 22:39:17 GMT",
+    "lastSignInTime": "Sun, 10 May 2026 22:39:17 GMT"
+  },
+  {
+    "uid": "LN0SbMNgfsYy0i7oWQYfKrwnXhB3",
+    "email": "va@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "va@gmail.com",
+        "email": "va@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Sat, 09 May 2026 20:47:35 GMT",
+    "lastSignInTime": "Sat, 09 May 2026 20:47:35 GMT"
+  },
+  {
+    "uid": "LRevMe4M74MLfcAkFfAB3P1ycjP2",
+    "email": "t@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "t@gmail.com",
+        "email": "t@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Sat, 09 May 2026 18:52:03 GMT",
+    "lastSignInTime": "Sat, 09 May 2026 19:06:16 GMT"
+  },
+  {
+    "uid": "LjJADxPyyOPAgd7sJSxfsRqN3Ec2",
+    "email": "prueba2@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "prueba2@gmail.com",
+        "email": "prueba2@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Sun, 10 May 2026 06:51:50 GMT",
+    "lastSignInTime": "Sun, 10 May 2026 06:51:50 GMT"
+  },
+  {
+    "uid": "MBACNh59Mla73JPvuNRTCpa112M2",
+    "email": "eduedu@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "eduedu@gmail.com",
+        "email": "eduedu@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Fri, 08 May 2026 12:12:28 GMT",
+    "lastSignInTime": "Fri, 08 May 2026 12:13:03 GMT"
+  },
+  {
+    "uid": "PunLkbj4NaUBkHxGyeTbs3owHxS2",
+    "email": "germinal@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "germinal@gmail.com",
+        "email": "germinal@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Sun, 10 May 2026 14:41:28 GMT",
+    "lastSignInTime": "Sun, 17 May 2026 18:10:58 GMT"
+  },
+  {
+    "uid": "Pyd6EBuIhQbytYwlnOCy5kntmav2",
+    "email": "premium@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "premium@gmail.com",
+        "email": "premium@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Fri, 08 May 2026 15:59:40 GMT",
+    "lastSignInTime": "Fri, 08 May 2026 15:59:40 GMT"
+  },
+  {
+    "uid": "QKPbh0at1mRD6RX5xqOdpJxxGSQ2",
+    "email": "auditoria_conductor_1778354947258@vamo.com",
+    "displayName": "Conductor Auditoria",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "auditoria_conductor_1778354947258@vamo.com",
+        "displayName": "Conductor Auditoria",
+        "email": "auditoria_conductor_1778354947258@vamo.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "role": "driver",
+      "cityKey": "rawson",
+      "driverSubtype": "express",
+      "approved": false,
+      "cv": 1
+    },
+    "creationTime": "Sat, 09 May 2026 19:29:08 GMT",
+    "lastSignInTime": null
+  },
+  {
+    "uid": "QcK9JHKRwodNdn6MBTQbbJ1b8vy1",
+    "email": "admin@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "admin@gmail.com",
+        "email": "admin@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "admin",
+      "v": 1
+    },
+    "creationTime": "Thu, 29 Jan 2026 20:56:59 GMT",
+    "lastSignInTime": "Thu, 28 May 2026 14:21:53 GMT"
+  },
+  {
+    "uid": "RHL8qVAPDvgdSAYF8P6J3rTHEqs2",
+    "email": "demo_admin@vamo.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "demo_admin@vamo.com",
+        "email": "demo_admin@vamo.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "admin",
+      "ck": "rawson"
+    },
+    "creationTime": "Tue, 12 May 2026 00:36:27 GMT",
+    "lastSignInTime": "Sat, 23 May 2026 02:07:30 GMT"
+  },
+  {
+    "uid": "RiptobklF4WGFPUhJNQKdHPGB8Q2",
+    "email": "m@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "m@gmail.com",
+        "email": "m@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Sun, 10 May 2026 15:03:30 GMT",
+    "lastSignInTime": "Sun, 10 May 2026 15:03:30 GMT"
+  },
+  {
+    "uid": "SyP2I7ZfxsUILfhJzkl6VV41a1J3",
+    "email": "smoketest_passenger@vamo.com",
+    "displayName": "Smoke Test Passenger",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "smoketest_passenger@vamo.com",
+        "displayName": "Smoke Test Passenger",
+        "email": "smoketest_passenger@vamo.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Thu, 14 May 2026 02:12:50 GMT",
+    "lastSignInTime": "Thu, 14 May 2026 02:44:21 GMT"
+  },
+  {
+    "uid": "TrccWTwgGgPTIKYg4YT2B7bsIij1",
+    "email": "test_onboarding_btn@vamo.app",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "test_onboarding_btn@vamo.app",
+        "email": "test_onboarding_btn@vamo.app",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Sat, 09 May 2026 03:34:32 GMT",
+    "lastSignInTime": "Sat, 09 May 2026 03:34:32 GMT"
+  },
+  {
+    "uid": "TuNg7AlVs3NoHLyPDnCH5cUGT1z2",
+    "email": "gris.am@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "gris.am@gmail.com",
+        "email": "gris.am@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Sun, 10 May 2026 22:44:25 GMT",
+    "lastSignInTime": "Sun, 10 May 2026 22:44:25 GMT"
+  },
+  {
+    "uid": "XadNzvLKNIfpCyjXBbZS7mvNeSC2",
+    "email": "demo_passenger@vamo.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "demo_passenger@vamo.com",
+        "email": "demo_passenger@vamo.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": "rawson"
+    },
+    "creationTime": "Tue, 12 May 2026 00:36:24 GMT",
+    "lastSignInTime": "Sat, 23 May 2026 01:59:52 GMT"
+  },
+  {
+    "uid": "YEmkrK7yuRQRmIQD7HVHW3PEbfp1",
+    "email": "sisi@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "sisi@gmail.com",
+        "email": "sisi@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sat, 09 May 2026 00:01:04 GMT",
+    "lastSignInTime": "Sat, 09 May 2026 00:01:04 GMT"
+  },
+  {
+    "uid": "Yn2u8i6J8mNNOv33dWGFdzU1Sr32",
+    "email": "superadmin@vamo.com",
+    "displayName": "Super Admin VamO",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "superadmin@vamo.com",
+        "displayName": "Super Admin VamO",
+        "email": "superadmin@vamo.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Fri, 08 May 2026 03:35:08 GMT",
+    "lastSignInTime": null
+  },
+  {
+    "uid": "cerXm0QAA2S68ZZA4r6u08KNaSJ3",
+    "email": "catrielcesarleandrobres@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "catrielcesarleandrobres@gmail.com",
+        "email": "catrielcesarleandrobres@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Thu, 07 May 2026 22:38:49 GMT",
+    "lastSignInTime": "Fri, 29 May 2026 22:43:15 GMT"
+  },
+  {
+    "uid": "f5BMXZCKuRSp90Y1oaKzZJz7mzt1",
+    "email": "lm.gran@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "lm.gran@gmail.com",
+        "email": "lm.gran@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sun, 10 May 2026 22:31:37 GMT",
+    "lastSignInTime": "Sun, 10 May 2026 22:31:37 GMT"
+  },
+  {
+    "uid": "g8GzfJtr8zQivSJbIQCaeg0nfhl2",
+    "email": "aa@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "aa@gmail.com",
+        "email": "aa@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Sun, 10 May 2026 22:23:40 GMT",
+    "lastSignInTime": "Sun, 10 May 2026 22:23:40 GMT"
+  },
+  {
+    "uid": "gCv8oRBYupVzzat5iBuTqLOfEQf1",
+    "email": "ww@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "ww@gmail.com",
+        "email": "ww@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Sun, 10 May 2026 15:44:10 GMT",
+    "lastSignInTime": "Tue, 19 May 2026 02:58:54 GMT"
+  },
+  {
+    "uid": "ghy5BsjcNhMcCsQVGlCqil0DQRl1",
+    "email": "cisneabi4778@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "cisneabi4778@gmail.com",
+        "email": "cisneabi4778@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Thu, 07 May 2026 22:38:13 GMT",
+    "lastSignInTime": "Thu, 07 May 2026 23:46:13 GMT"
+  },
+  {
+    "uid": "hmdZ9ZAslrYkFjszBJQNMvDz8bp1",
+    "email": "test_user_ai@vamo.app",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "test_user_ai@vamo.app",
+        "email": "test_user_ai@vamo.app",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Tue, 12 May 2026 11:56:10 GMT",
+    "lastSignInTime": "Tue, 12 May 2026 11:56:10 GMT"
+  },
+  {
+    "uid": "hpieQeGOHzQ5F8frP89yRSHJ8Xk1",
+    "email": "12@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "12@gmail.com",
+        "email": "12@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Sat, 09 May 2026 04:52:32 GMT",
+    "lastSignInTime": "Sat, 09 May 2026 04:52:32 GMT"
+  },
+  {
+    "uid": "j2QUEdWsonNzFxR8NqAIoeXTxDf2",
+    "email": "email@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "email@gmail.com",
+        "email": "email@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Sat, 09 May 2026 19:51:27 GMT",
+    "lastSignInTime": "Sat, 09 May 2026 19:53:35 GMT"
+  },
+  {
+    "uid": "lMF3iTNM5Tf0rPqEdXk0FBorWPJ2",
+    "email": "q@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "q@gmail.com",
+        "email": "q@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "passenger",
+      "ck": null,
+      "v": 1
+    },
+    "creationTime": "Sat, 09 May 2026 13:48:56 GMT",
+    "lastSignInTime": "Sat, 09 May 2026 16:53:32 GMT"
+  },
+  {
+    "uid": "mM2LPdeOx1NXAM289eGA3gqREK82",
+    "email": "covira1@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "covira1@gmail.com",
+        "email": "covira1@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {
+      "r": "driver",
+      "ck": "rawson",
+      "v": 2
+    },
+    "creationTime": "Sun, 10 May 2026 14:25:16 GMT",
+    "lastSignInTime": "Sun, 10 May 2026 14:25:16 GMT"
+  },
+  {
+    "uid": "mQZP5FxyZfXwXPKRy12ZbK32OW13",
+    "email": "qa@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "qa@gmail.com",
+        "email": "qa@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sat, 09 May 2026 21:32:39 GMT",
+    "lastSignInTime": "Sat, 09 May 2026 21:32:39 GMT"
+  },
+  {
+    "uid": "pHqHpcYI4dXs19Pl0NyEJC8cKHj1",
+    "email": "catrielbres@gmail.com",
+    "displayName": "cesar eduardo bres",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "catrielbres@gmail.com",
+        "displayName": "cesar eduardo bres",
+        "email": "catrielbres@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Mon, 18 May 2026 18:50:25 GMT",
+    "lastSignInTime": "Thu, 21 May 2026 13:49:23 GMT"
+  },
+  {
+    "uid": "qLtGStKw00fr7DuEW2A4FwigzJQ2",
+    "email": "gp1877774@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "gp1877774@gmail.com",
+        "email": "gp1877774@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Thu, 07 May 2026 22:10:46 GMT",
+    "lastSignInTime": "Fri, 22 May 2026 10:16:27 GMT"
+  },
+  {
+    "uid": "srh2AtBUFsQMYkfKYmYsFtEMNC93",
+    "email": "vamovamo@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "vamovamo@gmail.com",
+        "email": "vamovamo@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Fri, 08 May 2026 14:47:15 GMT",
+    "lastSignInTime": "Fri, 08 May 2026 14:47:15 GMT"
+  },
+  {
+    "uid": "tGBNEem57sYAsgEL8BRA3l4UHSl1",
+    "email": "s@gmail.com",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "s@gmail.com",
+        "email": "s@gmail.com",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Tue, 12 May 2026 16:34:39 GMT",
+    "lastSignInTime": "Tue, 12 May 2026 16:34:39 GMT"
+  },
+  {
+    "uid": "test_driver_parana_1",
+    "email": "parana.driver1@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.driver1@test.vamo",
+        "email": "parana.driver1@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "creationTime": "Sat, 16 May 2026 22:51:03 GMT",
+    "lastSignInTime": "Sat, 16 May 2026 23:51:16 GMT"
+  },
+  {
+    "uid": "test_driver_parana_2",
+    "email": "parana.driver2@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.driver2@test.vamo",
+        "email": "parana.driver2@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "creationTime": "Sat, 16 May 2026 22:51:04 GMT",
+    "lastSignInTime": null
+  },
+  {
+    "uid": "test_driver_parana_3",
+    "email": "parana.driver3@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.driver3@test.vamo",
+        "email": "parana.driver3@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "creationTime": "Sat, 16 May 2026 22:51:05 GMT",
+    "lastSignInTime": null
+  },
+  {
+    "uid": "test_driver_parana_4",
+    "email": "parana.driver4@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.driver4@test.vamo",
+        "email": "parana.driver4@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sat, 16 May 2026 22:51:06 GMT",
+    "lastSignInTime": null
+  },
+  {
+    "uid": "test_driver_parana_5",
+    "email": "parana.driver5@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.driver5@test.vamo",
+        "email": "parana.driver5@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sat, 16 May 2026 22:51:07 GMT",
+    "lastSignInTime": null
+  },
+  {
+    "uid": "test_muni_parana",
+    "email": "parana.muni@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.muni@test.vamo",
+        "email": "parana.muni@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sat, 16 May 2026 22:51:10 GMT",
+    "lastSignInTime": "Sat, 16 May 2026 23:46:40 GMT"
+  },
+  {
+    "uid": "test_pax_parana_1",
+    "email": "parana.passenger1@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.passenger1@test.vamo",
+        "email": "parana.passenger1@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "creationTime": "Sat, 16 May 2026 22:50:57 GMT",
+    "lastSignInTime": "Sat, 16 May 2026 23:59:37 GMT"
+  },
+  {
+    "uid": "test_pax_parana_2",
+    "email": "parana.passenger2@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.passenger2@test.vamo",
+        "email": "parana.passenger2@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "creationTime": "Sat, 16 May 2026 22:50:59 GMT",
+    "lastSignInTime": null
+  },
+  {
+    "uid": "test_pax_parana_3",
+    "email": "parana.passenger3@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.passenger3@test.vamo",
+        "email": "parana.passenger3@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sat, 16 May 2026 22:51:00 GMT",
+    "lastSignInTime": null
+  },
+  {
+    "uid": "test_pax_parana_4",
+    "email": "parana.passenger4@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.passenger4@test.vamo",
+        "email": "parana.passenger4@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sat, 16 May 2026 22:51:01 GMT",
+    "lastSignInTime": null
+  },
+  {
+    "uid": "test_pax_parana_5",
+    "email": "parana.passenger5@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.passenger5@test.vamo",
+        "email": "parana.passenger5@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sat, 16 May 2026 22:51:02 GMT",
+    "lastSignInTime": null
+  },
+  {
+    "uid": "test_traffic_parana",
+    "email": "parana.traffic@test.vamo",
+    "disabled": false,
+    "providerData": [
+      {
+        "uid": "parana.traffic@test.vamo",
+        "email": "parana.traffic@test.vamo",
+        "providerId": "password"
+      }
+    ],
+    "customClaims": {},
+    "creationTime": "Sat, 16 May 2026 22:51:09 GMT",
+    "lastSignInTime": null
+  }
+]

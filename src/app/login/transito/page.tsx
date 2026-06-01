@@ -1,16 +1,15 @@
 'use client';
 
-import React from 'react';
-import { AuthShell } from '@/features/auth/AuthShell';
-import { TrafficLoginForm } from '@/features/auth/TrafficLoginForm';
+import React, { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
 
 export default function LoginPage() {
-  return (
-    <AuthShell 
-      title="Acceso Tránsito" 
-      subtitle="Centro operativo de control vial y monitoreo de flota en tiempo real."
-    >
-      <TrafficLoginForm />
-    </AuthShell>
-  );
+  const router = useRouter();
+  
+  useEffect(() => {
+    router.replace('/traffic/login');
+  }, [router]);
+
+  return <VamoFullScreenLoader label="Redirigiendo al Acceso de Tránsito..." />;
 }

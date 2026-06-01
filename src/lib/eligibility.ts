@@ -1,5 +1,6 @@
 import { UserProfile, ServiceType } from "./types";
 import { CURRENT_TERMS_VERSION } from "./legal-config";
+import { featureFlags } from "@/config/features";
 
 export type EligibilityResult = {
   isEligible: boolean;
@@ -48,28 +49,44 @@ export const canPassengerRequestRide = (profile: UserProfile | null | undefined,
 export const canDriverGoOnline = (profile: UserProfile | null | undefined, isEmailVerified?: boolean): EligibilityResult => {
   if (!profile) return { isEligible: false, reason: "Perfil no encontrado", code: "NOT_FOUND" };
   if (profile.role !== "driver") return { isEligible: false, reason: "El usuario no es conductor", code: "INVALID_ROLE" };
-  if (profile.isSuspended) return { isEligible: false, reason: "Tu cuenta está suspendida", code: "SUSPENDED" };
+  if (profile.isSuspended || profile.adminSuspended || profile.municipalSuspended || profile.trafficSuspended) {
+      const isTraffic = profile.trafficSuspended || (profile.isSuspended && profile.suspensionSource === 'traffic');
+      const isMunicipal = profile.municipalSuspended || (profile.isSuspended && profile.suspensionSource === 'municipal');
+      const isAdmin = profile.adminSuspended || (profile.isSuspended && profile.suspensionSource === 'admin');
 
-  // [AUDIT] All drivers (pro or express) MUST have an active municipal status to go online.
-  const ms = profile.municipalStatus;
-  
-  const hasGracePeriod = ms === 'municipal_observed' && profile.observationGraceUntil;
-  const isWithinGrace = hasGracePeriod && (
-    profile.observationGraceUntil.toDate ? profile.observationGraceUntil.toDate() : new Date(profile.observationGraceUntil)
-  ) > new Date();
+      let message = "Tu cuenta está suspendida.";
+      if (isAdmin) {
+          message = "Suspendido por Administración VamO.";
+      } else if (isMunicipal) {
+          message = "Suspendido por Municipalidad.";
+      } else if (isTraffic) {
+          message = "Suspendido preventivamente por el área de Tránsito.";
+      }
+      return { isEligible: false, reason: message, code: "SUSPENDED" };
+  }
 
-  if (ms !== 'active' && !isWithinGrace) {
-    const messages: Partial<Record<string, string>> = {
-      municipal_observed:          "El plazo de gracia para corregir observaciones ha vencido. Regularizá tu situación para operar.",
-      suspended_expired_license:   "Licencia vencida: no podés operar hasta renovarla en la municipalidad.",
-      suspended_expired_insurance: "Seguro vencido: no podés operar hasta renovarlo en la municipalidad.",
-      suspended_unpaid_canon:      "Canon municipal impago: regularizá el pago para volver a operar.",
-      suspended_by_municipality:   "Tu habilitación fue suspendida por la municipalidad.",
-      rejected_by_municipality:    "Tu solicitud de habilitación fue rechazada definitivamente.",
-      pending_municipal_review:    "Habilitación municipal pendiente.",
-    };
-    const reason = messages[ms ?? ''] ?? "Debés completar tu habilitación municipal para operar.";
-    return { isEligible: false, reason, code: "MUNICIPAL_REQUIRED" };
+  // [AUDIT] All drivers (pro or express) MUST have an active municipal status to go online, UNLESS in Plan B.
+  if (!featureFlags.vamoParticularModeEnabled) {
+      const ms = profile.municipalStatus;
+      
+      const hasGracePeriod = ms === 'municipal_observed' && profile.observationGraceUntil;
+      const isWithinGrace = hasGracePeriod && (
+        profile.observationGraceUntil.toDate ? profile.observationGraceUntil.toDate() : new Date(profile.observationGraceUntil)
+      ) > new Date();
+
+      if (ms !== 'active' && !isWithinGrace) {
+        const messages: Partial<Record<string, string>> = {
+          municipal_observed:          "El plazo de gracia para corregir observaciones ha vencido. Regularizá tu situación para operar.",
+          suspended_expired_license:   "Licencia vencida: no podés operar hasta renovarla en la municipalidad.",
+          suspended_expired_insurance: "Seguro vencido: no podés operar hasta renovarlo en la municipalidad.",
+          suspended_unpaid_canon:      "Canon municipal impago: regularizá el pago para volver a operar.",
+          suspended_by_municipality:   "Tu habilitación fue suspendida por la municipalidad.",
+          rejected_by_municipality:    "Tu solicitud de habilitación fue rechazada definitivamente.",
+          pending_municipal_review:    "Habilitación municipal pendiente.",
+        };
+        const reason = messages[ms ?? ''] ?? "Debés completar tu habilitación municipal para operar.";
+        return { isEligible: false, reason, code: "MUNICIPAL_REQUIRED" };
+      }
   }
 
   if (!profile.approved) {

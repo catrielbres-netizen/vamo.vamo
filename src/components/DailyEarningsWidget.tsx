@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useDriverData } from '@/context/DriverRealtimeProvider';
+import { useWeeklyPool } from '@/hooks/useWeeklyPool';
 import { VamoIcon } from '@/components/VamoIcon';
 import { motion } from 'framer-motion';
 import { getArgentinaDateStr } from '@/lib/date';
@@ -9,6 +10,7 @@ import { safeFixed } from '@/lib/formatters';
 
 export function DailyEarningsWidget() {
     const { profile } = useDriverData();
+    const { driverStats } = useWeeklyPool();
     
     if (!profile || profile.role !== 'driver') return null;
 
@@ -59,6 +61,24 @@ export function DailyEarningsWidget() {
                     <div className="flex flex-col border-l border-white/5 pl-2">
                         <span className="text-[7px] font-black text-zinc-500 uppercase tracking-widest leading-none mb-1">Activo</span>
                         <span className="text-xs font-black text-emerald-400 leading-none">{formatTime(stats.onlineSeconds || 0)}</span>
+                    </div>
+                </div>
+
+                {/* [VamO PRO] Weekly Stats Row */}
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-indigo-500/10">
+                    <div className="flex items-center gap-1">
+                        <VamoIcon name="award" className="w-2.5 h-2.5 text-indigo-400" />
+                        <span className="text-[8px] font-black text-zinc-500 uppercase">Ranking Semanal</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-black text-white italic">{driverStats?.weeklyPoints || 0} pts</span>
+                        {driverStats?.rank && driverStats.rank > 0 ? (
+                            <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-[8px] font-black text-indigo-400">
+                                #{driverStats.rank}
+                            </span>
+                        ) : (
+                            <span className="text-[8px] font-black text-zinc-600 italic">Fuera de Top 30</span>
+                        )}
                     </div>
                 </div>
             </div>

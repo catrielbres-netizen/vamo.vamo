@@ -100,6 +100,7 @@ export const sendRideMessageV1 = onCall({ cors: true, region: 'us-central1' }, a
         if (result && result.recipientId) {
             // Importación dinámica para evitar dependencia circular si existe
             const { sendNotification } = require('./handlers');
+            const { createNotification } = require('./lib/notifications');
             const deepLink = result.senderRole === 'passenger' 
                 ? `/driver/rides?activeRideId=${rideId}&openChat=true` 
                 : `/dashboard/ride?rideId=${rideId}&openChat=true`;
@@ -111,6 +112,17 @@ export const sendRideMessageV1 = onCall({ cors: true, region: 'us-central1' }, a
                 deepLink,
                 { event: 'NEW_CHAT_MESSAGE', rideId, openChat: 'true' }
             );
+
+            await createNotification({
+                userId: result.recipientId,
+                role: result.senderRole === 'passenger' ? 'driver' : 'passenger',
+                type: 'new_message',
+                title: `Mensaje de ${result.senderName}`,
+                message: sanitizedText,
+                priority: 'info',
+                actionUrl: deepLink,
+                rideId
+            });
         }
 
         return { success: true };

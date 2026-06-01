@@ -18,11 +18,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { VamoLogo } from '@/components/branding/VamoLogo';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { CURRENT_TERMS_VERSION } from '@/lib/legal-config';
+import { featureFlags, PLAN_B_DRIVER_SUBTYPE } from '@/config/features';
 
 // --- Steps Configuration ---
 const STEPS = [
   { id: 'personal', title: 'Datos Personales', icon: 'user' },
   { id: 'vehicle', title: 'Tu Vehículo', icon: 'car' },
+  { id: 'documents', title: 'Documentación', icon: 'file-text' },
   { id: 'type', title: 'Tipo de Conductor', icon: 'shield' },
   { id: 'finish', title: 'Finalizar', icon: 'check-circle' },
 ];
@@ -50,16 +52,23 @@ export function DriverOnboardingWizard() {
     year: '',
     plate: '',
     color: '',
-    cityKey: 'rawson' as 'rawson' | 'trelew' | 'comodoro',
-    driverSubtype: 'express' as 'professional' | 'express',
+    cityKey: '',
+    customCity: '',
+    identityStatus: 'unverified' as 'unverified' | 'pending' | 'verified',
+    driverSubtype: PLAN_B_DRIVER_SUBTYPE as 'professional' | 'express',
+    licenseExpiry: '',
+    insuranceExpiry: '',
+    criminalRecordExpiry: '',
     termsAccepted: false,
   });
 
   // --- Documents State ---
   const [docs, setDocs] = useState<{
     dniPhoto: File | null;
+    dniBackPhoto: File | null;
     licensePhoto: File | null;
     insurancePhoto: File | null;
+    criminalRecordPhoto: File | null;
     vehicleCardPhoto: File | null;
     vehicleFrontPhoto: File | null;
     vehicleBackPhoto: File | null;
@@ -67,8 +76,10 @@ export function DriverOnboardingWizard() {
     profilePhoto: File | null;
   }>({
     dniPhoto: null,
+    dniBackPhoto: null,
     licensePhoto: null,
     insurancePhoto: null,
+    criminalRecordPhoto: null,
     vehicleCardPhoto: null,
     vehicleFrontPhoto: null,
     vehicleBackPhoto: null,
@@ -79,6 +90,78 @@ export function DriverOnboardingWizard() {
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [docUrls, setDocUrls] = useState<Record<string, string>>({});
+  const [isLocating, setIsLocating] = useState(false);
+
+  const getCurrentLocation = () => {
+    setIsLocating(true);
+    if (!navigator.geolocation) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Tu navegador no soporta geolocalización.' });
+      setIsLocating(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+          if (!apiKey) throw new Error("Falta API Key de Google Maps");
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`);
+          const data = await response.json();
+          
+          if (data.results && data.results.length > 0) {
+            const addressComponents = data.results[0].address_components;
+            let city = '';
+            for (const component of addressComponents) {
+              if (component.types.includes('locality')) {
+                city = component.long_name;
+                break;
+              }
+            }
+            
+            if (!city) {
+                const fallback = addressComponents.find((c: any) => c.types.includes('administrative_area_level_2'));
+                if (fallback) city = fallback.long_name;
+            }
+
+            if (city) {
+              const normalizedCity = city.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+              let foundKey = 'other';
+              if (normalizedCity.includes('rawson') || normalizedCity.includes('playa union')) foundKey = 'rawson';
+              else if (normalizedCity.includes('trelew')) foundKey = 'trelew';
+              else if (normalizedCity.includes('madryn')) foundKey = 'madryn';
+              else if (normalizedCity.includes('comodoro')) foundKey = 'comodoro';
+              else if (normalizedCity.includes('esquel')) foundKey = 'esquel';
+              else if (normalizedCity.includes('sarmiento')) foundKey = 'sarmiento';
+              else if (normalizedCity.includes('parana')) foundKey = 'parana';
+
+              setFormData(prev => ({ 
+                ...prev, 
+                cityKey: foundKey,
+                customCity: foundKey === 'other' ? city : ''
+              }));
+              toast({ title: 'Ubicación obtenida', description: `Localidad detectada: ${city}` });
+            } else {
+              toast({ variant: 'destructive', title: 'Atención', description: 'No se pudo determinar la ciudad.' });
+              setFormData(prev => ({ ...prev, cityKey: 'other' }));
+            }
+          }
+        } catch (error) {
+          console.error(error);
+          toast({ variant: 'destructive', title: 'Error', description: 'Error al obtener la ciudad.' });
+          setFormData(prev => ({ ...prev, cityKey: 'other' }));
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (error) => {
+        console.error(error);
+        toast({ variant: 'destructive', title: 'Permiso denegado', description: 'Por favor permite el acceso a tu ubicación.' });
+        setIsLocating(false);
+      }
+    );
+  };
 
   // --- Load Existing Data ---
   useEffect(() => {
@@ -90,6 +173,10 @@ export function DriverOnboardingWizard() {
         const snap = await getDoc(userRef);
         if (snap.exists()) {
           const data = snap.data();
+          const toDateStr = (ts: any) => {
+            if (!ts || typeof ts.toDate !== 'function') return '';
+            return ts.toDate().toISOString().split('T')[0];
+          };
           setFormData({
             name: data.name || '',
             dni: data.dni || '',
@@ -100,8 +187,14 @@ export function DriverOnboardingWizard() {
             year: data.vehicle?.year?.toString() || data.carModelYear?.toString() || '',
             plate: data.vehicle?.plate || data.plateNumber || '',
             color: data.vehicle?.color || '',
-            cityKey: data.cityKey || 'rawson',
-            driverSubtype: data.driverSubtype || 'express',
+            cityKey: data.cityKey || '',
+            customCity: '',
+            identityStatus: data.identityStatus || 'unverified',
+            driverSubtype: data.driverSubtype || PLAN_B_DRIVER_SUBTYPE,
+            licenseExpiry: toDateStr(data.licenseExpiry),
+            insuranceExpiry: toDateStr(data.insuranceExpiry),
+            criminalRecordExpiry: toDateStr(data.criminalRecordExpiry),
+            termsAccepted: true,
           });
           
           if (data.documents) {
@@ -200,8 +293,8 @@ export function DriverOnboardingWizard() {
   const nextStep = () => {
     // Validation
     if (currentStep === 1) {
-      if (!formData.name || !formData.dni || !formData.phone || (!docs.profilePhoto && !docUrls.profilePhoto)) {
-        return toast({ variant: 'destructive', title: 'Campos incompletos', description: 'Por favor completá todos los datos personales y subí tu foto de perfil.' });
+      if (!formData.name || !formData.dni || !formData.phone || !formData.cityKey || (!docs.profilePhoto && !docUrls.profilePhoto)) {
+        return toast({ variant: 'destructive', title: 'Campos incompletos', description: 'Por favor completá todos los datos personales, seleccioná tu ciudad y subí tu foto.' });
       }
     }
     if (currentStep === 2) {
@@ -210,15 +303,31 @@ export function DriverOnboardingWizard() {
       if (!formData.brand || !formData.model || !formData.plate || !formData.color || !formData.year) {
         return toast({ variant: 'destructive', title: 'Campos incompletos', description: 'Por favor completá los datos del vehículo.' });
       }
-      if (isNaN(year) || year < 1990 || year > currentYear + 1) {
-        return toast({ variant: 'destructive', title: 'Año inválido', description: 'El año del vehículo debe ser entre 1990 y el actual.' });
+      if (isNaN(year) || year < 2011 || year > currentYear + 1) {
+        return toast({ variant: 'destructive', title: 'Año inválido', description: 'Por ahora VamO acepta vehículos modelo 2011 en adelante.' });
       }
       if (!docs.vehicleFrontPhoto && !docUrls.vehicleFront) {
         return toast({ variant: 'destructive', title: 'Foto obligatoria', description: 'Por favor subí una foto frontal de tu vehículo.' });
       }
     }
 
+    if (currentStep === 3) {
+      if ((!docs.dniPhoto && !docUrls.dniFront) || (!docs.licensePhoto && !docUrls.license) || (!docs.insurancePhoto && !docUrls.insurance)) {
+        return toast({ variant: 'destructive', title: 'Documentos incompletos', description: 'Por favor subí el frente del DNI, la licencia de conducir y el seguro.' });
+      }
+      if (!formData.licenseExpiry || !formData.insuranceExpiry) {
+        return toast({ variant: 'destructive', title: 'Fechas requeridas', description: 'Por favor ingresá las fechas de vencimiento de tu licencia y seguro.' });
+      }
+      if ((docs.criminalRecordPhoto || docUrls.criminalRecord) && !formData.criminalRecordExpiry) {
+        return toast({ variant: 'destructive', title: 'Fecha requerida', description: 'Si subís antecedentes penales, debés indicar su fecha de vencimiento.' });
+      }
+    }
+
     if (currentStep === 4) {
+      // Step 4 is now "Tipo de Conductor", it doesn't need special validation right now.
+    }
+
+    if (currentStep === 5) {
       if (!formData.termsAccepted) {
         return toast({ variant: 'destructive', title: 'Acuerdo legal', description: 'Debés aceptar los términos y condiciones para continuar.' });
       }
@@ -291,21 +400,36 @@ export function DriverOnboardingWizard() {
       if (docs.vehicleFrontPhoto) {
         uploadPromises.push(uploadAsset(docs.vehicleFrontPhoto, 'vehicleFrontPhoto', `drivers/${user!.uid}/vehicle/front.jpg`, 'vehicleFront'));
       }
+      if (docs.dniPhoto) {
+        uploadPromises.push(uploadAsset(docs.dniPhoto, 'dniFront', `driver_documents/${user!.uid}/dni_front`, 'dniFront'));
+      }
+      if (docs.dniBackPhoto) {
+        uploadPromises.push(uploadAsset(docs.dniBackPhoto, 'dniBack', `driver_documents/${user!.uid}/dni_back`, 'dniBack'));
+      }
+      if (docs.licensePhoto) {
+        uploadPromises.push(uploadAsset(docs.licensePhoto, 'license', `driver_documents/${user!.uid}/license`, 'license'));
+      }
+      if (docs.insurancePhoto) {
+        uploadPromises.push(uploadAsset(docs.insurancePhoto, 'insurance', `driver_documents/${user!.uid}/insurance`, 'insurance'));
+      }
+      if (docs.criminalRecordPhoto) {
+        uploadPromises.push(uploadAsset(docs.criminalRecordPhoto, 'criminalRecord', `driver_documents/${user!.uid}/criminal_record`, 'criminalRecord'));
+      }
       
       await Promise.all(uploadPromises);
       console.log("[DRIVER_ONBOARDING_UPLOAD_OK] Required photos uploaded successfully.");
 
-      // Final validation: Only profile photo and vehicle front are mandatory now
-      if ((!finalDocUrls.profilePhoto && !docUrls.profilePhoto) || (!finalDocUrls.vehicleFront && !docUrls.vehicleFront)) {
+      // Final validation: Ensure required documents are present
+      if ((!finalDocUrls.profilePhoto && !docUrls.profilePhoto) || (!finalDocUrls.vehicleFront && !docUrls.vehicleFront) || (!finalDocUrls.dniFront && !docUrls.dniFront) || (!finalDocUrls.license && !docUrls.license) || (!finalDocUrls.insurance && !docUrls.insurance)) {
         setLoading(false);
-        return toast({ variant: 'destructive', title: 'Fotos incompletas', description: 'Debés subir tu foto de perfil y la foto frontal del vehículo.' });
+        return toast({ variant: 'destructive', title: 'Fotos incompletas', description: 'Debés subir todos los documentos obligatorios.' });
       }
 
       // 2. Call Secure Cloud Function (Fase 4C)
       console.log("[DRIVER_ONBOARDING_CALLABLE_START] Calling completeDriverOnboardingV1...");
       const completeDriverOnboarding = httpsCallable(functions!, 'completeDriverOnboardingV1');
       
-      await completeDriverOnboarding({
+      const payload: any = {
         name: formData.name,
         dni: formData.dni,
         phone: formData.phone.replace(/[\s\-\+()]/g, ''),
@@ -318,8 +442,10 @@ export function DriverOnboardingWizard() {
         },
         plateNumber: formData.plate.toUpperCase().trim(),
         carModelYear: parseInt(formData.year, 10),
-        cityKey: formData.cityKey,
+        cityKey: formData.cityKey === 'other' ? formData.customCity.toLowerCase().replace(/[^a-z0-9]/g, '') : formData.cityKey,
+        cityLabel: formData.cityKey === 'other' ? formData.customCity : (formData.cityKey === 'rawson' ? 'Rawson / Playa Unión' : formData.cityKey),
         driverSubtype: formData.driverSubtype,
+        commissionRate: 0.18, // Forzado Plan B
         termsAccepted: true,
         driverTermsAccepted: true,
         acceptedDriverTerms: true,
@@ -331,8 +457,13 @@ export function DriverOnboardingWizard() {
           front: finalDocUrls.vehicleFront || docUrls.vehicleFront,
           back: finalDocUrls.vehicleBack || docUrls.vehicleBack,
           interior: finalDocUrls.vehicleInterior || docUrls.vehicleInterior,
-        }
-      });
+        },
+        licenseExpiryStr: formData.licenseExpiry,
+        insuranceExpiryStr: formData.insuranceExpiry,
+        criminalRecordExpiryStr: formData.criminalRecordExpiry
+      };
+
+      await completeDriverOnboarding(payload);
 
       console.log("[DRIVER_ONBOARDING_CALLABLE_OK] Success.");
       console.log("[DRIVER_ONBOARDING_STATUS_PENDING_REVIEW] municipalStatus set to pending_municipal_review");
@@ -347,7 +478,7 @@ export function DriverOnboardingWizard() {
 
       toast({
         title: '¡Registro completo!',
-        description: 'Tu perfil ha sido enviado para revisión municipal.',
+        description: 'Tu perfil ha sido enviado para revisión.',
       });
 
       setIsSuccessModalOpen(true);
@@ -445,26 +576,69 @@ export function DriverOnboardingWizard() {
                         <p className="text-[10px] text-zinc-500 text-center italic">Esta foto será visible para tus pasajeros durante los viajes.</p>
                     </div>
 
-                    {/* Ciudad: Solo mostramos selector si no viene ya pre-cargada del registro inicial */}
-                      <div className="space-y-2">
-                        <Label className="text-xs uppercase tracking-widest text-zinc-400">Ciudad de Operación</Label>
-                        <Select 
-                          value={formData.cityKey} 
-                          onValueChange={(val: any) => setFormData(prev => ({ ...prev, cityKey: val }))}
+                    {/* Ciudad: Ubicación actual */}
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-1">Ciudad / Localidad</Label>
+                      
+                      {formData.cityKey && formData.cityKey !== 'other' && formData.cityKey !== '' ? (
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                           <div className="flex items-center gap-2">
+                             <VamoIcon name="map-pin" className="w-4 h-4" />
+                             <span className="font-bold">{
+                                formData.cityKey === 'rawson' ? 'Rawson / Playa Unión' :
+                                formData.cityKey === 'trelew' ? 'Trelew' :
+                                formData.cityKey === 'madryn' ? 'Puerto Madryn' :
+                                formData.cityKey === 'comodoro' ? 'Comodoro Rivadavia' :
+                                formData.cityKey === 'esquel' ? 'Esquel' :
+                                formData.cityKey === 'sarmiento' ? 'Sarmiento' :
+                                formData.cityKey === 'parana' ? 'Paraná' : formData.cityKey
+                             }</span>
+                           </div>
+                           <button type="button" onClick={getCurrentLocation} disabled={isLocating} className="text-xs font-bold uppercase hover:text-white transition-colors">
+                             {isLocating ? 'Buscando...' : 'Actualizar'}
+                           </button>
+                        </div>
+                      ) : formData.customCity && formData.cityKey !== '' ? (
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 text-white">
+                           <div className="flex items-center gap-2">
+                             <VamoIcon name="map-pin" className="w-4 h-4 text-zinc-400" />
+                             <span className="font-bold">{formData.customCity}</span>
+                           </div>
+                           <button type="button" onClick={getCurrentLocation} disabled={isLocating} className="text-xs font-bold uppercase text-indigo-400 hover:text-indigo-300 transition-colors">
+                             {isLocating ? 'Buscando...' : 'Actualizar'}
+                           </button>
+                        </div>
+                      ) : (
+                        <Button 
+                          type="button" 
+                          onClick={getCurrentLocation} 
+                          disabled={isLocating}
+                          className="w-full h-12 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-400 font-bold uppercase tracking-widest"
                         >
-                          <SelectTrigger className="h-12 bg-white/5 border-white/5 rounded-xl text-white">
-                            <SelectValue placeholder="Seleccioná tu ciudad" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                            <SelectItem value="rawson">Rawson / Playa Unión</SelectItem>
-                            <SelectItem value="trelew">Trelew</SelectItem>
-                            <SelectItem value="madryn">Puerto Madryn</SelectItem>
-                            <SelectItem value="comodoro">Comodoro Rivadavia</SelectItem>
-                            <SelectItem value="esquel">Esquel</SelectItem>
-                            <SelectItem value="sarmiento">Sarmiento</SelectItem>
-                          </SelectContent>
-                        </Select>
+                          {isLocating ? <VamoIcon name="loader" className="w-4 h-4 animate-spin mr-2" /> : <VamoIcon name="map-pin" className="w-4 h-4 mr-2" />}
+                          Obtener mi ubicación actual
+                        </Button>
+                      )}
+
+                      {(!formData.cityKey || formData.cityKey === 'other' || formData.cityKey === '') && !isLocating && !formData.customCity && (
+                        <div className="pt-2">
+                          <button 
+                            type="button" 
+                            onClick={() => setFormData(p => ({ ...p, cityKey: 'other', customCity: ' ' }))} 
+                            className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-white"
+                          >
+                            ¿No funciona? Ingresar manualmente
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {formData.cityKey === 'other' && formData.customCity !== '' && (
+                      <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-top-2">
+                        <Label className="text-xs uppercase tracking-widest text-zinc-400">Ingresá tu localidad manualmente</Label>
+                        <Input value={formData.customCity === ' ' ? '' : formData.customCity} onChange={(e) => setFormData(p => ({ ...p, customCity: e.target.value }))} placeholder="Ej: Gaiman" className="h-12 bg-white/5 border-white/5 rounded-xl" />
                       </div>
+                    )}
                     <div className="space-y-2">
                       <Label className="text-xs uppercase tracking-widest text-zinc-400">Email</Label>
                       <Input value={formData.email} readOnly className="h-12 bg-white/5 border-white/5 rounded-xl opacity-50" />
@@ -524,8 +698,130 @@ export function DriverOnboardingWizard() {
                   </div>
                 )}
 
-                {/* --- STEP 3: TYPE --- */}
+                {/* --- STEP 3: DOCUMENTS --- */}
                 {currentStep === 3 && (
+                  <div className="space-y-6">
+                    <p className="text-xs text-zinc-400">Subí la documentación obligatoria para validar tu identidad y tu vehículo.</p>
+                    
+                    {/* DNI Frente */}
+                    <div className="space-y-4">
+                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">DNI Frente (Obligatorio)</Label>
+                        <div 
+                            className="w-full h-32 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all"
+                            onClick={() => document.getElementById('input-dniPhoto')?.click()}
+                        >
+                            {(previews.dniPhoto || docUrls.dniFront) ? (
+                                <img src={previews.dniPhoto || docUrls.dniFront} alt="DNI Frente" className="w-full h-full object-cover" />
+                            ) : (
+                                <>
+                                    <VamoIcon name="camera" className="w-8 h-8 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
+                                    <span className="text-[10px] font-bold text-zinc-600 uppercase mt-2">Subir DNI Frente</span>
+                                </>
+                            )}
+                            <input id="input-dniPhoto" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => handleFileChange(e, 'dniPhoto')} />
+                        </div>
+                    </div>
+
+                    {/* DNI Dorso */}
+                    <div className="space-y-4">
+                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">DNI Dorso (Opcional recomendado)</Label>
+                        <div 
+                            className="w-full h-32 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all"
+                            onClick={() => document.getElementById('input-dniBackPhoto')?.click()}
+                        >
+                            {(previews.dniBackPhoto || docUrls.dniBack) ? (
+                                <img src={previews.dniBackPhoto || docUrls.dniBack} alt="DNI Dorso" className="w-full h-full object-cover" />
+                            ) : (
+                                <>
+                                    <VamoIcon name="camera" className="w-8 h-8 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
+                                    <span className="text-[10px] font-bold text-zinc-600 uppercase mt-2">Subir DNI Dorso</span>
+                                </>
+                            )}
+                            <input id="input-dniBackPhoto" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => handleFileChange(e, 'dniBackPhoto')} />
+                        </div>
+                    </div>
+
+                    {/* Licencia */}
+                    <div className="space-y-4 pt-4 border-t border-white/5">
+                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">Licencia de Conducir (Obligatorio)</Label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div 
+                                className="w-full h-32 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all"
+                                onClick={() => document.getElementById('input-licensePhoto')?.click()}
+                            >
+                                {(previews.licensePhoto || docUrls.license) ? (
+                                    <img src={previews.licensePhoto || docUrls.license} alt="Licencia" className="w-full h-full object-cover" />
+                                ) : (
+                                    <>
+                                        <VamoIcon name="camera" className="w-8 h-8 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
+                                        <span className="text-[10px] font-bold text-zinc-600 uppercase mt-2">Subir Licencia</span>
+                                    </>
+                                )}
+                                <input id="input-licensePhoto" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => handleFileChange(e, 'licensePhoto')} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] uppercase tracking-widest text-zinc-500">Fecha de Vencimiento</Label>
+                                <Input type="date" name="licenseExpiry" value={formData.licenseExpiry} onChange={handleInputChange} className="h-12 bg-white/5 border-white/5 rounded-xl [color-scheme:dark]" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Seguro */}
+                    <div className="space-y-4 pt-4 border-t border-white/5">
+                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">Seguro del Vehículo (Obligatorio)</Label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div 
+                                className="w-full h-32 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all"
+                                onClick={() => document.getElementById('input-insurancePhoto')?.click()}
+                            >
+                                {(previews.insurancePhoto || docUrls.insurance) ? (
+                                    <img src={previews.insurancePhoto || docUrls.insurance} alt="Seguro" className="w-full h-full object-cover" />
+                                ) : (
+                                    <>
+                                        <VamoIcon name="camera" className="w-8 h-8 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
+                                        <span className="text-[10px] font-bold text-zinc-600 uppercase mt-2">Subir Seguro</span>
+                                    </>
+                                )}
+                                <input id="input-insurancePhoto" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => handleFileChange(e, 'insurancePhoto')} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] uppercase tracking-widest text-zinc-500">Fecha de Vencimiento</Label>
+                                <Input type="date" name="insuranceExpiry" value={formData.insuranceExpiry} onChange={handleInputChange} className="h-12 bg-white/5 border-white/5 rounded-xl [color-scheme:dark]" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Antecedentes Penales */}
+                    <div className="space-y-4 pt-4 border-t border-white/5">
+                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">Antecedentes Penales (Recomendado)</Label>
+                        <p className="text-[10px] text-zinc-500 italic mb-2">Tenés hasta 3 meses para subir este documento. No bloquea tu cuenta de inmediato.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div 
+                                className="w-full h-32 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all"
+                                onClick={() => document.getElementById('input-criminalRecordPhoto')?.click()}
+                            >
+                                {(previews.criminalRecordPhoto || docUrls.criminalRecord) ? (
+                                    <img src={previews.criminalRecordPhoto || docUrls.criminalRecord} alt="Antecedentes" className="w-full h-full object-cover" />
+                                ) : (
+                                    <>
+                                        <VamoIcon name="camera" className="w-8 h-8 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
+                                        <span className="text-[10px] font-bold text-zinc-600 uppercase mt-2">Subir Antecedentes</span>
+                                    </>
+                                )}
+                                <input id="input-criminalRecordPhoto" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => handleFileChange(e, 'criminalRecordPhoto')} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-[10px] uppercase tracking-widest text-zinc-500">Fecha de Vencimiento</Label>
+                                <Input type="date" name="criminalRecordExpiry" value={formData.criminalRecordExpiry} onChange={handleInputChange} className="h-12 bg-white/5 border-white/5 rounded-xl [color-scheme:dark]" />
+                            </div>
+                        </div>
+                    </div>
+
+                  </div>
+                )}
+
+                {/* --- STEP 4: TYPE --- */}
+                {currentStep === 4 && (
                   <div className="space-y-4">
                     <p className="text-xs text-zinc-400 mb-4">Seleccioná cómo vas a trabajar. Esto define tu comisión y beneficios.</p>
                     <div className="grid grid-cols-1 gap-4">
@@ -546,37 +842,37 @@ export function DriverOnboardingWizard() {
                         <p className="text-xs text-zinc-500 leading-relaxed font-medium">Vehículo propio. Operás como conductor particular dentro de VamO.</p>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => setFormData(p => ({ ...p, driverSubtype: 'professional' }))}
-                        className={cn(
-                          "p-6 rounded-3xl border text-left transition-all",
-                          formData.driverSubtype === 'professional' 
-                            ? "bg-indigo-600/10 border-indigo-600 ring-2 ring-indigo-600/20" 
-                            : "bg-white/5 border-white/5 hover:bg-white/10"
-                        )}
-                      >
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-lg font-black uppercase italic tracking-tighter">Taxi / Remis</span>
-                          {formData.driverSubtype === 'professional' && <VamoIcon name="check-circle" className="w-6 h-6 text-indigo-400" />}
-                        </div>
-                        <p className="text-xs text-zinc-500 leading-relaxed font-medium">Vehículo habilitado por el municipio.</p>
-                      </button>
+                      {featureFlags.taxiRemisEnabled && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData(p => ({ ...p, driverSubtype: 'professional' }))}
+                          className={cn(
+                            "p-6 rounded-3xl border text-left transition-all",
+                            formData.driverSubtype === 'professional' 
+                              ? "bg-indigo-600/10 border-indigo-600 ring-2 ring-indigo-600/20" 
+                              : "bg-white/5 border-white/5 hover:bg-white/10"
+                          )}
+                        >
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-lg font-black uppercase italic tracking-tighter">Taxi / Remis</span>
+                            {formData.driverSubtype === 'professional' && <VamoIcon name="check-circle" className="w-6 h-6 text-indigo-400" />}
+                          </div>
+                          <p className="text-xs text-zinc-500 leading-relaxed font-medium">Vehículo habilitado por el municipio.</p>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {/* --- STEP 4: (ELIMINADO) --- */}
-
-                {/* --- STEP 4: FINISH --- */}
-                {currentStep === 4 && (
+                {/* --- STEP 5: FINISH --- */}
+                {currentStep === 5 && (
                   <div className="text-center space-y-6 py-8">
                     <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto border border-emerald-500/30">
                       <VamoIcon name="check-circle" className="w-10 h-10 text-emerald-500" />
                     </div>
                     <div className="space-y-2">
                       <h3 className="text-2xl font-black uppercase tracking-tighter italic">¡Todo listo!</h3>
-                      <p className="text-zinc-500 text-sm max-w-xs mx-auto">Al finalizar, enviaremos tus datos para la aprobación municipal.</p>
+                      <p className="text-zinc-500 text-sm max-w-xs mx-auto">Al finalizar, enviaremos tus datos para la aprobación de tu cuenta.</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-zinc-950 border border-white/5 text-left space-y-2">
                         <div className="flex justify-between text-[11px] uppercase tracking-widest font-black text-zinc-500">
@@ -649,7 +945,7 @@ export function DriverOnboardingWizard() {
                 <div className="space-y-2">
                     <h2 className="text-2xl font-black text-white tracking-tighter uppercase italic">¡Registro Enviado!</h2>
                     <p className="text-zinc-400 text-sm leading-relaxed">
-                        Tu perfil de conductor ha sido creado y enviado para revisión municipal. Ya podés acceder a tu panel para ver tu estado.
+                        Tu perfil de conductor ha sido creado y enviado para revisión. Ya podés acceder a tu panel para ver tu estado.
                     </p>
                 </div>
 

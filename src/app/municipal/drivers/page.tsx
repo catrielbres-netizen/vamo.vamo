@@ -267,7 +267,19 @@ export default function MunicipalDriversPage() {
                                         </td>
                                         <td className="px-5 py-3 text-xs text-zinc-500">{formatDate(d.createdAt)}</td>
                                         <td className="px-5 py-3">
-                                            <StatusBadge status={d.municipalStatus} />
+                                            <div className="flex flex-col gap-1">
+                                                <StatusBadge status={d.municipalStatus} />
+                                                {d.trafficSuspended && (
+                                                    <span className="text-[8px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded border border-red-500/20 uppercase font-black tracking-widest w-fit">
+                                                        Tránsito
+                                                    </span>
+                                                )}
+                                                {d.adminSuspended && (
+                                                    <span className="text-[8px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded border border-red-500/20 uppercase font-black tracking-widest w-fit">
+                                                        Admin
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-5 py-3">
                                             <span className={cn(

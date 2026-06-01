@@ -11,6 +11,7 @@ import { useUser, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useWeeklyPool } from '@/hooks/useWeeklyPool';
+import { weeklyPoolConfig } from '@/config/weeklyPoolConfig';
 
 export function WeeklyPoolWidget() {
   const { pool, driverStats, loading } = useWeeklyPool();
@@ -20,11 +21,11 @@ export function WeeklyPoolWidget() {
   const weeklyTrips = driverStats?.completedTrips || 0;
   const poolAmount = pool.currentAmount || 0;
   
-  // 1) Crecimiento total de la semana (base: 50000)
-  const baseWeeklyAmount = 50000;
+  // Crecimiento total de la semana (base: initialPoolAmount)
+  const baseWeeklyAmount = weeklyPoolConfig.initialPoolAmount;
   const weeklyGrowth = Math.max(0, poolAmount - baseWeeklyAmount);
 
-  const minTrips = 10; 
+  const minTrips = 1; 
   const isQualified = weeklyTrips >= minTrips;
   const progress = Math.min(100, (weeklyTrips / minTrips) * 100);
 
@@ -47,7 +48,8 @@ export function WeeklyPoolWidget() {
               <VamoIcon name="target" className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-orange-500/80 leading-none mb-1.5">Pozo Semanal</h2>
+              <h3 className="text-[12px] font-black uppercase tracking-[0.2em] text-orange-500/80 mb-1">POZO SEMANAL CONDUCTORES</h3>
+              <p className="text-xs text-zinc-400 mb-1">Cada viaje finalizado válido suma al ranking semanal de tu ciudad.</p>
               <div className="flex items-end gap-3">
                   <p className="text-3xl font-black text-white leading-none tracking-tight">
                       {formattedCurrency(poolAmount)}
@@ -84,7 +86,7 @@ export function WeeklyPoolWidget() {
                     </PopoverTrigger>
                     <PopoverContent className="w-64 bg-zinc-950 border-white/10 rounded-2xl p-4 shadow-2xl">
                       <p className="text-[10px] text-zinc-400 leading-relaxed">
-                        Monto aproximado que recibirás el lunes basado en tu desempeño actual.
+                        Monto aproximado que recibirás el lunes basado en tu desempeño actual (sujeto a tope individual del {weeklyPoolConfig.individualCapPercentage * 100}%).
                       </p>
                     </PopoverContent>
                   </Popover>
@@ -102,7 +104,7 @@ export function WeeklyPoolWidget() {
                     </PopoverTrigger>
                     <PopoverContent className="w-64 bg-zinc-950 border-white/10 rounded-2xl p-4 shadow-2xl">
                       <p className="text-[10px] text-zinc-400 leading-relaxed">
-                        Solo los 10 conductores con más puntos al cierre de la semana se dividen el pozo.
+                        Los {weeklyPoolConfig.eligibleTopCount} conductores con más puntos al cierre de la semana se dividen el pozo.
                       </p>
                     </PopoverContent>
                   </Popover>
@@ -118,7 +120,7 @@ export function WeeklyPoolWidget() {
                 <span className="text-[10px] font-medium text-zinc-400">
                     {isQualified 
                         ? "¡Ya participás por el pozo acumulado!" 
-                        : `Clasificás al pozo con ${minTrips} viajes semanales (Faltan ${minTrips - weeklyTrips})`}
+                        : `Necesitas al menos ${minTrips} viaje válido para entrar al ranking (${minTrips - weeklyTrips} faltantes)`}
                 </span>
               </div>
               <span className="text-xs font-black text-white tabular-nums bg-white/10 px-2 py-0.5 rounded-md">
@@ -128,7 +130,7 @@ export function WeeklyPoolWidget() {
           <div className="relative pt-1">
             <Progress value={progress} className="h-3 bg-zinc-900 border border-white/5 rounded-full" />
             <p className="text-center text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-2 flex items-center justify-center gap-2">
-                Tope del pozo: $300.000
+                Meta del pozo: {formattedCurrency(weeklyPoolConfig.maxDisplayedGoal)}
                 <Popover>
                   <PopoverTrigger asChild>
                     <button className="text-zinc-700 hover:text-white transition-colors">
@@ -137,7 +139,7 @@ export function WeeklyPoolWidget() {
                   </PopoverTrigger>
                   <PopoverContent className="w-64 bg-zinc-950 border-white/10 rounded-2xl p-4 shadow-2xl">
                     <p className="text-[10px] text-zinc-400 leading-relaxed">
-                      Monto máximo que la ciudad aporta al premio semanal ($300.000).
+                       Monto meta que la ciudad busca alcanzar para el premio semanal ({formattedCurrency(weeklyPoolConfig.maxDisplayedGoal)}).
                     </p>
                   </PopoverContent>
                 </Popover>
@@ -151,7 +153,7 @@ export function WeeklyPoolWidget() {
         <div className="mt-6 flex items-center gap-2 bg-indigo-500/5 border border-indigo-500/10 rounded-xl p-3">
             <VamoIcon name="info" className="w-4 h-4 text-indigo-400 shrink-0" />
             <p className="text-[9px] text-zinc-400 font-medium leading-relaxed">
-                El pozo se reparte de forma proporcional a los puntos generados por cada conductor calificado. 
+                El pozo se reparte de forma proporcional a los multiplicadores de cada conductor calificado. 
                 <span className="text-white font-bold ml-1">Se liquida cada lunes a las 03:00.</span>
             </p>
         </div>

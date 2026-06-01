@@ -35,7 +35,7 @@ export const ensureMunicipalPricingV1 = onCall({ cors: true, region: 'us-central
       PLATFORM_COMMISSION_RATE: legacyPricing?.PLATFORM_COMMISSION_RATE ?? 200,
       commission_particular: legacyPricing?.commission_particular ?? 0.13,
       commission_taxi_remis: legacyPricing?.commission_taxi_remis ?? 0.07,
-      municipal_percentage: legacyPricing?.municipal_percentage ?? 0.05,
+      municipal_percentage: legacyPricing?.municipal_percentage ?? 0.02,
       ASSISTANCE_FEE: legacyPricing?.ASSISTANCE_FEE ?? 400,
       assistanceEnabled: legacyPricing?.assistanceEnabled ?? true,
       dynamicPricing: {

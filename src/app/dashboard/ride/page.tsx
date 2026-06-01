@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import RideStatus from '@/components/RideStatus';
+import { Switch } from '@/components/ui/switch';
+import { getWeekIdentifierART } from '@/lib/timeUtils';
 import { Button } from '@/components/ui/button';
 import MapSelector from '@/components/MapSelector';
 import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
@@ -31,8 +33,15 @@ import { ShieldCheck, Scale, Map as MapIcon, Flag, Crosshair, Gift, Loader2, Spa
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { usePromotions } from '@/hooks/usePromotions';
 import { PassengerSmallBalance } from '@/components/PassengerSmallBalance';
-import { useTelemetry } from '@/lib/telemetry';
+import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
 import { PassengerDashboardSkeleton } from '@/components/skeletons/PassengerDashboardSkeleton';
+import { useSharedRideConfig } from '@/hooks/useSharedRideConfig';
+import { SharedRideLegalGate } from '@/components/shared-ride/SharedRideLegalGate';
+import { useSharedRide } from '@/hooks/useSharedRide';
+import { SharedRideFormingScreen } from '@/components/shared-ride/SharedRideFormingScreen';
+import { MercadoPagoLinkCard } from '@/components/MercadoPagoLinkCard';
+import { featureFlags } from '@/config/features';
+import { ExpressProgressWidget } from '@/components/ExpressProgressWidget';
 
 function RidePageContent() {
   const firestore = useFirestore();
@@ -65,8 +74,9 @@ function RidePageContent() {
   const [origin, setOrigin] = useState<Place | null>(null);
   const [destination, setDestination] = useState<Place | null>(null);
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
-  const [serviceType, setServiceType] = useState<ServiceType>('professional');
+  const [expressDiscountAmount, setExpressDiscountAmount] = useState<number>(0);
   const [dynamicSnapshot, setDynamicSnapshot] = useState<any>(null);
+  const [serviceType, setServiceType] = useState<ServiceType>('professional');
   const [isMapSelectorOpen, setMapSelectorOpen] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [preferredDriverGender, setPreferredDriverGender] = useState<'male' | 'female' | null>(null);
@@ -78,11 +88,28 @@ function RidePageContent() {
   const [sheetState, setSheetState] = useState<'collapsed' | 'expanded'>('collapsed');
   const [selectedPromoId, setSelectedPromoId] = useState<string | null>(null);
   const [isLegalInfoOpen, setIsLegalInfoOpen] = useState(false);
+  const [isCreatingSharedRequest, setIsCreatingSharedRequest] = useState(false);
+  const [isLegalGateOpen, setIsLegalGateOpen] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<number | null>(null);
   const [isSchedulingOpen, setIsSchedulingOpen] = useState(false);
+  const [isMpBlockOpen, setIsMpBlockOpen] = useState(false);
   const fareRequestId = useRef<number>(0);
 
   const { promotions: ridePromos, bestPromo, isLoading: isPromosLoading } = usePromotions('ride');
+
+  const {
+    request: sharedRequest,
+    group: sharedGroup,
+    cancelRequest,
+    requestNewGroup,
+    isCancelling: isSharedCancelling,
+    setOverrideRequestId,
+    setOverrideGroupId
+  } = useSharedRide();
+
+  const hasActiveSharedRequest = useMemo(() => {
+    return !!(sharedRequest && !['cancelled', 'completed', 'expired', 'no_show', 'undeclared_companion', 'rejected'].includes(sharedRequest.status));
+  }, [sharedRequest]);
   
   const eligibility = useMemo(() => {
     if (!profile) return { isEligible: true };
@@ -213,12 +240,18 @@ function RidePageContent() {
             const result = await createRideFunc(payload);
             if (fareRequestId.current !== currentReqId) return;
             const data = result.data as any;
-            if (data?.estimatedTotal) setEstimatedPrice(data.estimatedTotal);
+            if (data?.estimatedTotal) {
+                setEstimatedPrice(data.estimatedTotal);
+                setExpressDiscountAmount(data.expressDiscountAmount || 0);
+            }
             if (data?.dynamic) setDynamicSnapshot(data.dynamic);
             else setDynamicSnapshot(null);
         } catch (e) {
             console.error(e);
             setDynamicSnapshot(null);
+            setEstimatedPrice(null);
+            setExpressDiscountAmount(0);
+            toast({ variant: 'destructive', title: 'Error de tarifa', description: 'No se pudo calcular la tarifa. Verificá origen, destino o tarifario de la ciudad.' });
         } finally {
             if (fareRequestId.current === currentReqId) setIsCalculatingFare(false);
         }
@@ -245,20 +278,44 @@ function RidePageContent() {
 
     try {
         const functions = getFunctions(undefined, 'us-central1');
-        const createRide = httpsCallable(functions, 'createRideV1');
         const payload = await getRidePayload(false);
-        const result = await createRide({ ...payload, clientRequestId: Math.random().toString(36) });
-        const data = result.data as any;
-        if (data.success && data.rideId) {
-            setLocalRideId(data.rideId);
-            setPendingRideRequest(false);
-            telemetry.trackRideLifecycle(data.rideId, 'request_success', { serviceType });
+        const clientRequestId = Math.random().toString(36);
+
+        if (serviceType === 'shared') {
+            const requestSharedRide = httpsCallable(functions, 'requestSharedRideV1');
+            const result = await requestSharedRide({ ...payload, clientRequestId, individualFareReference: estimatedPrice, cityKey: origin.city || '', sharedRideNoticeAccepted: true });
+            const data = result.data as any;
+            if (data.ok && data.requestId) {
+                setPendingRideRequest(false);
+                setOverrideRequestId?.(data.requestId);
+                setOverrideGroupId?.(data.groupId);
+                telemetry.trackRideLifecycle(data.requestId, 'request_success', { serviceType });
+                toast({ title: "Buscando pasajeros compatibles para compartir tu viaje." });
+            }
+
+        } else {
+            const createRide = httpsCallable(functions, 'createRideV1');
+            const result = await createRide({ ...payload, clientRequestId });
+            const data = result.data as any;
+            if (data.success && data.rideId) {
+                setLocalRideId(data.rideId);
+                setPendingRideRequest(false);
+                telemetry.trackRideLifecycle(data.rideId, 'request_success', { serviceType });
+            }
         }
     } catch (error: any) {
       setLocalRideId(null);
       setPendingRideRequest(false);
       telemetry.trackError('ride_request_failed', error, { origin, destination });
-      toast({ variant: 'destructive', title: 'Error', description: error.message });
+      // Detectar bloqueo por Mercado Pago no vinculado
+      const isMpBlock = error?.code === 'failed-precondition' &&
+        (error?.message?.toLowerCase().includes('mercado pago') ||
+         error?.message?.toLowerCase().includes('mercadopago'));
+      if (isMpBlock) {
+        setIsMpBlockOpen(true);
+      } else {
+        toast({ variant: 'destructive', title: 'Error', description: error.message });
+      }
     } finally { 
         setIsRequesting(false); 
     }
@@ -267,15 +324,43 @@ function RidePageContent() {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'wallet' | 'automatic'>('automatic');
 
   // [VamO PRO] Express Benefit Unlock Logic
-  const ridesCompleted = profile?.passengerProgress?.ridesThisWeek || 0;
+  const currentWeekId = getWeekIdentifierART(new Date());
+  const isCurrentWeek = profile?.passengerProgress?.weekIdentifier === currentWeekId;
+  const ridesCompleted = isCurrentWeek ? (profile?.passengerProgress?.ridesThisWeek || 0) : 0;
+  // FASE B: Desbloqueado con 5 viajes.
   const isExpressUnlocked = ridesCompleted >= 5 || profile?.role === 'admin';
+  const expressUses = isCurrentWeek ? (profile?.passengerProgress?.expressUsesThisWeek || 0) : 0;
+  const expressHasUsesLeft = expressUses < 3;
+  
+  // Opciones de advertencia para el usuario si está desbloqueado pero agotado
+  const expressLabel = !expressHasUsesLeft 
+      ? 'Límite semanal alcanzado (3/3)' 
+      : 'Beneficio Desbloqueado';
 
-  // [AUDIT] Safety check: if Express is selected but now blocked (e.g. week reset), fallback to professional
   useEffect(() => {
-    if (serviceType === 'express' && !isExpressUnlocked) {
+    if (serviceType === 'express' && (!isExpressUnlocked || !expressHasUsesLeft)) {
         setServiceType('professional');
     }
-  }, [isExpressUnlocked, serviceType]);
+  }, [isExpressUnlocked, expressHasUsesLeft, serviceType]);
+
+  // [COMPARTIDO BETA] Feature flag — solo alpha testers
+  const { isEnabled: isSharedEnabled } = useSharedRideConfig();
+
+  // Estimación client-side: factor 0.68 (2 pasajeros), redondeado a $100
+  const estimatedSharedFare = useMemo(() => {
+    if (!estimatedPrice) return null;
+    return Math.ceil((estimatedPrice * 0.68) / 100) * 100;
+  }, [estimatedPrice]);
+
+  // Solo mostrar si hay ahorro real vs tarifa normal visible
+  const sharedOffersRealSaving = estimatedSharedFare !== null && estimatedSharedFare < (estimatedPrice ?? Infinity);
+
+  // Safety fallback: si Compartido se deshabilita mientras estaba seleccionado
+  useEffect(() => {
+    if (serviceType === 'shared' && !isSharedEnabled) {
+      setServiceType('professional');
+    }
+  }, [isSharedEnabled, serviceType]);
 
   const { data: walletResp } = useQuery({
       queryKey: ['wallet', user?.uid],
@@ -290,11 +375,19 @@ function RidePageContent() {
   const wallet = walletResp?.wallet;
   
   const savingsSimulation = useMemo(() => {
-     if (!estimatedPrice) return null;
-     const available = (wallet?.cashBalance || 0) + (wallet?.promoBalance || 0);
-     const walletUsed = paymentMethod === 'cash' ? 0 : Math.min(available, estimatedPrice);
-     return { benefit: walletUsed, final: estimatedPrice - walletUsed };
-  }, [estimatedPrice, wallet, paymentMethod]);
+     if (!estimatedPrice) return { benefit: 0, final: 0 };
+     // El precio base para restar billetera es después de Express
+     const priceAfterExpress = Math.max(0, estimatedPrice - (expressDiscountAmount || 0));
+
+     if (paymentMethod === 'cash') {
+         return { benefit: 0, final: priceAfterExpress };
+     }
+     
+     const currentBalance = profile?.currentBalance || 0;
+     const benefit = Math.min(priceAfterExpress, currentBalance);
+     const final = Math.max(0, priceAfterExpress - benefit);
+     return { benefit, final };
+  }, [estimatedPrice, expressDiscountAmount, profile?.currentBalance, paymentMethod]);
 
   const [isCancelling, setIsCancelling] = useState(false);
 
@@ -366,6 +459,64 @@ function RidePageContent() {
     return <PassengerDashboardSkeleton />;
   }
 
+  const handleConfirmSharedTerms = async () => {
+    if (isCreatingSharedRequest) return;
+    
+    // Validaciones obligatorias
+    if (!isSharedEnabled) {
+      toast({ variant: 'destructive', title: 'Error', description: 'El servicio compartido no está habilitado.' });
+      return;
+    }
+    if (!origin || !destination) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Faltan coordenadas de origen o destino.' });
+      return;
+    }
+    if (!estimatedPrice || estimatedPrice <= 0) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Es necesario calcular la tarifa estimada primero.' });
+      return;
+    }
+    const cityKey = profile?.cityKey;
+    if (!cityKey) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No pudimos detectar tu ciudad para Compartido.' });
+      return;
+    }
+
+    setIsCreatingSharedRequest(true);
+    setIsLegalGateOpen(false);
+    
+    try {
+      const res = await requestNewGroup({
+        origin,
+        destination,
+        cityKey,
+        individualFareReference: estimatedPrice,
+        sharedRideNoticeAccepted: true
+      });
+      
+      if (res && res.ok) {
+        toast({
+          title: '🚀 Solicitud Creada',
+          description: 'Estamos buscando compañeros de viaje para tu grupo compartido.',
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: res?.error || 'No se pudo crear la solicitud compartida.',
+        });
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: e.message || 'Error al iniciar viaje compartido.',
+      });
+    } finally {
+      setIsCreatingSharedRequest(false);
+    }
+  };
+
   const isSearching = hasActiveRide && (!effectiveRide || effectiveRide.status === 'searching' || effectiveRide.status === 'scheduled');
   const showRideStatus = hasActiveRide && !isSearching && !!effectiveRide;
 
@@ -409,7 +560,7 @@ function RidePageContent() {
         </div>
       )}
 
-      {!hasActiveRide && (
+      {!hasActiveRide && !hasActiveSharedRequest && (
         <div 
           className="relative z-10 flex flex-col h-full w-full p-4 pointer-events-none"
           style={{ paddingTop: 'calc(env(safe-area-inset-top, 16px) + 16px)' }}
@@ -421,6 +572,28 @@ function RidePageContent() {
             >
                 <div className="flex items-center justify-between pointer-events-auto">
                     <PassengerSmallBalance />
+                </div>
+                
+                <div className="pointer-events-auto mt-2 cursor-pointer" onClick={() => router.push('/dashboard/profile')}>
+                    <ExpressProgressWidget profile={profile} compact />
+                </div>
+                
+                {/* DASHBOARD ENTRY CARD PARA COMPARTIDO */}
+                <div className="pointer-events-auto mt-2 bg-gradient-to-br from-emerald-600/20 to-emerald-900/40 border border-emerald-500/30 p-4 rounded-3xl backdrop-blur-xl shadow-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                        <VamoIcon name="users" className="w-5 h-5 text-emerald-400" />
+                        <h3 className="font-black text-white uppercase tracking-widest text-sm">VamO Compartido</h3>
+                    </div>
+                    <p className="text-xs text-emerald-100/70 mb-4">Compartí el viaje con pasajeros cercanos, pagá menos y ayudá a que el conductor gane más.</p>
+                    <Button 
+                        onClick={() => {
+                            setServiceType('shared');
+                            handleOpenMapSelector('destination');
+                        }}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl h-10"
+                    >
+                        Pedir viaje compartido
+                    </Button>
                 </div>
                 
                 {/* BLOQUE A: INPUTS PULIDOS AL INICIO DE TODO */}
@@ -469,54 +642,108 @@ function RidePageContent() {
             </button>
 
             {sheetState === 'expanded' && (
-              <div className="mt-auto pointer-events-auto bg-[#1a1a1a] border border-white/10 rounded-t-3xl p-5 pb-8 flex flex-col gap-4 text-white animate-in slide-in-from-bottom-5 duration-300 shadow-[0_-20px_50px_-12px_rgba(0,0,0,0.5)]">
+              <div className="mt-auto pointer-events-auto bg-[#1a1a1a] border border-white/10 rounded-t-3xl p-5 flex flex-col gap-4 text-white animate-in slide-in-from-bottom-5 duration-300 shadow-[0_-20px_50px_-12px_rgba(0,0,0,0.5)] max-h-[65dvh] overflow-y-auto overscroll-contain"
+                   style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 8px) + 20px)' }}>
                  <h1 className="text-base font-bold text-white/90 px-1 italic uppercase tracking-wider">Detalles del Viaje</h1>
                  
-                 {/* BLOQUE: SELECTOR DE SERVICIO (VamO PRO) */}
-                 <div className={cn(
-                      "grid gap-2 p-1 bg-white/5 border border-white/5 rounded-2xl",
-                      isExpressUnlocked ? "grid-cols-2" : "grid-cols-1"
-                  )}>
-                    <button 
-                        onClick={() => setServiceType('professional')} 
+                 {/* NUEVO SELECTOR PRINCIPAL: INDIVIDUAL VS COMPARTIDO */}
+                 <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 border border-white/5 rounded-2xl">
+                    <button
+                        onClick={() => {
+                           if (serviceType === 'shared') setServiceType('professional');
+                        }}
                         className={cn(
                             "flex flex-col items-center justify-center py-3 rounded-xl transition-all border",
-                            serviceType === 'professional' 
+                            serviceType !== 'shared' 
                                 ? "bg-indigo-600 border-indigo-500 text-white shadow-lg" 
                                 : "bg-transparent border-transparent text-white/40 hover:text-white/60"
                         )}
                     >
-                        <VamoIcon name="award" className={cn("w-5 h-5 mb-1", serviceType === 'professional' ? "text-white" : "text-zinc-600")} />
-                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">Profesional</span>
-                        <span className="text-[8px] font-bold opacity-60 mt-1">Taxi / Remis</span>
+                        <VamoIcon name="user" className={cn("w-5 h-5 mb-1", serviceType !== 'shared' ? "text-white" : "text-zinc-600")} />
+                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">Viaje Individual</span>
                     </button>
                     
-                    {isExpressUnlocked && (
-                        <button 
-                            onClick={() => setServiceType('express')} 
-                            className={cn(
-                                "flex flex-col items-center justify-center py-3 rounded-xl transition-all border",
-                                serviceType === 'express' 
-                                    ? "bg-amber-600 border-amber-500 text-white shadow-lg" 
-                                    : "bg-transparent border-transparent text-white/40 hover:text-white/60"
-                            )}
-                        >
-                            <VamoIcon name="zap" className={cn("w-5 h-5 mb-1", serviceType === 'express' ? "text-white" : "text-zinc-600")} />
-                            <span className="text-[10px] font-black uppercase tracking-widest leading-none">Express</span>
-                            <span className="text-[8px] font-bold opacity-60 mt-1">Beneficio Desbloqueado</span>
-                        </button>
-                    )}
+                    <button
+                        onClick={() => setServiceType('shared')}
+                        className={cn(
+                            "flex flex-col items-center justify-center py-3 rounded-xl transition-all border",
+                            serviceType === 'shared' 
+                                ? "bg-emerald-600 border-emerald-500 text-white shadow-lg" 
+                                : "bg-transparent border-transparent text-white/40 hover:text-white/60"
+                        )}
+                    >
+                        <VamoIcon name="users" className={cn("w-5 h-5 mb-1", serviceType === 'shared' ? "text-white" : "text-zinc-600")} />
+                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">VamO Compartido</span>
+                    </button>
                  </div>
 
-                 {!isExpressUnlocked && (
-                     <div className="px-2 py-3 bg-zinc-900/50 rounded-2xl border border-dashed border-white/5 flex items-center gap-3">
-                         <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
-                             <VamoIcon name="lock" className="w-3.5 h-3.5 text-zinc-600" />
+                 {/* SUB-SELECTOR PARA VIAJE INDIVIDUAL */}
+                 {serviceType !== 'shared' && (
+                     <>
+                         <div className={cn(
+                              "grid gap-2 p-1 bg-white/5 border border-white/5 rounded-2xl",
+                              isExpressUnlocked ? "grid-cols-2" : "grid-cols-1"
+                          )}>
+                            <button 
+                                onClick={() => setServiceType('professional')} 
+                                className={cn(
+                                    "flex flex-col items-center justify-center py-3 rounded-xl transition-all border",
+                                    serviceType === 'professional' 
+                                        ? "bg-indigo-600 border-indigo-500 text-white shadow-lg" 
+                                        : "bg-transparent border-transparent text-white/40 hover:text-white/60"
+                                )}
+                            >
+                                <VamoIcon name="award" className={cn("w-5 h-5 mb-1", serviceType === 'professional' ? "text-white" : "text-zinc-600")} />
+                                <span className="text-[10px] font-black uppercase tracking-widest leading-none">Profesional</span>
+                                <span className="text-[8px] font-bold opacity-60 mt-1">Taxi / Remis</span>
+                            </button>
+                            
+                            {isExpressUnlocked && (
+                                <button 
+                                    onClick={() => expressHasUsesLeft && setServiceType('express')} 
+                                    className={cn(
+                                        "flex flex-col items-center justify-center py-3 rounded-xl transition-all border",
+                                        serviceType === 'express' 
+                                            ? "bg-amber-600 border-amber-500 text-white shadow-lg" 
+                                            : "bg-transparent border-transparent text-white/40 hover:text-white/60",
+                                        !expressHasUsesLeft && "opacity-50 cursor-not-allowed"
+                                    )}
+                                >
+                                    <VamoIcon name="zap" className={cn("w-5 h-5 mb-1", serviceType === 'express' ? "text-white" : "text-zinc-600")} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest leading-none">Express</span>
+                                    <span className="text-[8px] font-bold opacity-60 mt-1">{expressLabel}</span>
+                                </button>
+                            )}
                          </div>
-                         <div className="flex-1">
-                             <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest leading-none mb-1">Beneficios Express</p>
-                             <p className="text-[10px] text-zinc-600 italic">Completá {5 - ridesCompleted} viajes esta semana para desbloquear descuentos.</p>
-                         </div>
+
+                         {!isExpressUnlocked && (
+                             <div className="px-2 py-3 bg-zinc-900/50 rounded-2xl border border-dashed border-white/5 flex items-center gap-3">
+                                 <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
+                                     <VamoIcon name="lock" className="w-3.5 h-3.5 text-zinc-600" />
+                                 </div>
+                                 <div className="flex-1">
+                                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest leading-none mb-1">Beneficios Express</p>
+                                     <p className="text-[10px] text-zinc-600 italic">Completá {5 - ridesCompleted} viajes esta semana para desbloquear descuentos.</p>
+                                 </div>
+                             </div>
+                         )}
+                     </>
+                 )}
+
+                 {/* BLOQUE DE INFORMACIÓN COMPARTIDO */}
+                 {serviceType === 'shared' && (
+                     <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-100/80 text-xs">
+                         <p className="font-bold mb-2 text-emerald-400">Buscaremos pasajeros compatibles cerca de tu origen y con destinos dentro del rango permitido.</p>
+                         <ul className="list-disc list-inside space-y-1 mb-3 opacity-80 text-[11px]">
+                             <li>Orígenes dentro de 1.000 metros.</li>
+                             <li>Destinos dentro de 30 cuadras.</li>
+                         </ul>
+                         <p className="font-black text-emerald-400 text-[10px] uppercase tracking-widest mb-1">Ahorro estimado:</p>
+                         <ul className="list-disc list-inside space-y-1 opacity-80 text-[11px]">
+                             <li>2 pasajeros: pagás 60%.</li>
+                             <li>3 pasajeros: pagás 55%.</li>
+                             <li>4 pasajeros: pagás 50%.</li>
+                         </ul>
                      </div>
                  )}
 
@@ -524,7 +751,7 @@ function RidePageContent() {
                     <div className="flex gap-1.5 p-1.5 bg-white/5 border border-white/5 rounded-2xl">
                         <button onClick={() => setPaymentMethod('cash')} className={cn("flex-1 py-1.5 rounded-xl text-[11px] font-black transition-all uppercase tracking-tight", paymentMethod === 'cash' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70')}>Efectivo</button>
                         <button onClick={() => setPaymentMethod('wallet')} className={cn("flex-1 py-1.5 rounded-xl text-[11px] font-black transition-all uppercase tracking-tight", paymentMethod === 'wallet' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70')}>Billetera</button>
-                        <button onClick={() => setPaymentMethod('automatic')} className={cn("flex-1 py-1.5 rounded-xl text-[11px] font-black transition-all uppercase tracking-tight", paymentMethod === 'automatic' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70')}>Auto</button>
+                        <button onClick={() => setPaymentMethod('automatic')} className={cn("flex-1 py-1.5 rounded-xl text-[11px] font-black transition-all uppercase tracking-tight", paymentMethod === 'automatic' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70')}>Mercado Pago</button>
                     </div>
 
                      {/* BLOQUE C: DESGLOSE COMPLETO VamO (ESTÁNDAR UNIFICADO) */}
@@ -551,10 +778,23 @@ function RidePageContent() {
                                 </div>
                              </>
                           ) : (
-                             <div className="flex justify-between items-center text-xs px-1">
-                                 <span className="font-bold text-white/40 uppercase tracking-tight">Tarifa estimada</span>
-                                 <span className="font-black text-white/80">${estimatedPrice}</span>
-                             </div>
+                             <>
+                                 <div className="flex justify-between items-center text-xs px-1">
+                                     <span className="font-bold text-white/40 uppercase tracking-tight">Tarifa reconocida</span>
+                                     <span className={cn("font-black", expressDiscountAmount > 0 ? "line-through text-white/40" : "text-white/80")}>
+                                         ${estimatedPrice}
+                                     </span>
+                                 </div>
+                                 {expressDiscountAmount > 0 && (
+                                     <div className="flex justify-between items-center text-xs px-1 mt-1">
+                                         <div className="flex items-center gap-1.5 font-bold text-amber-400 uppercase tracking-tight">
+                                             <VamoIcon name="zap" className="w-3 h-3" />
+                                             <span>Beneficio Express VamO</span>
+                                         </div>
+                                         <span className="font-black text-amber-400">-${expressDiscountAmount}</span>
+                                     </div>
+                                 )}
+                             </>
                           )}
   
                           {/* FILA 2: VamO Pay aplicado (Saldo Billetera) */}
@@ -596,8 +836,12 @@ function RidePageContent() {
                                    <p className="text-[9px] text-zinc-500 italic leading-tight">
                                       Precio promocional dentro del rango autorizado. La tarifa municipal es el máximo oficial.
                                    </p>
-                                   <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-tight">
-                                      Este precio queda congelado al confirmar el viaje.
+                                </div>
+                             )}
+                             {serviceType === 'professional' && !dynamicSnapshot?.applied && (
+                                <div className="px-1 pt-1 border-t border-white/5">
+                                   <p className="text-[10px] text-zinc-400 italic font-medium leading-snug">
+                                      Tarifa estimada según tarifario profesional configurado para esta ciudad.
                                    </p>
                                 </div>
                              )}
@@ -615,11 +859,14 @@ function RidePageContent() {
                             <VamoIcon name="calendar" className="w-6 h-6" />
                         </Button>
                         <Button 
-                            onClick={handleRequestRide} 
-                            disabled={!origin || !destination || isRequesting} 
+                            onClick={() => {
+                                handleRequestRide();
+                            }}
+                            disabled={!origin || !destination || isRequesting || !estimatedPrice} 
                             className="flex-1 h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-500 font-black text-lg transition-all active:scale-[0.98] shadow-md border-t border-white/10"
                         >
-                            {isRequesting ? 'PROCESANDO...' : 'SOLICITAR VamO'}
+                            {isRequesting ? 'PROCESANDO...' : 
+                             serviceType === 'shared' ? 'PEDIR VIAJE COMPARTIDO' : 'SOLICITAR VamO'}
                         </Button>
                     </div>
               </div>
@@ -757,7 +1004,77 @@ function RidePageContent() {
           }} 
         />
       )}
+
+      {/* Pantalla de grupo en formación compartida (Fase 3) */}
+      {hasActiveSharedRequest && sharedRequest && (
+        <div className="absolute inset-x-0 bottom-0 z-10 bg-[#1a1a1a] p-5 pb-10 rounded-t-3xl shadow-2xl overflow-y-auto max-h-[85vh] overscroll-contain"
+             style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 8px) + 20px)' }}>
+             <SharedRideFormingScreen 
+                 request={sharedRequest}
+                 group={sharedGroup}
+                 onCancel={cancelRequest}
+                 isCancelling={isSharedCancelling}
+             />
+        </div>
+      )}
+
+      <SharedRideLegalGate
+        isOpen={isLegalGateOpen}
+        onClose={() => setIsLegalGateOpen(false)}
+        onConfirm={handleConfirmSharedTerms}
+      />
+
+      {/* MERCADO PAGO BLOCK MODAL */}
+      <Dialog open={isMpBlockOpen} onOpenChange={setIsMpBlockOpen}>
+          <DialogContent className="max-w-[90vw] sm:max-w-[400px] bg-[#1a1a1a] border-white/10 text-white rounded-[2rem] p-0 overflow-hidden">
+              <DialogHeader className="sr-only">
+                  <DialogTitle>Vincular Mercado Pago</DialogTitle>
+                  <DialogDescription>Para solicitar viajes necesitás vincular tu cuenta de Mercado Pago.</DialogDescription>
+              </DialogHeader>
+              {/* Header visual */}
+              <div className="bg-gradient-to-br from-blue-600/30 to-indigo-900/40 p-6 border-b border-white/5 flex flex-col items-center text-center gap-3">
+                  <div className="w-16 h-16 rounded-2xl bg-blue-500/20 border border-blue-500/20 flex items-center justify-center">
+                      <VamoIcon name="link" className="w-8 h-8 text-blue-400" />
+                  </div>
+                  <div>
+                      <h2 className="text-xl font-black text-white">Vinculá Mercado Pago</h2>
+                      <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                          Para solicitar viajes necesitás vincular Mercado Pago y validar tu identidad.
+                      </p>
+                  </div>
+              </div>
+              <div className="p-6 space-y-4">
+                  <div className="space-y-2 text-xs text-zinc-500 leading-relaxed">
+                      <div className="flex items-start gap-2">
+                          <VamoIcon name="shield-check" className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                          <span>Validamos tu identidad de forma segura a través de Mercado Pago.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                          <VamoIcon name="credit-card" className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                          <span>Podés pagar viajes con tu cuenta o con efectivo igualmente.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                          <VamoIcon name="lock" className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                          <span>Tus tokens nunca son visibles en la app. Solo se usan internamente.</span>
+                      </div>
+                  </div>
+                  <MercadoPagoLinkCard
+                      mpAccountStatus={profile?.mpAccountStatus}
+                      mpLinkedAt={(profile as any)?.mpLinkedAt}
+                      compact
+                  />
+                  <Button
+                      variant="ghost"
+                      onClick={() => setIsMpBlockOpen(false)}
+                      className="w-full rounded-2xl h-12 text-zinc-500 font-bold hover:bg-white/5 text-sm"
+                  >
+                      Cerrar
+                  </Button>
+              </div>
+          </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
 

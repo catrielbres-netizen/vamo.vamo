@@ -7,10 +7,10 @@
 export type FirestoreTimestamp = any;
 export type FirestoreFieldValue = any;
 
-export type ServiceType = "professional" | "express";
+export type ServiceType = "professional" | "express" | "shared";
 export type VehicleType = "taxi" | "remis";
 
-export type Role = "admin" | "driver" | "passenger" | "admin_municipal" | "operator_municipal" | "treasury_municipal" | "auditor_municipal" | "traffic_municipal";
+export type Role = "admin" | "superadmin" | "driver" | "passenger" | "admin_municipal" | "operator_municipal" | "treasury_municipal" | "auditor_municipal" | "traffic_municipal" | "station_operator" | "municipal_admin" | "traffic_admin" | "traffic_operator" | "traffic";
 
 export type RideStatus =
     | "scheduled"
@@ -282,6 +282,13 @@ export interface CompletedRide {
     calculatedAt: FirestoreTimestamp;
     fapEligible?: boolean;
     driverSubtype?: string;
+    // New fields for rentability audit
+    grossFare?: number;
+    passengerPays?: number;
+    driverGrossAmount?: number;
+    platformCommissionAmount?: number;
+    municipalShareAmount?: number;
+    netVamoRevenue?: number;
 }
 
 export interface RideChatMessage {
@@ -353,6 +360,9 @@ export interface Ride {
     matchingAttempts?: number;
     operatingAreaId?: string;
     preferredDriverGender?: string;
+    driverGenderPreference?: 'female' | 'any';
+    femaleDriverRequested?: boolean;
+    requestedByFemalePassenger?: boolean;
 
     driverLocationAtAccept?: {
         lat: number;
@@ -437,6 +447,67 @@ export interface Ride {
         lastUpdateAt: FirestoreTimestamp;
     };
     paymentSnapshot?: PaymentSnapshot;
+    
+    // Payment & Commission metadata
+    paymentProvider?: string;
+    paymentMode?: "single_driver_no_split" | "marketplace_split" | string;
+    paymentStatus?: string;
+    mpPaymentId?: string;
+    mpPaymentStatus?: string;
+    mpPaymentStatusDetail?: string;
+    mpPreferenceId?: string;
+    vamoCommissionPercent?: number;
+    vamoCommissionAmount?: number;
+    marketplaceFeeApplied?: number;
+    commissionCollectionStatus?: "internal_only" | "automatic_marketplace_fee" | string;
+    driverGrossAmount?: number;
+    splitApplied?: boolean;
+    paidAt?: FirestoreTimestamp | FirestoreFieldValue | null;
+
+    // VamO Compartido V1
+    rideType?: 'standard' | 'shared';
+    isSharedRide?: boolean;
+    sharedGroupId?: string;
+    sharedRequestIds?: string[];
+    sharedPassengerCount?: number;
+    pickupStops?: Place[];
+    dropoffStops?: Place[];
+    orderedStops?: Array<{
+        type: 'pickup' | 'dropoff';
+        requestId: string;
+        location: Place;
+        status?: 'pending' | 'arrived' | 'completed' | 'skipped';
+        fareToCollect?: number;
+        passengerName?: string;
+    }>;
+    sharedPassengers?: Array<{
+        passengerId: string;
+        passengerName: string;
+        pickupAddress: string;
+        dropoffAddress: string;
+        status: string;
+    }>;
+    routePlan?: Array<{
+        order: number;
+        type: 'pickup' | 'dropoff';
+        passengerId: string;
+        passengerName: string;
+        address: string;
+        status: string;
+    }>;
+    sharedFarePerPassenger?: number;
+    individualFareReference?: number;
+    driverBenefitAmount?: number;
+    driverBenefitPercent?: number;
+    totalFare?: number;
+    cashExpected?: number;
+    sharedPricingSnapshot?: any;
+    routeCompatibilitySnapshot?: any;
+    sharedSettlementStatus?: 'pending_shared_settlement' | 'settling' | 'settled' | 'not_applicable' | 'failed' | 'none';
+    sharedFinancialSummary?: any;
+    sharedDriverReceiptSummary?: any;
+    sharedReceiptsGenerated?: boolean | 'not_applicable';
+    sharedReceiptsGeneratedAt?: any;
 }
 
 export type RecordingType = 'audio' | 'video' | 'audio_video' | 'none';
@@ -527,6 +598,11 @@ export interface UserProfile {
     licenseVerified?: boolean;
     vehicleVerificationStatus?: VerificationStatus;
 
+    // --- MERCADO PAGO ---
+    mpLinked?: boolean;
+    mpAccountStatus?: 'linked' | 'expired' | 'unlinked' | string;
+    mpLinkedAt?: any;
+
     municipalCode?: string;
     municipalStatus?: string;
     licenseExpiry?: any;
@@ -543,7 +619,7 @@ export interface UserProfile {
     };
 
     passengerExpressBenefitActive?: boolean;
-    passengerExpressDiscountPercent?: 10 | 15;
+    passengerExpressDiscountPercent?: number;
     passengerProgress?: {
         ridesThisWeek: number;
         weekIdentifier: string; // e.g., "2024-W15"
@@ -659,6 +735,9 @@ export interface UserProfile {
     identityNote?: string;
     identitySubmittedAt?: any;
     observationGraceUntil?: any;
+    stationId?: string;
+    stationName?: string;
+    mustChangePassword?: boolean;
 }
 
 export type FapType = "accident" | "vandalism" | "robbery" | "medical" | "behavior" | "overcharge" | "lost_item" | "other";
@@ -807,6 +886,23 @@ export interface PromotionRedemption {
 }
 
 export type PromotionContext = 'topup' | 'ride' | 'registration' | 'general' | 'signup' | 'reactivation';
+
+export interface AppModeConfig {
+    mode: 'municipal' | 'independent';
+    municipalEnabled: boolean;
+    trafficPanelEnabled: boolean;
+    stopsPanelEnabled: boolean;
+    independentModeEnabled: boolean;
+    versionLabel: string;
+}
+
+export interface FinancialModelConfig {
+    mode: 'municipal' | 'independent';
+    municipalFeeEnabled: boolean;
+    municipalSharePercent: number;
+    vamoCommissionPercent: number;
+    label: string;
+}
 
 export interface SystemConfig {
     matchingEnabled: boolean;
@@ -1013,6 +1109,19 @@ export interface RideOffer {
     passengerPaysTotal?: number;
     driverReceivesTotal?: number;
     pricing?: any; // To allow financial snapshot computation directly from the offer
+    
+    // VamO Compartido V1
+    rideType?: 'standard' | 'shared';
+    isSharedRide?: boolean;
+    sharedGroupId?: string;
+    sharedPassengerCount?: number;
+    sharedFarePerPassenger?: number;
+    pickupStopsCount?: number;
+    dropoffStopsCount?: number;
+    orderedStopsPreview?: Array<{
+        type: 'pickup' | 'dropoff';
+        location: Place;
+    }>;
 }
 
 export interface RideRequest {
@@ -1160,6 +1269,7 @@ export interface WeeklyPool {
     maxAmount: number;
     growthRate: number;
     totalCompletedTrips: number;
+    weeklyPoolContributionPerRide?: number;
     createdAt: any;
     updatedAt: any;
 }
@@ -1167,6 +1277,7 @@ export interface WeeklyPool {
 export interface WeeklyPoolDriver {
     driverId: string;
     completedTrips: number;
+    weeklyPoints: number;
     multiplier: number;
     rank: number;
     estimatedPayout: number;
@@ -1181,4 +1292,93 @@ export interface WeeklyPoolClosure {
         multiplier: number;
     }[];
     closedAt: any;
+}
+
+/** 
+ * VamO Compartido V1 
+ */
+export type SharedRideRequestStatus = 
+    | 'proposed' 
+    | 'forming' 
+    | 'pending_confirmation' 
+    | 'confirmed' 
+    | 'assigned' 
+    | 'pickup_pending'
+    | 'picked_up'
+    | 'dropoff_pending'
+    | 'dropped_off'
+    | 'completed'
+    | 'cancelled' 
+    | 'expired' 
+    | 'no_show' 
+    | 'undeclared_companion';
+
+export type SharedRideGroupStatus = 
+    | 'forming' 
+    | 'pending_passenger_confirmation' 
+    | 'searching_driver' 
+    | 'driver_assigned' 
+    | 'ready_for_driver'
+    | 'completed' 
+    | 'cancelled' 
+    | 'expired';
+
+export interface SharedRideRequest {
+    id: string;
+    passengerId: string;
+    passengerName: string;
+    cityKey: string;
+    origin: Place;
+    destination: Place;
+    status: SharedRideRequestStatus;
+    individualFareReference: number;
+    sharedFareEstimate?: number;
+    finalFareCash?: number;
+    paymentMethod: 'cash';
+    passengerSavingAmount?: number;
+    passengerSavingPercent?: number;
+    confirmationExpiresAt?: FirestoreTimestamp | null;
+    groupId?: string | null;
+    finalRideId?: string | null;
+    pickupStatus?: 'pending' | 'arrived' | 'picked_up';
+    dropoffStatus?: 'pending' | 'dropped_off';
+    noShow?: boolean;
+    undeclaredCompanion?: boolean;
+    createdAt: FirestoreTimestamp | FirestoreFieldValue;
+    updatedAt: FirestoreTimestamp | FirestoreFieldValue;
+    passengerReceipt?: any;
+    operationalReceipt?: any;
+}
+
+export interface SharedRideGroup {
+    id: string;
+    cityKey: string;
+    status: SharedRideGroupStatus;
+    requestIds: string[];
+    passengerIds: string[];
+    occupiedSeats: number;
+    maxSeats: number;
+    paymentMethod: 'cash';
+    estimatedIndividualFare: number;
+    sharedFarePerPassenger: number;
+    estimatedSharedTotal: number;
+    estimatedDriverTotal: number;
+    driverBenefitAmount: number;
+    driverBenefitPercent: number;
+    passengerSavingAmount: number;
+    passengerSavingPercent: number;
+    pickupStops: Place[];
+    dropoffStops: Place[];
+    orderedStops: Array<{
+        type: 'pickup' | 'dropoff';
+        requestId: string;
+        location: Place;
+    }>;
+    routeCompatibility?: any;
+    driverId?: string | null;
+    finalRideId?: string | null;
+    expiresAt: FirestoreTimestamp;
+    confirmationExpiresAt?: FirestoreTimestamp | null;
+    createdAt: FirestoreTimestamp | FirestoreFieldValue;
+    updatedAt: FirestoreTimestamp | FirestoreFieldValue;
 }

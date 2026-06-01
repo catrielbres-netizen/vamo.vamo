@@ -23,6 +23,8 @@ import { Sparkles } from 'lucide-react';
 import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
 import { ChatContainer } from './Chat/ChatContainer';
 import { SafetyToolkit } from './SafetyToolkit';
+import SharedRideManager from './SharedRideManager';
+import Logger from '@/lib/telemetry/logger';
 
 export default function ActiveDriverRide({ 
   ride: activeRide,
@@ -61,7 +63,7 @@ export default function ActiveDriverRide({
       const isStale = !finalRide || (!finalRide.completedRide && hasSettledData);
       
       if (isStale) {
-        console.log("[RECEIPT_SYNC] Settlement detected, updating state...");
+        Logger.logInfo("[RECEIPT_SYNC] Settlement detected, updating state...");
         setFinalRide({ ...activeRide }); // Spread to force new identity
       }
     }
@@ -72,7 +74,7 @@ export default function ActiveDriverRide({
 
   // [DIAGNOSTIC] Chat State Tracking
   useEffect(() => {
-    console.log("[CHAT_STATE]", { isChatOpen, rideId: ride?.id });
+    Logger.logDebug("[CHAT_STATE]", { isChatOpen, rideId: ride?.id });
   }, [isChatOpen, ride?.id]);
 
   const { waitMinutes, waitCost, hasWaitData, isCurrentlyWaiting, waitChargeApplied, isEarlyArrival } = useWaitTimer(ride);
@@ -80,7 +82,7 @@ export default function ActiveDriverRide({
 
   useEffect(() => {
     if (ride) {
-      console.log(`[ACTIVE_RIDE_AUDIT] status=${ride.status} rideId=${ride.id}`);
+      Logger.logInfo(`[ACTIVE_RIDE_AUDIT] status=${ride.status} rideId=${ride.id}`);
     }
   }, [ride?.id, ride?.status]);
 
@@ -92,7 +94,7 @@ export default function ActiveDriverRide({
   }, [isCurrentlyWaiting]);
 
   useEffect(() => {
-    const handleFocus = () => console.log("[NAV_DEBUG] Driver returned");
+    const handleFocus = () => Logger.logDebug("[NAV_DEBUG] Driver returned");
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, []);
@@ -141,7 +143,7 @@ export default function ActiveDriverRide({
             updatedAt: serverTimestamp()
           });
         } catch (e) {
-          console.error("ETA Update failed:", e);
+          Logger.logError("ETA Update failed:", e);
         }
       });
     };
@@ -160,11 +162,15 @@ export default function ActiveDriverRide({
   const handleStartRide = async () => {
     if (!firebaseApp || isProcessing || !ride) return;
     setIsProcessing(true);
+    Logger.trackRideEvent('ride_start_attempt', { rideId: ride.id });
     try {
       const startRideV1 = httpsCallable(getFunctions(undefined, 'us-central1'), 'startRideV1');
       await startRideV1({ rideId: ride.id });
+      Logger.trackRideEvent('ride_start_success', { rideId: ride.id });
       toast({ title: '¡Viaje iniciado!' });
     } catch (e: any) {
+      Logger.logError('Error starting ride:', e);
+      Logger.trackRideEvent('ride_start_error', { rideId: ride.id, error: e.message });
       toast({ variant: 'destructive', title: 'Error', description: e.message });
     } finally { setIsProcessing(false); }
   };
@@ -176,6 +182,7 @@ export default function ActiveDriverRide({
       const driverArrived = httpsCallable(getFunctions(undefined, 'us-central1'), 'driverArrivedV1');
       await driverArrived({ rideId: ride.id });
     } catch (e: any) {
+      Logger.logError('Error driver arrived:', e);
       toast({ variant: 'destructive', title: 'Error' });
     } finally { setIsProcessing(false); }
   };
@@ -185,7 +192,7 @@ export default function ActiveDriverRide({
     
     // [VamO PRO] Safety Guard: only toggle if in valid states
     if (ride.status !== 'in_progress' && ride.status !== 'paused') {
-      console.warn("[PAUSE_GUARD] Cannot toggle pause in status:", ride.status);
+      Logger.logWarn("[PAUSE_GUARD] Cannot toggle pause in status:", ride.status);
       return;
     }
 
@@ -194,6 +201,7 @@ export default function ActiveDriverRide({
       const togglePauseV1 = httpsCallable(getFunctions(undefined, 'us-central1'), 'togglePauseV1');
       await togglePauseV1({ rideId: ride.id, action: ride.status === 'paused' ? 'resume' : 'pause' });
     } catch (e: any) {
+      Logger.logError('Error toggling pause:', e);
       toast({ variant: 'destructive', title: 'Error', description: e.message });
     } finally { setIsProcessing(false); }
   };
@@ -201,10 +209,14 @@ export default function ActiveDriverRide({
   const handleCompleteRide = async () => {
     if (!firebaseApp || isProcessing || !ride) return;
     setIsProcessing(true);
+    Logger.trackRideEvent('ride_finish_attempt', { rideId: ride.id });
     try {
       const finishRideV1 = httpsCallable(getFunctions(undefined, 'us-central1'), 'finishRideV1');
       await finishRideV1({ rideId: ride.id });
+      Logger.trackRideEvent('ride_finish_success', { rideId: ride.id });
     } catch (e: any) {
+      Logger.logError('Error completing ride:', e);
+      Logger.trackRideEvent('ride_finish_error', { rideId: ride.id, error: e.message });
       toast({ variant: 'destructive', title: 'Error' });
     } finally { setIsProcessing(false); }
   };
@@ -216,6 +228,18 @@ export default function ActiveDriverRide({
   };
 
   if (!isMounted || !ride) return null;
+
+  if (ride.rideType === 'shared' || (ride as any).isSharedRide === true) {
+    return (
+      <SharedRideManager 
+        ride={ride as WithId<Ride>} 
+        onClose={() => {
+            if (onClose) onClose();
+            router.replace('/driver/rides');
+        }} 
+      />
+    );
+  }
 
   return (
     <>

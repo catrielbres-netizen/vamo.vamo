@@ -8,11 +8,13 @@ import { getIdTokenResult, signOut } from 'firebase/auth';
 import { useDoc } from '../firestore/use-doc';
 import { useMemoFirebase } from '../hooks';
 import { doc, Firestore } from 'firebase/firestore';
+import { resolveUserRole } from '@/lib/utils';
 
 export interface UseUserResult {
   user: User | null;
   profile: UserProfile | null;
   claims: ParsedToken | null;
+  role: string | null;
   loading: boolean;
   isRefreshing: boolean;
   error: Error | null;
@@ -163,10 +165,14 @@ export const useUser = (): UseUserResult => {
     console.warn(`[AUTH_STATE_STALE] Profile UID mismatch! Profile: ${(profile as any).id}, Auth: ${user?.uid}`);
   }
 
+  const claimsVal = isDemo ? demoData?.claimsMock || null : customClaims;
+  const role = resolveUserRole(profile, claimsVal);
+
   return {
     user,
     profile,
-    claims: isDemo ? demoData?.claimsMock || null : customClaims,
+    claims: claimsVal,
+    role,
     loading,
     isRefreshing,
     error,

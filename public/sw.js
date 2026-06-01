@@ -1,78 +1,116 @@
-// AUTH CORE — NO MODIFICAR SIN EJECUTAR TESTS DE REGRESIÓN AUTH
-const CACHE_NAME = 'vamo-cache-v4'; 
+// VamO Service Worker — vamo-cache-v7
+// ─────────────────────────────────────────────────────────────────────────────
+// CAMBIO v6 → v7:
+//   - Actualización de versión para forzar cache busting de los nuevos assets y del loader.
+//   - skipWaiting SOLO ocurre cuando VersionManager envía {type: 'SKIP_WAITING'}.
+//   - El SW permanece en estado "waiting" hasta que el usuario confirma.
+//   - Limpieza de caches antiguas en activate.
+//   - clients.claim() en activate para tomar control inmediato tras activarse.
+//
+// NO TOCAR: wallet / refund / settlement / tarifa dinámica / matching / IA.
 
-// Assets to cache on install
+const CACHE_NAME = 'vamo-cache-v7';
+
+// Assets a pre-cachear (solo los esenciales para offline básico)
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.webmanifest',
 ];
 
+// ── Install: pre-cachear assets y ESPERAR en waiting ──────────────────────
 self.addEventListener('install', (event) => {
-  console.log('[SW] Install event — VamO Resilience Mode');
+  console.log('[SW] Install event — vamo-cache-v7');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // USAMOS MAP PARA QUE SI UNO FALLA, LOS DEMÁS SIGAN
       return Promise.allSettled(
-        PRECACHE_ASSETS.map(url => {
-          return cache.add(url).catch(err => {
-            console.error(`[SW_CACHE_ERROR] Failed to cache: ${url}`, err);
-          });
-        })
+        PRECACHE_ASSETS.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn(`[SW] Failed to pre-cache: ${url}`, err);
+          })
+        )
       );
-    }).then(() => self.skipWaiting())
+    })
+    // SIN self.skipWaiting() aquí — el SW queda en "waiting"
+    // hasta que VersionManager envíe SKIP_WAITING.
   );
 });
 
+// ── Activate: limpiar caches antiguas + claim clients ─────────────────────
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activate event');
+  console.log('[SW] Activate event — cleaning old caches.');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('[SW] Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames.map((name) => {
+          if (name !== CACHE_NAME) {
+            console.log('[SW] Deleting old cache:', name);
+            return caches.delete(name);
           }
         })
-      );
-    }).then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch', (event) => {
-  // Strategy: Network First for critical chunks
-  // This prevents serving stale JS bundles after a deploy
-  if (event.request.url.includes('/_next/static/chunks/')) {
-    event.respondWith(
-      fetch(event.request).then(response => {
-        // If the chunk is found (200 OK), we'refine. 
-        // If it's a 404, we don't cache it and let the browser fail 
-        // so the VersionManager can trigger a full reload.
-        return response;
-      }).catch(() => caches.match(event.request))
-    );
-    return;
-  }
-
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.match('/');
-      })
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
+      )
+    ).then(() => {
+      // Tomar control inmediato de todos los clientes abiertos
+      return self.clients.claim();
     })
   );
 });
 
-// Update mechanism
+// ── Fetch: Network-First para chunks Next.js; Cache-First para resto local ───────
+self.addEventListener('fetch', (event) => {
+  // Ignorar métodos que no sean GET
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  const url = new URL(event.request.url);
+
+  // Evitar cachear Firebase, API de Next.js, y endpoints externos
+  if (
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname.includes('/__/') || // Firebase Hosting reserved paths
+    event.request.url.includes('googleapis.com') ||
+    event.request.url.includes('firebase')
+  ) {
+    return; // Bypass SW cache - ir directo a la red
+  }
+
+  // Chunks de Next.js: siempre ir a red primero para obtener el hash correcto
+  if (event.request.url.includes('/_next/static/chunks/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          // Cachear la respuesta fresca
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Navegaciones (HTML): siempre red primero, fallback a '/'
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/'))
+    );
+    return;
+  }
+
+  // Resto: Cache-First con fallback a red
+  event.respondWith(
+    caches.match(event.request).then((cached) => cached || fetch(event.request))
+  );
+});
+
+// ── Message: recibir SKIP_WAITING desde VersionManager ────────────────────
+// Este es el ÚNICO lugar donde el SW abandona el estado "waiting".
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('[SW] SKIP_WAITING received — activating.');
     self.skipWaiting();
   }
 });

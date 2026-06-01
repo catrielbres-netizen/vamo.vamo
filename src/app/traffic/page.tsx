@@ -8,22 +8,49 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
 
 export default function TrafficDashboard() {
-    const { profile } = useUser();
+    const { user, profile, role, loading: authLoading } = useUser();
     const { toast } = useToast();
+    const telemetry = useTelemetry();
     const [stats, setStats] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
+    const [loadingStats, setLoadingStats] = useState(true);
+    const [profileTimeout, setProfileTimeout] = useState(false);
+    const [selectedCityKey, setSelectedCityKey] = useState<string>('');
+    const router = useRouter();
 
-    const fetchStats = async () => {
-        setLoading(true);
+    const allowedRoles = [
+        'admin',
+        'superadmin',
+        'traffic',
+        'traffic_admin',
+        'traffic_operator',
+        'traffic_municipal',
+        'admin_municipal',
+        'municipal_admin',
+    ];
+
+    const isGlobalAdmin = role === 'admin' || role === 'superadmin';
+
+    const fetchStats = async (cityToFetch: string) => {
+        if (!cityToFetch) return;
+        setLoadingStats(true);
         try {
             const functions = getFunctions(undefined, 'us-central1');
             const getStats = httpsCallable(functions, 'getTrafficStatsV1');
-            const res = await getStats();
+            const res = await getStats({ cityKey: cityToFetch });
             setStats(res.data);
+            telemetry.trackEvent({
+                type: 'municipal_operation',
+                eventName: 'traffic_dashboard_loaded',
+                metadata: {
+                    cityKey: cityToFetch,
+                }
+            });
         } catch (error: any) {
             toast({ 
                 variant: 'destructive', 
@@ -31,17 +58,46 @@ export default function TrafficDashboard() {
                 description: 'No se pudieron sincronizar las estadísticas de tránsito.' 
             });
         } finally {
-            setLoading(false);
+            setLoadingStats(false);
         }
     };
 
-    const router = useRouter();
-
     useEffect(() => {
         if (profile) {
-            // Role guard: Traffic is limited to operators, municipal admins or global admins
-            const allowedRoles = ['traffic_operator', 'admin_municipal', 'admin'];
-            if (!allowedRoles.includes(profile.role)) {
+            // Non-admins must use their profile's cityKey, admins default to 'rawson'
+            setSelectedCityKey(profile.cityKey || 'rawson');
+        }
+    }, [profile]);
+
+    useEffect(() => {
+        if (selectedCityKey) {
+            fetchStats(selectedCityKey);
+        }
+    }, [selectedCityKey]);
+
+    // 5 seconds profile load timeout
+    useEffect(() => {
+        let t: NodeJS.Timeout;
+        if (user && !profile && authLoading === false) {
+            t = setTimeout(() => {
+                setProfileTimeout(true);
+            }, 5000);
+        }
+        return () => clearTimeout(t);
+    }, [user, profile, authLoading]);
+
+    // Redirection and fetching logic
+    useEffect(() => {
+        if (authLoading) return;
+
+        if (!user) {
+            console.log("No user found in dashboard, redirecting to /traffic/login");
+            router.replace('/traffic/login');
+            return;
+        }
+
+        if (role) {
+            if (!allowedRoles.includes(role)) {
                 toast({ 
                     variant: 'destructive', 
                     title: 'Acceso denegado', 
@@ -50,24 +106,118 @@ export default function TrafficDashboard() {
                 router.replace('/traffic/login');
                 return;
             }
-            fetchStats();
-        } else {
-            router.replace('/traffic/login');
         }
-    }, [profile]);
+    }, [user, role, authLoading, router]);
 
-    if (!profile) return null;
+    // 1. If actively loading auth state or profile and no timeout has hit yet
+    if (authLoading && !profileTimeout) {
+        return (
+            <div className="h-[calc(100vh-80px)] flex items-center justify-center bg-[#050505]">
+                <div className="text-center space-y-4">
+                    <VamoIcon name="loader" className="h-8 w-8 animate-spin text-indigo-500 mx-auto" />
+                    <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest animate-pulse">Iniciando Panel de Tránsito...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // 2. If no user is logged in
+    if (!user) {
+        return null; // Redirect logic handles this
+    }
+
+    // 3. If profile takes too long or failed to load
+    if (!profile) {
+        if (profileTimeout) {
+            return (
+                <div className="h-[calc(100vh-80px)] flex items-center justify-center bg-[#050505] p-6">
+                    <div className="max-w-md w-full p-8 rounded-[2rem] border border-white/5 bg-zinc-950/85 text-center space-y-6">
+                        <VamoIcon name="alert-triangle" className="w-12 h-12 text-rose-500 mx-auto animate-pulse" />
+                        <h2 className="text-lg font-black text-white italic uppercase tracking-tighter">Error de Configuración</h2>
+                        <p className="text-xs text-zinc-400">
+                            No se pudo recuperar la información de tu cuenta. Por favor verifica tu conexión o vuelve a iniciar sesión.
+                        </p>
+                        <Button onClick={() => window.location.reload()} className="w-full h-12 bg-white hover:bg-zinc-200 text-black font-black rounded-xl">
+                            REINTENTAR
+                        </Button>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <div className="h-[calc(100vh-80px)] flex items-center justify-center bg-[#050505]">
+                <div className="text-center space-y-4">
+                    <VamoIcon name="loader" className="h-8 w-8 animate-spin text-indigo-500 mx-auto" />
+                    <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest animate-pulse">Cargando perfil operativo...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // 4. If role is unauthorized
+    if (!role || !allowedRoles.includes(role)) {
+        return (
+            <div className="h-[calc(100vh-80px)] flex items-center justify-center bg-[#050505] p-6">
+                <div className="max-w-md w-full p-8 rounded-[2rem] border border-white/5 bg-zinc-950/85 text-center space-y-6">
+                    <VamoIcon name="shield-off" className="w-12 h-12 text-rose-500 mx-auto" />
+                    <h2 className="text-lg font-black text-white italic uppercase tracking-tighter">Acceso Denegado</h2>
+                    <p className="text-xs text-zinc-400">
+                        La cuenta actual ({user.email}) no posee los permisos operacionales necesarios para ingresar a Tránsito.
+                    </p>
+                    <Button onClick={() => router.replace('/traffic/login')} className="w-full h-12 bg-white hover:bg-zinc-200 text-black font-black rounded-xl">
+                        IR AL ACCESO DE TRÁNSITO
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    // 5. If profile exists but cityKey and city are missing
+    if (!profile.cityKey && !profile.city) {
+        return (
+            <div className="h-[calc(100vh-80px)] flex items-center justify-center bg-[#050505] p-6">
+                <div className="max-w-md w-full p-8 rounded-[2rem] border border-white/5 bg-zinc-950/85 text-center space-y-6">
+                    <VamoIcon name="map-pin-off" className="w-12 h-12 text-amber-500 mx-auto animate-bounce" />
+                    <h2 className="text-lg font-black text-white italic uppercase tracking-tighter">Sin Ciudad Asignada</h2>
+                    <p className="text-xs text-zinc-400">
+                        Tu perfil de agente de tránsito no posee una jurisdicción municipal válida asignada en el sistema.
+                    </p>
+                    <p className="text-[10px] text-zinc-600 font-bold uppercase">
+                        Comunícate con soporte técnico municipal.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-8 max-w-7xl mx-auto space-y-12 animate-in fade-in duration-1000">
             {/* HERO / WELCOME */}
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                <div className="space-y-1">
+                <div className="space-y-3">
                     <h1 className="text-5xl font-black tracking-tighter text-white italic uppercase">Control de Tránsito</h1>
-                    <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs flex items-center gap-2">
-                        <VamoIcon name="map-pin" className="w-3 h-3 text-indigo-500" />
-                        Jurisdicción Municipal: {profile.city || 'Jurisdicción VamO'}
-                    </p>
+                    {isGlobalAdmin ? (
+                        <div className="flex items-center gap-3">
+                            <span className="text-zinc-500 font-black uppercase tracking-widest text-[10px] bg-zinc-900 border border-white/5 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
+                                Vista Global Admin
+                            </span>
+                            <Select onValueChange={setSelectedCityKey} value={selectedCityKey}>
+                                <SelectTrigger className="bg-white/5 border-white/5 rounded-xl h-10 w-40 text-xs font-black uppercase tracking-widest text-zinc-300">
+                                    <SelectValue placeholder="Ciudad..." />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-950 border-white/10 text-white">
+                                    <SelectItem value="rawson">Rawson</SelectItem>
+                                    <SelectItem value="trelew">Trelew</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    ) : (
+                        <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs flex items-center gap-2">
+                            <VamoIcon name="map-pin" className="w-3 h-3 text-indigo-500" />
+                            Jurisdicción Municipal: <span className="text-white font-black italic">{profile.city || selectedCityKey.toUpperCase()}</span>
+                        </p>
+                    )}
                 </div>
                 <div className="flex gap-3">
                     <Link href="/traffic/drivers">
@@ -81,7 +231,7 @@ export default function TrafficDashboard() {
 
             {/* METRICS GRID */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {loading ? (
+                {loadingStats ? (
                     Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-40 rounded-[2.5rem] bg-zinc-900/50" />)
                 ) : (
                     <>

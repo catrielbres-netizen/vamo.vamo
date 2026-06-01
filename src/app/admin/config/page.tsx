@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, AlertTriangle, Zap, Thermometer, ShieldAlert, BadgeDollarSign, Landmark, ShieldCheck, MapPin } from 'lucide-react';
 import { VamoIcon } from '@/components/VamoIcon';
 import { safeFixed } from '@/lib/formatters';
-import { SystemConfig, PricingConfig, City } from '@/lib/types';
+import { SystemConfig, PricingConfig, City, AppModeConfig, FinancialModelConfig } from '@/lib/types';
 
 export default function AdminConfigPage() {
     const firestore = useFirestore();
@@ -25,6 +25,25 @@ export default function AdminConfigPage() {
 
     const [cities, setCities] = useState<City[]>([]);
     const [selectedCityKey, setSelectedCityKey] = useState<string>('rawson');
+
+    // APP MODE
+    const [appMode, setAppMode] = useState<AppModeConfig>({
+        mode: 'independent',
+        municipalEnabled: false,
+        trafficPanelEnabled: false,
+        stopsPanelEnabled: false,
+        independentModeEnabled: true,
+        versionLabel: 'Versión B',
+    });
+
+    // FINANCIAL MODEL
+    const [financialMode, setFinancialMode] = useState<FinancialModelConfig>({
+        mode: 'independent',
+        municipalFeeEnabled: false,
+        municipalSharePercent: 0,
+        vamoCommissionPercent: 0.15,
+        label: 'Versión Independiente'
+    });
 
     // SYSTEM CONFIG
     const [systemConfig, setSystemConfig] = useState<SystemConfig>({
@@ -64,13 +83,21 @@ export default function AdminConfigPage() {
     const fetchInitialData = async () => {
         if (!firestore) return;
         try {
-            const [sysSnap, citiesSnap] = await Promise.all([
+            const [sysSnap, citiesSnap, appModeSnap, finModeSnap] = await Promise.all([
                 getDoc(doc(firestore, 'system_config', 'global')),
-                getDocs(collection(firestore, 'cities'))
+                getDocs(collection(firestore, 'cities')),
+                getDoc(doc(firestore, 'system_config', 'app_mode')),
+                getDoc(doc(firestore, 'system_config', 'financial_model'))
             ]);
 
             if (sysSnap.exists()) {
                 setSystemConfig(sysSnap.data() as SystemConfig);
+            }
+            if (appModeSnap.exists()) {
+                setAppMode(appModeSnap.data() as AppModeConfig);
+            }
+            if (finModeSnap.exists()) {
+                setFinancialMode(finModeSnap.data() as FinancialModelConfig);
             }
             
             const citiesList: City[] = [];
@@ -114,6 +141,16 @@ export default function AdminConfigPage() {
                     updatedAt: serverTimestamp(),
                     updatedBy: profile.id,
                     schemaVersion: 1
+                }),
+                setDoc(doc(firestore, 'system_config', 'app_mode'), {
+                    ...appMode,
+                    updatedAt: serverTimestamp(),
+                    updatedBy: profile.id,
+                }),
+                setDoc(doc(firestore, 'system_config', 'financial_model'), {
+                    ...financialMode,
+                    updatedAt: serverTimestamp(),
+                    updatedBy: profile.id,
                 }),
                 setDoc(doc(firestore, 'municipal_pricing', selectedCityKey), { 
                     ...pricingConfig, 
@@ -200,6 +237,56 @@ export default function AdminConfigPage() {
                         Cualquier modificación en las tarifas afectará el cálculo de precios en tiempo real para todos los usuarios de <strong>{selectedCityKey.toUpperCase()}</strong>.
                         Los cambios NO son retroactivos (se guardará un <strong>[PRICING_SNAPSHOT]</strong> en cada nuevo viaje).
                     </p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                {/* APP MODE SECTION */}
+                <div className="space-y-8 md:col-span-2">
+                    <Card className="bg-indigo-500/5 border-indigo-500/20 rounded-[32px] overflow-hidden backdrop-blur-xl">
+                        <CardHeader className="pb-4">
+                            <div className="flex items-center gap-3 mb-2">
+                                <Landmark className="h-5 w-5 text-indigo-400" />
+                                <CardTitle className="text-xl font-black text-indigo-400 uppercase tracking-tighter">Modo de Aplicación (Audiencia)</CardTitle>
+                            </div>
+                            <CardDescription className="text-xs text-indigo-500/60">Alternar entre Versión Institucional y Fallback Independiente.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between p-4 bg-black/40 rounded-3xl border border-white/5">
+                                        <div className="space-y-0.5">
+                                            <Label className="text-sm font-black text-white uppercase tracking-tight">Modo Municipal (Institucional)</Label>
+                                            <p className="text-[10px] text-zinc-500 font-bold uppercase">Activa paneles y branding</p>
+                                        </div>
+                                        <Switch 
+                                            checked={appMode.mode === 'municipal'} 
+                                            onCheckedChange={v => setAppMode({...appMode, mode: v ? 'municipal' : 'independent', versionLabel: v ? 'Modo Institucional Municipal' : 'Versión B', municipalEnabled: v, trafficPanelEnabled: v, stopsPanelEnabled: v})}
+                                            className="data-[state=checked]:bg-indigo-500"
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between p-4 bg-black/40 rounded-3xl border border-white/5">
+                                        <div className="space-y-0.5">
+                                            <Label className="text-sm font-black text-white uppercase tracking-tight">Tasa Municipal</Label>
+                                            <p className="text-[10px] text-zinc-500 font-bold uppercase">Activar para audiencia</p>
+                                        </div>
+                                        <Switch 
+                                            checked={financialMode.mode === 'municipal'} 
+                                            onCheckedChange={v => setFinancialMode({...financialMode, mode: v ? 'municipal' : 'independent', municipalFeeEnabled: v, label: v ? 'Participación municipal configurable por convenio/ordenanza' : 'Versión Independiente'})}
+                                            className="data-[state=checked]:bg-indigo-500"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-indigo-500/10 rounded-3xl border border-indigo-500/20 text-xs text-indigo-200">
+                                    <p className="font-bold mb-2 uppercase tracking-widest text-[10px]">Estado Actual:</p>
+                                    <p><strong>App Mode:</strong> {appMode.mode}</p>
+                                    <p><strong>Label App:</strong> {appMode.versionLabel}</p>
+                                    <p><strong>Label Finanzas:</strong> {financialMode.label}</p>
+                                    <p className="mt-4 italic opacity-80">El cambio impacta a todos los clientes en tiempo real sin recargar la página.</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
 

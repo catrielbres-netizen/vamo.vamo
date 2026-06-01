@@ -1,0 +1,14 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3002",
+      "localStorage": [
+        {
+          "name": "firebase:authUser:AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA:[DEFAULT]",
+          "value": "{\"uid\":\"9oOsPaBsp8XkcTLjSTEJbdzMafa2\",\"email\":\"superadmin@vamo.local\",\"emailVerified\":true,\"displayName\":\"Super Admin VamO\",\"isAnonymous\":false,\"providerData\":[{\"providerId\":\"password\",\"uid\":\"superadmin@vamo.local\",\"displayName\":\"Super Admin VamO\",\"email\":\"superadmin@vamo.local\",\"phoneNumber\":null,\"photoURL\":null}],\"stsTokenManager\":{\"refreshToken\":\"AMf-vBxZAj2pu2B6Mb-DgV-YhyLE-x6y1BU-clF3g_aQFbqwKMqtc3sW_geutCLbmCVNil5GoTKG4GYckOQjHg58BfvadscdbUPcvxEWgweoyBVX7ulZSIesfua3FiHgomBCWHYpQLMJ5vS_G5XtOs7dzJbXB3WBUd3a6AlKecY76G80TT-7muuYntOnSbCwr7Qoh-saEXVsm0ENG9gj0aAe-W-HHRPqULVShbc4fdsN1j5UgD8nU-_wOYOfK83-rwBUNZl6Vg98\",\"accessToken\":\"eyJhbGciOiJSUzI1NiIsImtpZCI6ImVlYzIxN2Q0MThjYjhlNWEzMTQzMThhMGQyZmZhNGUwY2ViMmU0Y2MiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiU3VwZXIgQWRtaW4gVmFtTyIsImlzcyI6Imh0dHBzOi8vc2VjdXJldG9rZW4uZ29vZ2xlLmNvbS9zdHVkaW8tNjY5NzE2MDg0MC03YzY3ZiIsImF1ZCI6InN0dWRpby02Njk3MTYwODQwLTdjNjdmIiwiYXV0aF90aW1lIjoxNzc5MDcwNDEzLCJ1c2VyX2lkIjoiOW9Pc1BhQnNwOFhrY1RMalNURUpiZHpNYWZhMiIsInN1YiI6IjlvT3NQYUJzcDhYa2NUTGpTVEVKYmR6TWFmYTIiLCJpYXQiOjE3NzkwNzA0MjAsImV4cCI6MTc3OTA3NDAyMCwiZW1haWwiOiJzdXBlcmFkbWluQHZhbW8ubG9jYWwiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJlbWFpbCI6WyJzdXBlcmFkbWluQHZhbW8ubG9jYWwiXX0sInNpZ25faW5fcHJvdmlkZXIiOiJwYXNzd29yZCJ9fQ.s_fojvkpNuLZOdqEOxfNpmBALqJ5CqEKjcbDrBl34xStaj9KYe6ner9-C21B_nzjEe4bn5EkVtlLuMV2y8r1P_84rvXnP_UUsegB-FMXg_8K_69oOFJZQTfsHDdr28MUeiS0gkoNkgI8xmpXmWwxsHuyFLZfj-zfurXU1tN2hg0r7gT6Iosi8MIEUzkUsrHAfs15ZMdx26_lb8_cNVVZDRPeIZ-XISVdFGt9U0tYQW7LpvG9iM-gVqBvT9WsyxKjCcN3UJBe75kpHoDmjN9oYkQEGblRrkzFinV9oQdWSSF8vMLQUR9L4R6ECwy1TqzvvbW05uVPfUk53s5RH3bUcg\",\"expirationTime\":1779074019254},\"createdAt\":\"1778211331796\",\"lastLoginAt\":\"1779070317820\",\"apiKey\":\"AIzaSyDOkw1zuu8JZu2zGwn_YUWK1az4zphC9PA\",\"appName\":\"[DEFAULT]\"}"
+        }
+      ]
+    }
+  ]
+}

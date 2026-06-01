@@ -377,6 +377,31 @@
       ]
     },
     {
+      "collectionGroup": "driver_points",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "cityKey", "order": "ASCENDING" },
+        { "fieldPath": "weekId", "order": "ASCENDING" },
+        { "fieldPath": "weeklyTripsCount", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "driver_points",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "weekId", "order": "ASCENDING" },
+        { "fieldPath": "weeklyTripsCount", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "driver_points",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "weeklyTripsCount", "order": "DESCENDING" },
+        { "fieldPath": "lastUpdated", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "rides",
       "queryScope": "COLLECTION",
       "fields": [
@@ -546,6 +571,31 @@
         { "fieldPath": "cityKey", "order": "ASCENDING" },
         { "fieldPath": "isOnline", "order": "ASCENDING" },
         { "fieldPath": "lastActiveAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shared_ride_groups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "expiresAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shared_ride_groups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hasMinimumPassengers", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "closingExpiresAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passenger_points",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "weekId", "order": "ASCENDING" },
+        { "fieldPath": "weeklyTripsCount", "order": "DESCENDING" }
       ]
     }
   ],

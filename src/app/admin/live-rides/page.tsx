@@ -8,6 +8,7 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
 import { MapsProvider } from '@/components/MapsProvider';
 import { useFunctions, useFirestore, useCollection } from '@/firebase'; 
+import { VamoMarker } from '@/components/VamoMarker';
 import { useRouter } from 'next/navigation';
 import { httpsCallable } from 'firebase/functions';
 import { useToast } from '@/hooks/use-toast';
@@ -116,7 +117,7 @@ export default function AdminLiveRidesPage() {
                     {driverLocations?.map((d: any) => {
                         if (!d.currentLocation) return null;
                         return (
-                            <AdvancedMarker
+                            <VamoMarker
                                 key={d.id}
                                 position={d.currentLocation}
                                 onClick={() => setSelectedDriverId(d.id)}
@@ -134,7 +135,7 @@ export default function AdminLiveRidesPage() {
                                 >
                                     <VamoIcon name="car" className="w-4 h-4 text-white" />
                                 </div>
-                            </AdvancedMarker>
+                            </VamoMarker>
                         );
                     })}
                 </Map>

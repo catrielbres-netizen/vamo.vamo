@@ -40,8 +40,17 @@ const CITY_DEFINITIONS: Record<
     bbox: {
       minLat: -43.40,
       maxLat: -43.10,
-      minLng: -65.60, // Expanded to include Gaiman/Dolavon
+      minLng: -65.60,
       maxLng: -65.10,
+    },
+  },
+  parana: {
+    nameMap: ["parana", "paraná", "oro-verde", "san-benito", "colonia-avellaneda"],
+    bbox: {
+      minLat: -31.90,
+      maxLat: -31.60,
+      minLng: -60.80,
+      maxLng: -60.30,
     },
   },
   // Add more municipalities here as needed

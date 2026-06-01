@@ -11,6 +11,11 @@ import {
   serverTimestamp,
   addDoc,
   collection,
+  query,
+  where,
+  getDocs,
+  getDoc,
+  setDoc,
 } from "firebase/firestore";
 import {
   MunicipalProfile,
@@ -166,7 +171,48 @@ export default function MunicipalDriverDetailPage() {
   const [canDate, setCanDate] = useState("");
   const [obsText, setObsText] = useState("");
 
-  const { cityKey: agentCityKey, isOperator } = useMunicipalContext();
+  const { cityKey: agentCityKey, isOperator, isMuniAdmin } = useMunicipalContext();
+
+  // Taxi stand assignment states
+  const [availableStands, setAvailableStands] = useState<{ id: string; name: string }[]>([]);
+  const [selectedStandId, setSelectedStandId] = useState("");
+
+  const targetCityKey = mp?.cityKey || userData?.cityKey;
+
+  // Fetch available stands for the driver's cityKey
+  useEffect(() => {
+    if (!firestore || !targetCityKey) return;
+    const fetchStands = async () => {
+      try {
+        const standsSnap = await getDocs(
+          query(
+            collection(firestore, 'taxi_stands'),
+            where('cityKey', '==', targetCityKey),
+            where('status', '==', 'active')
+          )
+        );
+        const list: { id: string; name: string }[] = [];
+        standsSnap.forEach(docSnap => {
+          list.push({ id: docSnap.id, name: docSnap.data().name });
+        });
+        setAvailableStands(list);
+      } catch (e) {
+        console.error("Error fetching available stands:", e);
+      }
+    };
+    fetchStands();
+  }, [firestore, targetCityKey]);
+
+  // Synchronize initial stand selection state
+  useEffect(() => {
+    if (userData?.stationId) {
+      setSelectedStandId(userData.stationId);
+    } else if (mp?.stationId) {
+      setSelectedStandId(mp.stationId);
+    } else {
+      setSelectedStandId("");
+    }
+  }, [userData, mp]);
 
   useEffect(() => {
     if (!firestore || !driverId) return;
@@ -225,7 +271,6 @@ export default function MunicipalDriverDetailPage() {
   }, [firestore, driverId, user, profile, agentCityKey]);
 
   // Security: only same city
-  const targetCityKey = mp?.cityKey || userData?.cityKey;
   if (targetCityKey && agentCityKey && targetCityKey !== agentCityKey) {
     return (
       <div className="py-20 text-center space-y-3">
@@ -424,6 +469,69 @@ export default function MunicipalDriverDetailPage() {
     }
   };
 
+  const handleAssignStand = async (standIdToAssign: string) => {
+    if (!firestore || !driverId) return;
+    setBusy(true);
+
+    const finalStandId = standIdToAssign && standIdToAssign !== "none" ? standIdToAssign : null;
+    const standName = finalStandId
+      ? (availableStands.find(s => s.id === finalStandId)?.name || "Parada")
+      : null;
+
+    try {
+      // 1. Update/Create drivers collection (always save here)
+      const driverRef = doc(firestore, 'drivers', driverId);
+      await setDoc(driverRef, {
+        stationId: finalStandId,
+        stationName: standName,
+        stationAssignedAt: finalStandId ? new Date() : null,
+        stationAssignedBy: finalStandId ? (user?.email || 'admin') : null
+      }, { merge: true });
+
+      // 2. Update users collection safely if it exists
+      try {
+        const userRef = doc(firestore, 'users', driverId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          await setDoc(userRef, {
+            stationId: finalStandId,
+            stationName: standName
+          }, { merge: true });
+        } else {
+          console.warn("[STATION_ASSIGN] users document not found, skipping users sync for", driverId);
+        }
+      } catch (err) {
+        console.warn("[STATION_ASSIGN] Error syncing with users collection:", err);
+      }
+
+      // 3. Update municipal_profiles safely
+      if (mp) {
+        const mpRef = doc(firestore, 'municipal_profiles', driverId);
+        await setDoc(mpRef, {
+          stationId: finalStandId,
+          stationName: standName,
+          stationAssignedAt: finalStandId ? new Date() : null,
+          stationAssignedBy: finalStandId ? (user?.email || 'admin') : null
+        }, { merge: true });
+      }
+
+      setSelectedStandId(standIdToAssign);
+      toast({
+        title: 'Parada asignada',
+        description: finalStandId ? `Asignado correctamente a "${standName}"` : 'Desvinculado de la parada.'
+      });
+    } catch (e: any) {
+      console.error("Error assigning driver to stand:", e);
+      toast({
+        variant: 'destructive',
+        title: 'Error de asignación',
+        description: 'Ocurrió un error al vincular el conductor a la parada.'
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // ── Regla de habilitación ─────────────────────────────────────────────────
   const checklistOk = mp
     ? CHECKLIST_KEYS.every((k) => mp.checklist?.[k]?.status === "approved")
@@ -491,6 +599,21 @@ export default function MunicipalDriverDetailPage() {
                 status={mp.municipalStatus} 
                 graceUntil={mp.observationGraceUntil || userData?.observationGraceUntil}
               />
+              {userData?.trafficSuspended && (
+                <span className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full mt-1">
+                  Bloqueado operativamente por Tránsito
+                </span>
+              )}
+              {userData?.adminSuspended && (
+                <span className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full mt-1">
+                  Bloqueado por Administración VamO
+                </span>
+              )}
+              {userData?.municipalSuspended && (
+                <span className="bg-red-500/10 text-red-400 border border-red-500/20 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full mt-1">
+                  Suspendido por Municipalidad
+                </span>
+              )}
               {mp.observationGraceUntil && (
                 <p className={cn(
                   "text-[10px] font-bold uppercase tracking-tight",
@@ -705,6 +828,43 @@ export default function MunicipalDriverDetailPage() {
                 </div>
               ) : (
                 <p className="text-xs text-zinc-500 italic text-center py-2">Este conductor opera su propio vehículo (Titular e Independiente).</p>
+              )}
+            </div>
+          </div>
+
+          {/* ── PARADA DIGITAL ASIGNADA ───────────────────────────────────── */}
+          <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden backdrop-blur-xl">
+            <div className="px-5 py-4 border-b border-white/5 bg-indigo-500/[0.02] flex items-center justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-indigo-400">
+                  Parada Digital Asignada
+                </p>
+                <p className="text-[10px] text-zinc-500 mt-0.5">Vincular a este conductor con una parada oficial</p>
+              </div>
+              <VamoIcon name="map-pin" className="h-5 w-5 text-indigo-400 animate-pulse" />
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3 items-end">
+                <div className="flex-1 space-y-1.5">
+                  <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block">Seleccionar Parada</label>
+                  <select
+                    value={selectedStandId || "none"}
+                    onChange={(e) => handleAssignStand(e.target.value)}
+                    disabled={!isMuniAdmin || busy}
+                    className="w-full h-11 bg-zinc-900 border border-white/10 rounded-xl px-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500/50 disabled:opacity-50"
+                  >
+                    <option value="none">Sin parada asignada</option>
+                    {availableStands.map(stand => (
+                      <option key={stand.id} value={stand.id}>{stand.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              {!isMuniAdmin && (
+                <p className="text-[9px] font-bold text-amber-500 uppercase tracking-tight">
+                  * Solo los administradores municipales y globales tienen permisos para modificar la parada asignada.
+                </p>
               )}
             </div>
           </div>

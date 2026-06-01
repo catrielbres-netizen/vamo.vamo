@@ -13,13 +13,27 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { UserProfile } from '@/lib/types';
+import { useUser } from '@/firebase/auth/use-user';
 
 export default function TrafficLoginPage() {
     const auth = useAuth();
     const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();
-    
+
+    const { user, profile, role } = useUser();
+    const allowedRoles = [
+        'admin',
+        'superadmin',
+        'traffic',
+        'traffic_admin',
+        'traffic_operator',
+        'traffic_municipal',
+        'admin_municipal',
+        'municipal_admin',
+    ];
+    const isAuthorized = !!user && !!role && allowedRoles.includes(role);
+
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,23 +53,36 @@ export default function TrafficLoginPage() {
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
 
-            // Check user role
+            // Check user role (both claims & Firestore doc)
+            const tokenResult = await user.getIdTokenResult();
+            const claims = tokenResult.claims;
+
+            let userProfile: any = null;
             const userRef = doc(firestore, 'users', user.uid);
             const userSnap = await getDoc(userRef);
-
-            if (!userSnap.exists()) {
-                throw new Error('Perfil no encontrado.');
+            if (userSnap.exists()) {
+                userProfile = userSnap.data();
             }
 
-            const userProfile = userSnap.data() as UserProfile;
+            const { resolveUserRole } = await import('@/lib/utils');
+            const resolvedRole = resolveUserRole(userProfile, claims);
 
             // Solo permitimos roles que tengan acceso a la gestión de tráfico
-            const validTrafficRoles = ['admin', 'admin_municipal', 'traffic_municipal'];
-            if (!validTrafficRoles.includes(userProfile.role)) {
+            const validTrafficRoles = [
+                'admin',
+                'superadmin',
+                'traffic',
+                'traffic_admin',
+                'traffic_operator',
+                'traffic_municipal',
+                'admin_municipal',
+                'municipal_admin',
+            ];
+            if (!resolvedRole || !validTrafficRoles.includes(resolvedRole)) {
                 await auth.signOut();
                 throw new Error('Acceso denegado. Esta cuenta no tiene permisos para el área de Tránsito.');
             }
-            
+
             toast({ title: '¡Bienvenido Agente!', description: 'Accediendo al centro de control...' });
             router.replace('/traffic');
 
@@ -76,7 +103,7 @@ export default function TrafficLoginPage() {
         <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-500/5 via-transparent to-transparent">
             <Card className="max-w-md w-full border-white/5 bg-zinc-950/50 backdrop-blur-3xl shadow-2xl overflow-hidden relative">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-700" />
-                
+
                 <CardHeader className="text-center pt-10 pb-6">
                     <div className="mx-auto w-16 h-16 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center mb-4">
                         <VamoIcon name="shield-check" className="h-8 w-8 text-indigo-500" />
@@ -89,41 +116,51 @@ export default function TrafficLoginPage() {
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Legajo / Email</Label>
-                            <Input 
-                                id="email" 
-                                type="email" 
-                                placeholder="agente@transito.gov.ar" 
+                            <Input
+                                id="email"
+                                type="email"
+                                placeholder="agente@transito.gov.ar"
                                 className="h-12 bg-black/50 border-white/10 rounded-xl focus:border-indigo-500/50 transition-all font-medium text-sm"
-                                value={email} 
-                                onChange={(e) => setEmail(e.target.value)} 
-                                disabled={isSubmitting} 
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                disabled={isSubmitting}
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="password" title="Contraseña" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Contraseña</Label>                            
-                            <Input 
-                                id="password" 
-                                type="password" 
+                            <Label htmlFor="password" title="Contraseña" className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-1">Contraseña</Label>
+                            <Input
+                                id="password"
+                                type="password"
                                 className="h-12 bg-black/50 border-white/10 rounded-xl focus:border-indigo-500/50 transition-all font-medium text-sm"
-                                value={password} 
-                                onChange={(e) => setPassword(e.target.value)} 
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
                                 disabled={isSubmitting}
                             />
                         </div>
                     </div>
 
                     <div className="space-y-3 pt-2">
-                        <Button 
-                            onClick={handleLogin} 
-                            disabled={isSubmitting || !auth} 
+                        <Button
+                            onClick={handleLogin}
+                            disabled={isSubmitting || !auth}
                             className="w-full h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm uppercase tracking-widest rounded-xl shadow-xl shadow-indigo-600/10 transition-all active:scale-[0.98]"
                         >
                             {isSubmitting ? 'VERIFICANDO...' : 'ACCEDER AL CONTROL'}
                         </Button>
-                        
+
                         <p className="text-center text-[9px] text-zinc-600 font-bold uppercase tracking-[0.2em] pt-4">
                             SISTEMA DE SEGURIDAD VIAL VAMO PRO
                         </p>
+
+                        {user && (
+                            <div className="mt-6 p-4 rounded-2xl bg-zinc-900/50 border border-white/5 space-y-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-left">
+                                <p className="text-white border-b border-white/5 pb-2 text-[11px] font-black italic">SESIÓN INICIADA (DEPURACIÓN)</p>
+                                <p>Usuario: <span className="text-indigo-400 font-black">{user.email}</span></p>
+                                <p>Rol Resuelto: <span className="text-indigo-400 font-black">{role || 'Ninguno / Cargando...'}</span></p>
+                                <p>Autorizado Tránsito: <span className={isAuthorized ? "text-emerald-400 font-black animate-pulse" : "text-rose-500 font-black"}>{isAuthorized ? 'SÍ' : 'NO'}</span></p>
+                                <p>Ciudad: <span className="text-indigo-400 font-black">{profile?.cityKey || profile?.city || 'Sin ciudad'}</span></p>
+                            </div>
+                        )}
                     </div>
                 </CardContent>
             </Card>

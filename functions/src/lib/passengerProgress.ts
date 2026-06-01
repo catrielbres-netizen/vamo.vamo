@@ -6,9 +6,10 @@ import { UserProfile } from '../types';
 
 export interface ProgressResult {
     ridesThisWeek: number;
-    discountPercent: 0 | 10 | 15;
+    discountPercent: number;
     currentLevel: 'none' | 'unlocked_10' | 'unlocked_15';
     unlockedBenefit: boolean;
+    expressUsesThisWeek: number;
 }
 
 /**
@@ -20,7 +21,8 @@ export interface ProgressResult {
  */
 export async function updatePassengerProgress(
     passengerId: string,
-    rideId: string
+    rideId: string,
+    expressBenefitApplied: boolean = false
 ): Promise<ProgressResult | null> {
     const db = admin.firestore();
     const userRef = db.collection('users').doc(passengerId);
@@ -47,51 +49,38 @@ export async function updatePassengerProgress(
                 weeklySubsidySpent: number;
                 weekIdentifier: string;
                 currentLevel: 'none' | 'unlocked_10' | 'unlocked_15';
+                expressUsesThisWeek: number;
             } = {
                 ridesThisWeek: 0,
                 weeklySubsidySpent: 0,
                 weekIdentifier,
                 currentLevel: 'none',
+                expressUsesThisWeek: 0,
                 ...(profile?.passengerProgress || {})
             };
 
             // --- WEEKLY RESET (lazy, on first ride of new week) ---
             if (progress.weekIdentifier !== weekIdentifier) {
-                logger.info(`[EXPRESS] New week detected: ${weekIdentifier}. Resetting progress.`);
-
-                // Level carries over based on prior week performance
-                const prevRides = progress.ridesThisWeek || 0;
-                let nextLevel: 'none' | 'unlocked_10' | 'unlocked_15' = 'none';
-                if (progress.currentLevel === 'none') {
-                    nextLevel = prevRides >= 5 ? 'unlocked_10' : 'none';
-                } else if (progress.currentLevel === 'unlocked_10') {
-                    nextLevel = prevRides >= 10 ? 'unlocked_15' : prevRides >= 5 ? 'unlocked_10' : 'none';
-                } else if (progress.currentLevel === 'unlocked_15') {
-                    nextLevel = prevRides >= 10 ? 'unlocked_15' : prevRides >= 5 ? 'unlocked_10' : 'none';
-                }
-
-                progress = { ridesThisWeek: 0, weeklySubsidySpent: 0, weekIdentifier, currentLevel: nextLevel };
+                logger.info(`[EXPRESS] New week detected: ${weekIdentifier}. Resetting progress (no carryover).`);
+                progress = { ridesThisWeek: 0, weeklySubsidySpent: 0, weekIdentifier, currentLevel: 'none', expressUsesThisWeek: 0 };
             }
 
             // --- INCREMENT for this ride ---
             progress.ridesThisWeek = (progress.ridesThisWeek || 0) + 1;
-
-            // --- MID-WEEK UNLOCK (immediate gratification) ---
-            if (progress.currentLevel === 'none' && progress.ridesThisWeek >= 5) {
-                progress.currentLevel = 'unlocked_10';
-            } else if (progress.currentLevel === 'unlocked_10' && progress.ridesThisWeek >= 10) {
-                progress.currentLevel = 'unlocked_15';
+            if (expressBenefitApplied) {
+                progress.expressUsesThisWeek = (progress.expressUsesThisWeek || 0) + 1;
             }
 
-            // --- DERIVE discount percent from level ---
-            const discountPercent: 0 | 10 | 15 =
-                progress.currentLevel === 'unlocked_15' ? 15 :
-                progress.currentLevel === 'unlocked_10' ? 10 : 0;
+            // --- DERIVE discount percent and level using canonical 6-level scale ---
+            const discountPercent = getExpressDiscountPercent({ passengerProgress: progress } as any);
+            progress.currentLevel = 
+                discountPercent >= 15 ? 'unlocked_15' :
+                discountPercent >= 10 ? 'unlocked_10' : 'none';
 
             // --- WRITE user progress ---
             tx.set(userRef, {
                 passengerProgress: progress,
-                passengerExpressBenefitActive: progress.currentLevel !== 'none',
+                passengerExpressBenefitActive: discountPercent > 0,
                 passengerExpressDiscountPercent: discountPercent,
                 updatedAt: FieldValue.serverTimestamp()
             }, { merge: true });
@@ -103,10 +92,11 @@ export async function updatePassengerProgress(
                 ridesThisWeek: progress.ridesThisWeek,
                 discountPercent,
                 currentLevel: progress.currentLevel,
-                unlockedBenefit: progress.currentLevel !== 'none'
+                unlockedBenefit: progress.currentLevel !== 'none',
+                expressUsesThisWeek: progress.expressUsesThisWeek
             };
 
-            logger.info(`[EXPRESS] Progress updated | passengerId=${passengerId} | ridesThisWeek=${progress.ridesThisWeek} | level=${progress.currentLevel} | discountPercent=${discountPercent}%`);
+            logger.info(`[EXPRESS] Progress updated | passengerId=${passengerId} | ridesThisWeek=${progress.ridesThisWeek} | expressUses=${progress.expressUsesThisWeek}`);
             return progressResult;
         });
 
@@ -118,30 +108,31 @@ export async function updatePassengerProgress(
 }
 
 /**
- * [FASE 7.1] Calcula el porcentaje de descuento Express — escala endurecida.
- * Fuente única: passengerProgress.ridesThisWeek
- *
- * Escala 6 niveles (más exigente que Fase 7):
- *   0–2  viajes/semana →  0%  (sin descuento, usuarios nuevos)
- *   3–5  viajes/semana →  5%
- *   6–9  viajes/semana →  8%
- *   10–14 viajes/semana → 10%
- *   15–24 viajes/semana → 12%
- *   25+  viajes/semana → 15%  (power users)
- *
- * Fallback: sin progress → 0% (subsidio cero por defecto)
- * Cap externo: MAX_EXPRESS_DISCOUNT = $400 en createRideV1
+ * [FASE B] Calcula el porcentaje de descuento Express — regla del 20%.
+ * El Beneficio Express se activa cuando el pasajero completa 5 viajes válidos semanales.
+ * Límite semanal: Máximo 3 viajes con Beneficio Express.
+ * Descuento: 20% (con tope de $2000 en createRideV1)
  */
 export function getExpressDiscountPercent(passengerProfile: UserProfile): number {
+    const currentWeekId = getWeekIdentifierART(new Date());
+    const isCurrentWeek = passengerProfile?.passengerProgress?.weekIdentifier === currentWeekId;
+    
+    if (!isCurrentWeek) {
+        return 0; // Semana vencida, reseteo de beneficio
+    }
+    
     const rides = passengerProfile?.passengerProgress?.ridesThisWeek ?? 0;
-    let discountPercent = 0;
-    if (rides >= 25) discountPercent = 15;
-    else if (rides >= 15) discountPercent = 12;
-    else if (rides >= 10) discountPercent = 10;
-    else if (rides >= 6)  discountPercent = 8;
-    else if (rides >= 3)  discountPercent = 5;
-    logger.info(`[EXPRESS_HARD] ridesThisWeek=${rides} | discount=${discountPercent}%`);
-    return discountPercent;
+    const expressUsesThisWeek = passengerProfile?.passengerProgress?.expressUsesThisWeek ?? 0;
+    
+    if (rides < 5) {
+        return 0; // No llegó a 5 viajes
+    }
+    
+    if (expressUsesThisWeek >= 3) {
+        return 0; // Ya consumió sus 3 usos semanales
+    }
+
+    return 20; // 20% de descuento
 }
 
 /**

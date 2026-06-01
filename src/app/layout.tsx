@@ -8,19 +8,22 @@ import ClientProviders from './ClientProviders';
 import { VersionManager } from '@/components/VersionManager';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AIGuard } from '@/components/ai/AIGuard';
+import { GlobalFooter } from '@/components/GlobalFooter';
 
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const archivo = Archivo({ subsets: ['latin'], variable: '--font-archivo', weight: ['400', '600', '800', '900'] });
 
 export const metadata: Metadata = {
-  title: "VamO",
-  description: "Transporte seguro, moderno y municipalmente integrado.",
-  icons: {
-    icon: "/branding/vamo-logo.png",
-    apple: "/branding/vamo-logo.png",
+  title: 'VamO PRO',
+  description: 'Sistema Integral VamO',
+  manifest: '/manifest.webmanifest',
+  themeColor: '#000000',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'VamO PRO',
   },
-  manifest: "/manifest.webmanifest",
 };
 
 export const viewport = {
@@ -49,6 +52,7 @@ export default function RootLayout({
             <div className="relative flex min-h-screen flex-col">
               <VersionManager />
               <main className="flex-1">{children}</main>
+              <GlobalFooter />
               <AIGuard />
             </div>
           </ErrorBoundary>

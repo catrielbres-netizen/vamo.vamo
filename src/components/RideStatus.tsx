@@ -44,6 +44,8 @@ import FinishedRideSummary from './FinishedRideSummary';
 import { cn } from '@/lib/utils';
 import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
 import { SafetyToolkit } from './SafetyToolkit';
+import { PassengerSharedRoadSheet } from './PassengerSharedRoadSheet';
+import { MercadoPagoPaymentButton } from './MercadoPagoPaymentButton';
 
 function formatCurrency(value: number) {
   if (typeof value !== 'number' || isNaN(value)) return '$...';
@@ -61,6 +63,7 @@ const STATUS_CONFIG: Record<string, { title: string; subtitle: string }> = {
     paused: { title: "Viaje en espera", subtitle: "El conductor ha pausado el cronómetro" },
     completed: { title: "Viaje finalizado", subtitle: "Gracias por viajar con VamO" },
     cancelled: { title: "Viaje cancelado", subtitle: "No se pudo concretar el viaje" },
+    accepted: { title: "Viaje aceptado", subtitle: "El conductor está organizando la ruta" },
 };
 
 export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, onNewRide: () => void }) {
@@ -102,7 +105,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
   }, [driverLocationData]);
 
   useEffect(() => {
-    if (ride.status === 'driver_assigned' && driverLocation && ride.origin) {
+    if (ride?.status === 'driver_assigned' && driverLocation && ride?.origin) {
         const distance = haversineDistance(driverLocation, ride.origin);
         const etaSeconds = distance / 8.33;
         const etaMinutes = Math.ceil(etaSeconds / 60);
@@ -113,7 +116,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
     } else {
         setDriverEta(null);
     }
-  }, [driverLocation, ride.origin, ride.status]);
+  }, [driverLocation, ride?.origin, ride?.status]);
 
   useEffect(() => {
     setIsWaitTimerOpen(isCurrentlyWaiting);
@@ -145,15 +148,15 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
 
   // [Bug 2 Fix] Cleanup after receipt closed
   useEffect(() => {
-    if (ride.status === 'completed' && hasClosedReceipt) {
+    if (ride?.status === 'completed' && hasClosedReceipt) {
       onNewRide();
     }
-  }, [ride.status, hasClosedReceipt, onNewRide]);
+  }, [ride?.status, hasClosedReceipt, onNewRide]);
 
   // VOICE SYNTHESIS FOR ARRIVAL
   const hasSpokenArrivalInfo = React.useRef(false);
   useEffect(() => {
-     if (ride.status === 'driver_arrived' && !hasSpokenArrivalInfo.current) {
+     if (ride?.status === 'driver_arrived' && !hasSpokenArrivalInfo.current) {
         hasSpokenArrivalInfo.current = true;
         try {
            if ('speechSynthesis' in window) {
@@ -165,10 +168,14 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
         } catch (e) {
            console.warn("Speech synthesis error", e);
         }
-     } else if (ride.status === 'searching' || ride.status === 'driver_assigned') {
+     } else if (ride?.status === 'searching' || ride?.status === 'driver_assigned') {
         hasSpokenArrivalInfo.current = false;
      }
-  }, [ride.status]);
+  }, [ride?.status]);
+
+  if (!ride) {
+      return null;
+  }
 
   // [VamO PRO] Unified Financial Source
   const financial = getRideFinancialSnapshot(ride);
@@ -307,6 +314,12 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                     </div>
                  )}
 
+                  {ride.isSharedRide && ride.orderedStops && (
+                      <div className="px-1 mb-4">
+                          <PassengerSharedRoadSheet ride={ride} />
+                      </div>
+                  )}
+
                   <div className="flex flex-col gap-3 mt-2">
                        {(() => {
                            // [VamO PRO] Unified Financial Snapshot
@@ -362,6 +375,10 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                               </div>
                            );
                        })()}
+                       {/* [MP_SINGLE_DRIVER_MODE] Mercado Pago Button */}
+                       <div className="px-1">
+                           <MercadoPagoPaymentButton ride={ride as any} amount={getRideFinancialSnapshot(ride).cashToCollect} />
+                       </div>
                       <div className="flex flex-col gap-2">
                         <Button 
                             variant="outline"

@@ -49,6 +49,7 @@ export default function DriverEarningsPage() {
     const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
     const [isWithdrawalDialogOpen, setIsWithdrawalDialogOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [selectedTx, setSelectedTx] = useState<any | null>(null);
 
     useEffect(() => {
         const mpStatus = searchParams.get('mp_status');
@@ -232,7 +233,7 @@ export default function DriverEarningsPage() {
                                     if (isPositive && (tx.type as any) === 'credit_promo') title = 'Bono Pozo Semanal';
 
                                     return (
-                                        <li key={tx.id} className="flex justify-between items-center p-4 rounded-2xl bg-white/[0.03] border border-white/[0.03] hover:bg-white/[0.05] transition-all group">
+                                        <li key={tx.id} onClick={() => setSelectedTx({ ...tx, friendlyTitle: title, isPositive })} className="flex justify-between items-center p-4 rounded-2xl bg-white/[0.03] border border-white/[0.03] hover:bg-white/[0.05] transition-all group cursor-pointer">
                                             <div className="space-y-1">
                                                 <div className="flex items-center gap-2">
                                                     <div className={cn(
@@ -250,9 +251,12 @@ export default function DriverEarningsPage() {
                                                     {tx.createdAt?.toDate ? tx.createdAt.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '...'}
                                                 </p>
                                             </div>
-                                            <p className={cn("font-black text-sm tracking-tighter italic tabular-nums", isPositive ? 'text-emerald-500' : 'text-white')}>
-                                                {isPositive ? '+' : ''}{formatCurrency(tx.amount)}
-                                            </p>
+                                            <div className="flex items-center gap-3">
+                                                <p className={cn("font-black text-sm tracking-tighter italic tabular-nums", isPositive ? 'text-emerald-500' : 'text-white')}>
+                                                    {isPositive ? '+' : ''}{formatCurrency(tx.amount)}
+                                                </p>
+                                                <VamoIcon name="chevron-right" className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                                            </div>
                                         </li>
                                     );
                                 })}
@@ -266,6 +270,56 @@ export default function DriverEarningsPage() {
             </div>
 
             {/* MODALS */}
+            <Dialog open={!!selectedTx} onOpenChange={(open) => !open && setSelectedTx(null)}>
+                <DialogContent className="max-w-md bg-zinc-950 border-zinc-900 rounded-[2.5rem] p-8">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white">Detalle de Movimiento</DialogTitle>
+                    </DialogHeader>
+                    {selectedTx && (
+                        <div className="mt-6 space-y-6">
+                            <div className="text-center p-6 bg-zinc-900/50 rounded-3xl border border-white/5">
+                                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2 font-mono">Monto</p>
+                                <p className={cn("text-5xl font-black tracking-tighter drop-shadow-sm", selectedTx.isPositive ? "text-emerald-500" : "text-white")}>
+                                    {selectedTx.isPositive ? '+' : ''}{formatCurrency(selectedTx.amount)}
+                                </p>
+                                {selectedTx.status === 'pending' && (
+                                    <Badge className="mt-3 bg-amber-500/10 text-amber-500 border-amber-500/20 font-black uppercase">Pendiente</Badge>
+                                )}
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Concepto</span>
+                                    <span className="text-sm font-black text-white text-right">{selectedTx.friendlyTitle}</span>
+                                </div>
+                                <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Fecha</span>
+                                    <span className="text-sm font-bold text-zinc-300">
+                                        {selectedTx.createdAt?.toDate ? selectedTx.createdAt.toDate().toLocaleString('es-AR') : '...'}
+                                    </span>
+                                </div>
+                                {selectedTx.referenceId && (
+                                    <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                                        <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Referencia</span>
+                                        <span className="text-sm font-mono font-bold text-zinc-400 bg-white/5 px-2 py-1 rounded-md">
+                                            #{selectedTx.referenceId.slice(0, 8).toUpperCase()}
+                                        </span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center pb-3">
+                                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">ID Transacción</span>
+                                    <span className="text-[10px] font-mono text-zinc-600 truncate max-w-[150px]">
+                                        {selectedTx.id}
+                                    </span>
+                                </div>
+                            </div>
+                            <Button className="w-full h-12 rounded-2xl font-black uppercase tracking-widest bg-zinc-800 hover:bg-zinc-700 text-white" onClick={() => setSelectedTx(null)}>
+                                Cerrar
+                            </Button>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
             <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
                 <DialogContent className="max-w-md bg-zinc-950 border-zinc-900 rounded-[2.5rem] p-8">
                     <DialogHeader>

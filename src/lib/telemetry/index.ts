@@ -157,5 +157,6 @@ export class TelemetryService {
     }
 }
 
-// Re-export provider and hook for cleaner imports
-export { TelemetryProvider, useTelemetry } from './TelemetryProvider';
+// Telemetry module entry point. 
+// Note: TelemetryProvider and useTelemetry are exported from ./TelemetryProvider 
+// to avoid circular dependencies with TelemetryService.

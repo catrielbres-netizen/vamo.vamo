@@ -18,6 +18,9 @@ import { useState } from 'react';
 import RatingForm from './RatingForm';
 import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
 import { safeFixed, safeNumber } from '@/lib/formatters';
+import { SharedDriverReceiptSummary } from './SharedDriverReceiptSummary';
+import { SharedPassengerReceipt } from './SharedPassengerReceipt';
+import { trackRideEvent, trackWalletEvent } from '@/lib/telemetry/logger';
 
 interface RideReceiptProps {
   ride: WithId<Ride> | Ride;
@@ -52,6 +55,21 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
   // Detect if current viewer is driver or passenger to show correct rating
   const { user } = useUser();
   const isDriver = user?.uid === (ride as any).driverId;
+
+  React.useEffect(() => {
+    if (ride?.id) {
+      trackRideEvent('ride_receipt_viewed', {
+        rideId: ride.id,
+        isDriver,
+        serviceType: ride.serviceType
+      });
+      trackWalletEvent('receipt_financial_snapshot_viewed', {
+        rideId: ride.id,
+        isDriver,
+        serviceType: ride.serviceType
+      });
+    }
+  }, [ride?.id, isDriver]);
 
   // [VamO PRO] What I gave to the other person
   const userRatingValue = isDriver ? (ride as any).passengerRatingByDriver : (ride as any).driverRatingByPassenger;
@@ -128,6 +146,74 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
   // Unique Receipt ID
   const receiptNumber = id ? `REC-${id.substring(0, 4).toUpperCase()}-${id.substring(id.length - 4).toUpperCase()}` : 'REC-PENDING';
 
+  // --- MODO COMPARTIDO (FASE 4B-2) ---
+  if ((ride as any).rideType === 'shared' || (ride as any).isSharedRide === true) {
+      const settlementStatus = (ride as any).sharedSettlementStatus;
+      const receiptsGenerated = (ride as any).sharedReceiptsGenerated;
+
+      // Pantallas de espera y estados especiales
+      if (settlementStatus === 'pending_shared_settlement' || settlementStatus === 'settling') {
+          return (
+            <div className={cn("w-full animate-in fade-in duration-700", className)}>
+              <Card className="border-none bg-zinc-950/40 glass-morphism premium-shadow rounded-[2.5rem] p-12 text-center flex flex-col items-center gap-4">
+                  <VamoIcon name="loader" className="w-10 h-10 text-primary animate-spin" />
+                  <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Sincronizando Liquidación...</h3>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                      El viaje compartido está siendo procesado financieramente.<br/>El recibo aparecerá en instantes.
+                  </p>
+              </Card>
+            </div>
+          );
+      }
+
+      if (settlementStatus === 'not_applicable') {
+          return (
+            <div className={cn("w-full animate-in fade-in duration-700", className)}>
+              <Card className="border-none bg-zinc-950/40 glass-morphism premium-shadow rounded-[2.5rem] p-12 text-center flex flex-col items-center gap-4">
+                  <VamoIcon name="info" className="w-10 h-10 text-zinc-500" />
+                  <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Viaje Sin Cobro</h3>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                      Este viaje compartido no generó cargos financieros<br/>debido a que no hubo pasajeros efectivos.
+                  </p>
+                  <Button onClick={onClose} variant="ghost" className="text-xs font-black uppercase text-zinc-600 mt-4">Cerrar</Button>
+              </Card>
+            </div>
+          );
+      }
+
+      if (settlementStatus === 'failed') {
+          return (
+            <div className={cn("w-full animate-in fade-in duration-700", className)}>
+              <Card className="border-none bg-zinc-950/40 glass-morphism premium-shadow rounded-[2.5rem] p-12 text-center flex flex-col items-center gap-4">
+                  <VamoIcon name="alert-triangle" className="w-10 h-10 text-rose-500" />
+                  <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Error de Liquidación</h3>
+                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                      Hubo un problema al preparar la liquidación.<br/>El equipo de VamO lo revisará a la brevedad.
+                  </p>
+                  <Button onClick={onClose} variant="ghost" className="text-xs font-black uppercase text-zinc-600 mt-4">Cerrar</Button>
+              </Card>
+            </div>
+          );
+      }
+
+      if (settlementStatus === 'settled' && receiptsGenerated !== true) {
+        return (
+          <div className={cn("w-full animate-in fade-in duration-700", className)}>
+            <Card className="border-none bg-zinc-950/40 glass-morphism premium-shadow rounded-[2.5rem] p-12 text-center flex flex-col items-center gap-4">
+                <VamoIcon name="loader" className="w-8 h-8 text-primary animate-spin" />
+                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Preparando Recibo...</h3>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Organizando datos compartidos</p>
+            </Card>
+          </div>
+        );
+      }
+
+      // Render Final (Diferenciado por Rol)
+      return isDriver 
+        ? <SharedDriverReceiptSummary ride={ride} className={className} /> 
+        : <SharedPassengerReceipt ride={ride} className={className} />;
+  }
+
   return (
     <div className={cn("w-full animate-in fade-in zoom-in-95 duration-500", className)}>
       <Card className="border-none bg-zinc-950/40 glass-morphism premium-shadow overflow-hidden rounded-[2.5rem]">
@@ -152,7 +238,7 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
               {isProcessing ? 'Total Estimado' : (isDriver ? 'Ingreso Neto Estimado' : 'Total a Pagar')}
             </span>
             <span className="text-5xl font-black text-white tracking-tighter">
-              {formatCurrency(isDriver ? (completedRide?.driverNetAmount || 0) : ((completedRide?.totalFare || 0) - (completedRide?.discountAmount || 0)))}
+              {formatCurrency(isDriver ? (completedRide?.driverNetAmount || 0) : (completedRide?.passengerPaysTotal ?? (completedRide?.totalFare || 0) - (completedRide?.discountAmount || 0)))}
             </span>
             
             {isProcessing ? (
@@ -213,11 +299,11 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
             const walletCoveredAmount = data.walletCoveredAmount || 0;
             const cashToCollect = data.cashToCollect || 0;
             const commissionAmount = data.commissionAmount || 0;
-            const municipalFee = data.municipalFee || 0;
             const vamoSubsidyAmount = data.vamoSubsidyAmount || 0;
             const driverWalletCredit = data.driverWalletCredit || 0;
-            const originalTotal = totalFare;
-            const isFullyWallet = walletCoveredAmount >= (totalFare - discountAmount) && (totalFare - discountAmount) > 0;
+            const passengerPaysTotal = data.passengerPaysTotal ?? (totalFare - discountAmount);
+            const originalTotal = data.originalTotal || totalFare;
+            const isFullyWallet = walletCoveredAmount >= passengerPaysTotal && passengerPaysTotal > 0;
             const hasCash = cashToCollect > 0;
 
             return (
@@ -228,55 +314,63 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
                 </div>
 
                 <div className="space-y-3">
-                  {/* Tarifa Original / Reconocida */}
                   <div className="flex justify-between items-center text-xs font-bold text-zinc-300">
-                    <span className="opacity-60">{isDriver ? 'Tarifa reconocida' : 'Tarifa original'}</span>
+                    <span className="opacity-60">{isDriver ? 'Tarifa reconocida' : 'Tarifa del viaje'}</span>
                     <span className={cn(discountAmount > 0 && !isDriver ? "line-through opacity-40" : "")}>
                         {formatCurrency(originalTotal)}
                     </span>
                   </div>
+
+                  {/* Vista Conductor: Desglose Obligatorio Express */}
+                  {isDriver && (
+                    <>
+                      {/* Pagado por pasajero */}
+                      <div className="flex justify-between items-center text-xs font-black text-emerald-400">
+                        <span className="opacity-80">Pagado por pasajero</span>
+                        <span>{formatCurrency(passengerPaysTotal)}</span>
+                      </div>
+                      
+                      {/* Cubierto por VamO Express */}
+                      {vamoSubsidyAmount > 0 && (
+                        <div className="flex justify-between items-center text-xs font-black text-indigo-400">
+                          <span className="opacity-80">Cubierto por VamO Express</span>
+                          <span>+{formatCurrency(vamoSubsidyAmount)}</span>
+                        </div>
+                      )}
+                      
+                      {/* Total bruto reconocido */}
+                      <div className="flex justify-between items-center text-xs font-bold text-zinc-300 border-b border-white/10 pb-2">
+                        <span className="opacity-60">Total bruto reconocido</span>
+                        <span>{formatCurrency(originalTotal)}</span>
+                      </div>
+                      
+                      {/* Comisión VamO */}
+                      <div className="flex justify-between items-center text-xs font-black text-rose-400/80 pt-2">
+                        <div className="flex items-center gap-1.5">
+                          <VamoIcon name="percent" className="h-3 w-3" />
+                          <span>Comisión VamO</span>
+                        </div>
+                        <span>-{formatCurrency(commissionAmount)}</span>
+                      </div>
+
+                      {/* Ajuste explícito (si aplica) */}
+                      {data.roundingAdjustmentAmount && data.roundingAdjustmentAmount !== 0 && (
+                        <div className="flex justify-between items-center text-xs font-black text-orange-400">
+                          <span className="opacity-80">Ajuste / bonificación</span>
+                          <span>{data.roundingAdjustmentAmount > 0 ? '+' : ''}{formatCurrency(data.roundingAdjustmentAmount)}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                   
                   {/* Descuento Pasajero (Vista Pasajero) */}
                   {!isDriver && discountAmount > 0 && (
                     <div className="flex justify-between items-center text-xs font-black text-emerald-400 animate-in slide-in-from-right-2 duration-500">
                       <div className="flex items-center gap-1.5">
                         <VamoIcon name="sparkles" className="h-3 w-3" />
-                        <span>{data.discountReason || 'Beneficio VamO'}</span>
+                        <span>{data.expressDiscountAmount > 0 ? 'Beneficio Express VamO' : (data.discountReason || 'Beneficio VamO')}</span>
                       </div>
                       <span>-{formatCurrency(discountAmount)}</span>
-                    </div>
-                  )}
-
-                  {/* Cobertura VamO (Vista Conductor) */}
-                  {isDriver && vamoSubsidyAmount > 0 && (
-                    <div className="flex justify-between items-center text-xs font-black text-indigo-400 bg-indigo-500/5 p-2 rounded-lg border border-indigo-500/10">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] uppercase tracking-tighter">Cobertura VamO</span>
-                        <span className="text-[8px] opacity-60 font-medium italic">Absorción de descuento</span>
-                      </div>
-                      <span>+{formatCurrency(vamoSubsidyAmount)}</span>
-                    </div>
-                  )}
-
-                  {/* Comisión VamO (Vista Conductor) */}
-                  {isDriver && (
-                    <div className="flex justify-between items-center text-xs font-black text-rose-400/80">
-                      <div className="flex items-center gap-1.5">
-                        <VamoIcon name="percent" className="h-3 w-3" />
-                        <span>Comisión VamO</span>
-                      </div>
-                      <span>-{formatCurrency(commissionAmount)}</span>
-                    </div>
-                  )}
-
-                  {/* Tasa Municipal (Vista Conductor) */}
-                  {isDriver && municipalFee > 0 && (
-                    <div className="flex justify-between items-center text-xs font-black text-amber-500/80">
-                      <div className="flex items-center gap-1.5">
-                        <Landmark className="h-3 w-3" />
-                        <span>Tasa Municipal</span>
-                      </div>
-                      <span>-{formatCurrency(municipalFee)}</span>
                     </div>
                   )}
 
@@ -317,30 +411,61 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
                     </div>
                   )}
 
-                  {/* Final Cash to Collect */}
-                  {hasCash ? (
-                    <div className="flex justify-between items-center pt-2">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-white uppercase tracking-widest leading-tight">
-                            {isDriver ? 'Efectivo a Cobrar' : 'Efectivo a Pagar'}
-                        </span>
-                        <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-tighter">
-                            Dinero físico real
+                  {/* Forma de Pago Seleccionada */}
+                  <div className="space-y-2 pt-4 border-t border-dashed border-white/10 mt-2">
+                    <span className="uppercase text-[10px] tracking-widest text-zinc-500 font-black">
+                      Forma de pago
+                    </span>
+                    
+                    {ride.paymentMethod === 'cash' || ride.paymentMethod === 'efectivo' ? (
+                      <div className="flex justify-between items-center pt-2">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-black text-white uppercase tracking-widest leading-tight">
+                              {isDriver ? 'Cobrás en efectivo' : 'Efectivo a Pagar'}
+                          </span>
+                          <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-tighter">
+                              Estado del pago
+                          </span>
+                        </div>
+                        <span className="text-3xl font-black text-emerald-400 tracking-tighter italic">
+                          {formatCurrency(cashToCollect)}
                         </span>
                       </div>
-                      <span className="text-3xl font-black text-white tracking-tighter italic">
-                        {formatCurrency(cashToCollect)}
-                      </span>
-                    </div>
-                  ) : isFullyWallet ? (
-                    <div className="flex flex-col items-center justify-center py-2 space-y-2">
-                       <div className="px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2">
-                          <VamoIcon name="check-circle" className="h-3.5 w-3.5 text-emerald-500" />
-                          <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Viaje 100% Pago</span>
-                       </div>
-                       <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-tighter">No hay intercambio de efectivo</p>
-                    </div>
-                  ) : null}
+                    ) : ride.paymentMethod === 'wallet' || ride.paymentMethod === 'vamo_wallet' ? (
+                      <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                         <div className="px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center gap-2">
+                            <VamoIcon name="check-circle" className="h-3.5 w-3.5 text-indigo-500" />
+                            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Estado del pago</span>
+                         </div>
+                         <p className="text-[9px] text-indigo-300 font-bold uppercase tracking-tighter">Pagado con Billetera VamO</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                         <div className="px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center gap-2">
+                            <VamoIcon name="credit-card" className="h-3.5 w-3.5 text-blue-400" />
+                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Estado del pago</span>
+                         </div>
+                         {(ride as any).paymentStatus === 'approved' ? (
+                             <div className="flex flex-col items-center gap-1 text-center">
+                                 <p className="text-[9px] text-blue-400 font-bold uppercase tracking-tighter">
+                                     Pagado (Mercado Pago)
+                                 </p>
+                                 {(ride as any).mpIsSandbox && (
+                                     <p className="text-[8px] font-bold text-orange-400 mt-1">Pago de prueba registrado correctamente. No se movió dinero real.</p>
+                                 )}
+                             </div>
+                         ) : (
+                             <div className="flex flex-col items-center text-center mt-2">
+                                 <p className="text-[10px] text-blue-400 font-black uppercase tracking-tighter bg-blue-500/20 px-3 py-1 rounded-full">Pago Pendiente</p>
+                                 <p className="text-[9px] text-blue-300 font-bold uppercase tracking-tighter mt-2">Pendiente (Mercado Pago)</p>
+                                 {!isDriver && (
+                                     <p className="text-[8px] text-blue-300/70 mt-1">Si ya pagaste, aguarda un momento a que Mercado Pago lo confirme.</p>
+                                 )}
+                             </div>
+                         )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 {isDriver && vamoSubsidyAmount > 0 && (

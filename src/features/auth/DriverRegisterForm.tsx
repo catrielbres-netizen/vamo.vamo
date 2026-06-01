@@ -159,6 +159,7 @@ export function DriverRegisterForm() {
                 <option value="rawson" className="bg-zinc-900">Rawson / Playa Unión</option>
                 <option value="trelew" className="bg-zinc-900">Trelew</option>
                 <option value="comodoro" className="bg-zinc-900">Comodoro Rivadavia</option>
+                <option value="parana" className="bg-zinc-900">Paraná</option>
             </select>
         </div>
       </div>

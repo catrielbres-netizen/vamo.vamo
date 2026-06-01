@@ -15,7 +15,8 @@
     "demo:seed": "tsx scripts/demo/seed_demo_users_web.ts",
     "demo:seed-data": "tsx scripts/demo/seed_demo_data.ts",
     "test:auth": "echo 'EJECUTANDO TESTS DE REGRESION AUTH...' && echo 'OK'",
-    "predeploy": "npm run build && npm run test:auth"
+    "predeploy": "npm run build && npm run test:auth",
+    "deploy:hosting": "firebase deploy --only hosting"
   },
   "engines": {
     "node": "20"

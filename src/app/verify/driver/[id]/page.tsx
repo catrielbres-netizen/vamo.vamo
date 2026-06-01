@@ -71,8 +71,85 @@ export default function PublicDriverVerifyPage() {
         );
     }
 
-    const isHabilitado = profile.municipalStatus === 'active';
-    const statusLabel = isHabilitado ? 'Conductor Habilitado' : 'No Habilitado / En Revisión';
+    const municipalStatus = profile.municipalStatus || 'pending';
+    const isSuspended =
+        profile.isSuspended === true ||
+        profile.trafficSuspended === true ||
+        profile.municipalSuspended === true ||
+        profile.adminSuspended === true;
+    const approved = profile.approved === true;
+    const source = profile.suspensionSource || null;
+
+    let municipalStatusLabel = "Pendiente de revisión";
+    if (municipalStatus === 'active') {
+        municipalStatusLabel = "Aprobado municipalmente";
+    } else if (municipalStatus === 'municipal_observed') {
+        municipalStatusLabel = "Observado";
+    } else if (municipalStatus === 'rejected_by_municipality') {
+        municipalStatusLabel = "Rechazado";
+    } else if (municipalStatus === 'suspended_expired_license') {
+        municipalStatusLabel = "Licencia Vencida";
+    } else if (municipalStatus === 'suspended_expired_insurance') {
+        municipalStatusLabel = "Seguro Vencido";
+    } else if (municipalStatus === 'suspended_unpaid_canon') {
+        municipalStatusLabel = "Canon Municipal Impago";
+    } else if (municipalStatus === 'suspended_by_municipality') {
+        municipalStatusLabel = "Suspendido por Municipalidad";
+    }
+
+    let operationalStatusLabel = profile.operationalStatusLabel || "Activo para operar";
+    let operationalStatus = profile.operationalStatus || "active";
+    let credentialStatus = profile.credentialStatus || "valid";
+
+    // Compute locally if not synced yet (defensive fallback)
+    if (!profile.operationalStatus) {
+        if (isSuspended) {
+            credentialStatus = "blocked";
+            if (profile.trafficSuspended === true || source === 'traffic') {
+                operationalStatus = "suspended_by_traffic";
+                operationalStatusLabel = "Bloqueado operativamente por Tránsito";
+            } else if (profile.municipalSuspended === true || source === 'municipal') {
+                operationalStatus = "suspended_by_municipality";
+                operationalStatusLabel = "Suspendido por Municipalidad";
+            } else if (profile.adminSuspended === true || source === 'admin') {
+                operationalStatus = "suspended_by_admin";
+                operationalStatusLabel = "Suspendido por Administración VamO";
+            } else {
+                operationalStatus = "suspended";
+                operationalStatusLabel = "Suspendido";
+            }
+        } else if (municipalStatus !== 'active') {
+            credentialStatus = "pending";
+            operationalStatus = "pending_municipal_review";
+            operationalStatusLabel = "Habilitación Municipal Pendiente";
+        } else if (!approved) {
+            credentialStatus = "pending";
+            operationalStatus = "not_approved";
+            operationalStatusLabel = "Pendiente de Aprobación Final";
+        } else {
+            credentialStatus = "valid";
+            operationalStatus = "active";
+            operationalStatusLabel = "Activo para operar";
+        }
+    }
+
+    // Ribbon properties mapping
+    const isHabilitado = credentialStatus === 'valid';
+    let ribbonText = "Credencial Vigente";
+    let ribbonBg = "bg-emerald-500";
+    if (credentialStatus === 'blocked') {
+        ribbonText = "Credencial Restringida";
+        ribbonBg = "bg-red-600";
+    } else if (credentialStatus === 'expired') {
+        ribbonText = "Credencial Vencida";
+        ribbonBg = "bg-red-600";
+    } else if (credentialStatus === 'rejected') {
+        ribbonText = "Credencial Rechazada";
+        ribbonBg = "bg-red-600";
+    } else if (credentialStatus === 'pending') {
+        ribbonText = "Credencial Pendiente";
+        ribbonBg = "bg-amber-500";
+    }
 
     return (
         <div className="min-h-screen bg-[#0a0a0a] text-white selection:bg-indigo-500/30 font-sans pb-12">
@@ -92,13 +169,21 @@ export default function PublicDriverVerifyPage() {
                 )}>
                     {/* Status Ribbon */}
                     <div className={cn(
-                        "py-3 px-6 text-center text-[10px] font-black uppercase tracking-[0.2em] italic",
-                        isHabilitado ? "bg-emerald-500 text-white" : "bg-red-600 text-white"
+                        "py-3 px-6 text-center text-[10px] font-black uppercase tracking-[0.2em] italic text-white",
+                        ribbonBg
                     )}>
-                        {statusLabel}
+                        {ribbonText}
                     </div>
 
                     <CardContent className="p-8 space-y-6">
+                        {credentialStatus === 'blocked' && (
+                            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-center space-y-1">
+                                <p className="text-xs font-black uppercase tracking-wider">¡Atención Inspector!</p>
+                                <p className="text-sm font-bold leading-tight">Esta credencial no habilita la operación actualmente.</p>
+                                <p className="text-[10px] opacity-80 mt-1">{operationalStatusLabel}</p>
+                            </div>
+                        )}
+
                         <div className="flex flex-col items-center gap-4 text-center">
                             <div className="relative">
                                 <Avatar className="h-32 w-32 border-4 border-white/10 shadow-2xl">
@@ -131,6 +216,27 @@ export default function PublicDriverVerifyPage() {
                             <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
                                 <p className="text-[8px] font-black uppercase tracking-widest text-zinc-500 mb-1">Legajo Municipal</p>
                                 <p className="text-xs font-black text-indigo-400 font-mono tracking-wider">{profile.municipalCode || '---'}</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 pt-2">
+                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-zinc-500 mb-1">Estado Municipal</p>
+                                <p className={cn(
+                                    "text-xs font-black italic uppercase tracking-tight",
+                                    municipalStatus === 'active' ? "text-emerald-400" : "text-amber-400"
+                                )}>
+                                    {municipalStatusLabel}
+                                </p>
+                            </div>
+                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-zinc-500 mb-1">Estado Operativo</p>
+                                <p className={cn(
+                                    "text-xs font-black italic uppercase tracking-tight",
+                                    operationalStatus === 'active' ? "text-emerald-400" : "text-red-400"
+                                )}>
+                                    {operationalStatusLabel}
+                                </p>
                             </div>
                         </div>
 

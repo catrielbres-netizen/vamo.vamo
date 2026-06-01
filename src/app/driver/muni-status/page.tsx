@@ -9,7 +9,9 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { QRCodeCanvas } from 'qrcode.react';
+import { useRouter } from 'next/navigation';
+import { featureFlags } from '@/config/features';
+import { LazyQRCode } from '@/components/LazyQRCode';
 import {
     Dialog,
     DialogContent,
@@ -206,6 +208,7 @@ const isExpired = (ts: any) => {
 
 export default function DriverMuniStatusPage() {
     const { user, profile } = useUser();
+    const router = useRouter();
     const firestore = useFirestore();
     const { toast } = useToast();
     const [munProfile, setMunProfile] = useState<MunicipalProfile | null>(null);
@@ -216,6 +219,11 @@ export default function DriverMuniStatusPage() {
     const [isUploading, setIsUploading] = useState(false);
 
     useEffect(() => {
+        if (featureFlags.vamoParticularModeEnabled || !featureFlags.municipalModeEnabled) {
+            router.replace('/driver/profile');
+            return;
+        }
+
         if (!firestore || !user?.uid) return;
         const ref = doc(firestore, 'municipal_profiles', user.uid);
         const unsub = onSnapshot(ref, snap => {
@@ -230,6 +238,19 @@ export default function DriverMuniStatusPage() {
     }, [firestore, user?.uid]);
 
     // All drivers use this page to manage their municipal status
+    if (featureFlags.vamoParticularModeEnabled || !featureFlags.municipalModeEnabled) {
+        return (
+            <div className="py-16 flex flex-col items-center justify-center text-center px-4 space-y-4">
+                <VamoIcon name="lock" className="h-10 w-10 text-zinc-500" />
+                <h2 className="text-xl font-black text-white">Módulo No Disponible</h2>
+                <p className="text-sm text-zinc-400">Este módulo está reservado para la versión municipal de VamO.</p>
+                <Button className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl" onClick={() => router.replace('/driver/profile')}>
+                    Volver a mi perfil
+                </Button>
+            </div>
+        );
+    }
+
     if (loading) {
         return (
             <div className="py-16 flex justify-center">
@@ -344,6 +365,11 @@ export default function DriverMuniStatusPage() {
         }
     };
 
+    const isTraffic = profile?.trafficSuspended || (profile?.isSuspended && profile?.suspensionSource === 'traffic');
+    const isMunicipal = profile?.municipalSuspended || (profile?.isSuspended && profile?.suspensionSource === 'municipal');
+    const isAdmin = profile?.adminSuspended || (profile?.isSuspended && profile?.suspensionSource === 'admin');
+    const activeSuspension = isTraffic || isMunicipal || isAdmin;
+
     return (
         <div className="space-y-5 pb-10">
 
@@ -352,6 +378,36 @@ export default function DriverMuniStatusPage() {
                 <VamoIcon name="landmark" className="h-5 w-5 text-amber-400" />
                 <h2 className="text-lg font-black text-white tracking-tight">Habilitación Municipal</h2>
             </div>
+
+            {activeSuspension && (
+                <div className="rounded-3xl border-2 border-red-500/50 bg-red-500/10 p-6 space-y-3 shadow-2xl shadow-red-500/10 animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-3">
+                        <VamoIcon name="alert-circle" className="h-6 w-6 text-red-400 shrink-0" />
+                        <h3 className="text-base font-black text-red-400 uppercase tracking-tight">
+                            {isAdmin ? 'Cuenta Bloqueada por Administración' : 
+                             isMunicipal ? 'Habilitación Suspendida por Municipio' : 
+                             'Suspensión Preventiva de Tránsito'}
+                        </h3>
+                    </div>
+                    <p className="text-xs text-zinc-300 leading-relaxed font-semibold">
+                        {isAdmin ? 'Tu cuenta ha sido bloqueada por la administración de la plataforma VamO.' : 
+                         isMunicipal ? 'Tu habilitación municipal ha sido suspendida por el área central del Municipio.' : 
+                         'Tu cuenta ha sido suspendida preventivamente por el área operativa de Control de Tránsito.'}
+                    </p>
+                    {((isAdmin && profile?.adminSuspensionReason) || 
+                      (isMunicipal && profile?.municipalSuspensionReason) || 
+                      (isTraffic && profile?.trafficSuspensionReason)) && (
+                        <div className="p-3 bg-zinc-950/60 rounded-xl border border-white/5 mt-2">
+                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-wider mb-1">Motivo informado:</p>
+                            <p className="text-xs text-red-400 italic">
+                                "{isAdmin ? profile.adminSuspensionReason : 
+                                  isMunicipal ? profile.municipalSuspensionReason : 
+                                  profile.trafficSuspensionReason}"
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* ── CÓDIGO MUNICIPAL ────────────────────────────────────────── */}
             {profile?.municipalCode && (
@@ -376,13 +432,20 @@ export default function DriverMuniStatusPage() {
                                 </DialogTitle>
                             </DialogHeader>
                             <div className="flex flex-col items-center gap-6 py-6">
-                                <div className="p-4 bg-white rounded-3xl shadow-2xl">
-                                    <QRCodeCanvas 
+                                <div className="relative p-4 bg-white rounded-3xl shadow-2xl overflow-hidden">
+                                    <LazyQRCode 
                                         value={`${typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.online'}/verify/driver/${user?.uid}`}
                                         size={180}
                                         level="H"
                                         marginSize={2}
                                     />
+                                    {activeSuspension && (
+                                        <div className="absolute inset-0 bg-red-600/80 rounded-3xl flex flex-col items-center justify-center text-white p-4 text-center select-none backdrop-blur-[2px]">
+                                            <VamoIcon name="shield-off" className="w-12 h-12 text-white animate-bounce" />
+                                            <span className="text-[10px] font-black uppercase tracking-wider mt-2">Operación Bloqueada</span>
+                                            <span className="text-[8px] opacity-90 mt-1 font-semibold leading-tight">Esta credencial no está habilitada para operar</span>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="text-center space-y-1">
                                     <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Código: {profile?.municipalCode}</p>

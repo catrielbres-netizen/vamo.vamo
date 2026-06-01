@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
+import * as admin from "firebase-admin";
 import { getDb, getAuth } from "./lib/firebaseAdmin";
 
 /**
@@ -104,4 +105,89 @@ export const diagnosticAuditV1 = onCall({ cors: true, region: "us-central1", tim
         logger.error("[DIAGNOSTIC_FATAL]", error);
         throw new HttpsError("internal", "Error durante la ejecución del diagnóstico.");
     }
+});
+
+/**
+ * [VamO DIAGNOSTICS] emergencyUnblockSharedRidesV1
+ * Emergency cleanup to unblock passengers with stuck shared ride states.
+ */
+export const emergencyUnblockSharedRidesV1 = onCall({ cors: true, region: "us-central1", timeoutSeconds: 300, memory: "512MiB" }, async (request) => {
+    // 1. SECURITY: Admin Only
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Debes estar autenticado.");
+    }
+
+    const db = getDb();
+    const callerSnap = await db.collection("users").doc(request.auth.uid).get();
+    if (!callerSnap.exists || callerSnap.data()?.role !== "admin") {
+        throw new HttpsError("permission-denied", "Acceso restringido a administradores globales.");
+    }
+
+    logger.info(`[EMERGENCY_UNBLOCK] Starting unblock for all users...`);
+
+    const usersSnap = await db.collection('users')
+        .where('activeSharedRequestId', '!=', null)
+        .get();
+
+    logger.info(`[EMERGENCY_UNBLOCK] Found ${usersSnap.size} users with activeSharedRequestId.`);
+
+    let cleanedCount = 0;
+
+    for (const userDoc of usersSnap.docs) {
+        const userData = userDoc.data();
+        const userId = userDoc.id;
+        const activeRideId = userData.activeRideId;
+
+        let shouldCleanShared = true;
+
+        if (activeRideId) {
+            const rideSnap = await db.collection('rides').doc(activeRideId).get();
+            if (rideSnap.exists) {
+                const rideData = rideSnap.data();
+                const blockingStatuses = ['searching', 'offered', 'accepted', 'driver_assigned', 'driver_arrived', 'in_progress', 'paused'];
+                if (rideData && blockingStatuses.includes(rideData.status)) {
+                    logger.info(`[EMERGENCY_UNBLOCK] User ${userId} has a REAL blocking ride ${activeRideId}. Skipping.`);
+                    shouldCleanShared = false;
+                }
+            }
+        }
+
+        if (shouldCleanShared) {
+            await db.collection('users').doc(userId).update({
+                activeSharedRequestId: admin.firestore.FieldValue.delete(),
+                activeSharedRideGroupId: admin.firestore.FieldValue.delete(),
+                currentSharedRideGroupId: admin.firestore.FieldValue.delete(),
+                sharedRideStatus: admin.firestore.FieldValue.delete(),
+                ...(activeRideId ? { activeRideId: admin.firestore.FieldValue.delete() } : {}),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            cleanedCount++;
+        }
+    }
+
+    // Clean old groups
+    const groupsSnap = await db.collection('shared_ride_groups')
+        .where('status', 'in', ['forming', 'closing', 'ready_for_driver', 'pending_passenger_confirmation'])
+        .get();
+
+    let groupsCleaned = 0;
+    for (const groupDoc of groupsSnap.docs) {
+        const groupData = groupDoc.data();
+        const createdAt = groupData.createdAt?.toDate ? groupData.createdAt.toDate() : new Date();
+        const ageInMinutes = (Date.now() - createdAt.getTime()) / (1000 * 60);
+
+        if (ageInMinutes > 120) {
+            await groupDoc.ref.update({
+                status: 'cancelled_debug_cleanup',
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            groupsCleaned++;
+        }
+    }
+
+    return {
+        success: true,
+        cleanedCount,
+        groupsCleaned
+    };
 });

@@ -40,3 +40,16 @@ export function parseFirestoreDate(date: any): Date | null {
 
   return null;
 }
+
+export function resolveUserRole(profile: any, claims: any): string | null {
+  if (!profile && !claims) return null;
+  return (
+    claims?.role ||
+    claims?.r ||
+    profile?.role ||
+    profile?.trafficRole ||
+    profile?.municipalRole ||
+    profile?.adminRole ||
+    null
+  );
+}

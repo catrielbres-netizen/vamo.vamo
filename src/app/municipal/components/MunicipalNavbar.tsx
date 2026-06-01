@@ -16,12 +16,14 @@ const navLinks = [
     { href: '/municipal/dashboard',  label: 'Dashboard',   icon: 'layout-dashboard' },
     { href: '/municipal/alerts',     label: 'Alertas',     icon: 'shield-alert' },
     { href: '/municipal/map',        label: 'Mapa',        icon: 'map' },
+    { href: '/municipal/taxi-stands',label: 'Paradas',     icon: 'map-pin' },
     { href: '/municipal/drivers',    label: 'Conductores', icon: 'users' },
     { href: '/municipal/passengers', label: 'Pasajeros',   icon: 'contact' },
     { href: '/traffic',              label: 'Tránsito',    icon: 'shield-check' },
     { href: '/municipal/treasury',   label: 'Tesorería',   icon: 'landmark' },
     { href: '/municipal/team',       label: 'Equipo',      icon: 'shield' },
     { href: '/municipal/pricing',    label: 'Tarifas',     icon: 'banknote' },
+    { href: '/municipal/settings',   label: 'Diseño',      icon: 'palette' },
 ]
 
 const HUB_CITY_KEY = 'rawson';
@@ -36,6 +38,7 @@ export function MunicipalNavbar() {
   const filteredLinks = navLinks.filter(link => {
       if (link.href === '/municipal/team') return isMuniAdmin;
       if (link.href === '/municipal/pricing') return isMuniAdmin;
+      if (link.href === '/municipal/taxi-stands') return isMuniAdmin;
       if (link.href === '/municipal/drivers') return isOperator || isMuniAdmin;
       if (link.href === '/municipal/passengers') return isOperator || isMuniAdmin;
       if (link.href === '/municipal/alerts') return isTraffic || isOperator || isMuniAdmin;

@@ -64,8 +64,12 @@
   }
   
   .bg-morphic {
-    background: radial-gradient(circle at top right, #1e1b4b, #050509);
+    background-image: var(--vamo-texture-bg, none), radial-gradient(circle at top right, rgba(var(--vamo-primary-rgb), 0.15), var(--vamo-bg));
+    background-color: var(--vamo-bg);
     background-attachment: fixed;
+    background-size: var(--vamo-texture-size, auto), auto;
+    background-position: var(--vamo-texture-position, 0 0), 0 0;
+    transition: background-color 0.4s ease, background-image 0.4s ease;
   }
 
   .btn-glow {
