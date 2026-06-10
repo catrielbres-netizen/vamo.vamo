@@ -14,7 +14,7 @@ import { Progress } from '@/components/ui/progress';
 import { VamoIcon } from './VamoIcon';
 import { WithId } from '@/firebase/firestore/use-collection';
 import { Ride, UserProfile, Role } from '@/lib/types';
-import { Timestamp, doc, runTransaction, increment } from 'firebase/firestore';
+import { Timestamp, doc, runTransaction, increment, updateDoc, deleteField, getFirestore } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import RatingForm from './RatingForm';
@@ -24,6 +24,7 @@ import { ExpressReceiptProgress } from './ExpressProgressWidget';
 import { SharedDriverReceiptSummary } from './SharedDriverReceiptSummary';
 import { SharedPassengerReceipt } from './SharedPassengerReceipt';
 import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
+import { MercadoPagoPaymentButton } from './MercadoPagoPaymentButton';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useRef, useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -189,7 +190,22 @@ export default function FinishedRideSummary({
             <div className="flex flex-col w-full px-6 gap-2 pt-4">
                 <Button 
                     className="w-full bg-indigo-600 hover:bg-indigo-700 h-14 font-black rounded-2xl"
-                    onClick={() => window.location.reload()}
+                    onClick={async () => {
+                        try {
+                            const db = getFirestore(firebaseApp);
+                            // Primero limpiamos el error para que pase a estado de carga
+                            await updateDoc(doc(db, 'rides', ride.id), {
+                                settlementError: deleteField(),
+                                sharedSettlementStatus: 'pending_shared_settlement',
+                            });
+                            // Luego llamamos al backend para que realmente lo re-liquide
+                            const functions = getFunctions(firebaseApp, 'us-central1');
+                            const retrySettle = httpsCallable(functions, 'retrySharedRideSettlementV1');
+                            await retrySettle({ rideId: ride.id });
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }}
                 >
                     Reintentar ahora
                 </Button>
@@ -479,7 +495,7 @@ export default function FinishedRideSummary({
                     Forma de pago
                   </span>
                   
-                  {ride.paymentMethod === 'cash' || ride.paymentMethod === 'efectivo' ? (
+                  {(ride.paymentMethod as any) === 'cash' || (ride.paymentMethod as any) === 'efectivo' ? (
                     <div className="flex flex-col gap-1 mt-1">
                       <div className="flex justify-between items-center text-md font-black text-white bg-zinc-900 p-4 rounded-2xl border border-white/5 shadow-inner">
                         <div className="flex flex-col">
@@ -489,7 +505,7 @@ export default function FinishedRideSummary({
                         <span className="text-emerald-400 text-2xl tracking-tighter italic">{formatCurrency(cashToCollect)}</span>
                       </div>
                     </div>
-                  ) : ride.paymentMethod === 'wallet' || ride.paymentMethod === 'vamo_wallet' ? (
+                  ) : (ride.paymentMethod as any) === 'wallet' || (ride.paymentMethod as any) === 'vamo_wallet' ? (
                     <div className="flex flex-col gap-1 mt-1">
                       <div className="flex justify-between items-center text-md font-black text-white bg-indigo-500/10 p-4 rounded-2xl border border-indigo-500/20 shadow-inner">
                         <div className="flex flex-col">
@@ -514,7 +530,7 @@ export default function FinishedRideSummary({
                                </span>
                            )}
                            {/* Sandbox test check */}
-                           {ride.paymentStatus === 'approved' && ride.mpIsSandbox && (
+                           {ride.paymentStatus === 'approved' && (ride as any).mpIsSandbox && (
                                <span className="text-[8px] font-bold mt-2 text-orange-400">Pago de prueba registrado correctamente. No se movió dinero real.</span>
                            )}
                         </div>
