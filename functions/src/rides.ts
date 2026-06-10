@@ -2492,3 +2492,16 @@ export const joinScheduledRideInterestV1 = onCall({ cors: true, region: 'us-cent
         throw new HttpsError('internal', 'Error al procesar la solicitud.');
     }
 });
+
+export const clearPassengerActiveRideV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
+    const db = getDb();
+    const userRef = db.doc(`users/${request.auth.uid}`);
+    await userRef.update({
+        activeRideId: FieldValue.delete(),
+        activeSharedRideId: FieldValue.delete(),
+        activeSharedGroupId: FieldValue.delete(),
+        activeSharedRequestId: FieldValue.delete()
+    });
+    return { success: true };
+});

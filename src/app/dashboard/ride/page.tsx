@@ -542,15 +542,11 @@ function RidePageContent() {
       setCompletedRideId(null);
 
       // [VamO PRO] Proactive Firestore Cleanup to avoid hangs
-      if (user && firestore && (profile?.activeRideId || profile?.activeSharedRideId)) {
+      if (user && firebaseApp && (profile?.activeRideId || profile?.activeSharedRideId)) {
           try {
-              const userRef = doc(firestore, 'users', user.uid);
-              await updateDoc(userRef, { 
-                  activeRideId: null,
-                  activeSharedRideId: null,
-                  activeSharedGroupId: null,
-                  activeSharedRequestId: null
-              });
+              const functions = getFunctions(firebaseApp, 'us-central1');
+              const clearRide = httpsCallable(functions, 'clearPassengerActiveRideV1');
+              await clearRide();
               console.log("[CLEANUP] active ride pointers cleared in Firestore.");
           } catch (e) {
               console.error("[CLEANUP] Failed to clear active ride pointers:", e);

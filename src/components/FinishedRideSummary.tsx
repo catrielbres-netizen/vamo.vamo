@@ -99,7 +99,15 @@ export default function FinishedRideSummary({
     window.location.href = target;
   };
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    try {
+        const functions = getFunctions(firebaseApp, 'us-central1');
+        const clearRide = httpsCallable(functions, 'clearPassengerActiveRideV1');
+        await clearRide();
+    } catch (e) {
+        console.error("Failed to clear passenger active ride:", e);
+    }
+    
     if (onClose) {
       onClose();
       return;
