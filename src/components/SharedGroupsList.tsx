@@ -1,7 +1,7 @@
 import React from 'react';
 import { VamoIcon } from './VamoIcon';
 import { cn } from '@/lib/utils';
-import { formatDistance } from '@/lib/format';
+
 
 interface SharedGroupItem {
     groupId: string;

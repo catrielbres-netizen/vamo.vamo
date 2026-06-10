@@ -204,7 +204,7 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
     const q = query(
       collection(firestore, 'rides'),
       where('driverId', '==', profile.id),
-      where('status', 'in', ['driver_assigned', 'driver_arrived', 'in_ride', 'paused']),
+      where('status', 'in', ['driver_assigned', 'driver_arrived', 'in_ride', 'paused', 'in_progress']),
       limit(1)
     );
 
@@ -668,13 +668,13 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
                                   <p className="text-[10px] opacity-80 mt-0.5">Tu cuenta requiere regularización para seguir operando.</p>
                                   {profile.riskReasons && profile.riskReasons.length > 0 && (
                                       <div className="flex flex-wrap gap-1 mt-1.5">
-                                          {profile.riskReasons.slice(0, 2).map((r, i) => (
+                                          {profile.riskReasons.slice(0, 2).map((r: string, i: number) => (
                                               <span key={i} className="px-1.5 py-0.5 rounded-md bg-black/5 text-[8px] font-bold uppercase tracking-wider border border-current/10">{r}</span>
                                           ))}
                                       </div>
                                   )}
                               </div>
-                              <Button size="sm" variant="ghost" className="h-8 rounded-lg bg-white/5 hover:bg-white/10 font-bold text-xs" onClick={() => router.push(profile.riskReasons?.some(r => r.includes('deuda') || r.includes('Saldo')) ? '/driver/earnings' : '/driver/muni-status')}>Ver</Button>
+                              <Button size="sm" variant="ghost" className="h-8 rounded-lg bg-white/5 hover:bg-white/10 font-bold text-xs" onClick={() => router.push(profile.riskReasons?.some((r: string) => r.includes('deuda') || r.includes('Saldo')) ? '/driver/earnings' : '/driver/muni-status')}>Ver</Button>
                           </div>
                       );
                   }
@@ -694,13 +694,13 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
                                 <p className="text-[10px] opacity-80 mt-0.5">Revisá tu estado para evitar restricciones en el servicio.</p>
                                 {profile.riskReasons && profile.riskReasons.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mt-1.5">
-                                        {profile.riskReasons.slice(0, 2).map((r, i) => (
+                                        {profile.riskReasons.slice(0, 2).map((r: string, i: number) => (
                                             <span key={i} className="px-1.5 py-0.5 rounded-md bg-black/5 text-[8px] font-bold uppercase tracking-wider border border-current/10">{r}</span>
                                         ))}
                                     </div>
                                 )}
                             </div>
-                            <Button size="sm" variant="ghost" className="h-8 rounded-lg bg-white/5 hover:bg-white/10 font-bold text-xs" onClick={() => router.push(profile.riskReasons?.some(r => r.includes('deuda') || r.includes('Saldo')) ? '/driver/earnings' : '/driver/muni-status')}>Ver</Button>
+                            <Button size="sm" variant="ghost" className="h-8 rounded-lg bg-white/5 hover:bg-white/10 font-bold text-xs" onClick={() => router.push(profile.riskReasons?.some((r: string) => r.includes('deuda') || r.includes('Saldo')) ? '/driver/earnings' : '/driver/muni-status')}>Ver</Button>
                         </div>
                       );
                   }
@@ -771,6 +771,13 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
                                 <VamoIcon name="wallet" className="w-4 h-4" /> Billetera
                             </Link>
                         </TabsTrigger>
+                        {featureFlags.municipalModeEnabled && (
+                            <TabsTrigger value="muni-status" asChild>
+                                <Link href="/driver/muni-status" className="gap-1.5 text-xs px-3 py-1.5 flex items-center justify-center">
+                                    <VamoIcon name="landmark" className="w-4 h-4" /> Habilitación
+                                </Link>
+                            </TabsTrigger>
+                        )}
                         <TabsTrigger value="profile" asChild>
                             <Link href="/driver/profile" className="gap-1.5 text-xs px-3 py-1.5 flex items-center justify-center">
                                 <VamoIcon name="user" className="w-4 h-4" /> Perfil

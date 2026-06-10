@@ -730,7 +730,7 @@ export default function MunicipalDriverDetailPage() {
                       {userData.driverRiskLevel}
                    </Badge>
                 )}
-                {userData?.riskReasons?.map((reason, i) => (
+                {userData?.riskReasons?.map((reason: string, i: number) => (
                   <Badge key={i} variant="secondary" className="bg-white/5 text-zinc-400 border-none text-[9px] uppercase font-bold">
                     {reason}
                   </Badge>

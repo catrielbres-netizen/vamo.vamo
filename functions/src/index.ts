@@ -32,8 +32,13 @@ export {
   searchTrafficDriversV1,
   updateDriverMunicipalStatusV1,
   requestDriverDocumentV1,
-  updateTrafficSuspensionV1
+  updateTrafficSuspensionV1,
+  createTrafficObservationV1,
+  submitTrafficObservationDocumentV1,
+  resolveTrafficObservationV1,
+  checkExpiredTrafficObservations
 } from "./traffic";
+export * from "./traffic_reports";
 export * from "./municipal";
 export * from "./users";
 export * from "./documents";

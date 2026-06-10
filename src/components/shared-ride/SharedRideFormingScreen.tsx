@@ -53,10 +53,11 @@ export function SharedRideFormingScreen({
 
     // [REGRESO UX] Lanzar búsqueda automáticamente al llegar a 0
     useEffect(() => {
-        if (launchTimeLeft === 0 && (group?.status === 'forming' || group?.status === 'pending_passenger_confirmation') && (group?.occupiedSeats || 0) >= 2) {
+        const currentReqCount = group?.requestCount ?? group?.passengerIds?.length ?? 1;
+        if (((launchTimeLeft === 0 && group?.driverSearchStartsAt) || timeLeft === 0) && (group?.status === 'forming' || group?.status === 'pending_passenger_confirmation') && currentReqCount >= 2) {
             onLaunch?.();
         }
-    }, [launchTimeLeft, group?.status, group?.occupiedSeats, onLaunch]);
+    }, [launchTimeLeft, timeLeft, group?.status, group?.requestCount, group?.passengerIds?.length, group?.driverSearchStartsAt, onLaunch]);
 
     // Timer para Confirmación (45s)
     useEffect(() => {
@@ -99,10 +100,16 @@ export function SharedRideFormingScreen({
     // [VamO PRO] Robust creator identification
     const isCreator = request.roleInGroup === 'creator' || (group ? group.creatorPassengerId === request.passengerId : true);
     const paxCount = group?.occupiedSeats || 1;
+    const maxSeats = group?.maxSeats ?? 4;
+    const maxRequests = group?.maxRequests ?? 2;
+    const requestCount = group?.requestCount ?? group?.passengerIds?.length ?? 1;
+    // El grupo está lleno cuando ambos usuarios registrados se sumaron (independiente de asientos)
+    const isGroupFull = requestCount >= maxRequests || paxCount >= maxSeats;
     const isInitializing = !group;
 
     const renderHeader = () => {
-        if (request.status === 'assigned') {
+        // [FIX] 'assigned' status is set when dispatch starts, so we must also check if the group really has a driver
+        if (request.status === 'assigned' && (group?.status === 'driver_assigned' || group?.driverId || request.pickupStatus)) {
             return {
                 title: "Conductor Asignado",
                 subtitle: "¡Buenas noticias! Ya tenemos un conductor para el grupo.",
@@ -113,30 +120,30 @@ export function SharedRideFormingScreen({
             };
         }
 
-        if (request.status === 'pending_group' || request.status === 'grouped' || request.status === 'forming') {
-            if (paxCount >= 4 || launchTimeLeft === 0 || group?.status === 'ready_for_driver_dispatch') {
+        if (request.status === 'pending_group' || request.status === 'grouped' || request.status === 'forming' || request.status === 'assigned') {
+            if (isGroupFull || (launchTimeLeft === 0 && group?.driverSearchStartsAt) || (timeLeft === 0 && requestCount >= 2) || group?.status === 'ready_for_driver_dispatch') {
                 return {
-                    title: "Despachando Grupo",
-                    subtitle: "Grupo compartido formado. Buscando conductor para el grupo.",
+                    title: "Buscando Conductor",
+                    subtitle: "Ya encontramos pasajeros compatibles. Estamos asignando un conductor al grupo.",
                     icon: <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />,
                     glow: "bg-emerald-500",
                     timerLabel: "Estado",
-                    timerValue: "BUSCANDO"
+                    timerValue: "ESPERANDO"
                 };
             }
-            if (paxCount >= 2) {
+            if (requestCount >= 2) {
                 return {
-                    title: "Grupo Formado",
-                    subtitle: "Grupo compartido formado. Buscando conductor para el grupo.",
-                    icon: <Users className="w-10 h-10 text-indigo-400" />,
-                    glow: "bg-indigo-500",
+                    title: "Grupo Mínimo Formado",
+                    subtitle: "Esperando para buscar conductor...",
+                    icon: <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />,
+                    glow: "bg-emerald-500",
                     timerLabel: "Lanzamiento",
-                    timerValue: formatTime(launchTimeLeft)
+                    timerValue: formatTime(launchTimeLeft > 0 ? launchTimeLeft : timeLeft)
                 };
             }
             return {
-                title: isExpired ? 'Solicitud Vencida' : 'Buscando Pasajeros',
-                subtitle: isExpired ? 'No se encontraron compañeros' : 'Buscando pasajeros compatibles para compartir tu viaje.',
+                title: isExpired ? 'Grupo Expirado' : 'Buscando Pasajeros',
+                subtitle: isExpired ? 'No se encontraron compañeros' : 'Esperamos al menos 1 pasajero compatible más.',
                 icon: <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />,
                 glow: "bg-indigo-500",
                 timerLabel: "Formando",
@@ -147,11 +154,11 @@ export function SharedRideFormingScreen({
         if (group?.status === 'ready_for_driver' || group?.status === 'dispatched' || group?.status === 'searching_driver') {
             return {
                 title: "Buscando Conductor",
-                subtitle: "Asignando conductor al grupo formado",
+                subtitle: "Ya encontramos pasajeros compatibles. Estamos asignando un conductor al grupo.",
                 icon: <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />,
                 glow: "bg-indigo-500",
                 timerLabel: "Estado",
-                timerValue: "BUSCANDO"
+                timerValue: "ESPERANDO"
             };
         }
 
@@ -209,13 +216,27 @@ export function SharedRideFormingScreen({
             {/* PRECIO Y AHORRO */}
             {(request.status === 'pending_confirmation' || request.status === 'confirmed' || group?.status === 'ready_for_driver') && (
                 <div className="bg-indigo-600 rounded-3xl p-5 shadow-xl border-t border-white/20 flex flex-col gap-3">
-                    <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-white/60 italic">Tu Tarifa Grupal</span>
-                        <span className="text-3xl font-black tracking-tighter italic">
+                    <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-white/50 uppercase tracking-tight">Tu viaje individual costaba</span>
+                        <span className="font-black text-white/60 line-through">
+                            ${(request.individualFareReference || 0).toLocaleString('es-AR')}
+                        </span>
+                    </div>
+
+                    <div className="flex justify-between items-center mt-1">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-white/60 italic">TU TARIFA COMPARTIDA</span>
+                            {group?.occupiedSeats && group.occupiedSeats > 1 && (
+                                <span className="text-[8px] font-bold text-indigo-300 uppercase mt-0.5">Precio mejorado ({group.occupiedSeats} pax)</span>
+                            )}
+                        </div>
+                        <span className="text-3xl font-black tracking-tighter italic text-white">
                             ${(request.sharedFareEstimate || request.finalFareCash || group?.sharedFarePerPassenger || 0).toLocaleString('es-AR')}
                         </span>
                     </div>
-                    <div className="h-px bg-white/10" />
+                    
+                    <div className="h-px bg-white/10 my-1" />
+                    
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <TrendingDown className="w-4 h-4 text-emerald-300" />
@@ -225,6 +246,21 @@ export function SharedRideFormingScreen({
                             -${(request.individualFareReference - (request.sharedFareEstimate || request.finalFareCash || group?.sharedFarePerPassenger || 0)).toLocaleString('es-AR')}
                         </span>
                     </div>
+
+                    {group?.estimatedSharedTotal && (
+                        <>
+                            <div className="h-px bg-white/10 my-1" />
+                            <div className="flex justify-between items-center bg-black/10 p-3 rounded-2xl border border-white/5">
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-white/40">Total bruto del grupo</span>
+                                    <span className="text-[8px] text-white/30 uppercase mt-0.5">Suma de aportes ({group?.occupiedSeats || 1} pax)</span>
+                                </div>
+                                <span className="text-lg font-black text-white/80 italic">
+                                    ${(group.estimatedSharedTotal).toLocaleString('es-AR')}
+                                </span>
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
 
@@ -241,9 +277,9 @@ export function SharedRideFormingScreen({
                 <div className="bg-white/5 border border-white/5 rounded-2xl p-4 flex flex-col items-center gap-1.5">
                     <Users className="w-3.5 h-3.5 text-emerald-400" />
                     <span className="text-lg font-black tracking-tighter">
-                        {group?.occupiedSeats || 1}/4
+                        {paxCount}/{maxSeats}
                     </span>
-                    <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Pasajeros</span>
+                    <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Asientos</span>
                 </div>
             </div>
 
@@ -254,9 +290,11 @@ export function SharedRideFormingScreen({
                         <p className="text-[11px] text-zinc-400 leading-relaxed italic">
                             {request.status === 'pending_confirmation' 
                                 ? 'Encontramos un grupo compatible con tu recorrido. Confirmá tu lugar para sumarte al viaje compartido.'
-                                : (group?.occupiedSeats || 0) >= 2
-                                ? 'Grupo compartido formado. Buscando conductor para el grupo. Todavía pueden sumarse más personas.'
-                                : (group?.occupiedSeats || 0) === 1
+                                : group?.status === 'ready_for_driver' || launchTimeLeft === 0
+                                ? 'Ya se formó el grupo. Estamos contactando a los conductores más cercanos. Esto puede tomar unos minutos.'
+                                : requestCount >= 2
+                                ? 'Todavía pueden sumarse más pasajeros. Esperando el temporizador antes de buscar conductor.'
+                                : requestCount === 1
                                 ? 'No buscamos conductor todavía. Esperamos al menos 1 pasajero compatible más.'
                                 : 'Tu solicitud equivale a 1 asiento. El sistema agrupa viajes con recorridos compatibles para reducir el costo.'}
                         </p>
@@ -327,7 +365,7 @@ export function SharedRideFormingScreen({
                             Cancelar solicitud
                         </Button>
                         
-                        {(group?.occupiedSeats || 0) === 1 && (
+                        {requestCount === 1 && (
                             <p className="text-[9px] text-zinc-500 text-center uppercase font-bold tracking-tight">
                                 Podés cancelar para pedir un viaje normal si preferís no esperar.
                             </p>

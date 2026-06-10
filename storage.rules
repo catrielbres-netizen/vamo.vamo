@@ -81,9 +81,6 @@ service firebase.storage {
         isAdmin() || 
         (
           request.auth.uid == userId && 
-          request.auth.token.r == 'driver' &&
-          request.auth.token.ck != null &&
-          request.auth.token.ck == cityKey &&
           request.resource.size < 10 * 1024 * 1024 &&
           request.resource.contentType.matches('image/.*|application/pdf')
         )

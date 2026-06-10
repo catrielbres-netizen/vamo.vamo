@@ -153,9 +153,13 @@ export const updateMunicipalChecklistItemV1 = onCall({ cors: true, region: 'us-c
                 [`checklist.${key}.status`]: status,
                 [`checklist.${key}.reviewedAt`]: timestamp,
                 [`checklist.${key}.reviewedBy`]: operatorUid,
+                [`checklist.${key}.reviewedByRole`]: operator.role,
                 [`checklist.${key}.observation`]: observation || null,
                 updatedAt: timestamp
             };
+            if (operator.role.startsWith('traffic')) {
+                muniUpdates[`checklist.${key}.observationSource`] = 'traffic';
+            }
 
             const expiryMap: Record<string, string> = {
                 driverLicense: "licenseExpiry",
@@ -166,34 +170,68 @@ export const updateMunicipalChecklistItemV1 = onCall({ cors: true, region: 'us-c
 
             let userUpdates: any = { updatedAt: timestamp };
 
+            let obsDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+            if (status === 'approved') {
+                const obsQuery = db.collection('traffic_observations')
+                    .where('driverId', '==', driverId)
+                    .where('requestedDocumentType', '==', key)
+                    .where('status', 'in', ['pending_traffic_review', 'awaiting_driver_response', 'open']);
+                const obsSnap = await tx.get(obsQuery);
+                obsDocs = obsSnap.docs;
+            }
+
             if (status === 'approved' && expiryMap[key] && expiryDate) {
                 const date = Timestamp.fromDate(new Date(expiryDate + "T12:00:00"));
                 muniUpdates[expiryMap[key]] = date;
                 userUpdates[expiryMap[key]] = date;
             }
             if (status === 'observed') {
-                muniUpdates.municipalStatus = 'municipal_observed';
-                userUpdates.municipalStatus = 'municipal_observed';
-                
-                // Grace Period Logic: 48 hours
-                const GRACE_MS = 48 * 60 * 60 * 1000;
-                const graceUntil = Timestamp.fromMillis(Date.now() + GRACE_MS);
-                
-                // Only give grace if already active/approved
-                if (muni.municipalStatus === 'active') {
-                    muniUpdates.observationGraceUntil = graceUntil;
-                    userUpdates.observationGraceUntil = graceUntil;
-                    userUpdates.approved = true; // Keep working
-                } else {
+                const isTraffic = operator.role.startsWith('traffic');
+                if (isTraffic) {
+                    userUpdates.trafficSuspended = true;
+                    userUpdates.isSuspended = true;
+                    userUpdates.suspensionSource = 'traffic';
+                    userUpdates.trafficSuspensionReason = observation || 'Documentación observada';
                     userUpdates.approved = false;
+                    
+                    muniUpdates.trafficSuspended = true;
+                    muniUpdates.isSuspended = true;
+                    muniUpdates.suspensionSource = 'traffic';
+                    
+                    tx.set(db.doc(`drivers_locations/${driverId}`), {
+                        isSuspended: true,
+                        updatedAt: timestamp
+                    }, { merge: true });
+                } else {
+                    muniUpdates.municipalStatus = 'municipal_observed';
+                    userUpdates.municipalStatus = 'municipal_observed';
+                    
+                    // Grace Period Logic: 48 hours
+                    const GRACE_MS = 48 * 60 * 60 * 1000;
+                    const graceUntil = Timestamp.fromMillis(Date.now() + GRACE_MS);
+                    
+                    // Only give grace if already active/approved
+                    if (muni.municipalStatus === 'active') {
+                        muniUpdates.observationGraceUntil = graceUntil;
+                        userUpdates.observationGraceUntil = graceUntil;
+                        userUpdates.approved = true; // Keep working
+                    } else {
+                        userUpdates.approved = false;
+                    }
                 }
             }
 
             if (status === 'approved') {
-                // If everything is approved now, we might want to clear grace
-                // (Optional, but clean)
-                // However, let's keep it simple: if status changes to approved, 
-                // the global status will be updated later by handleEnable or similar.
+                for (const docSnap of obsDocs) {
+                    tx.update(docSnap.ref, {
+                        status: 'pending_resolution',
+                        trafficReviewStatus: 'approved',
+                        reviewedAt: timestamp,
+                        reviewedBy: operatorUid,
+                        relatedDocumentId: key,
+                        updatedAt: timestamp
+                    });
+                }
             }
 
             tx.update(muniRef, muniUpdates);

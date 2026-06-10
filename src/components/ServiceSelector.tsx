@@ -3,7 +3,7 @@
 import React from 'react';
 import { VamoIcon } from "./VamoIcon";
 import { useUser } from '@/firebase';
-import { ExpressProgressWidget, getExpressTierInfo, EXPRESS_TIERS } from './ExpressProgressWidget';
+import { ExpressProgressWidget, getExpressTierInfo } from './ExpressProgressWidget';
 import { featureFlags } from '@/config/features';
 
 const SERVICES = [
@@ -20,18 +20,17 @@ export function ServiceSelector({ value, onChange }: ServiceSelectorProps) {
   const { profile } = useUser();
 
   const ridesThisWeek = profile?.passengerProgress?.ridesThisWeek ?? 0;
-  const { currentTier, nextTier, ridesNeeded } = getExpressTierInfo(ridesThisWeek);
+  const { isUnlocked, ridesNeeded } = getExpressTierInfo(ridesThisWeek);
+  const currentDiscount = isUnlocked ? 20 : 0;
 
   // Express visible para todos — el descuento varía según el nivel (puede ser 0%)
   // Admin siempre ve Express
   const canSeeExpress = true;
 
   // Descripción dinámica de Express según nivel actual
-  const expressDesc = currentTier.discount > 0
-    ? `${currentTier.discount}% de descuento · ${nextTier ? `${ridesNeeded} viajes para ${nextTier.discount}%` : '¡Nivel máximo!'}`
-    : nextTier
-      ? `Completá ${ridesNeeded} viaje${ridesNeeded !== 1 ? 's' : ''} para activar ${nextTier.discount}% de dto.`
-      : 'Vehículos particulares.';
+  const expressDesc = currentDiscount > 0
+    ? `${currentDiscount}% de descuento · ¡Nivel máximo!`
+    : `Completá ${ridesNeeded} viaje${ridesNeeded !== 1 ? 's' : ''} para activar 20% de dto.`;
 
   const visibleServices = SERVICES.map(s =>
     s.id === 'express' ? { ...s, desc: expressDesc } : s
@@ -62,9 +61,9 @@ export function ServiceSelector({ value, onChange }: ServiceSelectorProps) {
                     <div className="flex items-center gap-1.5 shrink-0">
                         {/* Badge de descuento — solo para Express */}
                         {s.id === 'express' && (
-                            currentTier.discount > 0 ? (
+                            currentDiscount > 0 ? (
                                 <span className="text-[9px] font-black bg-indigo-500/15 text-indigo-400 border border-indigo-500/25 px-2 py-0.5 rounded-full uppercase tracking-wide whitespace-nowrap">
-                                    {currentTier.discount}% dto.
+                                    {currentDiscount}% dto.
                                 </span>
                             ) : (
                                 <span className="text-[9px] font-black bg-zinc-800/80 text-zinc-500 border border-white/5 px-2 py-0.5 rounded-full uppercase tracking-wide whitespace-nowrap">
@@ -93,11 +92,11 @@ export function ServiceSelector({ value, onChange }: ServiceSelectorProps) {
       )}
 
       {/* Mensaje motivacional si Express NO está seleccionado y el descuento es 0% */}
-      {value !== 'express' && currentTier.discount === 0 && nextTier && (
+      {value !== 'express' && currentDiscount === 0 && (
           <div className="p-3 rounded-2xl bg-zinc-950/50 border border-dashed border-indigo-500/20 text-center">
               <p className="text-[10px] font-black text-indigo-500/60 uppercase tracking-[0.2em] mb-0.5">⚡ Descuento Express</p>
               <p className="text-[11px] text-zinc-500 italic">
-                  Completá {ridesNeeded} viaje{ridesNeeded !== 1 ? 's' : ''} esta semana para activar {nextTier.discount}% de descuento.
+                  Completá {ridesNeeded} viaje{ridesNeeded !== 1 ? 's' : ''} esta semana para activar 20% de descuento.
               </p>
           </div>
       )}

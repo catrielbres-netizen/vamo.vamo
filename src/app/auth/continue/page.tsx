@@ -16,7 +16,6 @@ import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader
 export default function AuthContinuePage() {
     const router = useRouter();
     const { user, profile, loading } = useUser();
-    const { services } = useFirebase();
 
     useEffect(() => {
         if (loading) return;

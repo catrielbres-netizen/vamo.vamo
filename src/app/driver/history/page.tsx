@@ -166,7 +166,6 @@ export default function DriverHistoryPage() {
 
                     {!filteredRides || filteredRides.length === 0 ? (
                         <div className="text-center py-8">
-                            {console.log("📜 [DRIVER_HISTORY_RENDER_EMPTY]")}
                             <VamoIcon name="file-text" className="mx-auto h-12 w-12 text-muted-foreground" />
                             <p className="mt-4 text-muted-foreground">
                                 {filterDate ? 'No completaste ningún viaje en esta fecha.' : 'No has completado ningún viaje todavía.'}
@@ -174,7 +173,6 @@ export default function DriverHistoryPage() {
                         </div>
                     ) : (
                         <ul className="space-y-3">
-                            {console.log("📜 [DRIVER_HISTORY_RENDER_LIST] Count:", filteredRides.length)}
                             {filteredRides.map(ride => {
                                 const financial = getRideFinancialSnapshot(ride);
                                 const distMeters = ride.completedRide?.distanceMeters || (ride as any).distanceMeters || 0;

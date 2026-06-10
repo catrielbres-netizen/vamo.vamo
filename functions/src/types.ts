@@ -11,6 +11,43 @@ export type VehicleType = "taxi" | "remis";
 
 export type Role = "admin" | "superadmin" | "driver" | "passenger" | "admin_municipal" | "operator_municipal" | "treasury_municipal" | "auditor_municipal" | "traffic_municipal" | "station_operator" | "municipal_admin" | "traffic_admin" | "traffic_operator" | "traffic";
 
+export interface MunicipalAccountPaymentConfig {
+    cityKey: string;
+    municipalityName: string;
+    paymentProvider: 'mercado_pago' | 'bank_transfer' | 'manual';
+    mercadoPagoAccountId?: string;
+    mercadoPagoLinked: boolean;
+    mercadoPagoEmail?: string;
+    bankAlias?: string;
+    cbu?: string;
+    cuit?: string;
+    accountHolderName?: string;
+    enabled: boolean;
+    createdAt: any;
+    updatedAt: any;
+    updatedBy: string;
+}
+
+export interface MunicipalLedgerEntry {
+    id?: string;
+    cityKey: string;
+    rideId: string;
+    paymentMethod: string;
+    totalFare: number;
+    municipalSharePercent: number;
+    municipalShareAmount: number;
+    source: 'cash' | 'wallet' | 'mercado_pago' | 'other';
+    settlementStatus: 'paid_direct' | 'pending_transfer' | 'transferred' | 'failed';
+    municipalityAccountId?: string;
+    createdAt: any;
+    settledAt?: any;
+    transferredAt?: any;
+    transferredBy?: string;
+    transferReference?: string;
+    periodWeekId?: string;
+    periodMonthId?: string;
+}
+
 export type RideStatus =
     | "scheduled"
     | "searching"
@@ -284,6 +321,9 @@ export interface CompletedRide {
     platformCommissionAmount?: number;
     municipalShareAmount?: number;
     netVamoRevenue?: number;
+    taxiAssociationAmount?: number;
+    remisAssociationAmount?: number;
+    totalAssociationsAmount?: number;
 }
 
 export interface RideChatMessage {
@@ -488,11 +528,15 @@ export interface Ride {
         updatedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
     }>;
     sharedPassengers?: Array<{
+        requestId: string;       // [REQUIRED] Without this, acceptRideV2 cannot update requests
         passengerId: string;
         passengerName: string;
         pickupAddress: string;
         dropoffAddress: string;
         status: string;
+        individualQuotedFare?: number;
+        sharedFare?: number;
+        savingsAmount?: number;
     }>;
     routePlan?: Array<{
         order: number;
@@ -1049,6 +1093,18 @@ export interface RideOffer {
         type: 'pickup' | 'dropoff';
         location: Place;
     }>;
+    sharedPassengers?: Array<{
+        passengerId: string;
+        passengerName: string;
+        pickupAddress: string;
+        dropoffAddress: string;
+        individualQuotedFare: number;
+        sharedFare: number;
+        savingsAmount: number;
+        status: string;
+    }>;
+    individualFareReference?: number;
+    driverBenefitAmount?: number;
 }
 
 export interface RideRequest {
@@ -1481,6 +1537,8 @@ export interface FapCounter {
 export type SharedRideRequestStatus = 
     | 'proposed' 
     | 'forming' 
+    | 'pending_group'
+    | 'grouped'
     | 'pending_confirmation' 
     | 'confirmed' 
     | 'assigned' 
@@ -1534,6 +1592,8 @@ export interface SharedRideRequest {
     sharedRideNoticeAcceptedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
     expiresAt?: FirestoreTimestamp | FirestoreFieldValue | null;
     manualCreation?: boolean;
+    selectedSeats?: Array<'front_passenger' | 'rear_left' | 'rear_center' | 'rear_right'>;
+    seatCount?: number;
 }
 export interface SharedRideFeatureConfig {
     enabled: boolean;
@@ -1560,6 +1620,14 @@ export interface SharedRideGroup {
     }>;
     occupiedSeats: number;
     maxSeats: number;
+    requestCount?: number;
+    maxRequests?: number;
+    seatMap?: {
+        front_passenger?: { passengerId: string; requestId: string; passengerName: string };
+        rear_left?: { passengerId: string; requestId: string; passengerName: string };
+        rear_center?: { passengerId: string; requestId: string; passengerName: string };
+        rear_right?: { passengerId: string; requestId: string; passengerName: string };
+    };
     paymentMethod: 'cash';
     estimatedIndividualFare: number;
     sharedFarePerPassenger: number;
@@ -1618,4 +1686,32 @@ export interface MpOAuthState {
     createdAt: any;
     expiresAt: any;
     used: boolean;
+}
+
+export interface TrafficObservation {
+    observationId: string;
+    driverId: string;
+    cityKey: string;
+    createdBy: string;
+    createdByRole: 'traffic_municipal' | 'traffic_operator' | 'admin' | string;
+    source: 'traffic';
+    type: 'document_request' | 'preventive_suspension' | 'field_observation' | 'incident' | 'expired_document' | 'missing_document' | string;
+    severity: 'critical' | 'regularizable' | 'informative';
+    status: 'open' | 'awaiting_driver_response' | 'pending_traffic_review' | 'approved' | 'rejected' | 'resolved' | 'expired' | 'escalated_to_municipality';
+    requestedDocumentType: string;
+    requestedDocumentLabel: string;
+    reason: string;
+    note?: string;
+    createdAt: any;
+    dueAt: any;
+    countdownHours: number;
+    driverSubmittedAt?: any;
+    reviewedAt?: any;
+    reviewedBy?: string;
+    resolutionNote?: string;
+    resolvedAt?: any;
+    resolvedBy?: string;
+    relatedDocumentId?: string;
+    affectsMatching: boolean;
+    autoSuspendAtDueDate: boolean;
 }

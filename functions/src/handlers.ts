@@ -446,18 +446,33 @@ export function calculateSettlement(
     const originalFare = rideData.pricing?.originalTotal ?? totalFare;
     const vamoExpressCoverageAmount = expressDiscountSnap;
     
-    const driverSubtypeResolved = (rideData as any).driverSubtypeSnapshot || driverData.driverSubtype || 'express';
+    // [SETTLEMENT_FIX] Multi-step safe fallback — never silently fall to 'express'.
+    // Priority: ride.driverSubtypeSnapshot > ride.driverSubtype > ride.serviceType > driver profile > 'professional'
+    let driverSubtypeResolved: string = (rideData as any).driverSubtypeSnapshot
+        || (rideData as any).driverSubtype
+        || (rideData.serviceType === 'professional' ? 'professional' : null)
+        || driverData.driverSubtype
+        || 'professional'; // Safe institutional default — 12% commission
+    if (!(rideData as any).driverSubtypeSnapshot) {
+        logger.warn(`[SETTLEMENT_FALLBACK] driverSubtypeSnapshot missing on ride ${(rideData as any).id || 'unknown'}. Resolved via fallback: '${driverSubtypeResolved}'. Source fields: driverSubtype=${(rideData as any).driverSubtype}, serviceType=${rideData.serviceType}, driverData.driverSubtype=${driverData.driverSubtype}`);
+    }
     const isProfessional = driverSubtypeResolved === 'professional';
+
     const cityKey = rideData.cityKey || 'rawson';
 
-    // [FASE 5] New Commission Model (Version B)
-    const totalCommissionRate = isProfessional ? 0.12 : 0.18;
+    // New Commission Model: 10% total (6% VamO, 2% Muni, 1% Taxi, 1% Remis)
+    const totalCommissionRate = 0.10;
 
     // Driver calculations use totalFare (Single Source of Truth for Gross Fare)
     const driverFareRef = totalFare;
     
     const commissionAmount = Math.round(driverFareRef * totalCommissionRate);
-    const vamoAmount       = commissionAmount; // VamO takes 100% of commission in Version B
+    const vamoAmount = Math.round(driverFareRef * 0.06);
+    const municipalAmount = Math.round(driverFareRef * 0.02);
+    const taxiAssociationAmount = Math.round(driverFareRef * 0.01);
+    const remisAssociationAmount = Math.round(driverFareRef * 0.01);
+    const totalAssociationsAmount = taxiAssociationAmount + remisAssociationAmount;
+    
     const driverNetAmount  = driverFareRef - commissionAmount;
 
     const creditCoveredAmount = Math.max(0, rideData.pricing?.creditCoveredAmount || 0);
@@ -516,7 +531,11 @@ export function calculateSettlement(
         driverSubtypeSnapshot: driverSubtypeResolved,
         driverNetAmount,
         totalAmount: totalFare,
-        vamoAmount: vamoAmount,
+        vamoAmount,
+        municipalAmount,
+        taxiAssociationAmount,
+        remisAssociationAmount,
+        totalAssociationsAmount,
         driverEarnings: driverNetAmount,
         trackingStats,
         // Rentability audit fields
@@ -715,9 +734,13 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
     // --- GUARD: VamO Compartido V4 ---
     // Si el viaje es compartido, derivamos a la lógica especializada de Fase 4.
     if (after.rideType === 'shared' || (after as any).isSharedRide === true) {
-        logger.info(`[SHARED_SETTLEMENT_ROUTED_TO_V4] Ride ${rideId}. Routing to specialized settlement.`);
-        await settleSharedRideFinancialsV1(rideId);
-        return;
+        if ((after as any).isSharedChildRide === true) {
+            logger.info(`[CHILD_SETTLEMENT] Processing child ride ${rideId} for history and weekly pool. Skipping master financial settlement.`);
+        } else {
+            logger.info(`[SHARED_SETTLEMENT_ROUTED_TO_V4] Ride ${rideId}. Routing to specialized settlement.`);
+            await settleSharedRideFinancialsV1(rideId);
+            return;
+        }
     }
 
     // [DIAGNOSTIC] If it was already completed, but not settled, we should investigate why.
@@ -738,15 +761,24 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
         const driverSubtype = after.driverSubtypeSnapshot || 'express';
         const totalFare = after.pricing?.estimatedTotal || 0;
         
-        // FASE 5 Logic
-        const totalCommissionRate = driverSubtype === 'professional' ? 0.12 : 0.18;
-        const vamoAmount = Math.round(totalFare * totalCommissionRate);
-        const driverEarnings = totalFare - vamoAmount;
+        // New Commission Model
+        const totalCommissionRate = 0.10;
+        const commissionAmount = Math.round(totalFare * totalCommissionRate);
+        const vamoAmount = Math.round(totalFare * 0.06);
+        const municipalAmount = Math.round(totalFare * 0.02);
+        const taxiAssociationAmount = Math.round(totalFare * 0.01);
+        const remisAssociationAmount = Math.round(totalFare * 0.01);
+        const totalAssociationsAmount = taxiAssociationAmount + remisAssociationAmount;
+        const driverEarnings = totalFare - commissionAmount;
 
         const completedRideData: any = {
             totalAmount: totalFare,
-            commissionAmount: vamoAmount,
+            commissionAmount,
             vamoAmount,
+            municipalAmount,
+            taxiAssociationAmount,
+            remisAssociationAmount,
+            totalAssociationsAmount,
             driverEarnings,
             totalFare,
             commissionRate: totalCommissionRate,
@@ -775,7 +807,8 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 stats: {
                     totalRidesToday: admin.firestore.FieldValue.increment(1),
                     totalCityRevenue: admin.firestore.FieldValue.increment(totalFare),
-                    totalPlatformCommission: admin.firestore.FieldValue.increment(vamoAmount)
+                    totalPlatformCommission: admin.firestore.FieldValue.increment(vamoAmount),
+                    totalMunicipalCommission: admin.firestore.FieldValue.increment(municipalAmount)
                 }
             }, { merge: true });
 
@@ -787,8 +820,12 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 passengerId: (after as any).passengerId,
                 cityKey: after.cityKey || 'rawson',
                 totalFare,
-                commissionAmount: vamoAmount,
+                commissionAmount,
                 vamoAmount,
+                municipalAmount,
+                taxiAssociationAmount,
+                remisAssociationAmount,
+                totalAssociationsAmount,
                 driverEarnings,
                 distanceMeters: after.pricing?.estimatedDistanceMeters || 0,
                 processedAt: now,
@@ -973,12 +1010,16 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
 
             // --- PREPARE RIDE & POOL UPDATES (DEFERRED WRITES) ---
             const isWeeklyPoolEligible = !rideData.weeklyPoolCounted;
+            // [RECEIPT] Generate a deterministic receipt number for auditability
+            const receiptNumber = `VamO-${cityKey.toUpperCase()}-${weekId}-${rideId.substring(0, 8).toUpperCase()}`;
             const rideUpdate: any = {
                 completedRide: { ...settlementData, pointsAwarded, calculatedAt: Timestamp.now() },
                 settledAt: now,
+                receiptNumber,
                 vamoPointsAwarded: passengerPointsForThisRide,
                 expansionCounted: true
             };
+
             
             if (isWeeklyPoolEligible) {
                 rideUpdate.weeklyPoolCounted = true;
@@ -987,23 +1028,24 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             }
 
             // [FASE 5] finalDebit = VamO commission (Version B)
-            const finalDebit = commissionAmount;
+            const isSharedChild = (after as any).isSharedChildRide === true;
+            const finalDebit = isSharedChild ? 0 : commissionAmount;
             logger.log(`[FINANCIAL] Debiting driver ${driverId}: commissionAmount=${commissionAmount} = finalDebit=${finalDebit}`);
 
             // --- DRIVER STATS & BALANCE LOGIC (VamO PRO v7.0) ---
             
             const walletCredit = (settlementData.walletCoveredAmount || 0) + (settlementData as any).vamoExpressCoverageAmount;
-            const netBalanceChange = walletCredit - finalDebit;
+            const netBalanceChange = isSharedChild ? 0 : (walletCredit - finalDebit);
 
             // Determine if we need to reset daily/weekly/monthly stats
             const isNewDay = driverData.dailyStats?.lastResetDate !== todayStr;
             const isNewWeek = (driverData as any).financialStats?.lastWeekId !== weekId;
             const isNewMonth = (driverData as any).financialStats?.lastMonthId !== monthId;
 
-            const earningsForThisRide = settlementData.driverNetAmount || 0;
+            const earningsForThisRide = isSharedChild ? 0 : (settlementData.driverNetAmount || 0);
 
-            const todayCash = settlementData.cashToCollect || 0;
-            const todayDigital = settlementData.walletCoveredAmount || 0;
+            const todayCash = isSharedChild ? 0 : (settlementData.cashToCollect || 0);
+            const todayDigital = isSharedChild ? 0 : (settlementData.walletCoveredAmount || 0);
 
             const driverUpdate: any = {
                 'stats.ridesCompleted': FieldValue.increment(1),
@@ -1117,10 +1159,14 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
 
             // [WALLET_EXEC] Batch all driver movements (earnings, cash recovery, missions)
             // THIS CONTAINS THE FINAL READS (idempotency checks for movements)
-            await addWalletMovements(driverId, driverMovements, cityKey, tx, { 
-                userSnap: driverSnap,
-                walletSnap: driverWalletSnap 
-            });
+            if (!isSharedChild) {
+                await addWalletMovements(driverId, driverMovements, cityKey, tx, { 
+                    userSnap: driverSnap,
+                    walletSnap: driverWalletSnap 
+                });
+            } else {
+                logger.info(`[CHILD_SETTLEMENT] Skipped wallet movements for child ride ${rideId}`);
+            }
 
             // --- WRITES START HERE (Strict read-before-write) ---
             
@@ -1202,7 +1248,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             tx.update(driverRef, driverUpdate);
 
             // --- PASSENGER BALANCE DEDUCTION (UNTOUCHED) ---
-            if (walletCredit > 0) {
+            if (!isSharedChild && walletCredit > 0) {
                 logger.log(`[FINANCIAL] Deducting $${walletCredit} from passenger ${passengerId} (VamO Pay)`);
                 // REMOVED REDUNDANT DEDUCTION: currentBalance decrement removed to avoid double charge (P0 fix).
                 // Real deduction is handled by consumeLockedWallet on the wallets collection.
@@ -1248,30 +1294,32 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             tx.update(cityRef, {
                 'rewardsConfig.weeklyPoolAmount': FieldValue.increment(finalPoolIncrement),
                 'rewardsConfig.updatedAt': now,
-                'stats.totalPlatformCommission': FieldValue.increment(commissionAmount || 0),
+                'stats.totalPlatformCommission': FieldValue.increment(isSharedChild ? 0 : (commissionAmount || 0)),
                 'stats.totalRides': FieldValue.increment(1),
             });
 
             // Update Municipal Account (Treasury Integration)
-            const muniAccRef = db.doc(`municipal_accounts/${cityKey}`);
-            tx.set(muniAccRef, {
-                cityKey,
-                createdAt: Timestamp.now(),
-                lastMovementAt: now,
-                updatedAt: now,
-                status: 'active'
-            }, { merge: true });
+            if (!isSharedChild) {
+                const muniAccRef = db.doc(`municipal_accounts/${cityKey}`);
+                tx.set(muniAccRef, {
+                    cityKey,
+                    createdAt: Timestamp.now(),
+                    lastMovementAt: now,
+                    updatedAt: now,
+                    status: 'active'
+                }, { merge: true });
 
-            const muniTxRef = db.collection('platform_transactions').doc();
-            tx.set(muniTxRef, {
-                cityKey,
-                rideId,
-                amount: 0,
-                type: 'municipal_contribution',
-                note: `Participación municipal viaje ${rideId}`,
-                createdAt: now,
-                systemVersion: 'v6_pool_muni'
-            });
+                const muniTxRef = db.collection('platform_transactions').doc();
+                tx.set(muniTxRef, {
+                    cityKey,
+                    rideId,
+                    amount: 0,
+                    type: 'municipal_contribution',
+                    note: `Participación municipal viaje ${rideId}`,
+                    createdAt: now,
+                    systemVersion: 'v6_pool_muni'
+                });
+            }
 
             // FAP Express extra debit removed based on Admin requirements. It is now absorbed within the main commission.
 
@@ -1299,7 +1347,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             settlementDataToLog = settlementData;
 
             // [WALLET] Consume locked passenger funds (NOW SAFE: ALL READS DONE AT START)
-            const walletConsumeAmount = settlementData.walletCoveredAmount || 0;
+            const walletConsumeAmount = isSharedChild ? 0 : (settlementData.walletCoveredAmount || 0);
             if (walletConsumeAmount > 0) {
                 // HARDENING: If this is a digital trip, we MUST find a prior lock.
                 if (!consumeSnap.exists && !releaseSnap.exists) {
@@ -2249,6 +2297,40 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
         }
 
         const cancelledByRole = isDriver ? 'driver' : 'passenger';
+
+        // Regla 7: Cancelación del conductor en viaje compartido
+        if (cancelledByRole === 'driver' && rideData.isSharedRide) {
+            logger.info(`[SHARED_RIDE] Driver ${uid} cancelled shared ride ${rideId}. Relaunching search.`);
+            transaction.update(rideRef, {
+                status: 'searching',
+                driverId: FieldValue.delete(),
+                driverName: FieldValue.delete(),
+                driverPhoto: FieldValue.delete(),
+                driverPlate: FieldValue.delete(),
+                driverModel: FieldValue.delete(),
+                driverPhone: FieldValue.delete(),
+                dispatchReason: 'urgent_driver_relaunch',
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            const driverRef = db.doc(`users/${uid}`);
+            transaction.update(driverRef, {
+                activeRideId: FieldValue.delete(),
+                cancellationCount: FieldValue.increment(1),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            // Mark offers as cancelled (the trigger might not do it if status is not cancelled)
+            const offersSnap = await db.collection('rideOffers')
+                .where('rideId', '==', rideId)
+                .where('status', '==', 'pending')
+                .get();
+            offersSnap.forEach(doc => {
+                transaction.update(doc.ref, { status: 'cancelled', updatedAt: FieldValue.serverTimestamp() });
+            });
+
+            return { success: true, relaunched: true };
+        }
 
         // [FASE 7.4] Cancel fee — registro de penalización por cancelación tardía del pasajero
         // Regla: pasajero cancela con conductor ya asignado + más de 2 min desde asignación

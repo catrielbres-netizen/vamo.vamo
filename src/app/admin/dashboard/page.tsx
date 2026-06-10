@@ -412,7 +412,7 @@ export default function AdminDashboardPage() {
                                 </CardContent>
                             </Card>
 
-                            <SystemAlerts cityKey={activeCityKey} />
+                            <SystemAlerts cityKey={activeCityKey || undefined} />
 
                             <Card className="border-red-500/20 bg-red-500/[0.02] backdrop-blur-xl">
                                 <CardHeader className="pb-2">

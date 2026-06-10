@@ -71,7 +71,20 @@ export function useDriverRides(shouldListen: boolean) {
               isDiscountApplied: data.isDiscountApplied,
               compensationAmount: data.compensationAmount,
               passengerPaysTotal: data.passengerPaysTotal,
-              driverReceivesTotal: data.driverReceivesTotal
+              driverReceivesTotal: data.driverReceivesTotal,
+              
+              // [VamO Compartido] Shared ride fields
+              rideType: data.rideType,
+              isSharedRide: data.isSharedRide,
+              sharedGroupId: data.sharedGroupId,
+              sharedPassengerCount: data.sharedPassengerCount,
+              sharedFarePerPassenger: data.sharedFarePerPassenger,
+              pickupStopsCount: data.pickupStopsCount,
+              dropoffStopsCount: data.dropoffStopsCount,
+              orderedStopsPreview: data.orderedStopsPreview,
+              individualFareReference: data.individualFareReference,
+              driverBenefitAmount: data.driverBenefitAmount,
+              sharedPassengers: data.sharedPassengers
           };
 
           // [VamO AUDIT] Deduplicate by rideId. 

@@ -31,6 +31,7 @@ import { Ride, Place, ServiceType, Promotion } from '@/lib/types';
 import { OnlineDriversLayer } from '@/components/OnlineDriversLayer';
 import { ShieldCheck, Scale, Map as MapIcon, Flag, Crosshair, Gift, Loader2, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { usePromotions } from '@/hooks/usePromotions';
 import { PassengerSmallBalance } from '@/components/PassengerSmallBalance';
 import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
@@ -42,6 +43,8 @@ import { SharedRideFormingScreen } from '@/components/shared-ride/SharedRideForm
 import { MercadoPagoLinkCard } from '@/components/MercadoPagoLinkCard';
 import { featureFlags } from '@/config/features';
 import { ExpressProgressWidget } from '@/components/ExpressProgressWidget';
+import { SharedRideSuggestionModal } from '@/components/shared-ride/SharedRideSuggestionModal';
+import { SharedSeatSelector, SeatId } from '@/components/shared-ride/SharedSeatSelector';
 
 function RidePageContent() {
   const firestore = useFirestore();
@@ -93,6 +96,15 @@ function RidePageContent() {
   const [scheduledAt, setScheduledAt] = useState<number | null>(null);
   const [isSchedulingOpen, setIsSchedulingOpen] = useState(false);
   const [isMpBlockOpen, setIsMpBlockOpen] = useState(false);
+  const [selectedSeats, setSelectedSeats] = useState<SeatId[]>([]);
+  
+  // Shared Suggestion States
+  const [suggestionData, setSuggestionData] = useState<any>(null);
+  const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
+  const [hasDeclinedSuggestion, setHasDeclinedSuggestion] = useState(false);
+  const [isPreRequesting, setIsPreRequesting] = useState(false);
+  const [stuckRideDetails, setStuckRideDetails] = useState<{ activeRideId?: string | null, activeSharedGroupId?: string | null, activeSharedRequestId?: string | null, isRecoverable?: boolean } | null>(null);
+  
   const fareRequestId = useRef<number>(0);
 
   const { promotions: ridePromos, bestPromo, isLoading: isPromosLoading } = usePromotions('ride');
@@ -175,9 +187,17 @@ function RidePageContent() {
   useEffect(() => {
     if (profile?.activeRideId) {
       setWatchedRideId(profile.activeRideId);
-      setCompletedRideId(null); // Reset if new active ride
+      setCompletedRideId(null);
+    } else if (profile?.activeSharedRideId) {
+      setWatchedRideId(profile.activeSharedRideId);
+      setCompletedRideId(null);
+    } else if ((sharedGroup as any)?.finalRideId) {
+      // Segundo pasajero: el grupo ya tiene rideId pero profile.activeRideId
+      // aún no llegó del backend. Lo tomamos directo del grupo.
+      setWatchedRideId((sharedGroup as any).finalRideId);
     }
-  }, [profile?.activeRideId]);
+  }, [profile?.activeRideId, profile?.activeSharedRideId, (sharedGroup as any)?.finalRideId]);
+
 
   const activeRideRef = useMemoFirebase(() => {
     const targetId = watchedRideId || completedRideId;
@@ -202,7 +222,9 @@ function RidePageContent() {
   const { data: localRide } = useDoc<Ride>(localRideRef);
 
   const effectiveRide = ride || localRide;
-  const hasActiveRide = !!(watchedRideId || localRideId || pendingRideRequest || completedRideId);
+  // Incluir sharedGroup.finalRideId para que hasActiveRide sea true
+  // antes de que profile.activeRideId llegue del backend (segundo pasajero)
+  const hasActiveRide = !!(watchedRideId || localRideId || pendingRideRequest || completedRideId || (sharedGroup as any)?.finalRideId);
 
   useEffect(() => {
     if (profile?.activeRideId && (localRideId === profile.activeRideId || pendingRideRequest)) {
@@ -307,6 +329,10 @@ function RidePageContent() {
       setLocalRideId(null);
       setPendingRideRequest(false);
       telemetry.trackError('ride_request_failed', error, { origin, destination });
+      if (error?.code === 'already-exists') {
+          setStuckRideDetails(error.details || { isRecoverable: true });
+          return;
+      }
       // Detectar bloqueo por Mercado Pago no vinculado
       const isMpBlock = error?.code === 'failed-precondition' &&
         (error?.message?.toLowerCase().includes('mercado pago') ||
@@ -319,6 +345,119 @@ function RidePageContent() {
     } finally { 
         setIsRequesting(false); 
     }
+  };
+
+  const handlePreRequestRide = async () => {
+    // Si la sugerencia fue rechazada antes, pasamos directo al flujo correspondiente
+    if (!isSharedEnabled || hasDeclinedSuggestion || !origin || !destination || !firebaseApp) {
+        if (serviceType === 'shared') return setIsLegalGateOpen(true);
+        return handleRequestRide();
+    }
+    
+    setIsPreRequesting(true);
+    let handled = false;
+    
+    try {
+        const functions = getFunctions(firebaseApp, 'us-central1');
+        const listNearby = httpsCallable(functions, 'listNearbySharedRideGroupsV1');
+        
+        // Timeout de 2 segundos para no bloquear la UX
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2000));
+        const apiPromise = listNearby({
+            origin,
+            destination,
+            cityKey: origin.city || profile?.cityKey
+        });
+
+        const result: any = await Promise.race([apiPromise, timeoutPromise]);
+        
+        if (result.data?.groups?.length > 0) {
+            const bestGroup = result.data.groups[0]; // Ya vienen ordenados por compatibilidad
+            
+            // Re-calcular estimación de compartición para este pasajero
+            // Factor base: 60% (2 pax), 55% (3 pax), 50% (4 pax).
+            let factor = 0.60;
+            if (bestGroup.passengerCount === 2) factor = 0.55;
+            if (bestGroup.passengerCount === 3) factor = 0.50;
+            
+            const sharedFareEstimate = Math.ceil(((estimatedPrice || 0) * factor) / 100) * 100; 
+            const savingsAmount = (estimatedPrice || 0) - sharedFareEstimate;
+
+            if (savingsAmount > 0 && bestGroup.passengerCount < bestGroup.maxPassengers) {
+                setSuggestionData({
+                    ...bestGroup,
+                    individualFare: estimatedPrice,
+                    sharedFareEstimate,
+                    savingsAmount,
+                });
+                setIsSuggestionModalOpen(true);
+                handled = true;
+            }
+        }
+    } catch (e: any) {
+        console.warn("[SHARED_SUGGESTION] Fetch failed or timeout:", e.message);
+    } finally {
+        setIsPreRequesting(false);
+    }
+
+    if (!handled) {
+        if (serviceType === 'shared') {
+            setIsLegalGateOpen(true);
+        } else {
+            handleRequestRide();
+        }
+    }
+  };
+
+  const handleJoinSuggestedGroup = async () => {
+      if (!suggestionData || !firebaseApp || !origin || !destination || !profile) return;
+      setIsRequesting(true);
+      try {
+          const functions = getFunctions(firebaseApp, 'us-central1');
+          const joinGroup = httpsCallable(functions, 'joinSharedRideGroupV1');
+          const result = await joinGroup({
+              groupId: suggestionData.groupId,
+              origin,
+              destination,
+              cityKey: origin.city || profile.cityKey,
+              individualFareReference: estimatedPrice,
+              sharedRideNoticeAccepted: true,
+              selectedSeats  // ← enviar asientos seleccionados por el segundo pasajero
+          });
+          const data = result.data as any;
+          if (data.ok && data.requestId) {
+              // Setear watchedRideId INMEDIATAMENTE sin esperar profile.activeRideId del backend.
+              // El ID del ride compartido es siempre shared_${groupId} (determinístico).
+              const predictedRideId = `shared_${data.groupId}`;
+              setWatchedRideId(predictedRideId);
+              setPendingRideRequest(false);
+              setOverrideRequestId?.(data.requestId);
+              setOverrideGroupId?.(data.groupId);
+              setIsSuggestionModalOpen(false);
+              setSelectedSeats([]);
+              toast({ title: "Te has unido al viaje compartido." });
+          }
+      } catch (e: any) {
+          console.error(e);
+          if (e?.code === 'already-exists') {
+              setIsSuggestionModalOpen(false);
+              setStuckRideDetails(e.details || { isRecoverable: true });
+              return;
+          }
+          toast({ variant: 'destructive', title: 'Error al unirse', description: e.message });
+      } finally {
+          setIsRequesting(false);
+      }
+  };
+
+  const handleDeclineSuggestion = () => {
+      setHasDeclinedSuggestion(true);
+      setIsSuggestionModalOpen(false);
+      if (serviceType === 'shared') {
+          setIsLegalGateOpen(true);
+      } else {
+          handleRequestRide();
+      }
   };
 
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'wallet' | 'automatic'>('automatic');
@@ -403,13 +542,18 @@ function RidePageContent() {
       setCompletedRideId(null);
 
       // [VamO PRO] Proactive Firestore Cleanup to avoid hangs
-      if (user && firestore && profile?.activeRideId) {
+      if (user && firestore && (profile?.activeRideId || profile?.activeSharedRideId)) {
           try {
               const userRef = doc(firestore, 'users', user.uid);
-              await updateDoc(userRef, { activeRideId: null });
-              console.log("[CLEANUP] activeRideId cleared in Firestore.");
+              await updateDoc(userRef, { 
+                  activeRideId: null,
+                  activeSharedRideId: null,
+                  activeSharedGroupId: null,
+                  activeSharedRequestId: null
+              });
+              console.log("[CLEANUP] active ride pointers cleared in Firestore.");
           } catch (e) {
-              console.error("[CLEANUP] Failed to clear activeRideId:", e);
+              console.error("[CLEANUP] Failed to clear active ride pointers:", e);
           }
       }
   }, [user, firestore, profile?.activeRideId]);
@@ -454,6 +598,35 @@ function RidePageContent() {
     }
   }, [effectiveRide?.status]);
 
+  // Detect dismantled group
+  const isGroupDismantled = sharedRequest?.status === 'cancelled' && sharedRequest?.cancelReason === 'group_dismantled_1_pax_left';
+  const [showDismantledAlert, setShowDismantledAlert] = useState(false);
+  useEffect(() => {
+      if (isGroupDismantled) {
+          setShowDismantledAlert(true);
+      }
+  }, [isGroupDismantled]);
+
+  // Detect driver cancellation
+  const prevRideStatus = useRef<string | null>(null);
+  useEffect(() => {
+      if (effectiveRide) {
+          if (
+              prevRideStatus.current &&
+              prevRideStatus.current !== 'searching' &&
+              effectiveRide.status === 'searching' &&
+              effectiveRide.dispatchReason === 'urgent_driver_relaunch'
+          ) {
+              toast({
+                  title: 'El conductor canceló',
+                  description: 'Estamos buscando otro conductor para tu grupo.',
+                  variant: 'default',
+              });
+          }
+          prevRideStatus.current = effectiveRide.status;
+      }
+  }, [effectiveRide?.status, effectiveRide?.dispatchReason, toast]);
+
   if (userError) return <div className="p-4">Error: {userError.message}</div>;
   if (!isLoaded || !profile) {
     return <PassengerDashboardSkeleton />;
@@ -490,7 +663,8 @@ function RidePageContent() {
         destination,
         cityKey,
         individualFareReference: estimatedPrice,
-        sharedRideNoticeAccepted: true
+        sharedRideNoticeAccepted: true,
+        selectedSeats
       });
       
       if (res && res.ok) {
@@ -517,8 +691,35 @@ function RidePageContent() {
     }
   };
 
-  const isSearching = hasActiveRide && (!effectiveRide || effectiveRide.status === 'searching' || effectiveRide.status === 'scheduled');
-  const showRideStatus = hasActiveRide && !isSearching && !!effectiveRide;
+  const isPendingShared = (isRequesting || pendingRideRequest || isCreatingSharedRequest) && serviceType === 'shared';
+  // Segundo pasajero: el ride compartido puede estar asignado aunque effectiveRide aún no cargó
+  const isSharedGroupDispatched = !!(sharedGroup?.finalRideId || sharedGroup?.driverId || sharedGroup?.status === 'driver_assigned' || sharedGroup?.status === 'searching_driver');
+  const isRideAssigned = (!!effectiveRide && !['searching', 'scheduled', 'cancelled'].includes(effectiveRide.status)) || isSharedGroupDispatched;
+  const showSharedScreen = (hasActiveSharedRequest || isPendingShared) && !isRideAssigned;
+
+
+  // Para rides compartidos NO mostramos PassengerSearchingSheet (isSearching=false)
+  // el ride compartido en estado 'searching' lo maneja SharedRideFormingScreen
+  const isSearchingShared = !!effectiveRide?.isSharedRide && effectiveRide.status === 'searching';
+  const isSearching = hasActiveRide && (!effectiveRide || effectiveRide.status === 'searching' || effectiveRide.status === 'scheduled') && !showSharedScreen && !isSharedGroupDispatched && !isSearchingShared;
+  // showRideStatus: siempre que haya un ride cargado y NO estemos en SharedRideFormingScreen
+  const showRideStatus = !!effectiveRide && !showSharedScreen;
+
+  // Pantalla de conexión: cubre el gap entre el join y que Firestore propague el ride.
+  // watchedRideId se setea INMEDIATAMENTE al unirse, antes de que effectiveRide cargue.
+  const isConnectingSharedRide = !!watchedRideId && !effectiveRide && !showSharedScreen;
+
+
+  const handleContinueAsIndividual = async () => {
+      setShowDismantledAlert(false);
+      setServiceType('professional');
+      handleReset(); // Limpia y deja listo para pedir
+  };
+
+  const handleCancelDismantled = () => {
+      setShowDismantledAlert(false);
+      handleReset();
+  };
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#0a0a0a] animate-in fade-in duration-1000 fill-mode-both">
@@ -576,24 +777,6 @@ function RidePageContent() {
                 
                 <div className="pointer-events-auto mt-2 cursor-pointer" onClick={() => router.push('/dashboard/profile')}>
                     <ExpressProgressWidget profile={profile} compact />
-                </div>
-                
-                {/* DASHBOARD ENTRY CARD PARA COMPARTIDO */}
-                <div className="pointer-events-auto mt-2 bg-gradient-to-br from-emerald-600/20 to-emerald-900/40 border border-emerald-500/30 p-4 rounded-3xl backdrop-blur-xl shadow-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                        <VamoIcon name="users" className="w-5 h-5 text-emerald-400" />
-                        <h3 className="font-black text-white uppercase tracking-widest text-sm">VamO Compartido</h3>
-                    </div>
-                    <p className="text-xs text-emerald-100/70 mb-4">Compartí el viaje con pasajeros cercanos, pagá menos y ayudá a que el conductor gane más.</p>
-                    <Button 
-                        onClick={() => {
-                            setServiceType('shared');
-                            handleOpenMapSelector('destination');
-                        }}
-                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl h-10"
-                    >
-                        Pedir viaje compartido
-                    </Button>
                 </div>
                 
                 {/* BLOQUE A: INPUTS PULIDOS AL INICIO DE TODO */}
@@ -660,7 +843,7 @@ function RidePageContent() {
                         )}
                     >
                         <VamoIcon name="user" className={cn("w-5 h-5 mb-1", serviceType !== 'shared' ? "text-white" : "text-zinc-600")} />
-                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">Viaje Individual</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">VIAJE INDIVIDUAL</span>
                     </button>
                     
                     <button
@@ -673,7 +856,7 @@ function RidePageContent() {
                         )}
                     >
                         <VamoIcon name="users" className={cn("w-5 h-5 mb-1", serviceType === 'shared' ? "text-white" : "text-zinc-600")} />
-                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">VamO Compartido</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">VAMO COMPARTIDO</span>
                     </button>
                  </div>
 
@@ -732,18 +915,63 @@ function RidePageContent() {
 
                  {/* BLOQUE DE INFORMACIÓN COMPARTIDO */}
                  {serviceType === 'shared' && (
-                     <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-100/80 text-xs">
-                         <p className="font-bold mb-2 text-emerald-400">Buscaremos pasajeros compatibles cerca de tu origen y con destinos dentro del rango permitido.</p>
-                         <ul className="list-disc list-inside space-y-1 mb-3 opacity-80 text-[11px]">
-                             <li>Orígenes dentro de 1.000 metros.</li>
-                             <li>Destinos dentro de 30 cuadras.</li>
-                         </ul>
-                         <p className="font-black text-emerald-400 text-[10px] uppercase tracking-widest mb-1">Ahorro estimado:</p>
-                         <ul className="list-disc list-inside space-y-1 opacity-80 text-[11px]">
-                             <li>2 pasajeros: pagás 60%.</li>
-                             <li>3 pasajeros: pagás 55%.</li>
-                             <li>4 pasajeros: pagás 50%.</li>
-                         </ul>
+                     <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex flex-col gap-3">
+                         <div className="border-b border-emerald-500/20 pb-3 mb-1">
+                             <div className="flex items-center gap-2 mb-2">
+                                 <VamoIcon name="users" className="w-5 h-5 text-emerald-400" />
+                                 <h3 className="font-black text-emerald-400 uppercase tracking-widest text-sm">NUEVO: VAMO COMPARTIDO</h3>
+                             </div>
+                             <p className="text-xs text-emerald-100/80 leading-relaxed font-medium">
+                                 Compartí el viaje con pasajeros cercanos, <span className="font-bold text-white">pagá menos</span> y ayudá a que el conductor <span className="font-bold text-white">gane más</span>.
+                             </p>
+                         </div>
+                         <div>
+                             <p className="text-[11px] font-black text-emerald-400 uppercase tracking-widest">Tu ahorro posible</p>
+                             <p className="text-[10px] text-emerald-100/80 mb-2 font-medium">Si se suman pasajeros compatibles, tu precio baja automáticamente.</p>
+                             <SharedSeatSelector
+                               selectedSeats={selectedSeats}
+                               onSeatsChange={setSelectedSeats}
+                             />
+
+                             <div className="bg-emerald-500/20 rounded-xl p-3 flex flex-col items-center justify-center border border-emerald-500/30 text-center mt-2">
+                                 {selectedSeats.length > 0 ? (
+                                   <>
+                                     <span className="text-[10px] text-emerald-100/70 font-bold leading-tight mb-1">
+                                       {selectedSeats.length === 1 ? 'Por 1 asiento' : 'Por vos + 1 acompañante'}
+                                     </span>
+                                     {estimatedPrice ? (() => {
+                                       // 1 asiento: precio_base × 0.60
+                                       // 2 asientos: precio_base × 0.60 × 1.10 (acompañante +10%)
+                                       const baseFare = Math.round((estimatedPrice * 0.60) / 100) * 100;
+                                       const seatMultiplier = selectedSeats.length >= 2 ? 1.10 : 1.00;
+                                       const sharedFare = Math.round((baseFare * seatMultiplier) / 100) * 100;
+                                       const saving = estimatedPrice - sharedFare;
+                                       return (
+                                         <>
+                                           <span className="text-sm sm:text-base font-black text-white">Pagás ${sharedFare.toLocaleString('es-AR')}</span>
+                                           <span className="text-[10px] font-bold text-emerald-300">Ahorrás ${saving.toLocaleString('es-AR')} vs viaje individual</span>
+                                         </>
+                                       );
+                                     })() : (
+                                         <span className="text-sm sm:text-base font-black text-white">Cargando precio...</span>
+                                     )}
+                                   </>
+                                 ) : (
+                                   <span className="text-[11px] font-bold text-emerald-300">Seleccioná tus asientos para ver el precio</span>
+                                 )}
+                             </div>
+
+                             <p className="text-[9px] text-emerald-100/50 mt-2 font-medium italic text-center">
+                                 Cada pasajero paga según su propio recorrido. El conductor cobra la suma de todos los aportes.
+                             </p>
+                         </div>
+                         <div className="bg-black/20 rounded-xl p-3 border border-white/5">
+                             <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><VamoIcon name="info" className="w-3 h-3" /> Reglas de Compatibilidad</p>
+                             <ul className="list-disc list-inside space-y-1 text-emerald-100/70 text-[11px] font-medium ml-1">
+                                 <li>Orígenes dentro de 1.000 metros.</li>
+                                 <li>Destinos dentro de 30 cuadras.</li>
+                             </ul>
+                         </div>
                      </div>
                  )}
 
@@ -860,13 +1088,18 @@ function RidePageContent() {
                         </Button>
                         <Button 
                             onClick={() => {
-                                handleRequestRide();
+                                handlePreRequestRide();
                             }}
                             disabled={!origin || !destination || isRequesting || !estimatedPrice} 
-                            className="flex-1 h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-500 font-black text-lg transition-all active:scale-[0.98] shadow-md border-t border-white/10"
+                            className={cn(
+                                "flex-1 h-14 rounded-2xl font-black text-lg transition-all active:scale-[0.98] shadow-md border-t border-white/10",
+                                serviceType === 'shared' 
+                                    ? "bg-emerald-600 hover:bg-emerald-500 text-white" 
+                                    : "bg-indigo-600 hover:bg-indigo-500 text-white"
+                            )}
                         >
                             {isRequesting ? 'PROCESANDO...' : 
-                             serviceType === 'shared' ? 'PEDIR VIAJE COMPARTIDO' : 'SOLICITAR VamO'}
+                             serviceType === 'shared' ? 'CONFIRMAR COMPARTIDO' : 'SOLICITAR VamO'}
                         </Button>
                     </div>
               </div>
@@ -935,15 +1168,14 @@ function RidePageContent() {
               </div>
               <div className="flex flex-col gap-3 mt-4">
                   <Button 
+                    disabled={!scheduledAt || isRequesting || isPreRequesting}
                     onClick={() => {
-                        if (!scheduledAt) return;
-                        handleRequestRide();
+                        handlePreRequestRide();
                         setIsSchedulingOpen(false);
                     }} 
-                    disabled={!scheduledAt || isRequesting}
                     className="w-full rounded-2xl h-14 bg-indigo-600 hover:bg-indigo-500 font-black uppercase tracking-widest text-sm shadow-lg shadow-indigo-900/20"
                   >
-                      {isRequesting ? <VamoIcon name="loader" className="animate-spin mr-2" /> : null}
+                      {isRequesting || isPreRequesting ? <VamoIcon name="loader" className="animate-spin mr-2" /> : null}
                       Confirmar Reserva
                   </Button>
                   <Button variant="ghost" onClick={() => setIsSchedulingOpen(false)} className="w-full rounded-2xl h-12 text-zinc-500 font-bold hover:bg-white/5">
@@ -983,7 +1215,11 @@ function RidePageContent() {
       )}
 
       {showRideStatus && effectiveRide && (
-         <RideStatus ride={effectiveRide} onNewRide={handleReset} />
+         <RideStatus 
+           ride={effectiveRide} 
+           onNewRide={handleReset} 
+           onCancel={effectiveRide.isSharedRide ? cancelRequest : handleCancelSearching}
+         />
       )}
       {(profile?.role === 'passenger' && profile?.hasSeenTutorial !== true && !tutorialDismissed) && (
         <TutorialOverlay 
@@ -1005,24 +1241,64 @@ function RidePageContent() {
         />
       )}
 
+      {/* Pantalla de conexión: tapa el layout mientras Firestore propaga el ride (gap de timing) */}
+      {isConnectingSharedRide && (
+        <div className="fixed inset-0 z-[100] bg-[#0d0d0d] flex flex-col items-center justify-center gap-6">
+            <div className="w-20 h-20 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                <span className="text-4xl">🚗</span>
+            </div>
+            <div className="text-center">
+                <h3 className="text-white font-black text-xl uppercase tracking-widest">Conectando</h3>
+                <p className="text-zinc-400 text-sm mt-2">Uniéndote al viaje compartido...</p>
+            </div>
+            <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-bounce" style={{animationDelay:'0ms'}} />
+                <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-bounce" style={{animationDelay:'150ms'}} />
+                <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-bounce" style={{animationDelay:'300ms'}} />
+            </div>
+        </div>
+      )}
+
       {/* Pantalla de grupo en formación compartida (Fase 3) */}
-      {hasActiveSharedRequest && sharedRequest && (
-        <div className="absolute inset-x-0 bottom-0 z-10 bg-[#1a1a1a] p-5 pb-10 rounded-t-3xl shadow-2xl overflow-y-auto max-h-[85vh] overscroll-contain"
+      {showSharedScreen && (
+        <div className="fixed inset-0 z-[100] bg-[#0d0d0d] overflow-y-auto flex flex-col"
              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 8px) + 20px)' }}>
              <SharedRideFormingScreen 
-                 request={sharedRequest}
-                 group={sharedGroup}
+                 request={sharedRequest as any}
+                 group={sharedGroup || undefined}
                  onCancel={cancelRequest}
                  isCancelling={isSharedCancelling}
              />
         </div>
       )}
 
+
       <SharedRideLegalGate
         isOpen={isLegalGateOpen}
         onClose={() => setIsLegalGateOpen(false)}
         onConfirm={handleConfirmSharedTerms}
       />
+
+      <AlertDialog open={showDismantledAlert} onOpenChange={setShowDismantledAlert}>
+          <AlertDialogContent className="bg-[#1a1a1a] border border-white/10 text-white rounded-2xl max-w-[90vw] sm:max-w-md">
+              <AlertDialogHeader>
+                  <AlertDialogTitle className="text-xl font-black uppercase text-amber-400">El grupo se desarmó</AlertDialogTitle>
+                  <AlertDialogDescription className="text-zinc-400 font-medium text-sm">
+                      Lamentablemente, los demás pasajeros cancelaron y quedaste solo en el grupo. Como ya no cumple los requisitos para ser un viaje compartido, el grupo ha sido cancelado.
+                      <br /><br />
+                      ¿Querés continuar y solicitar este mismo viaje como individual?
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="mt-6 flex-col sm:flex-row gap-2">
+                  <AlertDialogCancel onClick={handleCancelDismantled} className="bg-white/5 border-white/10 hover:bg-white/10 text-white h-12 rounded-xl flex-1 mt-0">
+                      Cancelar Viaje
+                  </AlertDialogCancel>
+                  <AlertDialogAction onClick={handleContinueAsIndividual} className="bg-indigo-600 hover:bg-indigo-500 text-white h-12 rounded-xl flex-1 m-0 shadow-lg shadow-indigo-900/20">
+                      Continuar como Individual
+                  </AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
 
       {/* MERCADO PAGO BLOCK MODAL */}
       <Dialog open={isMpBlockOpen} onOpenChange={setIsMpBlockOpen}>
@@ -1073,6 +1349,99 @@ function RidePageContent() {
               </div>
           </DialogContent>
       </Dialog>
+
+      {/* MODAL DE SUGERENCIA DE VAMO COMPARTIDO */}
+      {suggestionData && (
+          <SharedRideSuggestionModal
+              open={isSuggestionModalOpen}
+              onOpenChange={setIsSuggestionModalOpen}
+              individualFare={suggestionData.individualFare}
+              sharedFareEstimate={suggestionData.sharedFareEstimate}
+              savingsAmount={suggestionData.savingsAmount}
+              passengerCount={suggestionData.passengerCount}
+              maxPassengers={suggestionData.maxPassengers ?? 2}
+              onJoin={handleJoinSuggestedGroup}
+              onContinueIndividual={handleDeclineSuggestion}
+              isLoading={isRequesting}
+              suggestingForSharedMode={serviceType === 'shared'}
+              selectedSeats={selectedSeats}
+              onSeatsChange={setSelectedSeats}
+              occupiedSeats={(suggestionData.occupiedSeats ?? []) as SeatId[]}
+          />
+      )}
+
+      {/* MODAL DE VIAJE TRABADO / ALREADY-EXISTS */}
+      <AlertDialog open={!!stuckRideDetails} onOpenChange={() => setStuckRideDetails(null)}>
+          <AlertDialogContent className="bg-[#1a1a1a] border border-white/10 text-white rounded-2xl max-w-[90vw] sm:max-w-md">
+              <AlertDialogHeader>
+                  <AlertDialogTitle className="text-xl font-black uppercase text-amber-400">TENÉS UN VIAJE COMPARTIDO ACTIVO</AlertDialogTitle>
+                  <AlertDialogDescription className="text-zinc-400 font-medium text-sm">
+                      El sistema detecta que ya estás en un viaje o grupo compartido. No podés crear ni unirte a uno nuevo hasta que finalice o sea cancelado.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="flex flex-col gap-2 mt-4">
+                  <Button 
+                      onClick={() => {
+                          setStuckRideDetails(null);
+                          if (stuckRideDetails?.activeRideId) setOverrideRequestId?.(stuckRideDetails.activeRideId);
+                          else if (stuckRideDetails?.activeSharedRequestId) setOverrideRequestId?.(stuckRideDetails.activeSharedRequestId);
+                      }} 
+                      className="h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold"
+                  >
+                      Volver a mi viaje
+                  </Button>
+                  
+                  <Button 
+                      onClick={async () => {
+                          setStuckRideDetails(null);
+                          toast({ title: 'Intentando cancelar viaje anterior...' });
+                          await handleCancelSearching(); 
+                          await cancelRequest();
+                      }} 
+                      variant="outline" 
+                      className="h-12 rounded-xl border-white/10 text-zinc-300 hover:bg-white/5 font-bold"
+                  >
+                      Cancelar solicitud anterior
+                  </Button>
+
+                  <Button 
+                      onClick={async () => {
+                          setStuckRideDetails(null);
+                          if (user && firestore) {
+                              try {
+                                  const userRef = doc(firestore, 'users', user.uid);
+                                  await updateDoc(userRef, { 
+                                      activeRideId: null, 
+                                      activeSharedRideId: null, 
+                                      activeSharedGroupId: null, 
+                                      activeSharedRequestId: null 
+                                  });
+                                  toast({ title: 'Perfil liberado (Limpieza Alpha)' });
+                              } catch (e) {
+                                  console.error(e);
+                              }
+                          }
+                      }} 
+                      variant="outline" 
+                      className="h-12 rounded-xl border-red-500/30 text-red-400 hover:bg-red-500/10 font-bold"
+                  >
+                      Forzar Limpieza (Solo Alpha)
+                  </Button>
+                  
+                  <Button 
+                      onClick={() => {
+                          setStuckRideDetails(null);
+                          // El usuario puede decidir qué hacer
+                      }} 
+                      variant="ghost" 
+                      className="h-12 rounded-xl text-zinc-500 hover:bg-white/5 font-bold"
+                  >
+                      Cerrar
+                  </Button>
+              </div>
+          </AlertDialogContent>
+      </AlertDialog>
+
     </div>
 
   );

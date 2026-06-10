@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
+import { useFirestore } from '@/firebase';
+import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 export default function TrafficDashboard() {
     const { user, profile, role, loading: authLoading } = useUser();
@@ -21,7 +23,10 @@ export default function TrafficDashboard() {
     const [loadingStats, setLoadingStats] = useState(true);
     const [profileTimeout, setProfileTimeout] = useState(false);
     const [selectedCityKey, setSelectedCityKey] = useState<string>('');
+    const [recentRides, setRecentRides] = useState<any[]>([]);
+    const [loadingRides, setLoadingRides] = useState(true);
     const router = useRouter();
+    const db = useFirestore();
 
     const allowedRoles = [
         'admin',
@@ -85,6 +90,30 @@ export default function TrafficDashboard() {
         }
         return () => clearTimeout(t);
     }, [user, profile, authLoading]);
+
+    // Fetch recent rides
+    useEffect(() => {
+        if (!selectedCityKey || !db) return;
+        setLoadingRides(true);
+
+        const q = query(
+            collection(db, 'rides'),
+            where('cityKey', '==', selectedCityKey),
+            orderBy('updatedAt', 'desc'),
+            limit(10)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const rides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setRecentRides(rides);
+            setLoadingRides(false);
+        }, (error) => {
+            console.error("Error fetching recent rides:", error);
+            setLoadingRides(false);
+        });
+
+        return () => unsubscribe();
+    }, [selectedCityKey, db]);
 
     // Redirection and fetching logic
     useEffect(() => {
@@ -249,13 +278,60 @@ export default function TrafficDashboard() {
                 <Card className="lg:col-span-2 rounded-[3rem] border-white/5 bg-zinc-950/50 backdrop-blur-xl overflow-hidden premium-shadow">
                     <div className="p-8 border-b border-white/5 flex items-center justify-between">
                         <h2 className="text-xl font-black tracking-tighter uppercase italic">Operativos Recientes</h2>
-                        <Button variant="ghost" size="sm" className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest">Ver Historial</Button>
+                        <Button variant="ghost" size="sm" className="text-zinc-500 font-bold text-[10px] uppercase tracking-widest hover:text-white transition-colors" onClick={() => fetchStats(selectedCityKey)}>Actualizar</Button>
                     </div>
-                    <CardContent className="p-8">
-                        <div className="space-y-6 text-center py-12">
-                            <VamoIcon name="clipboard-list" className="w-12 h-12 text-zinc-800 mx-auto" />
-                            <p className="text-zinc-600 font-bold uppercase tracking-widest text-[10px]">No hay actividad reciente registrada en esta jurisdicción.</p>
-                        </div>
+                    <CardContent className="p-0">
+                        {loadingRides ? (
+                            <div className="p-12 space-y-4">
+                                <Skeleton className="h-16 w-full bg-zinc-900/50 rounded-2xl" />
+                                <Skeleton className="h-16 w-full bg-zinc-900/50 rounded-2xl" />
+                                <Skeleton className="h-16 w-full bg-zinc-900/50 rounded-2xl" />
+                            </div>
+                        ) : recentRides.length === 0 ? (
+                            <div className="space-y-6 text-center py-12">
+                                <VamoIcon name="clipboard-list" className="w-12 h-12 text-zinc-800 mx-auto" />
+                                <p className="text-zinc-600 font-bold uppercase tracking-widest text-[10px]">Sin eventos operativos recientes en {selectedCityKey.toUpperCase()}.</p>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-white/5 max-h-[400px] overflow-y-auto pr-2">
+                                {recentRides.map(ride => {
+                                    let statusColor = "bg-zinc-800 text-zinc-400";
+                                    let statusLabel = "Desconocido";
+                                    let icon = "activity";
+
+                                    if (ride.status === 'searching') { statusColor = "bg-amber-500/20 text-amber-500"; statusLabel = "Buscando Móvil"; icon = "search"; }
+                                    else if (ride.status === 'assigned') { statusColor = "bg-indigo-500/20 text-indigo-400"; statusLabel = "Móvil Asignado"; icon = "user-check"; }
+                                    else if (ride.status === 'in_progress') { statusColor = "bg-blue-500/20 text-blue-400"; statusLabel = "Viaje Iniciado"; icon = "navigation"; }
+                                    else if (ride.status === 'completed') { statusColor = "bg-emerald-500/20 text-emerald-500"; statusLabel = "Finalizado"; icon = "check-circle"; }
+                                    else if (ride.status === 'cancelled') { statusColor = "bg-rose-500/20 text-rose-500"; statusLabel = "Cancelado"; icon = "x-circle"; }
+
+                                    const timeStr = ride.updatedAt?.toDate ? ride.updatedAt.toDate().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+                                    
+                                    return (
+                                        <div key={ride.id} className="p-6 hover:bg-white/[0.02] transition-colors flex items-center justify-between gap-4">
+                                            <div className="flex items-center gap-4 min-w-0">
+                                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${statusColor.replace('text-', 'text-opacity-100 bg-opacity-20 ')}`}>
+                                                    <VamoIcon name={icon} className="w-4 h-4" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-bold text-white flex items-center gap-2">
+                                                        {statusLabel}
+                                                        {ride.standId && <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded uppercase tracking-widest">Desde Parada</span>}
+                                                    </p>
+                                                    <p className="text-[10px] text-zinc-500 font-mono mt-1 truncate uppercase">
+                                                        {ride.driverName ? `Conductor: ${ride.driverName}` : 'Sin conductor asignado'} • {ride.serviceType === 'express' ? 'PARTICULAR' : 'TAXI/REMIS'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <p className="text-[10px] font-black text-zinc-400">{timeStr}</p>
+                                                <p className="text-[9px] text-zinc-600 uppercase font-mono tracking-widest mt-1">ID: {ride.id.slice(0, 8)}</p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 

@@ -34,7 +34,7 @@ export function VamoBottomSheet({
     >
       <div 
         className={cn(
-          "glass-morphism premium-shadow rounded-t-[2.5rem] md:rounded-[2rem] pointer-events-auto",
+          "bg-zinc-950/95 backdrop-blur-xl premium-shadow border border-white/10 rounded-t-[2.5rem] md:rounded-[2rem] pointer-events-auto",
           "flex flex-col overflow-hidden sheet-transition",
           "max-h-[85vh] md:max-h-[80vh]"
         )}

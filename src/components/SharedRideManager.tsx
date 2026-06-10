@@ -26,7 +26,8 @@ export default function SharedRideManager({
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const [requests, setRequests] = useState<Record<string, SharedRideRequest>>({});
-  const [confirmAction, setConfirmAction] = useState<{ action: 'no_show' | 'confirm_dropoff' | 'mark_undeclared_companion', stopOrder?: number, passengerName: string } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ action: 'no_show' | 'confirm_dropoff' | 'mark_undeclared_companion', requestId?: string, stopType?: string, passengerName: string } | null>(null);
+  const [isToolkitMinimized, setIsToolkitMinimized] = useState(true);
 
   // 1. Escuchar las solicitudes individuales del grupo
   useEffect(() => {
@@ -57,12 +58,22 @@ export default function SharedRideManager({
   const currentPassenger = nextStop ? (requests[nextStop.requestId] || (ride.sharedPassengers || []).find((p: any) => p.requestId === nextStop.requestId)) : null;
 
   // 3. Handlers
-  const handleAction = async (action: 'arrive' | 'confirm_pickup' | 'confirm_dropoff' | 'no_show', stopOrder: number) => {
+  const handleAction = async (action: 'arrive' | 'confirm_pickup' | 'confirm_dropoff' | 'no_show', requestId?: string, stopType?: string) => {
     if (!firebaseApp || isProcessing) return;
+    
+    // Si no pasaron parámetros específicos, usamos nextStop por defecto (caso típico)
+    const reqId = requestId || nextStop?.requestId;
+    const sType = stopType || nextStop?.type;
+
+    if (!reqId || !sType) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo identificar la parada actual.' });
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const advanceStop = httpsCallable(getFunctions(firebaseApp, 'us-central1'), 'advanceSharedRideStopV1');
-      await advanceStop({ rideId: ride.id, stopOrder, action });
+      await advanceStop({ rideId: ride.id, action, requestId: reqId, stopType: sType });
       toast({ title: 'Estado de parada actualizado' });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e.message });
@@ -232,7 +243,7 @@ export default function SharedRideManager({
                 {nextStop.status !== 'arrived' ? (
                   <Button 
                     className="col-span-3 h-16 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest text-xs"
-                    onClick={() => handleAction('arrive', nextStop.order)}
+                    onClick={() => handleAction('arrive')}
                     disabled={isProcessing}
                   >
                     {isProcessing ? <VamoIcon name="loader" className="animate-spin w-5 h-5" /> : "YA LLEGUÉ"}
@@ -241,7 +252,7 @@ export default function SharedRideManager({
                   <div className="col-span-3 grid grid-cols-2 gap-2">
                     <Button 
                       className="h-16 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-widest text-[10px] leading-tight"
-                      onClick={() => handleAction('confirm_pickup', nextStop.order)}
+                      onClick={() => handleAction('confirm_pickup')}
                       disabled={isProcessing}
                     >
                       CONFIRMAR SUBIDA
@@ -249,7 +260,7 @@ export default function SharedRideManager({
                     <Button 
                       variant="destructive"
                       className="h-16 rounded-2xl bg-red-600/20 hover:bg-red-600/30 text-red-500 border border-red-500/20 font-black uppercase tracking-widest text-[10px] leading-tight"
-                      onClick={() => setConfirmAction({ action: 'no_show', stopOrder: nextStop.order, passengerName: nextStop.passengerName || '' })}
+                      onClick={() => setConfirmAction({ action: 'no_show', requestId: nextStop.requestId, stopType: nextStop.type, passengerName: nextStop.passengerName || '' })}
                       disabled={isProcessing}
                     >
                       NO VINO
@@ -258,7 +269,7 @@ export default function SharedRideManager({
                 ) : (
                   <Button 
                     className="col-span-3 h-16 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-widest text-xs"
-                    onClick={() => setConfirmAction({ action: 'confirm_dropoff', stopOrder: nextStop.order, passengerName: nextStop.passengerName || '' })}
+                    onClick={() => setConfirmAction({ action: 'confirm_dropoff', requestId: nextStop.requestId, stopType: nextStop.type, passengerName: nextStop.passengerName || '' })}
                     disabled={isProcessing}
                   >
                     CONFIRMAR BAJADA
@@ -358,7 +369,7 @@ export default function SharedRideManager({
           </div>
 
           <div className="grid grid-cols-1 gap-3">
-            {ride.sharedRequestIds.map(rid => {
+            {(ride.sharedRequestIds || []).map(rid => {
               const req = requests[rid];
               if (!req) return null;
 
@@ -394,10 +405,25 @@ export default function SharedRideManager({
       </div>
 
       {/* FOOTER ACTIONS */}
-      <div className="fixed inset-x-0 bottom-0 p-6 z-50 bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent">
-        <div className="max-w-md mx-auto flex flex-col gap-4">
-          <SafetyToolkit ride={ride} role="driver" />
-          <PanicButton rideId={ride.id} role="driver" />
+      <div className="fixed inset-x-0 bottom-0 p-6 z-50 bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent pointer-events-none">
+        <div className="max-w-md mx-auto flex flex-col gap-3 pointer-events-auto items-end">
+          <Button 
+            variant="ghost" 
+            className="rounded-full bg-zinc-900/90 border border-white/10 w-12 h-12 flex items-center justify-center p-0 backdrop-blur-md shadow-2xl"
+            onClick={() => setIsToolkitMinimized(!isToolkitMinimized)}
+          >
+             <VamoIcon name={isToolkitMinimized ? "shield" : "chevron-down"} className="w-5 h-5 text-indigo-400" />
+          </Button>
+
+          {!isToolkitMinimized && (
+             <div className="w-full flex flex-col gap-3 animate-in slide-in-from-bottom-4 fade-in duration-300 origin-bottom">
+                <SafetyToolkit ride={ride} role="driver" />
+             </div>
+          )}
+          
+          <div className="w-full">
+             <PanicButton rideId={ride.id} role="driver" />
+          </div>
         </div>
       </div>
 
@@ -421,8 +447,8 @@ export default function SharedRideManager({
                 if (!confirmAction) return;
                 if (confirmAction.action === 'mark_undeclared_companion') {
                     handleOldAction('mark_undeclared_companion', nextStop?.requestId || '');
-                } else if (confirmAction.stopOrder !== undefined) {
-                    handleAction(confirmAction.action, confirmAction.stopOrder);
+                } else if (confirmAction.requestId && confirmAction.stopType) {
+                    handleAction(confirmAction.action, confirmAction.requestId, confirmAction.stopType);
                 }
               }}
               className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl h-14 font-black uppercase text-xs"

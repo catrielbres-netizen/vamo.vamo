@@ -6,6 +6,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useUser, useFirestore } from "@/firebase";
 import {
   doc,
+  collection,
+  query,
+  where,
+  orderBy,
   onSnapshot,
   serverTimestamp,
   updateDoc,
@@ -15,6 +19,9 @@ import {
   MunicipalExpressStatus,
   DocItemStatus,
   UserProfile,
+  TrafficObservation,
+  MunicipalChecklistKey,
+  normalizeDriverDocumentType,
 } from "@/lib/types";
 import { VamoIcon } from "@/components/VamoIcon";
 import { Button } from "@/components/ui/button";
@@ -49,6 +56,7 @@ export default function TrafficDriverDetailPage() {
 
   const [mp, setMp] = useState<MunicipalProfile | null>(null);
   const [userData, setUserData] = useState<UserProfile | null>(null);
+  const [observations, setObservations] = useState<TrafficObservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -66,9 +74,21 @@ export default function TrafficDriverDetailPage() {
       setLoading(false);
     });
 
+    const obsQuery = query(
+      collection(firestore, "traffic_observations"),
+      where("driverId", "==", driverId),
+      orderBy("createdAt", "desc")
+    );
+    const unsubObs = onSnapshot(obsQuery, (snap) => {
+      const obsList: TrafficObservation[] = [];
+      snap.forEach((doc) => obsList.push(doc.data() as TrafficObservation));
+      setObservations(obsList);
+    });
+
     return () => {
       unsub();
       unsubUser();
+      unsubObs();
     };
   }, [firestore, driverId]);
 
@@ -86,35 +106,46 @@ export default function TrafficDriverDetailPage() {
 
   const [reqDocType, setReqDocType] = useState<string>("");
   const [reqReason, setReqReason] = useState<string>("");
+  const [reqSeverity, setReqSeverity] = useState<'critical' | 'regularizable' | 'informative'>("regularizable");
   const [isReqModalOpen, setIsReqModalOpen] = useState(false);
 
+  const openRequestModal = (docKey: string, severity: 'regularizable' | 'critical' = 'regularizable') => {
+    setReqDocType(docKey);
+    setReqSeverity(severity);
+    setReqReason(`Por favor, renovar y actualizar el documento: ${formatLabel(docKey)}`);
+    setIsReqModalOpen(true);
+  };
+
   const handleRequestDocument = async () => {
-    if (!reqDocType) return;
+    if (!reqDocType || !reqReason) return;
     setBusy(true);
     try {
       const functions = getFunctions(undefined, "us-central1");
-      const requestDoc = httpsCallable(functions, "requestDriverDocumentV1");
-      await requestDoc({
-        targetUid: driverId,
+      const createObs = httpsCallable(functions, "createTrafficObservationV1");
+      await createObs({
+        driverId,
+        severity: reqSeverity,
         documentType: reqDocType,
         reason: reqReason,
       });
       toast({
-        title: "Solicitud Enviada",
-        description: `Se ha solicitado ${formatLabel(reqDocType)} al conductor.`,
+        title: "Observación Creada",
+        description: `Se ha registrado la observación y notificado al conductor.`,
       });
       telemetry.trackEvent({
         type: 'municipal_operation',
-        eventName: 'traffic_document_requested',
+        eventName: 'traffic_observation_created',
         metadata: {
           driverId,
           documentType: reqDocType,
+          severity: reqSeverity,
           reason: reqReason
         }
       });
       setIsReqModalOpen(false);
       setReqDocType("");
       setReqReason("");
+      setReqSeverity("regularizable");
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -315,6 +346,17 @@ export default function TrafficDriverDetailPage() {
     );
   }
 
+  const isLegacyTraffic = userData?.municipalStatus === 'suspended_by_traffic' || mp?.municipalStatus === 'suspended_by_traffic';
+  const isSuspendedTop = !!userData?.isSuspended || !!userData?.trafficSuspended || !!userData?.municipalSuspended || !!userData?.adminSuspended || !!mp?.isSuspended || !!mp?.trafficSuspended || !!mp?.municipalSuspended || !!mp?.adminSuspended || isLegacyTraffic;
+  const suspensionSourceTop = userData?.suspensionSource || mp?.suspensionSource || (userData?.adminSuspended ? 'admin' : (userData?.municipalSuspended ? 'municipal' : (userData?.trafficSuspended ? 'traffic' : null))) || (mp?.adminSuspended ? 'admin' : (mp?.municipalSuspended ? 'municipal' : (mp?.trafficSuspended ? 'traffic' : null))) || (isLegacyTraffic ? 'traffic' : null);
+
+  const isTrafficSuspended = isSuspendedTop && suspensionSourceTop === 'traffic';
+  const isMunicipalSuspended = isSuspendedTop && suspensionSourceTop === 'municipal';
+  const trafficReason = userData?.trafficSuspensionReason || mp?.municipalObservation || "Suspensión operativa por control de Tránsito";
+  const requestedDocType = mp?.lastTrafficRequest?.documentType;
+  const requestedDocStatus = requestedDocType ? mp?.checklist?.[requestedDocType]?.status : null;
+
+
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-8 animate-in fade-in duration-700">
       {/* HEADER */}
@@ -330,7 +372,10 @@ export default function TrafficDriverDetailPage() {
               </h1>
               <StatusBadge
                 status={
-                  mp?.municipalStatus || userData.municipalStatus || "pending"
+                  isTrafficSuspended ? 'traffic_observed' :
+                  isMunicipalSuspended ? 'municipal_observed' :
+                  isSuspendedTop ? 'admin_suspended' :
+                  (mp?.municipalStatus || userData.municipalStatus || "pending")
                 }
               />
             </div>
@@ -400,6 +445,24 @@ export default function TrafficDriverDetailPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Gravedad (Plazo)
+                  </label>
+                  <Select onValueChange={(val: any) => setReqSeverity(val)} value={reqSeverity}>
+                    <SelectTrigger className="bg-white/5 border-white/5 rounded-xl h-12">
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                      <SelectItem value="regularizable">
+                        Regularizable (Da 24 hs de plazo)
+                      </SelectItem>
+                      <SelectItem value="critical">
+                        Crítica (Suspende de inmediato)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
                     Motivo de la Solicitud
                   </label>
                   <Textarea
@@ -410,11 +473,11 @@ export default function TrafficDriverDetailPage() {
                   />
                 </div>
                 <Button
-                  className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-500 font-black"
+                  className={`w-full h-14 rounded-2xl font-black ${reqSeverity === 'critical' ? 'bg-red-600 hover:bg-red-500' : 'bg-indigo-600 hover:bg-indigo-500'}`}
                   disabled={busy || !reqDocType}
                   onClick={handleRequestDocument}
                 >
-                  ENVIAR SOLICITUD FORMAL
+                  {reqSeverity === 'critical' ? 'SUSPENDER Y PEDIR DOC' : 'ENVIAR INTIMACIÓN (24 HS)'}
                 </Button>
               </div>
             </DialogContent>
@@ -422,6 +485,69 @@ export default function TrafficDriverDetailPage() {
         </div>
         )}
       </div>
+
+      {/* EXPLICIT TRAFFIC OBSERVATION CARD */}
+      {isTrafficSuspended && (
+        <Card className="rounded-[2rem] border-red-500/20 bg-red-500/10 shadow-lg shadow-red-500/5 p-6 animate-in fade-in slide-in-from-top-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-2">
+              <h2 className="text-xl font-black text-red-400 uppercase tracking-tighter flex items-center gap-2">
+                <VamoIcon name="alert-triangle" className="w-6 h-6" /> Tránsito inhabilitó preventivamente a este conductor
+              </h2>
+              <div className="text-sm font-semibold text-zinc-300">
+                <p>Motivo: <span className="italic text-zinc-400">"{trafficReason}"</span></p>
+                {requestedDocType && (
+                  <p className="mt-1 flex items-center gap-2">
+                    Documento Requerido: <span className="text-white bg-white/10 px-2 py-0.5 rounded font-mono text-[10px]">{requestedDocType}</span>
+                    <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded ${requestedDocStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-400' : requestedDocStatus === 'pending' || requestedDocStatus === 'submitted' ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}`}>
+                      Estado: {requestedDocStatus === 'submitted' ? 'EN REVISIÓN' : requestedDocStatus || 'Sin cargar'}
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex-shrink-0 w-full md:w-auto">
+              {requestedDocStatus === 'approved' ? (
+                <Button
+                  disabled={busy}
+                  onClick={handleLiftSuspension}
+                  className="w-full md:w-auto h-14 px-8 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white border-none font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-600/20 animate-pulse"
+                >
+                  REHABILITAR CONDUCTOR
+                </Button>
+              ) : requestedDocStatus === 'pending' || requestedDocStatus === 'submitted' ? (
+                 <div className="text-center md:text-right border border-amber-500/20 bg-amber-500/10 p-3 rounded-xl">
+                   <p className="text-[10px] uppercase font-black text-amber-500">Documento en revisión</p>
+                   <p className="text-[10px] text-amber-400/80">Aprobá el documento abajo para rehabilitar.</p>
+                 </div>
+              ) : (
+                <div className="text-center md:text-right border border-white/5 bg-black/20 p-3 rounded-xl opacity-80">
+                  <p className="text-[10px] uppercase font-black text-zinc-400">Esperando carga del conductor</p>
+                  <p className="text-[10px] text-zinc-500">No es posible rehabilitar aún.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {isMunicipalSuspended && (
+        <Card className="rounded-[2rem] border-red-500/10 bg-zinc-900/50 p-6 text-center animate-in fade-in slide-in-from-top-4">
+            <h2 className="text-base font-black text-red-400 uppercase tracking-wider mb-2">
+                Suspensión Municipal
+            </h2>
+            <p className="text-xs text-zinc-400">Este conductor fue deshabilitado por Municipalidad. Requiere revisión municipal central.</p>
+        </Card>
+      )}
+
+      {isSuspendedTop && !suspensionSourceTop && (
+        <Card className="rounded-[2rem] border-orange-500/20 bg-orange-500/10 p-6 text-center animate-in fade-in slide-in-from-top-4">
+            <h2 className="text-base font-black text-orange-400 uppercase tracking-wider mb-2 flex items-center justify-center gap-2">
+                <VamoIcon name="alert-triangle" className="w-5 h-5" /> Inconsistencia de Estado
+            </h2>
+            <p className="text-xs text-zinc-300">El conductor figura inhabilitado operativamente pero no se registra el origen (Tránsito, Admin o Municipalidad). Requiere revisión técnica o de Administración.</p>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* INFO COL */}
@@ -452,12 +578,11 @@ export default function TrafficDriverDetailPage() {
             </CardContent>
           </Card>
 
-          {/* DOCUMENTATION CHECKLIST */}
+          {/* VENCIMIENTOS DOCUMENTALES */}
           <Card className="rounded-[2.5rem] border-white/5 bg-zinc-950/50 backdrop-blur-xl overflow-hidden premium-shadow">
-            <div className="p-8 border-b border-white/5">
+            <div className="p-8 border-b border-white/5 flex items-center justify-between">
               <h2 className="text-lg font-black tracking-tighter uppercase italic text-zinc-400 flex items-center gap-2">
-                <VamoIcon name="file-text" className="w-4 h-4" /> Documentación
-                Digital
+                <VamoIcon name="file-text" className="w-4 h-4" /> Vencimientos Documentales
               </h2>
             </div>
             <CardContent className="p-0 divide-y divide-white/5">
@@ -466,36 +591,127 @@ export default function TrafficDriverDetailPage() {
                   El conductor aún no ha iniciado su legajo municipal.
                 </div>
               ) : (
-                Object.entries(mp.checklist || {}).map(
-                  ([key, item]: [string, any]) => (
+                ['driverLicense', 'vehicleInsurance', 'technicalInspection', 'vehicleRegistrationCard', 'criminalRecord', 'municipalCanon', 'municipalHabilitation', 'disinfectionReceipt', 'passengerCoverageInsurance'].map(
+                  (rawKey) => {
+                    const key = normalizeDriverDocumentType(rawKey);
+                    // Normalizar todo el checklist para soportar alias (ej. 'antecedentes' -> 'criminalRecord')
+                    const normalizedChecklist: Record<string, any> = {};
+                    if (mp?.checklist) {
+                      Object.keys(mp.checklist).forEach(k => {
+                        const nk = normalizeDriverDocumentType(k);
+                        // Preferimos 'approved' si hay colisión
+                        if (normalizedChecklist[nk]?.status !== 'approved') {
+                          normalizedChecklist[nk] = mp.checklist[k as MunicipalChecklistKey];
+                        }
+                      });
+                    }
+
+                    const item = normalizedChecklist[key] || mp.checklist?.[rawKey as MunicipalChecklistKey] || { status: 'missing' };
+                    // Fallbacks desde la raiz del legajo municipal (legacy)
+                    const getRootExpiry = (k: string) => {
+                        switch(k) {
+                            case 'driverLicense': return mp.licenseExpiry;
+                            case 'vehicleInsurance': return mp.insuranceExpiry;
+                            case 'technicalInspection': return mp.itvExpiry;
+                            case 'criminalRecord': return mp.backgroundCheckExpiry;
+                            case 'municipalCanon': return mp.canonExpiry;
+                            case 'municipalHabilitation': return mp.habilitationExpiry; // Si existe
+                            default: return null;
+                        }
+                    };
+
+                    let finalExpiryStr = item.expiryDate;
+                    let rootSourceUsed = false;
+                    
+                    if (!finalExpiryStr) {
+                        const rootExpiry = getRootExpiry(key);
+                        if (rootExpiry) {
+                            finalExpiryStr = rootExpiry.toDate ? rootExpiry.toDate().toISOString() : new Date(rootExpiry).toISOString();
+                            rootSourceUsed = true;
+                        }
+                    }
+
+                    let expiryState = item.status === 'missing' ? 'missing' : 'pending';
+                    let daysLeft: number | null = null;
+                    
+                    if (item.status === 'approved') {
+                        if (finalExpiryStr) {
+                            const d = new Date(finalExpiryStr);
+                            // Fix timezone diff for accurate days
+                            d.setHours(23, 59, 59, 999);
+                            const now = new Date();
+                            daysLeft = Math.ceil((d.getTime() - now.getTime()) / (1000 * 3600 * 24));
+                            if (daysLeft < 0) expiryState = 'expired';
+                            else if (daysLeft <= 15) expiryState = 'expiring_soon';
+                            else expiryState = 'valid';
+                        } else {
+                            // Está aprobado pero NO tiene fecha de vencimiento cargada en ningún lado
+                            expiryState = 'approved_no_date';
+                        }
+                    } else if (item.status === 'observed') {
+                        expiryState = 'observed';
+                    } else if (item.status === 'pending_traffic_review') {
+                        expiryState = 'review';
+                    }
+
+                    const stateColor = 
+                        expiryState === 'valid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                        expiryState === 'approved_no_date' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                        expiryState === 'expiring_soon' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                        expiryState === 'expired' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                        expiryState === 'observed' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                        expiryState === 'review' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                        'bg-zinc-800/50 text-zinc-500 border-zinc-700';
+
+                    const stateLabel = 
+                        expiryState === 'valid' ? 'Vigente' :
+                        expiryState === 'approved_no_date' ? 'Aprobado — sin vencimiento registrado' :
+                        expiryState === 'expiring_soon' ? 'Por Vencer' :
+                        expiryState === 'expired' ? 'Vencido' :
+                        expiryState === 'observed' ? 'Observado' :
+                        expiryState === 'review' ? 'En Revisión' :
+                        'Faltante';
+
+                    return (
                     <div
                       key={key}
-                      className="p-6 flex items-center justify-between group"
+                      className="p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group hover:bg-white/[0.02] transition-colors"
                     >
                       <div className="flex items-center gap-4">
                         <div
                           className={cn(
-                            "w-10 h-10 rounded-xl flex items-center justify-center border",
-                            item.status === "approved"
-                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
-                              : "bg-zinc-900 border-white/5 text-zinc-600",
+                            "w-12 h-12 rounded-xl flex items-center justify-center border shrink-0",
+                            stateColor
                           )}
                         >
                           <VamoIcon
-                            name={item.status === "approved" ? "check" : "file"}
-                            className="w-5 h-5"
+                            name={(expiryState === 'valid' || expiryState === 'approved_no_date') ? "check" : expiryState === 'expired' ? "alert-octagon" : expiryState === 'observed' ? "alert-triangle" : "file"}
+                            className="w-6 h-6"
                           />
                         </div>
                         <div>
                           <p className="text-sm font-bold text-zinc-200 uppercase tracking-tight">
                             {formatLabel(key)}
                           </p>
-                          <p className="text-[10px] text-zinc-600 font-black uppercase tracking-widest">
-                            {item.status}
-                          </p>
+                          <div className="flex flex-col gap-1 mt-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={cn("text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded", stateColor)}>
+                                {stateLabel}
+                              </span>
+                              {finalExpiryStr && (
+                                <span className="text-[10px] font-mono text-zinc-400">
+                                  Vto: {new Date(finalExpiryStr).toLocaleDateString()} 
+                                  {daysLeft !== null && <span className="ml-1 font-bold">({daysLeft < 0 ? 'Hace ' + Math.abs(daysLeft) : 'En ' + daysLeft} días)</span>}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[9px] text-zinc-500 uppercase tracking-widest">
+                              Fuente: {rootSourceUsed ? 'Raíz del legajo municipal' : (item.status !== 'missing' ? 'Documento municipal cargado' : 'Falta cargar')}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap items-center justify-end">
                         {item.storageUrl && (
                           <a
                             href={item.storageUrl}
@@ -503,17 +719,17 @@ export default function TrafficDriverDetailPage() {
                             rel="noreferrer"
                           >
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              className="rounded-lg text-[10px] font-black uppercase text-indigo-400"
+                              className="rounded-lg text-[10px] font-black uppercase text-indigo-400 border-indigo-500/20 hover:bg-indigo-500/10"
                             >
                               VER
                             </Button>
                           </a>
                         )}
                         {(profile?.role === 'admin' || profile?.role === 'superadmin' || profile?.role === 'traffic_municipal' || profile?.role === 'admin_municipal' || profile?.role === 'traffic_admin' || profile?.role === 'traffic_operator') && (
-                          <div className="flex gap-2 flex-wrap items-center">
-                            {item.status !== "approved" && (
+                          <>
+                            {item.status !== "approved" && item.status !== "missing" && (
                               <ApproveItemButton
                                 keyId={key}
                                 disabled={busy}
@@ -521,6 +737,8 @@ export default function TrafficDriverDetailPage() {
                                   "driverLicense",
                                   "vehicleInsurance",
                                   "criminalRecord",
+                                  "municipalCanon",
+                                  "passengerCoverageInsurance"
                                 ].includes(key)}
                                 onConfirm={(expiry) =>
                                   handleChecklistItem(
@@ -532,28 +750,42 @@ export default function TrafficDriverDetailPage() {
                                 }
                               />
                             )}
-                            {item.status !== "observed" && (
-                              <ObserveItemButton
-                                disabled={busy}
-                                onObserve={(obs) =>
-                                  handleChecklistItem(key, "observed", obs)
-                                }
-                              />
+                            
+                            {(expiryState === 'valid' || expiryState === 'expiring_soon' || expiryState === 'missing') && (
+                                <Button
+                                  disabled={busy}
+                                  onClick={() => openRequestModal(key, 'regularizable')}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="rounded-lg text-[10px] font-black uppercase text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 border border-amber-500/20"
+                                >
+                                  SOLICITAR RENOVACIÓN
+                                </Button>
                             )}
-                            {item.status === "approved" && (
-                              <button
-                                disabled={busy}
-                                onClick={() => handleChecklistItem(key, "observed")}
-                                className="text-[10px] text-zinc-600 hover:text-orange-400 underline transition-colors"
-                              >
-                                Revertir a observado
-                              </button>
+
+                            {expiryState === 'expired' && (
+                                <Button
+                                  disabled={busy}
+                                  onClick={() => openRequestModal(key, 'critical')}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="rounded-lg text-[10px] font-black uppercase text-red-500 hover:bg-red-500/10 hover:text-red-400 border border-red-500/20"
+                                >
+                                  SUSPENDER (VENCIDO)
+                                </Button>
                             )}
-                          </div>
+
+                            {item.status === "observed" && (
+                              <span className="text-[10px] uppercase font-bold text-orange-500 underline decoration-orange-500/30 cursor-pointer hover:text-orange-400" onClick={() => handleChecklistItem(key, 'pending')}>
+                                Revertir
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
-                  ),
+                  );
+                 }
                 )
               )}
             </CardContent>
@@ -615,7 +847,7 @@ export default function TrafficDriverDetailPage() {
                               onClick={handleLiftSuspension}
                               className="w-full h-12 rounded-xl bg-emerald-600/10 text-emerald-500 border border-emerald-500/20 font-black text-xs hover:bg-emerald-600/20 animate-pulse"
                             >
-                              LEVANTAR SUSPENSIÓN PREVENTIVA
+                              REHABILITAR CONDUCTOR
                             </Button>
                           ) : (
                             <div className="p-3 text-center rounded-xl bg-zinc-500/5 border border-white/5 space-y-1">
@@ -652,19 +884,7 @@ export default function TrafficDriverDetailPage() {
             </div>
           </Card>
 
-          {/* VENCIMIENTOS QUICK VIEW */}
-          {mp && (
-            <Card className="rounded-[2.5rem] border-white/5 bg-zinc-900/30 p-8 space-y-4">
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-500 italic">
-                Vencimientos Clave
-              </h3>
-              <div className="space-y-4">
-                <ExpiryItem label="Licencia" date={mp.licenseExpiry} />
-                <ExpiryItem label="Seguro" date={mp.insuranceExpiry} />
-                <ExpiryItem label="Canon" date={mp.canonExpiry} />
-              </div>
-            </Card>
-          )}
+          {/* VENCIMIENTOS QUICK VIEW - HIDDEN IN FAVOR OF FULL LIST ABOVE */}
         </div>
       </div>
     </div>
@@ -714,6 +934,18 @@ function StatusBadge({ status }: { status: string }) {
     suspended_by_traffic: {
       label: "Suspendido por Tránsito",
       cls: "bg-red-500/10 text-red-500 border-red-500/20",
+    },
+    traffic_observed: {
+      label: "OBSERVADO POR TRÁNSITO",
+      cls: "bg-amber-500/20 text-amber-500 border-amber-500/30",
+    },
+    municipal_observed: {
+      label: "OBSERVADO POR MUNICIPALIDAD",
+      cls: "bg-red-500/10 text-red-500 border-red-500/20",
+    },
+    admin_suspended: {
+      label: "BLOQUEADO (ADMIN)",
+      cls: "bg-red-500/20 text-red-500 border-red-500/40",
     },
     suspended: {
       label: "Suspendido",
@@ -771,11 +1003,15 @@ function formatLabel(key: string) {
     dniFront: "DNI Frente",
     dniBack: "DNI Dorso",
     driverLicense: "Licencia de Conducir",
+    professionalLicense: "Licencia Profesional",
     vehicleInsurance: "Seguro del Vehículo",
+    technicalInspection: "RTO / VTV",
     vehicleRegistrationCard: "Cédula",
     criminalRecord: "Antecedentes Penales",
     municipalCanon: "Canon Municipal",
+    municipalHabilitation: "Habilitación Municipal",
     disinfectionReceipt: "Certificado de Desinfección",
+    passengerCoverageInsurance: "Cobertura de Pasajero",
   };
   return labels[key] || key;
 }

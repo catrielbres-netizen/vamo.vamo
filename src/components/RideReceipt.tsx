@@ -299,6 +299,10 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
             const walletCoveredAmount = data.walletCoveredAmount || 0;
             const cashToCollect = data.cashToCollect || 0;
             const commissionAmount = data.commissionAmount || 0;
+            const vamoAmount = data.vamoAmount || 0;
+            const municipalAmount = data.municipalAmount || 0;
+            const taxiAssociationAmount = data.taxiAssociationAmount || 0;
+            const remisAssociationAmount = data.remisAssociationAmount || 0;
             const vamoSubsidyAmount = data.vamoSubsidyAmount || 0;
             const driverWalletCredit = data.driverWalletCredit || 0;
             const passengerPaysTotal = data.passengerPaysTotal ?? (totalFare - discountAmount);
@@ -344,13 +348,29 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
                         <span>{formatCurrency(originalTotal)}</span>
                       </div>
                       
-                      {/* Comisión VamO */}
-                      <div className="flex justify-between items-center text-xs font-black text-rose-400/80 pt-2">
+                      {/* Desglose Comisiones */}
+                      <div className="flex justify-between items-center text-xs font-black text-rose-400/80 pt-2 border-t border-white/5">
                         <div className="flex items-center gap-1.5">
                           <VamoIcon name="percent" className="h-3 w-3" />
-                          <span>Comisión VamO</span>
+                          <span>Comisión Total (10%)</span>
                         </div>
                         <span>-{formatCurrency(commissionAmount)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] font-bold text-rose-400/60 pl-5 mt-1">
+                          <span>VamO (6%)</span>
+                          <span>{formatCurrency(vamoAmount)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] font-bold text-rose-400/60 pl-5">
+                          <span>Municipalidad (2%)</span>
+                          <span>{formatCurrency(municipalAmount)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] font-bold text-rose-400/60 pl-5">
+                          <span>Asoc. Taxis (1%)</span>
+                          <span>{formatCurrency(taxiAssociationAmount)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] font-bold text-rose-400/60 pl-5">
+                          <span>Asoc. Remises (1%)</span>
+                          <span>{formatCurrency(remisAssociationAmount)}</span>
                       </div>
 
                       {/* Ajuste explícito (si aplica) */}
@@ -417,7 +437,7 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
                       Forma de pago
                     </span>
                     
-                    {ride.paymentMethod === 'cash' || ride.paymentMethod === 'efectivo' ? (
+                    {ride.paymentMethod === 'cash' || (ride.paymentMethod as any) === 'efectivo' ? (
                       <div className="flex justify-between items-center pt-2">
                         <div className="flex flex-col">
                           <span className="text-[10px] font-black text-white uppercase tracking-widest leading-tight">
@@ -431,7 +451,7 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
                           {formatCurrency(cashToCollect)}
                         </span>
                       </div>
-                    ) : ride.paymentMethod === 'wallet' || ride.paymentMethod === 'vamo_wallet' ? (
+                    ) : ride.paymentMethod === 'wallet' || (ride.paymentMethod as any) === 'vamo_wallet' ? (
                       <div className="flex flex-col items-center justify-center py-2 space-y-2">
                          <div className="px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center gap-2">
                             <VamoIcon name="check-circle" className="h-3.5 w-3.5 text-indigo-500" />

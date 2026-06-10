@@ -57,6 +57,7 @@ function formatCurrency(value: number) {
 
 const STATUS_CONFIG: Record<string, { title: string; subtitle: string }> = {
     searching: { title: "Buscando conductor", subtitle: "Conectando con un vehículo cercano..." },
+    searching_shared: { title: "Buscando conductor", subtitle: "El grupo está listo. Buscando conductor..." },
     driver_assigned: { title: "Conductor en camino", subtitle: "Ya confirmamos tu viaje" },
     driver_arrived: { title: "Conductor llegó", subtitle: "Te está esperando en el punto de encuentro" },
     in_progress: { title: "Viaje en curso", subtitle: "Dirigiéndote a tu destino" },
@@ -66,7 +67,8 @@ const STATUS_CONFIG: Record<string, { title: string; subtitle: string }> = {
     accepted: { title: "Viaje aceptado", subtitle: "El conductor está organizando la ruta" },
 };
 
-export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, onNewRide: () => void }) {
+
+export default function RideStatus({ ride, onNewRide, onCancel }: { ride: WithId<Ride>, onNewRide: () => void, onCancel?: () => Promise<void> | void }) {
   const firestore = useFirestore();
   const firebaseApp = useFirebaseApp();
   const { profile } = useUser();
@@ -126,9 +128,14 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
   }, [isCurrentlyWaiting]);
 
   const handleCancelRide = async () => {
-    if (!ride || !firebaseApp) return;
     setIsCancelling(true);
     try {
+      if (onCancel) {
+          await onCancel();
+          setIsCancelDialogOpen(false);
+          return;
+      }
+      if (!ride || !firebaseApp) return;
       const functions = getFunctions(undefined, 'us-central1');
       const cancelRideV1 = httpsCallable(functions, 'cancelRideV1');
       await cancelRideV1({ rideId: ride.id, reason: 'cancelled_by_passenger' });
@@ -147,11 +154,17 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
   const [hasClosedReceipt, setHasClosedReceipt] = useState(false);
 
   // [Bug 2 Fix] Cleanup after receipt closed
+  const isMyDropoffCompleted = useMemo(() => {
+     if (!ride.isSharedRide || !ride.orderedStops || profile?.role !== 'passenger') return false;
+     const myDropoff = ride.orderedStops.find(s => s.passengerId === profile?.uid && s.type === 'dropoff');
+     return myDropoff?.status === 'completed';
+  }, [ride, profile?.uid, profile?.role]);
+
   useEffect(() => {
-    if (ride?.status === 'completed' && hasClosedReceipt) {
+    if ((ride?.status === 'completed' || isMyDropoffCompleted) && hasClosedReceipt) {
       onNewRide();
     }
-  }, [ride?.status, hasClosedReceipt, onNewRide]);
+  }, [ride?.status, isMyDropoffCompleted, hasClosedReceipt, onNewRide]);
 
   // VOICE SYNTHESIS FOR ARRIVAL
   const hasSpokenArrivalInfo = React.useRef(false);
@@ -173,7 +186,28 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
      }
   }, [ride?.status]);
 
-  if (!ride) {
+  const rideFinancialData = useMemo(() => {
+      if (!ride) return null;
+      const fin = getRideFinancialSnapshot(ride);
+      const isShared = ride.isSharedRide;
+      const myData = isShared ? ride.sharedPassengers?.find((p: any) => p.passengerId === profile?.uid) as any : null;
+      
+      return {
+          financial: fin,
+          rawTotal: fin.totalFare,
+          walletAmount: fin.walletCoveredAmount,
+          cashToPay: fin.cashToCollect,
+          hasWallet: fin.walletCoveredAmount > 0,
+          isShared,
+          myData,
+          mySharedFare: myData?.sharedFare,
+          myIndividualFare: myData?.individualQuotedFare,
+          mySavings: myData?.savingsAmount,
+          groupTotal: fin.totalFare
+      };
+  }, [ride, profile?.uid]);
+
+  if (!ride || !rideFinancialData) {
       return null;
   }
 
@@ -183,11 +217,13 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
   const currentTotalWithWait = baseCashToPay + waitCost;
   const showMap = ['searching', 'driver_assigned', 'driver_arrived', 'in_progress', 'paused'].includes(ride.status) && mapsAvailable;
   const canPassengerCancel = ride && ['searching', 'driver_assigned', 'driver_arrived'].includes(ride.status);
-  const config = STATUS_CONFIG[ride.status] || { title: "Estado del viaje", subtitle: "Actualizando..." };
+  const statusKey = (ride.status === 'searching' && ride.isSharedRide) ? 'searching_shared' : ride.status;
+  const config = STATUS_CONFIG[statusKey] || { title: "Estado del viaje", subtitle: "Actualizando..." };
+
 
   return (
     <>
-      <div className="fixed inset-0 flex flex-col bg-transparent overflow-hidden"> 
+      <div className="fixed inset-0 z-[100] flex flex-col bg-transparent overflow-hidden"> 
       {showMap && (
         <div className="absolute inset-0 z-0">
             <Map
@@ -227,7 +263,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
           )}
       </div>
 
-      {ride.status !== 'completed' && (
+      {(ride.status !== 'completed' && !isMyDropoffCompleted) && (
       <VamoBottomSheet
         isOpen={true}
         isExpanded={isExpanded}
@@ -235,7 +271,22 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
         minHeight={ride.status === 'searching' ? '55vh' : '40vh'}
         maxHeight="75vh"
       >
-          {ride.status === 'searching' ? (
+          {ride.status === 'searching' && ride.isSharedRide ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                      <span className="text-3xl">🚗</span>
+                  </div>
+                  <div>
+                      <h3 className="text-white font-black text-lg uppercase tracking-widest">Buscando conductor</h3>
+                      <p className="text-zinc-400 text-sm mt-1">El grupo está listo. Contactando conductores cercanos...</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{animationDelay:'0ms'}} />
+                      <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{animationDelay:'150ms'}} />
+                      <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{animationDelay:'300ms'}} />
+                  </div>
+              </div>
+          ) : ride.status === 'searching' ? (
               <PassengerSearchingSheet
                   serviceType={ride.serviceType}
                   estimatedPrice={financial.totalFare}
@@ -299,7 +350,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                      </div>
                  )}
 
-                 {isExpanded && (
+                 {isExpanded && !ride.isSharedRide && (
                     <div className="flex flex-col gap-4 mb-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                         <PassengerTripCard 
                             serviceType={ride.serviceType}
@@ -316,36 +367,68 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
 
                   {ride.isSharedRide && ride.orderedStops && (
                       <div className="px-1 mb-4">
-                          <PassengerSharedRoadSheet ride={ride} />
+                          <PassengerSharedRoadSheet ride={ride} myId={profile?.uid} />
                       </div>
                   )}
 
                   <div className="flex flex-col gap-3 mt-2">
-                       {(() => {
-                           // [VamO PRO] Unified Financial Snapshot
-                           const financial = getRideFinancialSnapshot(ride);
-                           const rawTotal = financial.totalFare;
-                           const walletAmount = financial.walletCoveredAmount;
-                           const cashToPay = financial.cashToCollect;
-                           const hasWallet = walletAmount > 0;
-
-                           return (
-                              <div className="bg-zinc-950/90 border border-white/5 rounded-[2rem] p-6 flex flex-col gap-4 shadow-2xl relative overflow-hidden backdrop-blur-md mb-2">
+                       {rideFinancialData.isShared ? (
+                                  <div className="bg-zinc-950/90 border border-emerald-500/20 rounded-[2rem] p-6 flex flex-col gap-4 shadow-2xl relative overflow-hidden backdrop-blur-md mb-2">
+                                     <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-[80px]" />
+                                     
+                                     {rideFinancialData.mySharedFare !== undefined ? (
+                                        <>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-none">Tu tarifa compartida</span>
+                                                <span className="text-4xl font-black tracking-tighter leading-none text-white italic drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] mt-1">
+                                                    {formatCurrency(rideFinancialData.mySharedFare)}
+                                                </span>
+                                            </div>
+                                            {(rideFinancialData.mySavings ?? 0) > 0 && (
+                                                <div className="flex justify-between items-center text-xs px-1">
+                                                    <span className="font-bold text-emerald-400/80 uppercase tracking-tight">Ahorraste</span>
+                                                    <span className="font-black text-emerald-400">{formatCurrency(rideFinancialData.mySavings || 0)}</span>
+                                                </div>
+                                            )}
+                                            {(rideFinancialData.myIndividualFare ?? 0) > 0 && (
+                                                <div className="flex justify-between items-center text-xs px-1 mt-1 border-t border-white/5 pt-2">
+                                                    <span className="font-bold text-zinc-500 uppercase tracking-tight">Costo individual original</span>
+                                                    <span className="font-bold text-zinc-500 line-through">{formatCurrency(rideFinancialData.myIndividualFare || 0)}</span>
+                                                </div>
+                                            )}
+                                        </>
+                                     ) : (
+                                        <div className="flex items-center gap-2">
+                                            <VamoIcon name="loader" className="w-4 h-4 animate-spin text-emerald-500" />
+                                            <span className="text-xs font-bold text-zinc-400">Calculando tu tarifa compartida...</span>
+                                        </div>
+                                     )}
+                                     
+                                     <div className="h-px bg-white/5 mx-1 my-1" />
+                                     
+                                     <div className="flex justify-between items-center text-[10px] px-1">
+                                         <span className="font-bold text-zinc-500 uppercase tracking-widest">Total del grupo</span>
+                                         <span className="font-black text-zinc-400">{formatCurrency(rideFinancialData.groupTotal)}</span>
+                                     </div>
+                                     <p className="text-[8px] text-zinc-600 px-1 italic leading-tight">Suma de los aportes de todos los pasajeros. El conductor cobra este total.</p>
+                                  </div>
+                       ) : (
+                               <div className="bg-zinc-950/90 border border-white/5 rounded-[2rem] p-6 flex flex-col gap-4 shadow-2xl relative overflow-hidden backdrop-blur-md mb-2">
                                   {/* Subtle glow effect */}
                                   <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-[80px]" />
                                   
                                   <div className="flex justify-between items-center text-xs px-1">
                                       <span className="font-bold text-zinc-500 uppercase tracking-[0.2em]">Tarifa del viaje</span>
-                                      <span className="font-black text-white/90">{formatCurrency(rawTotal)}</span>
+                                      <span className="font-black text-white/90">{formatCurrency(rideFinancialData.rawTotal)}</span>
                                   </div>
                                   
-                                  {hasWallet && (
+                                  {rideFinancialData.hasWallet && (
                                      <div className="flex justify-between items-center text-xs px-1 animate-in slide-in-from-right-2 duration-500">
                                          <div className="flex items-center gap-2 text-emerald-400">
                                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                              <span className="font-black uppercase tracking-widest text-[9px]">VamO Pay aplicado</span>
                                          </div>
-                                         <span className="font-black text-emerald-400">-{formatCurrency(walletAmount)}</span>
+                                         <span className="font-black text-emerald-400">-{formatCurrency(rideFinancialData.walletAmount)}</span>
                                      </div>
                                   )}
 
@@ -368,18 +451,17 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
                                       </div>
                                       <div className="flex flex-col items-end">
                                           <span className="text-4xl font-black tracking-tighter leading-none text-white italic drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
-                                              {formatCurrency(cashToPay)}
+                                              {formatCurrency(rideFinancialData.cashToPay)}
                                           </span>
                                       </div>
                                   </div>
                               </div>
-                           );
-                       })()}
+                       )}
                        {/* [MP_SINGLE_DRIVER_MODE] Mercado Pago Button */}
                        <div className="px-1">
                            <MercadoPagoPaymentButton ride={ride as any} amount={getRideFinancialSnapshot(ride).cashToCollect} />
                        </div>
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-2 pb-4 mt-2">
                         <Button 
                             variant="outline"
                             onClick={() => setIsMapModalOpen(true)}
@@ -443,7 +525,7 @@ export default function RideStatus({ ride, onNewRide }: { ride: WithId<Ride>, on
       </VamoBottomSheet>
       )}
       
-      {ride.status === 'completed' && !hasClosedReceipt && (
+      {(ride.status === 'completed' || isMyDropoffCompleted) && !hasClosedReceipt && (
           <div className="fixed inset-0 z-[60] bg-background overflow-y-auto pointer-events-auto pt-safe pb-8">
             <div className="max-w-md mx-auto">
                 <FinishedRideSummary 

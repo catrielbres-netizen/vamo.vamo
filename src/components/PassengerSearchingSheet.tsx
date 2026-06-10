@@ -129,7 +129,7 @@ export const PassengerSearchingSheet: React.FC<PassengerSearchingSheetProps> = (
         <DialogTrigger asChild>
           <button
             disabled={isCancelling}
-            className="w-full max-w-[340px] h-10 mt-4 mb-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-[0.98] border border-white/5 hover:bg-zinc-900 bg-zinc-900/50 text-zinc-500 flex items-center justify-center gap-2"
+            className="w-full max-w-[340px] h-12 mb-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-[0.98] border border-white/5 hover:bg-zinc-800 bg-zinc-900 text-zinc-400 flex items-center justify-center gap-2 shadow-sm"
           >
             {isCancelling && <VamoIcon name="loader" className="animate-spin h-3 w-3" />}
             Cancelar

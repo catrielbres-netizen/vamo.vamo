@@ -151,7 +151,7 @@ export default function MunicipalPricingPage() {
             // Merge dynamic pricing config into the main config before saving
             const finalConfig = {
                 ...config,
-                dynamicPricing: dynamicConfig
+                dynamicPricing: dynamicConfig || undefined
             };
 
             const result = await updatePricing({

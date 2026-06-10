@@ -16,14 +16,15 @@ export function MercadoPagoPaymentButton({ ride, amount }: { ride: Ride; amount:
         return null; // Nothing to pay or already paid
     }
 
-    const isMp = ride.paymentMethod === 'automatic' || ride.paymentMethod === 'mercadopago' || ride.paymentMethod === 'auto';
+    const method = ride.paymentMethod as string | undefined;
+    const isMp = method === 'automatic' || method === 'mercadopago' || method === 'auto';
     const isStartedOrFinished = ['in_progress', 'ongoing', 'completed', 'finished'].includes(ride.status);
 
-    if (ride.paymentMethod === 'cash' || ride.paymentMethod === 'efectivo') {
+    if (method === 'cash' || method === 'efectivo') {
         return null;
     }
 
-    if (ride.paymentMethod === 'wallet' || ride.paymentMethod === 'vamo_wallet') {
+    if (method === 'wallet' || method === 'vamo_wallet') {
         return null;
     }
 

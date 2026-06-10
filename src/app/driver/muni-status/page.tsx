@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, onSnapshot, addDoc, collection, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, addDoc, collection, setDoc, updateDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { cn } from '@/lib/utils';
 import { VamoIcon } from '@/components/VamoIcon';
@@ -24,6 +24,7 @@ import {
     MunicipalExpressStatus,
     MunicipalChecklistKey,
     DocItemStatus,
+    TrafficObservation,
 } from '@/lib/types';
 
 // ─── Helpers de UI ────────────────────────────────────────────────────────────
@@ -138,6 +139,24 @@ const STATUS_CONFIG: Record<MunicipalExpressStatus, StatusConfig> = {
         icon:   'x-circle',
         canOperate: false,
     },
+    suspended_by_traffic: {
+        label: 'Suspendido preventivamente por Tránsito',
+        description: 'Tránsito ha emitido una suspensión operativa. Verificá qué documento o trámite es requerido en la plataforma.',
+        color:  'text-red-400',
+        bg:     'bg-red-500/10',
+        border: 'border-red-500/30',
+        icon:   'shield-off',
+        canOperate: false,
+    },
+    suspended_by_admin: {
+        label: 'Cuenta Bloqueada por Administración',
+        description: 'Tu cuenta ha sido inhabilitada desde Administración. Contactá a soporte técnico.',
+        color:  'text-red-400',
+        bg:     'bg-red-500/10',
+        border: 'border-red-500/30',
+        icon:   'shield-off',
+        canOperate: false,
+    },
 };
 
 const CHECKLIST_LABELS: Record<MunicipalChecklistKey, string> = {
@@ -212,6 +231,7 @@ export default function DriverMuniStatusPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [munProfile, setMunProfile] = useState<MunicipalProfile | null>(null);
+    const [observations, setObservations] = useState<TrafficObservation[]>([]);
     const [loading, setLoading]       = useState(true);
 
     const [uploadingDoc, setUploadingDoc] = useState<MunicipalChecklistKey | null>(null);
@@ -234,7 +254,24 @@ export default function DriverMuniStatusPage() {
         // [VamO PRO] Public profile is synced automatically via Cloud Functions
         // when users or municipal_profiles documents are updated.
 
-        return () => unsub();
+        const obsQuery = query(
+            collection(firestore, "traffic_observations"),
+            where("driverId", "==", user.uid)
+        );
+        const unsubObs = onSnapshot(obsQuery, (snap) => {
+            const obsList: TrafficObservation[] = [];
+            snap.forEach((doc) => obsList.push({ observationId: doc.id, ...doc.data() } as TrafficObservation));
+            // Sort client-side to avoid index requirement for now
+            obsList.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            setObservations(obsList);
+        }, (err) => {
+            console.error("Error fetching traffic observations:", err);
+        });
+
+        return () => {
+            unsub();
+            unsubObs();
+        };
     }, [firestore, user?.uid]);
 
     // All drivers use this page to manage their municipal status
@@ -379,6 +416,108 @@ export default function DriverMuniStatusPage() {
                 <h2 className="text-lg font-black text-white tracking-tight">Habilitación Municipal</h2>
             </div>
 
+            {/* TRAFFIC OBSERVATIONS BLOCK */}
+            {observations.filter(o => ['open', 'awaiting_driver_response', 'pending_traffic_review', 'rejected'].includes(o.status)).map(obs => (
+                <div key={obs.observationId} className={`rounded-3xl border-2 p-6 space-y-4 shadow-2xl animate-in fade-in slide-in-from-top-2 ${obs.severity === 'critical' ? 'border-red-500/50 bg-red-500/10 shadow-red-500/10' : 'border-amber-500/50 bg-amber-500/10 shadow-amber-500/10'}`}>
+                    <div className="flex items-center gap-3">
+                        <VamoIcon name="alert-triangle" className={`h-6 w-6 shrink-0 ${obs.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}`} />
+                        <h3 className={`text-base font-black uppercase tracking-tight ${obs.severity === 'critical' ? 'text-red-400' : 'text-amber-400'}`}>
+                            Observación de Tránsito
+                        </h3>
+                    </div>
+                    <p className="text-sm font-bold text-white">{obs.reason}</p>
+                    
+                    <div className="flex items-center gap-2">
+                        <span className="bg-white/10 px-2 py-1 rounded text-[10px] font-mono text-white">Documento requerido: {obs.requestedDocumentLabel || 'No especificado'}</span>
+                        <span className="bg-black/30 px-2 py-1 rounded text-[10px] font-black uppercase text-zinc-300">Estado: {obs.status || 'pending'}</span>
+                    </div>
+
+                    {obs.status === 'rejected' && obs.resolutionNote && (
+                        <div className="p-3 bg-red-950/60 rounded-xl border border-red-500/20">
+                            <p className="text-[10px] font-black text-red-500 uppercase">Motivo de rechazo:</p>
+                            <p className="text-xs text-red-300 italic">"{obs.resolutionNote}"</p>
+                        </div>
+                    )}
+
+                    {obs.status === 'awaiting_driver_response' && obs.dueAt && obs.severity === 'regularizable' && (
+                        <div className="text-xs text-amber-300 font-semibold bg-amber-500/20 p-3 rounded-xl flex flex-col gap-1">
+                            <span className="font-bold">Tenés 24 horas hábiles para responder.</span>
+                            <span>Plazo límite: {obs.dueAt.seconds ? new Date(obs.dueAt.seconds * 1000).toLocaleString() : (typeof obs.dueAt.toDate === 'function' ? obs.dueAt.toDate().toLocaleString() : new Date(obs.dueAt).toLocaleString())}</span>
+                            <span className="mt-1 opacity-90 italic">Mientras estés dentro del plazo, podés seguir operando salvo que Tránsito indique una suspensión crítica.</span>
+                        </div>
+                    )}
+
+                    {obs.status === 'awaiting_driver_response' && obs.severity === 'critical' && (
+                        <div className="text-xs text-red-300 font-semibold bg-red-500/20 p-3 rounded-xl flex flex-col gap-1">
+                            <span className="font-bold">Tu cuenta fue suspendida preventivamente por Tránsito.</span>
+                            <span>Subí la documentación para solicitar revisión.</span>
+                        </div>
+                    )}
+
+                    {(obs.status === 'open' || obs.status === 'awaiting_driver_response' || obs.status === 'rejected') && (
+                        <div className="pt-2">
+                            <input
+                                type="file"
+                                id={`file-${obs.observationId}`}
+                                className="hidden"
+                                accept="image/*,.pdf"
+                                onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    setIsUploading(true);
+                                    try {
+                                        const storage = getStorage(firestore.app);
+                                        const ext = file.name.split('.').pop() || 'tmp';
+                                        const path = `municipal_docs/${munProfile?.cityKey || 'unknown'}/${user?.uid}/${obs.observationId}_${Date.now()}.${ext}`;
+                                        const docRef = storageRef(storage, path);
+                                        await uploadBytes(docRef, file);
+                                        const url = await getDownloadURL(docRef);
+                                        
+                                        const { getFunctions, httpsCallable } = await import('firebase/functions');
+                                        const functions = getFunctions(undefined, 'us-central1');
+                                        const submitObs = httpsCallable(functions, 'submitTrafficObservationDocumentV1');
+                                        
+                                        const payload = {
+                                            observationId: obs.observationId,
+                                            driverId: user!.uid,
+                                            documentType: obs.requestedDocumentType || 'unknown',
+                                            storagePath: path,
+                                            fileUrl: url,
+                                            cityKey: munProfile?.cityKey || ''
+                                        };
+                                        
+                                        // Sanitize undefined values
+                                        Object.keys(payload).forEach(key => {
+                                            if ((payload as any)[key] === undefined) {
+                                                delete (payload as any)[key];
+                                            }
+                                        });
+
+                                        await submitObs(payload);
+                                        toast({ title: 'Documento subido a Tránsito' });
+                                    } catch(err: any) {
+                                        toast({ variant: 'destructive', title: 'Error', description: err.message });
+                                    } finally {
+                                        setIsUploading(false);
+                                    }
+                                }}
+                            />
+                            <label htmlFor={`file-${obs.observationId}`}>
+                                <Button
+                                    asChild
+                                    className="w-full h-12 bg-white text-black font-black uppercase text-xs rounded-xl cursor-pointer hover:bg-zinc-200"
+                                    disabled={isUploading}
+                                >
+                                    <span>
+                                        {isUploading ? 'SUBIENDO...' : 'SUBIR DOCUMENTO'}
+                                    </span>
+                                </Button>
+                            </label>
+                        </div>
+                    )}
+                </div>
+            ))}
+
             {activeSuspension && (
                 <div className="rounded-3xl border-2 border-red-500/50 bg-red-500/10 p-6 space-y-3 shadow-2xl shadow-red-500/10 animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-center gap-3">
@@ -390,9 +529,9 @@ export default function DriverMuniStatusPage() {
                         </h3>
                     </div>
                     <p className="text-xs text-zinc-300 leading-relaxed font-semibold">
-                        {isAdmin ? 'Tu cuenta ha sido bloqueada por la administración de la plataforma VamO.' : 
+                        {isAdmin ? 'Tu cuenta ha sido bloqueada por la administración de la plataforma VamO.' :  
                          isMunicipal ? 'Tu habilitación municipal ha sido suspendida por el área central del Municipio.' : 
-                         'Tu cuenta ha sido suspendida preventivamente por el área operativa de Control de Tránsito.'}
+                         'Tránsito solicitó una corrección documental o emitió una suspensión operativa. Cargá el documento requerido para solicitar rehabilitación.'}
                     </p>
                     {((isAdmin && profile?.adminSuspensionReason) || 
                       (isMunicipal && profile?.municipalSuspensionReason) || 

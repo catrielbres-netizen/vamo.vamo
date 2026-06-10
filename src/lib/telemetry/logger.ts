@@ -160,8 +160,8 @@ export const trackRideEvent = (
     | 'passenger_ride_create_attempt' | 'passenger_ride_create_success' | 'passenger_ride_create_error'
     | 'driver_offer_received' | 'driver_offer_accept_attempt' | 'driver_offer_accept_success' | 'driver_offer_accept_error'
     | 'ride_cancel_attempt' | 'ride_cancel_success' | 'ride_cancel_error'
-    | 'ride_start_attempt' | 'ride_start_success'
-    | 'ride_finish_attempt' | 'ride_finish_success' | 'ride_receipt_viewed',
+    | 'ride_start_attempt' | 'ride_start_success' | 'ride_start_error'
+    | 'ride_finish_attempt' | 'ride_finish_success' | 'ride_finish_error' | 'ride_receipt_viewed',
   payload?: any
 ) => trackEvent(eventName, payload);
 

@@ -25,3 +25,28 @@ export function getWeekId(): string {
     
     return `${year}-W${String(weekNumber).padStart(2, '0')}`;
 }
+
+/**
+ * [VamO PRO] Calculate Business Due Date
+ * Adds hours to the createdAt time, skipping weekends (Saturday and Sunday).
+ * Prepared for future city-specific holidays.
+ */
+export function calculateBusinessDueAt(createdAtMs: number, hours: number, cityKey: string = 'rawson'): number {
+    let currentMs = createdAtMs;
+    let hoursAdded = 0;
+    
+    // Add time hour by hour checking for weekends
+    while (hoursAdded < hours) {
+        currentMs += 60 * 60 * 1000; // Add 1 hour
+        const d = new Date(currentMs);
+        // Using Argentina Timezone to check the day of the week
+        const argDate = new Date(d.toLocaleString("en-US", {timeZone: "America/Argentina/Buenos_Aires"}));
+        const day = argDate.getDay(); // 0 is Sunday, 6 is Saturday
+        
+        // If it's a weekday, count it towards our business hours
+        if (day !== 0 && day !== 6) {
+            hoursAdded++;
+        }
+    }
+    return currentMs;
+}

@@ -25,3 +25,14 @@ export function formatDistance(meters: unknown): string {
 export function formatRating(rating: unknown, fallback = '5.0'): string {
     return safeFixed(rating, 1, fallback);
 }
+
+export function formatDuration(seconds: unknown): string {
+    if (seconds === null || seconds === undefined) return '—';
+    const s = typeof seconds === 'number' ? seconds : Number(seconds);
+    if (!Number.isFinite(s) || s < 0) return '—';
+    const m = Math.max(1, Math.ceil(s / 60));
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60);
+    const remM = m % 60;
+    return remM > 0 ? `${h}h ${remM}m` : `${h}h`;
+}

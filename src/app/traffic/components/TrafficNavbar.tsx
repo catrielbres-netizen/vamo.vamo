@@ -16,6 +16,7 @@ const navLinks = [
     { href: '/traffic/drivers',    label: 'Conductores',  icon: 'users' },
     { href: '/traffic/map',        label: 'Mapa en Vivo', icon: 'map' },
     { href: '/traffic/documents',  label: 'Documentos',   icon: 'file-text' },
+    { href: '/traffic/reports',    label: 'Reportes',     icon: 'file-bar-chart' },
 ];
 
 export function TrafficNavbar() {

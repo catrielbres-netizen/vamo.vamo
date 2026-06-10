@@ -12,6 +12,43 @@ export type VehicleType = "taxi" | "remis";
 
 export type Role = "admin" | "superadmin" | "driver" | "passenger" | "admin_municipal" | "operator_municipal" | "treasury_municipal" | "auditor_municipal" | "traffic_municipal" | "station_operator" | "municipal_admin" | "traffic_admin" | "traffic_operator" | "traffic";
 
+export interface MunicipalAccount {
+    cityKey: string;
+    municipalityName: string;
+    paymentProvider: 'mercado_pago' | 'bank_transfer' | 'manual';
+    mercadoPagoAccountId?: string;
+    mercadoPagoLinked: boolean;
+    mercadoPagoEmail?: string;
+    bankAlias?: string;
+    cbu?: string;
+    cuit?: string;
+    accountHolderName?: string;
+    enabled: boolean;
+    createdAt: any;
+    updatedAt: any;
+    updatedBy: string;
+}
+
+export interface MunicipalLedgerEntry {
+    id?: string;
+    cityKey: string;
+    rideId: string;
+    paymentMethod: string;
+    totalFare: number;
+    municipalSharePercent: number;
+    municipalShareAmount: number;
+    source: 'cash' | 'wallet' | 'mercado_pago' | 'other';
+    settlementStatus: 'paid_direct' | 'pending_transfer' | 'transferred' | 'failed';
+    municipalityAccountId?: string;
+    createdAt: any;
+    settledAt?: any;
+    transferredAt?: any;
+    transferredBy?: string;
+    transferReference?: string;
+    periodWeekId?: string;
+    periodMonthId?: string;
+}
+
 export type RideStatus =
     | "scheduled"
     | "searching"
@@ -51,12 +88,56 @@ export const isPanicButtonVisible = (status: RideStatus): boolean => {
  * Convierte un nombre de ciudad a su clave normalizada.
  */
 export function normalizeCityKey(city: string): string {
+    if (!city) return 'unknown';
     return city
-        .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
+}
+
+export function normalizeDriverDocumentType(type: string): MunicipalChecklistKey {
+  const map: Record<string, MunicipalChecklistKey> = {
+    'criminalRecord': 'criminalRecord',
+    'antecedentes': 'criminalRecord',
+    'antecedentesPenales': 'criminalRecord',
+    'backgroundCheck': 'criminalRecord',
+    
+    'driverLicense': 'driverLicense',
+    'licencia': 'driverLicense',
+    'license': 'driverLicense',
+    'professionalLicense': 'driverLicense',
+    
+    'vehicleInsurance': 'vehicleInsurance',
+    'insurance': 'vehicleInsurance',
+    'seguro': 'vehicleInsurance',
+    
+    'technicalInspection': 'technicalInspection' as MunicipalChecklistKey,
+    'rto': 'technicalInspection' as MunicipalChecklistKey,
+    'vtv': 'technicalInspection' as MunicipalChecklistKey,
+    
+    'vehicleRegistration': 'vehicleRegistrationCard',
+    'vehicleRegistrationCard': 'vehicleRegistrationCard',
+    'cedula': 'vehicleRegistrationCard',
+    'greenCard': 'vehicleRegistrationCard',
+    
+    'municipalCanon': 'municipalCanon',
+    'canon': 'municipalCanon',
+    'canonMunicipal': 'municipalCanon',
+
+    'municipalHabilitation': 'municipalHabilitation' as MunicipalChecklistKey,
+    'habilitacionMunicipal': 'municipalHabilitation' as MunicipalChecklistKey,
+    
+    'disinfectionReceipt': 'disinfectionReceipt',
+    'passengerCoverageInsurance': 'passengerCoverageInsurance',
+    'coberturaPasajero': 'passengerCoverageInsurance',
+    
+    'dniFront': 'dniFront',
+    'dniBack': 'dniBack',
+  };
+  
+  return (map[type] || type) as MunicipalChecklistKey;
 }
 
 /**
@@ -83,7 +164,9 @@ export type MunicipalExpressStatus =
   | 'suspended_expired_itv'
   | 'suspended_unpaid_canon'
   | 'suspended_by_municipality'
-  | 'rejected_by_municipality';
+  | 'rejected_by_municipality'
+  | 'suspended_by_traffic'
+  | 'suspended_by_admin';
 
 export type MunicipalChecklistKey = 
   | 'dniFront'
@@ -154,6 +237,18 @@ export interface MunicipalProfile {
         acceptsDiscountedRides: boolean;
         acceptsPets: boolean;
     };
+    isSuspended?: boolean;
+    suspensionReason?: string;
+    trafficSuspensionReason?: string;
+    adminSuspensionReason?: string;
+    municipalSuspensionReason?: string;
+    driverTermsAccepted?: boolean;
+    stationId?: string;
+    trafficSuspended?: boolean;
+    municipalSuspended?: boolean;
+    adminSuspended?: boolean;
+    suspensionSource?: string;
+    habilitationExpiry?: any;
 }
 
 export interface MunicipalDocSubmission {
@@ -345,6 +440,7 @@ export interface Ride {
     origin: Place;
     destination: Place;
     paymentMethod?: 'cash' | 'wallet' | 'automatic';
+    dispatchReason?: string;
 
     // --- MATCHING ---
     currentOfferedDriverId?: string | null;
@@ -475,6 +571,7 @@ export interface Ride {
     orderedStops?: Array<{
         type: 'pickup' | 'dropoff';
         requestId: string;
+        passengerId?: string;
         location: Place;
         status?: 'pending' | 'arrived' | 'completed' | 'skipped';
         fareToCollect?: number;
@@ -506,6 +603,8 @@ export interface Ride {
     sharedSettlementStatus?: 'pending_shared_settlement' | 'settling' | 'settled' | 'not_applicable' | 'failed' | 'none';
     sharedFinancialSummary?: any;
     sharedDriverReceiptSummary?: any;
+    sharedOperationalStatus?: 'completed' | 'cancelled_no_valid_passengers' | 'in_progress' | 'none';
+    sharedCompletionSummary?: any;
     sharedReceiptsGenerated?: boolean | 'not_applicable';
     sharedReceiptsGeneratedAt?: any;
 }
@@ -528,6 +627,15 @@ export type EnrichedRideOffer = WithId<RideOffer> & {
   origin: Place;
   destination: Place;
   pricing?: Ride['pricing'];
+  cashToCollect?: number;
+  estimatedTotal?: number;
+  isSharedRide?: boolean;
+  sharedPassengerCount?: number;
+  pickupStopsCount?: number;
+  dropoffStopsCount?: number;
+  sharedFarePerPassenger?: number;
+  isVip?: boolean;
+  serviceType?: string;
 };
 
 export interface DriverStats {
@@ -561,10 +669,22 @@ export interface UserProfile {
     updatedAt?: any;
 
     isSuspended?: boolean;
+    adminSuspended?: boolean;
+    municipalSuspended?: boolean;
+    trafficSuspended?: boolean;
+    suspensionSource?: string;
+    driverRiskLevel?: string;
+    registrationStatus?: string;
     averageRating?: number | null;
     ratingCount?: number;
 
+    driverRiskScore?: number;
+    riskReasons?: string[];
+
     activeRideId?: string | null;
+    activeSharedRequestId?: string | null;
+    activeSharedRideGroupId?: string | null;
+    activeSharedRideId?: string | null;
     isOnline?: boolean;
     lastActiveAt?: any;
     lastSeenAt?: any;
@@ -623,7 +743,9 @@ export interface UserProfile {
     passengerProgress?: {
         ridesThisWeek: number;
         weekIdentifier: string; // e.g., "2024-W15"
-        currentLevel: 'none' | 'unlocked_10' | 'unlocked_15';
+        currentLevel?: 'none' | 'unlocked_10' | 'unlocked_15';
+        expressUsesThisWeek?: number;
+        expressSavedAmountThisWeek?: number;
     };
 
     // --- OWNER / AUTHORIZED DRIVER SYSTEM ---
@@ -650,6 +772,7 @@ export interface UserProfile {
 
     termsAccepted?: boolean;
     acceptedDriverTerms?: boolean;
+    driverTermsAccepted?: boolean;
     termsAcceptedAt?: any;
     termsVersion?: string;
     emailVerified?: boolean;
@@ -738,6 +861,12 @@ export interface UserProfile {
     stationId?: string;
     stationName?: string;
     mustChangePassword?: boolean;
+    suspensionReason?: string;
+    trafficSuspensionReason?: string;
+    adminSuspensionReason?: string;
+    municipalSuspensionReason?: string;
+    hasSeenTutorial?: boolean;
+    tutorialSeenAt?: any;
 }
 
 export type FapType = "accident" | "vandalism" | "robbery" | "medical" | "behavior" | "overcharge" | "lost_item" | "other";
@@ -1122,6 +1251,9 @@ export interface RideOffer {
         type: 'pickup' | 'dropoff';
         location: Place;
     }>;
+    individualFareReference?: number;
+    driverBenefitAmount?: number;
+    sharedPassengers?: Array<any>;
 }
 
 export interface RideRequest {
@@ -1311,7 +1443,9 @@ export type SharedRideRequestStatus =
     | 'cancelled' 
     | 'expired' 
     | 'no_show' 
-    | 'undeclared_companion';
+    | 'undeclared_companion'
+    | 'pending_group'
+    | 'grouped';
 
 export type SharedRideGroupStatus = 
     | 'forming' 
@@ -1319,6 +1453,8 @@ export type SharedRideGroupStatus =
     | 'searching_driver' 
     | 'driver_assigned' 
     | 'ready_for_driver'
+    | 'ready_for_driver_dispatch'
+    | 'dispatched'
     | 'completed' 
     | 'cancelled' 
     | 'expired';
@@ -1346,8 +1482,14 @@ export interface SharedRideRequest {
     undeclaredCompanion?: boolean;
     createdAt: FirestoreTimestamp | FirestoreFieldValue;
     updatedAt: FirestoreTimestamp | FirestoreFieldValue;
+    roleInGroup?: 'creator' | 'joiner';
+    cancelledBy?: string;
+    cancelReason?: string;
     passengerReceipt?: any;
     operationalReceipt?: any;
+    selectedSeats?: Array<'front_passenger' | 'rear_left' | 'rear_center' | 'rear_right'>;
+    seatLabels?: string[];
+    seatCount?: number;
 }
 
 export interface SharedRideGroup {
@@ -1357,6 +1499,15 @@ export interface SharedRideGroup {
     requestIds: string[];
     passengerIds: string[];
     occupiedSeats: number;
+    seatMap?: {
+        front_passenger?: { passengerId: string; requestId: string; passengerName: string };
+        rear_left?: { passengerId: string; requestId: string; passengerName: string };
+        rear_center?: { passengerId: string; requestId: string; passengerName: string };
+        rear_right?: { passengerId: string; requestId: string; passengerName: string };
+    };
+    availableSeats?: string[];
+    requestCount?: number;
+    maxRequests?: number;
     maxSeats: number;
     paymentMethod: 'cash';
     estimatedIndividualFare: number;
@@ -1372,6 +1523,7 @@ export interface SharedRideGroup {
     orderedStops: Array<{
         type: 'pickup' | 'dropoff';
         requestId: string;
+        passengerId?: string;
         location: Place;
     }>;
     routeCompatibility?: any;
@@ -1379,6 +1531,36 @@ export interface SharedRideGroup {
     finalRideId?: string | null;
     expiresAt: FirestoreTimestamp;
     confirmationExpiresAt?: FirestoreTimestamp | null;
+    driverSearchStartsAt?: FirestoreTimestamp | null;
+    creatorPassengerId?: string;
     createdAt: FirestoreTimestamp | FirestoreFieldValue;
     updatedAt: FirestoreTimestamp | FirestoreFieldValue;
+}
+
+export interface TrafficObservation {
+    observationId: string;
+    driverId: string;
+    cityKey: string;
+    createdBy: string;
+    createdByRole: 'traffic_municipal' | 'traffic_operator' | 'admin' | string;
+    source: 'traffic';
+    type: 'document_request' | 'preventive_suspension' | 'field_observation' | 'incident' | 'expired_document' | 'missing_document' | string;
+    severity: 'critical' | 'regularizable' | 'informative';
+    status: 'open' | 'awaiting_driver_response' | 'pending_traffic_review' | 'approved' | 'rejected' | 'resolved' | 'expired' | 'escalated_to_municipality';
+    requestedDocumentType: string;
+    requestedDocumentLabel: string;
+    reason: string;
+    note?: string;
+    createdAt: any;
+    dueAt: any;
+    countdownHours: number;
+    driverSubmittedAt?: any;
+    reviewedAt?: any;
+    reviewedBy?: string;
+    resolutionNote?: string;
+    resolvedAt?: any;
+    resolvedBy?: string;
+    relatedDocumentId?: string;
+    affectsMatching: boolean;
+    autoSuspendAtDueDate: boolean;
 }

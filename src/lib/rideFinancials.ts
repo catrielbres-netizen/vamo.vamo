@@ -18,6 +18,9 @@ export type RideFinancialSnapshot = {
   commissionAmount: number;
   vamoAmount: number;
   municipalAmount: number;
+  taxiAssociationAmount: number;
+  remisAssociationAmount: number;
+  totalAssociationsAmount: number;
   walletCoveredAmount: number;
   cashToCollect: number;
   dynamicApplied: boolean;
@@ -39,6 +42,11 @@ export function getRideFinancialSnapshot(ride: any): RideFinancialSnapshot {
       driverNetEarnings: 0,
       driverWalletCredit: 0,
       commissionAmount: 0,
+      vamoAmount: 0,
+      municipalAmount: 0,
+      taxiAssociationAmount: 0,
+      remisAssociationAmount: 0,
+      totalAssociationsAmount: 0,
       walletCoveredAmount: 0,
       cashToCollect: 0,
       dynamicApplied: false,
@@ -74,6 +82,9 @@ export function getRideFinancialSnapshot(ride: any): RideFinancialSnapshot {
   const commissionAmount = Number(completed?.commissionAmount ?? pricing?.commissionAmount ?? ride.commissionAmount ?? 0);
   const vamoAmount = Number(completed?.vamoAmount ?? pricing?.vamoAmount ?? ride.vamoAmount ?? 0);
   const municipalAmount = Number(completed?.municipalAmount ?? pricing?.municipalAmount ?? ride.municipalAmount ?? 0);
+  const taxiAssociationAmount = Number(completed?.taxiAssociationAmount ?? pricing?.taxiAssociationAmount ?? ride.taxiAssociationAmount ?? 0);
+  const remisAssociationAmount = Number(completed?.remisAssociationAmount ?? pricing?.remisAssociationAmount ?? ride.remisAssociationAmount ?? 0);
+  const totalAssociationsAmount = Number(completed?.totalAssociationsAmount ?? pricing?.totalAssociationsAmount ?? ride.totalAssociationsAmount ?? 0);
 
   const passengerFinalTotal = Number(completed?.passengerPaysTotal ?? (totalFare - discountAmount));
   const driverRecognizedTotal = totalFare;
@@ -95,6 +106,9 @@ export function getRideFinancialSnapshot(ride: any): RideFinancialSnapshot {
     commissionAmount,
     vamoAmount,
     municipalAmount,
+    taxiAssociationAmount,
+    remisAssociationAmount,
+    totalAssociationsAmount,
     walletCoveredAmount,
     cashToCollect,
     dynamicApplied,

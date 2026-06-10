@@ -32,6 +32,7 @@ import { formatDistance, formatDuration } from '@/lib/formatters';
 const serviceCardStyles: Record<Ride['serviceType'], string> = {
     professional: "border-yellow-400/50",
     express: "border-gray-400/50",
+    shared: "border-indigo-400/50",
 };
 
 export default function DriverRideCard({

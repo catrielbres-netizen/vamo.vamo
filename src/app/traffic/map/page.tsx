@@ -6,12 +6,14 @@ import { collection, query, where, onSnapshot, limit } from 'firebase/firestore'
 import { Map, useMap } from '@vis.gl/react-google-maps';
 import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 import { safeFixed } from '@/lib/formatters';
 import { VamoMarker } from '@/components/VamoMarker';
 import { Badge } from '@/components/ui/badge';
 import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
+import { buildTrafficDriverViewModel, getDriverOperationalStatus } from '@/lib/traffic';
+import { useLiveDriversMap } from '@/hooks/useLiveDriversMap';
 
 interface DriverLiveStatus {
     id: string;
@@ -148,10 +150,13 @@ function TrafficDriversLayer({ cityKey }: { cityKey: string | null | undefined }
     const router = useRouter();
     const telemetry = useTelemetry();
 
-    const [drivers, setDrivers] = useState<DriverLiveStatus[]>([]);
+    const { drivers, activeRides, debugDrivers, rawCounts } = useLiveDriversMap(cityKey || null);
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'in_ride' | 'stale' | 'suspended'>('all');
+    
+    const searchParams = useSearchParams();
+    const isDebug = searchParams.get('debug') === 'true';
 
     if (!cityKey) {
         return (
@@ -167,107 +172,25 @@ function TrafficDriversLayer({ cityKey }: { cityKey: string | null | undefined }
         );
     }
 
-    // Subscribe to driver locations
-    useEffect(() => {
-        if (!db || !cityKey) return;
-
-        const q = query(
-            collection(db, 'drivers_locations'),
-            where('cityKey', '==', cityKey),
-            limit(200)
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetched = snapshot.docs.map(doc => {
-                const data = doc.data();
-                
-                // Robust normalization of location coordinates
-                const validLoc = getValidLatLng(data);
-
-                return {
-                    id: doc.id,
-                    driverName: data.driverName || 'Conductor',
-                    driverStatus: data.driverStatus || 'offline',
-                    currentLocation: validLoc,
-                    lastSeenAt: data.lastSeenAt,
-                    driverType: data.driverType || 'No informado',
-                    municipalStatus: data.municipalStatus || 'No informado',
-                    municipalCode: data.municipalCode || '',
-                    isSuspended: data.isSuspended || false,
-                    vehicleBrand: data.vehicle?.brand || 'No informado',
-                    vehicleModel: data.vehicle?.model || '',
-                    vehiclePlate: data.vehicle?.plate || 'No informado',
-                    vehicleColor: data.vehicle?.color || '',
-                    docsComplete: data.docsComplete,
-                    missingDocs: data.missingDocs || [],
-                    expiredDocs: data.expiredDocs || [],
-                    photoUrl: data.photoUrl || null
-                } as DriverLiveStatus;
-            });
-
-            // Handle Overlaps (Displacement logic)
-            const locationCounts: Record<string, number> = {};
-            const processed = fetched.map(d => {
-                if (!d.currentLocation) return d;
-                
-                const key = `${safeFixed(d.currentLocation.lat, 4)},${safeFixed(d.currentLocation.lng, 4)}`;
-                const count = locationCounts[key] || 0;
-                locationCounts[key] = count + 1;
-
-                if (count > 0) {
-                    const offsetLat = (count % 2 === 0 ? 1 : -1) * Math.ceil(count / 2) * 0.00015;
-                    const offsetLng = (count % 3 === 0 ? 1 : -1) * Math.ceil(count / 2) * 0.00015;
-                    
-                    return {
-                        ...d,
-                        currentLocation: {
-                            lat: d.currentLocation.lat + offsetLat,
-                            lng: d.currentLocation.lng + offsetLng
-                        }
-                    };
-                }
-                return d;
-            });
-
-            setDrivers(processed);
-        });
-
-        return () => unsubscribe();
-    }, [db, cityKey]);
-
-    // Check if location reports are stale (updated > 10 minutes ago)
-    const isStale = (driver: DriverLiveStatus) => {
-        if (!driver.lastSeenAt) return true;
-        let lastSeenMs = 0;
-        if (typeof driver.lastSeenAt.toMillis === 'function') {
-            lastSeenMs = driver.lastSeenAt.toMillis();
-        } else if (typeof driver.lastSeenAt.seconds === 'number') {
-            lastSeenMs = driver.lastSeenAt.seconds * 1000;
-        } else {
-            lastSeenMs = new Date(driver.lastSeenAt).getTime();
-        }
-        return Number.isNaN(lastSeenMs) ? true : (Date.now() - lastSeenMs) > 10 * 60 * 1000;
-    };
-
     // Filter and search drivers in-memory
     const filteredDrivers = useMemo(() => {
         return drivers.filter(d => {
             const queryClean = searchQuery.toLowerCase().trim();
             const matchesSearch = !queryClean || 
-                d.driverName.toLowerCase().includes(queryClean) ||
-                d.vehiclePlate.toLowerCase().includes(queryClean) ||
+                d.displayName?.toLowerCase().includes(queryClean) ||
+                d.plate?.toLowerCase().includes(queryClean) ||
                 (d.municipalCode && d.municipalCode.toLowerCase().includes(queryClean)) ||
                 (d.vehicleBrand + ' ' + d.vehicleModel).toLowerCase().includes(queryClean);
 
             if (!matchesSearch) return false;
 
-            const drvIsStale = isStale(d);
-            const isSuspended = d.isSuspended || d.municipalStatus?.toLowerCase() === 'suspended' || d.municipalStatus?.toLowerCase() === 'suspendido';
+            const drvIsStale = d.locationStale;
+            const isSuspended = d.isSuspended;
 
             if (filterStatus === 'all') return true;
-            if (filterStatus === 'online') return d.driverStatus === 'online' && !drvIsStale && !isSuspended;
-            if (filterStatus === 'in_ride') return (d.driverStatus === 'in_ride' || d.driverStatus === 'busy') && !drvIsStale && !isSuspended;
-            if (filterStatus === 'stale') return drvIsStale && !isSuspended;
+            if (filterStatus === 'online') return d.liveStatus === 'online' && !drvIsStale && !isSuspended;
+            if (filterStatus === 'in_ride') return (d.liveStatus === 'in_ride') && !drvIsStale && !isSuspended;
+            if (filterStatus === 'stale') return drvIsStale && !isSuspended && (d.liveStatus === 'online' || d.liveStatus === 'in_ride');
             if (filterStatus === 'suspended') return isSuspended;
 
             return true;
@@ -276,25 +199,29 @@ function TrafficDriversLayer({ cityKey }: { cityKey: string | null | undefined }
 
     // Separate drivers based on coordinate validity
     const driversWithValidLocation = useMemo(() => {
-        return filteredDrivers.filter(d => d.currentLocation !== null) as (DriverLiveStatus & { currentLocation: { lat: number; lng: number } })[];
+        return filteredDrivers.filter(d => d.location !== null) as (any & { location: { lat: number; lng: number } })[];
     }, [filteredDrivers]);
 
-    const selectedDriver = useMemo(() => drivers.find(d => d.id === selectedDriverId), [drivers, selectedDriverId]);
+    const selectedDriver = useMemo(() => drivers.find(d => d.driverId === selectedDriverId), [drivers, selectedDriverId]);
+    const driverActiveRide = useMemo(() => {
+        if (!selectedDriver) return null;
+        return activeRides.find(r => r.driverId === selectedDriver.driverId);
+    }, [selectedDriver, activeRides]);
 
-    const handleSelectDriver = (driver: DriverLiveStatus) => {
-        setSelectedDriverId(driver.id);
-        if (map && driver.currentLocation) {
-            map.panTo(driver.currentLocation);
+    const handleSelectDriver = (driver: any) => {
+        setSelectedDriverId(driver.driverId);
+        if (map && driver.location) {
+            map.panTo(driver.location);
             map.setZoom(16);
-            console.log("📍 [LIVE_MAP_DRIVER_SELECTED] Centered map on:", driver.id);
+            console.log("📍 [LIVE_MAP_DRIVER_SELECTED] Centered map on:", driver.driverId);
         }
         telemetry.trackEvent({
             type: 'municipal_operation',
             eventName: 'traffic_driver_selected',
             metadata: {
-                driverId: driver.id,
-                driverName: driver.driverName,
-                vehiclePlate: driver.vehiclePlate,
+                driverId: driver.driverId,
+                driverName: driver.displayName,
+                vehiclePlate: driver.plate,
                 cityKey
             }
         });
@@ -303,16 +230,16 @@ function TrafficDriversLayer({ cityKey }: { cityKey: string | null | undefined }
     return (
         <>
             {/* Markers on Map (Strictly using verified coordinates) */}
-            {driversWithValidLocation.map(driver => (
+            {driversWithValidLocation.map((driver: any) => (
                 <VamoMarker
-                    key={driver.id}
-                    position={driver.currentLocation}
+                    key={driver.driverId}
+                    position={driver.location}
                     onClick={() => handleSelectDriver(driver)}
                 >
                     <TrafficDriverMarker 
                         driver={driver} 
-                        isSelected={selectedDriverId === driver.id} 
-                        isStale={isStale(driver)}
+                        isSelected={selectedDriverId === driver.driverId} 
+                        isStale={driver.locationStale}
                         onClick={() => handleSelectDriver(driver)} 
                     />
                 </VamoMarker>
@@ -368,11 +295,11 @@ function TrafficDriversLayer({ cityKey }: { cityKey: string | null | undefined }
                         <p className="text-zinc-600 text-[10px] italic text-center py-8 uppercase font-bold tracking-widest">No se encontraron móviles activos</p>
                     ) : (
                         filteredDrivers.map(drv => {
-                            const drvIsStale = isStale(drv);
-                            const isOnline = drv.driverStatus === 'online' && !drvIsStale;
-                            const isBusy = (drv.driverStatus === 'in_ride' || drv.driverStatus === 'busy') && !drvIsStale;
-                            const isSuspended = drv.isSuspended || drv.municipalStatus?.toLowerCase() === 'suspended' || drv.municipalStatus?.toLowerCase() === 'suspendido';
-                            const hasLocation = drv.currentLocation !== null;
+                            const drvIsStale = drv.locationStale;
+                            const isOnline = drv.liveStatus === 'online';
+                            const isBusy = drv.liveStatus === 'in_ride';
+                            const isSuspended = drv.isSuspended;
+                            const hasLocation = drv.location !== null;
 
                             let statusBadge = (
                                 <span className="text-[8px] font-black uppercase bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">Offline</span>
@@ -401,17 +328,17 @@ function TrafficDriversLayer({ cityKey }: { cityKey: string | null | undefined }
 
                             return (
                                 <button
-                                    key={drv.id}
+                                    key={drv.driverId}
                                     onClick={() => handleSelectDriver(drv)}
                                     className={cn(
                                         "w-full text-left py-2 px-3 rounded-2xl transition-all duration-300 flex items-center justify-between gap-2 hover:bg-white/5",
-                                        selectedDriverId === drv.id ? "bg-white/10 border border-white/10" : "border border-transparent"
+                                        selectedDriverId === drv.driverId ? "bg-white/10 border border-white/10" : "border border-transparent"
                                     )}
                                 >
                                     <div className="min-w-0">
-                                        <p className="text-xs font-bold text-white truncate">{drv.driverName}</p>
+                                        <p className="text-xs font-bold text-white truncate">{drv.displayName}</p>
                                         <p className="text-[9px] text-zinc-500 truncate font-mono uppercase mt-0.5">
-                                            {drv.vehicleBrand} {drv.vehicleModel} · <span className="text-indigo-400">{drv.vehiclePlate}</span>
+                                            {drv.vehicleBrand} {drv.vehicleModel} · <span className="text-indigo-400">{drv.plate}</span>
                                         </p>
                                     </div>
                                     <div className="shrink-0 flex items-center gap-1">
@@ -443,25 +370,25 @@ function TrafficDriversLayer({ cityKey }: { cityKey: string | null | undefined }
                             )}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="font-black text-white truncate text-lg tracking-tighter">{selectedDriver.driverName}</p>
+                            <p className="font-black text-white truncate text-lg tracking-tighter">{selectedDriver.displayName}</p>
                             <div className="flex gap-1.5 mt-1">
                                 <Badge className={cn(
                                     "text-[8px] font-black uppercase", 
-                                    selectedDriver.isSuspended || selectedDriver.municipalStatus?.toLowerCase() === 'suspended'
+                                    selectedDriver.isSuspended
                                         ? "bg-rose-500/20 text-rose-400"
-                                        : !selectedDriver.currentLocation
+                                        : !selectedDriver.hasLocation
                                             ? "bg-zinc-800 text-zinc-500"
-                                            : isStale(selectedDriver)
+                                            : selectedDriver.locationStale
                                                 ? "bg-amber-500/20 text-amber-500"
                                                 : selectedDriver.driverStatus === 'online' 
                                                     ? "bg-emerald-500/20 text-emerald-500" 
                                                     : "bg-indigo-500/20 text-indigo-400"
                                 )}>
-                                    {selectedDriver.isSuspended || selectedDriver.municipalStatus?.toLowerCase() === 'suspended'
+                                    {selectedDriver.isSuspended
                                         ? 'SUSPENDIDO'
-                                        : !selectedDriver.currentLocation
+                                        : !selectedDriver.hasLocation
                                             ? 'SIN SEÑAL'
-                                            : isStale(selectedDriver)
+                                            : selectedDriver.locationStale
                                                 ? 'INACTIVO'
                                                 : selectedDriver.driverStatus === 'online' 
                                                     ? 'LIBRE' 
@@ -475,7 +402,7 @@ function TrafficDriversLayer({ cityKey }: { cityKey: string | null | undefined }
                         <div className="grid grid-cols-2 gap-2">
                             <div className="p-3 rounded-xl bg-white/5 border border-white/5">
                                 <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Patente</p>
-                                <p className="text-xs font-mono font-bold text-indigo-400">{selectedDriver.vehiclePlate}</p>
+                                <p className="text-xs font-mono font-bold text-indigo-400">{selectedDriver.plate}</p>
                             </div>
                             <div className="p-3 rounded-xl bg-white/5 border border-white/5">
                                 <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Muni</p>
@@ -493,20 +420,41 @@ function TrafficDriversLayer({ cityKey }: { cityKey: string | null | undefined }
                             <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Vehículo</p>
                             <p className="text-xs font-bold text-zinc-300 truncate">{selectedDriver.vehicleBrand} {selectedDriver.vehicleModel}</p>
                         </div>
+                        
+                        {driverActiveRide && (
+                            <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <VamoIcon name="navigation" className="w-4 h-4 text-indigo-400" />
+                                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Viaje Activo</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <div>
+                                        <p className="text-[8px] font-black text-zinc-500 uppercase">Origen</p>
+                                        <p className="text-xs font-bold text-zinc-200 truncate">{driverActiveRide.pickup?.address || 'Desconocido'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[8px] font-black text-zinc-500 uppercase">Destino</p>
+                                        <p className="text-xs font-bold text-zinc-200 truncate">{driverActiveRide.dropoff?.address || 'Desconocido'}</p>
+                                    </div>
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-indigo-500/10 flex items-center justify-between">
+                                    <span className="text-[9px] font-mono text-zinc-500">ID: {driverActiveRide.id.slice(0, 8)}</span>
+                                    <Badge className="bg-indigo-500/20 text-indigo-400 text-[8px] font-black uppercase">{driverActiveRide.status}</Badge>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <button 
                         onClick={() => {
-                            console.log("📍 [LIVE_MAP_DRIVER_DETAIL_OPEN] Traffic:", selectedDriver.id);
-                            router.push(`/traffic/drivers/${selectedDriver.id}`);
+                            console.log("📍 [LIVE_MAP_DRIVER_DETAIL_OPEN] Traffic:", selectedDriver.driverId);
+                            router.push(`/traffic/drivers/${selectedDriver.driverId}`);
                         }}
                         className="w-full bg-indigo-600 hover:bg-indigo-500 text-white h-12 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-indigo-500/20"
                     >
                         Ver Documentación
                     </button>
-                    <p className="text-[8px] text-zinc-600 font-bold text-center mt-3 uppercase tracking-tighter italic">
-                        Posición reportada: {selectedDriver.lastSeenAt?.toDate ? selectedDriver.lastSeenAt.toDate().toLocaleTimeString('es-AR') : 'N/A'}
-                    </p>
+                        Posición: {selectedDriver.locationStale ? 'INACTIVA' : 'ACTIVA'}
                 </div>
             )}
 
@@ -517,6 +465,89 @@ function TrafficDriversLayer({ cityKey }: { cityKey: string | null | undefined }
                <LegendItem color="bg-amber-500" label="Inactivo" />
                <LegendItem color="bg-rose-500" label="Suspendido" />
             </div>
+            {/* Selection Sidebar (Traffic) */}
+            {selectedDriver && (
+                <div className="absolute top-24 right-6 w-80 bg-zinc-950/90 backdrop-blur-2xl border border-white/10 rounded-[2rem] shadow-2xl p-6 animate-in slide-in-from-right-4 duration-300 z-50">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Detalle Operativo</h3>
+                        <button onClick={() => setSelectedDriverId(null)} className="text-zinc-500 hover:text-white transition-colors">
+                            <VamoIcon name="x" className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-12 h-12 rounded-full bg-zinc-900 border border-white/10 overflow-hidden flex items-center justify-center">
+                            {selectedDriver.photoUrl ? <img src={selectedDriver.photoUrl} alt="" className="w-full h-full object-cover" /> : <VamoIcon name="user" className="w-6 h-6 text-zinc-700" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="font-black text-white truncate">{selectedDriver.displayName}</p>
+                            <Badge className={cn("text-[8px] font-black uppercase mt-1", selectedDriver.liveStatus === 'online' ? "bg-emerald-500/20 text-emerald-500" : "bg-indigo-500/20 text-indigo-400")}>
+                                {selectedDriver.liveStatus}
+                            </Badge>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4 mb-6">
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                                <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Patente</p>
+                                <p className="text-xs font-mono font-bold text-indigo-400">{selectedDriver.plate}</p>
+                            </div>
+                            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                                <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Estado Muni</p>
+                                <p className={cn("text-xs font-bold uppercase", selectedDriver.municipalStatus === 'active' ? "text-emerald-500" : "text-amber-500")}>
+                                    {selectedDriver.municipalStatus || 'N/A'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                            <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Vehículo</p>
+                            <p className="text-xs font-bold text-white truncate">{selectedDriver.vehicleBrand} {selectedDriver.vehicleModel}</p>
+                        </div>
+                    </div>
+
+                    <button 
+                        onClick={() => {
+                            console.log("📍 [LIVE_MAP_DRIVER_DETAIL_OPEN] Tránsito:", selectedDriver.driverId);
+                            router.push(`/traffic/drivers/${selectedDriver.driverId}`);
+                        }}
+                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white h-12 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-indigo-500/20"
+                    >
+                        Ver Ficha Completa
+                    </button>
+                </div>
+            )}
+
+            {/* Debug Overlay */}
+            {isDebug && (
+                <div className="absolute bottom-6 right-6 z-50 w-96 bg-black/90 border border-red-500/50 p-4 rounded-xl text-xs font-mono text-zinc-300 max-h-[400px] overflow-y-auto">
+                    <h3 className="text-red-400 font-bold mb-2 uppercase tracking-widest border-b border-red-500/20 pb-2">Debug Panel</h3>
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                        <div>Users: <span className="text-white">{rawCounts?.users}</span></div>
+                        <div>Locations: <span className="text-white">{rawCounts?.locations}</span></div>
+                        <div>Profiles: <span className="text-white">{rawCounts?.profiles}</span></div>
+                        <div>Rides: <span className="text-white">{rawCounts?.rides}</span></div>
+                    </div>
+                    <div className="space-y-3">
+                        {debugDrivers?.slice(0, 20).map((d: any) => (
+                            <div key={d.driverId} className="border border-white/10 p-2 rounded bg-white/5">
+                                <div className="font-bold text-white mb-1">{d.displayName} ({d.driverId.slice(0,5)}...)</div>
+                                <div>U:<span className={d._debug.hasUser ? "text-green-400" : "text-red-400"}>{d._debug.hasUser?"Y":"N"}</span> ({d._debug.userStatus}) 
+                                L:<span className={d._debug.hasLocation ? "text-green-400" : "text-red-400"}>{d._debug.hasLocation?"Y":"N"}</span> ({d._debug.locStatus}) 
+                                P:<span className={d._debug.hasProfile ? "text-green-400" : "text-red-400"}>{d._debug.hasProfile?"Y":"N"}</span>
+                                </div>
+                                <div className="mt-1">
+                                    Map: <span className={d.visibleOnMap ? "text-green-400" : "text-red-400"}>{d.visibleOnMap?"Y":"N"}</span> | 
+                                    List: <span className={d.visibleInSideList ? "text-green-400" : "text-red-400"}>{d.visibleInSideList?"Y":"N"}</span>
+                                </div>
+                                {(!d.visibleOnMap && !d.visibleInSideList) && (
+                                    <div className="text-red-400 mt-1 truncate">Discard: {d._debug.discardReason}</div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </>
     );
 }
@@ -530,9 +561,8 @@ function LegendItem({ color, label }: { color: string, label: string }) {
     );
 }
 
-function TrafficDriverMarker({ driver, isSelected, isStale, onClick }: { driver: DriverLiveStatus & { currentLocation: { lat: number; lng: number } }, isSelected?: boolean, isStale: boolean, onClick?: () => void }) {
+function TrafficDriverMarker({ driver, isSelected, isStale, onClick }: { driver: any & { location: { lat: number; lng: number } }, isSelected?: boolean, isStale: boolean, onClick?: () => void }) {
     const isOnline = driver.driverStatus === 'online' && !isStale;
-    const isBusy = (driver.driverStatus === 'in_ride' || driver.driverStatus === 'busy') && !isStale;
     const isSuspended = driver.isSuspended || driver.municipalStatus?.toLowerCase() === 'suspended' || driver.municipalStatus?.toLowerCase() === 'suspendido';
 
     const colorClass = isSuspended 
@@ -576,15 +606,15 @@ function TrafficDriverMarker({ driver, isSelected, isStale, onClick }: { driver:
                     <div className="p-4 border-b border-white/5 flex gap-3 items-start">
                         <div className="w-12 h-12 bg-[#050912] rounded-full flex-shrink-0 overflow-hidden border border-white/10 flex items-center justify-center">
                             {driver.photoUrl ? (
-                                <img src={driver.photoUrl} alt={driver.driverName} className="w-full h-full object-cover" />
+                                <img src={driver.photoUrl} alt={driver.displayName} className="w-full h-full object-cover" />
                             ) : (
                                 <VamoIcon name="user" className="w-6 h-6 text-zinc-500" />
                             )}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-black text-white truncate">{driver.driverName}</h3>
+                            <h3 className="text-sm font-black text-white truncate">{driver.displayName}</h3>
                             <div className="flex flex-wrap gap-1 mt-1">
-                                <span className="px-1.5 py-0.5 rounded-md bg-zinc-800 text-[9px] font-bold text-zinc-300 uppercase">{driver.driverType || 'No informado'}</span>
+                                <span className="px-1.5 py-0.5 rounded-md bg-zinc-800 text-[9px] font-bold text-zinc-300 uppercase">{driver.driverSubtype || 'No informado'}</span>
                                 <span className={cn(
                                     "px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase",
                                     isSuspended 
@@ -608,7 +638,7 @@ function TrafficDriverMarker({ driver, isSelected, isStale, onClick }: { driver:
                             </div>
                             <div>
                                 <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Patente</p>
-                                <p className="text-xs font-mono font-bold text-[#1D7CFF]">{driver.vehiclePlate}</p>
+                                <p className="text-xs font-mono font-bold text-[#1D7CFF]">{driver.plate}</p>
                             </div>
                         </div>
                         <div>

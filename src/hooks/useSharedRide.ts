@@ -20,7 +20,7 @@ export function useSharedRide() {
     firestore && activeRequestId ? doc(firestore, 'shared_ride_requests', activeRequestId) : null
   , [firestore, activeRequestId]);
 
-  const { data: request, loading } = useDoc<SharedRideRequest>(requestRef);
+  const { data: request, isLoading } = useDoc<SharedRideRequest>(requestRef);
 
   // Listener del grupo si existe
   const activeGroupId = useMemo(() => {
@@ -74,7 +74,7 @@ export function useSharedRide() {
     return result.data as { groups: any[] };
   }, [firebaseApp]);
 
-  const joinGroup = useCallback(async (payload: { groupId: string; origin: any; destination: any; cityKey: string; individualFareReference: number; sharedRideNoticeAccepted: boolean }) => {
+  const joinGroup = useCallback(async (payload: { groupId: string; origin: any; destination: any; cityKey: string; individualFareReference: number; sharedRideNoticeAccepted: boolean; selectedSeats?: string[] }) => {
     if (!firebaseApp) return;
     const functions = getFunctions(firebaseApp, 'us-central1');
     const join = httpsCallable(functions, 'joinSharedRideGroupV1');
@@ -87,7 +87,7 @@ export function useSharedRide() {
     return data;
   }, [firebaseApp]);
 
-  const requestNewGroup = useCallback(async (payload: { origin: any; destination: any; cityKey: string; individualFareReference: number; sharedRideNoticeAccepted: boolean }) => {
+  const requestNewGroup = useCallback(async (payload: { origin: any; destination: any; cityKey: string; individualFareReference: number; sharedRideNoticeAccepted: boolean; selectedSeats?: string[] }) => {
     if (!firebaseApp) return;
     const functions = getFunctions(firebaseApp, 'us-central1');
     const requestShared = httpsCallable(functions, 'requestSharedRideV1');
@@ -114,7 +114,7 @@ export function useSharedRide() {
   return {
     request,
     group,
-    loading,
+    loading: isLoading,
     activeRequestId,
     activeGroupId,
     cancelRequest,

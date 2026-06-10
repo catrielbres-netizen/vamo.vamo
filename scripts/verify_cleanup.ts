@@ -1,96 +1,121 @@
-import { getApps, initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import * as fs from 'fs';
-import * as path from 'path';
+import admin from "firebase-admin";
 
-const serviceAccountPath = path.resolve(process.cwd(), 'service-account.json');
-const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-
-if (!getApps().length) {
-  initializeApp({
-    credential: cert(serviceAccount)
-  });
+if (!admin.apps || admin.apps.length === 0) {
+    admin.initializeApp();
 }
 
-const db = getFirestore();
+const db = admin.firestore();
 
-async function verify() {
-  console.log('--- VERIFICACIÓN POST-LIMPIEZA ---');
-  let errors = 0;
+async function run() {
+    console.log(`Starting Verification script...`);
 
-  // 1. Check users
-  const usersSnap = await db.collection('users').get();
-  console.log(`\n1. Usuarios restantes: ${usersSnap.size}`);
-  for (const doc of usersSnap.docs) {
-    const data = doc.data();
-    if (data.role !== 'admin' && data.role !== 'superadmin' && data.admin !== true) {
-      console.error(`❌ ERROR: Usuario no admin encontrado: ${doc.id}`);
-      errors++;
+    const validGroupStatuses = [
+        "forming", "grouped", "ready_for_driver", "ready_for_driver_dispatch",
+        "driver_searching", "searching", "driver_assigned", "in_progress", "active"
+    ];
+
+    console.log("\n1. Verificando shared_ride_groups activos...");
+    const groupsSnapshot = await db.collection("shared_ride_groups")
+        .where("status", "in", validGroupStatuses)
+        .get();
+
+    let foundActiveSharedGroup = false;
+    groupsSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.passengerCount > 0 || (data.sharedPassengers && data.sharedPassengers.length > 0)) {
+            console.log(` - ALERTA: Grupo activo encontrado: ${doc.id} - status: ${data.status}`);
+            foundActiveSharedGroup = true;
+        }
+    });
+    if (!foundActiveSharedGroup) {
+        console.log(" - OK: No hay grupos compartidos trabados con pasajeros.");
     }
-  }
 
-  // Admin IDs to check against
-  const adminIds = new Set(usersSnap.docs.map(d => d.id));
+    console.log("\n2. Verificando rides compartidos activos...");
+    const ridesSnapshot = await db.collection("rides")
+        .where("status", "in", ["active", "driver_assigned", "driver_searching", "in_progress", "picked_up"])
+        .where("isSharedRide", "==", true)
+        .get();
 
-  // 2. mp_accounts
-  const mpSnap = await db.collection('mp_accounts').get();
-  for (const doc of mpSnap.docs) {
-    if (!adminIds.has(doc.id) && doc.data().status !== 'revoked_deleted_user') {
-      console.error(`❌ ERROR: mp_account activa para usuario eliminado: ${doc.id}`);
-      errors++;
+    if (ridesSnapshot.empty) {
+        console.log(" - OK: No hay rides compartidos activos trabados.");
+    } else {
+        ridesSnapshot.forEach(doc => {
+            console.log(` - ALERTA: Ride compartido activo: ${doc.id} - status: ${doc.data().status}`);
+        });
     }
-  }
 
-  // 3. public_driver_profiles
-  const pdpSnap = await db.collection('public_driver_profiles').get();
-  for (const doc of pdpSnap.docs) {
-    if (!adminIds.has(doc.id)) {
-      console.error(`❌ ERROR: public_driver_profile huérfano: ${doc.id}`);
-      errors++;
+    console.log("\n3. Verificando rideOffers del grupo cerrado...");
+    const masterRideId = "shared_dyY2lBqbckkz7noNc1lD";
+    const offersSnapshot = await db.collection("rideOffers")
+        .where("rideId", "==", masterRideId)
+        .where("status", "in", ["pending", "active"])
+        .get();
+        
+    if (offersSnapshot.empty) {
+        console.log(" - OK: No hay rideOffers pendientes del grupo cerrado.");
+    } else {
+        offersSnapshot.forEach(doc => {
+            console.log(` - ALERTA: Offer pendiente encontrada: ${doc.id}`);
+        });
     }
-  }
 
-  // 4. wallets
-  const walletsSnap = await db.collection('wallets').get();
-  for (const doc of walletsSnap.docs) {
-    if (!adminIds.has(doc.id)) {
-      console.error(`❌ ERROR: wallet de usuario eliminado: ${doc.id}`);
-      errors++;
+    console.log("\n4. Verificando Eduardo (conductor)...");
+    const eduardoId = "VNhou0ag4wXXPr6IXa3foO6SI8B3";
+    const eduardoDoc = await db.collection("users").doc(eduardoId).get();
+    if (eduardoDoc.exists) {
+        const data = eduardoDoc.data()!;
+        console.log(` - driverStatus: ${data.driverStatus}`);
+        console.log(` - status: ${data.status}`);
+        console.log(` - activeRideId: ${data.activeRideId || 'Ninguno'}`);
+        console.log(` - currentRideId: ${data.currentRideId || 'Ninguno'}`);
+        if (data.driverStatus === "online" && !data.activeRideId && !data.currentRideId) {
+            console.log(" - OK: Eduardo está online y libre.");
+        } else {
+            console.log(" - ALERTA: Eduardo NO está libre u online.");
+        }
+    } else {
+        console.log(" - ALERTA: Eduardo no encontrado.");
     }
-  }
 
-  // 5. referrals
-  const referralsSnap = await db.collection('referrals').get();
-  for (const doc of referralsSnap.docs) {
-    if (!adminIds.has(doc.id)) {
-      console.error(`❌ ERROR: referral de usuario eliminado: ${doc.id}`);
-      errors++;
+    console.log("\n5. Verificando Pasajeros test...");
+    const passengerIds = [
+        "HYakOQJ8WqeauOHtn8VdcYlaSlK2", // Pasajero Test 1
+        "eMhDWqwmQMgoKMskjzTd2StwQaI3", // maria
+        "qgKot462IpPER2l9uzB0uzJsqWP2"  // Pasajero Test 2
+    ];
+    let paxLibres = 0;
+    const paxDocs = await Promise.all(passengerIds.map(uid => db.collection("users").doc(uid).get()));
+    paxDocs.forEach(doc => {
+        if (!doc.exists) return;
+        const data = doc.data()!;
+        console.log(` - Pasajero: ${data.name}`);
+        console.log(`   activeRideId: ${data.activeRideId || 'Ninguno'}`);
+        console.log(`   activeSharedGroupId: ${data.activeSharedGroupId || 'Ninguno'}`);
+        if (!data.activeRideId && !data.activeSharedGroupId) {
+            paxLibres++;
+        } else {
+            console.log(`   -> ALERTA: Pasajero no está libre.`);
+        }
+    });
+    if (paxLibres === 3) {
+        console.log(" - OK: Todos los pasajeros test están libres.");
     }
-  }
 
-  // 6. system_config
-  const planB = await db.collection('system_config').doc('plan_b_pricing').get();
-  const launch = await db.collection('system_config').doc('launch').get();
-  
-  if (!planB.exists) {
-    console.error('❌ ERROR: system_config/plan_b_pricing no existe!');
-    errors++;
-  } else {
-    console.log('✅ system_config/plan_b_pricing verificado.');
-  }
-
-  if (!launch.exists) {
-    console.error('❌ ERROR: system_config/launch no existe!');
-    errors++;
-  } else {
-    console.log('✅ system_config/launch verificado.');
-  }
-
-  if (errors === 0) {
-    console.log('\n✅ VERIFICACIÓN EXITOSA: La base de datos está limpia según las reglas.');
-  } else {
-    console.log(`\n❌ SE ENCONTRARON ${errors} ERRORES.`);
-  }
+    console.log("\n6. Verificando settings Alpha...");
+    const settingsDoc = await db.collection("settings").doc("features").get();
+    if (settingsDoc.exists) {
+        const data = settingsDoc.data()!;
+        console.log(` - requireAlphaTester: ${data.requireAlphaTester}`);
+        console.log(` - driverSearchEnabled: ${data.driverSearchEnabled}`);
+        if (data.requireAlphaTester === true && data.driverSearchEnabled === true) {
+            console.log(" - OK: Alpha sigue cerrado y configurado correctamente.");
+        } else {
+            console.log(" - ALERTA: Configuración Alpha alterada.");
+        }
+    } else {
+         console.log(" - ALERTA: Documento settings/features no encontrado.");
+    }
 }
 
-verify().catch(console.error);
+run().catch(console.error);

@@ -101,13 +101,22 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // ── users/{userId}/documents/{docId} ──────────────────────────────────────
     match /users/{userId}/documents/{docId} {
       allow read: if signedIn() && (
         request.auth.uid == userId || 
         isAdmin() || isSuperAdmin() || 
         (isMunicipalForCity(resource.data.get('cityKey', '')) && resource.data.category == 'municipal') ||
         (isTrafficForCity(resource.data.get('cityKey', '')) && resource.data.category in ['municipal', 'traffic'])
+      );
+      allow write: if false;
+    }
+
+    match /traffic_observations/{obsId} {
+      allow read: if signedIn() && (
+        request.auth.uid == resource.data.driverId ||
+        isAdmin() || isSuperAdmin() ||
+        isTrafficForCity(resource.data.get('cityKey', '')) ||
+        isMunicipalForCity(resource.data.get('cityKey', ''))
       );
       allow write: if false;
     }
@@ -139,6 +148,7 @@ service cloud.firestore {
     match /rides/{rideId} {
       allow get: if signedIn() && (
         resource.data.passengerId == request.auth.uid || 
+        request.auth.uid in resource.data.get('passengerIds', []) ||
         resource.data.driverId == request.auth.uid ||
         isAdmin() || isSuperAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
@@ -147,11 +157,14 @@ service cloud.firestore {
       );
 
       // SECURITY: Users can only READ their own rides. Admin can read everything.
-      // Municipal admins can read rides from their city.
+      // SECURITY: Rides must be created only through createRideV1 Cloud Function.
+      // This protects pricing, wallet lock, legalAcceptance and matching integrity.
       allow read: if signedIn() && (
         isAdmin() || isSuperAdmin() || 
         isMunicipalForCity(resource.data.get('cityKey', '')) ||
+        isTrafficForCity(resource.data.get('cityKey', '')) ||
         resource.data.passengerId == request.auth.uid || 
+        request.auth.uid in resource.data.get('passengerIds', []) ||
         resource.data.driverId == request.auth.uid ||
         (isDriver() && resource.data.status in ['scheduled', 'searching'] && resource.data.get('cityKey', '') == request.auth.token.ck) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
@@ -165,7 +178,9 @@ service cloud.firestore {
       
       // Allow participants to update ONLY safe telemetry/status fields
       allow update: if signedIn() && (
-        (resource.data.passengerId == request.auth.uid || resource.data.driverId == request.auth.uid) &&
+        (resource.data.passengerId == request.auth.uid || 
+         request.auth.uid in resource.data.get('passengerIds', []) ||
+         resource.data.driverId == request.auth.uid) &&
         request.resource.data.diff(resource.data).affectedKeys().hasAny(['etaMinutes', 'recordingStatus', 'updatedAt']) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'status', 'pricing', 'commissionAmount', 'driverId', 'passengerId', 'cityKey', 'serviceType', 'completedRide'
@@ -219,6 +234,7 @@ service cloud.firestore {
       allow write: if get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid;
       allow read: if signedIn() && (
          get(/databases/$(database)/documents/rides/$(rideId)).data.passengerId == request.auth.uid ||
+         request.auth.uid in get(/databases/$(database)/documents/rides/$(rideId)).data.get('passengerIds', []) ||
          get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid ||
          isAdmin() || isSuperAdmin()
       );
@@ -227,11 +243,13 @@ service cloud.firestore {
     match /rides/{rideId}/messages/{messageId} {
       allow read: if signedIn() && (
          get(/databases/$(database)/documents/rides/$(rideId)).data.passengerId == request.auth.uid ||
+         request.auth.uid in get(/databases/$(database)/documents/rides/$(rideId)).data.get('passengerIds', []) ||
          get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid ||
          isAdmin() || isSuperAdmin()
       );
       allow list: if signedIn() && (
          get(/databases/$(database)/documents/rides/$(rideId)).data.passengerId == request.auth.uid ||
+         request.auth.uid in get(/databases/$(database)/documents/rides/$(rideId)).data.get('passengerIds', []) ||
          get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid ||
          isAdmin() || isSuperAdmin()
       );
@@ -525,6 +543,11 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      match /weekly_pools/{weekId} {
+        allow get, list: if signedIn() && isDriver() && (cityKey == request.auth.token.ck || request.auth.token.ck != null);
+        allow create, update, delete: if false;
+      }
+
       match /passenger_points/{docId} {
         allow get: if signedIn() && isPassenger() && (resource == null || resource.data.passengerId == request.auth.uid);
         allow list: if signedIn() && isPassenger() && (
@@ -751,16 +774,6 @@ service cloud.firestore {
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.stationId == resource.data.standId)
       );
       allow write: if false; // Only Cloud Functions can append logs
-    }
-    // ── Weekly Pool – solo lectura para conductores 
-    match /weekly_pools/{weekId} {
-      // Lectura única del pool de la semana del cityKey del conductor
-      // Lectura única del pool de la semana del cityKey del conductor
-      allow get, list: if signedIn() && isDriver() && (resource.data.cityKey == request.auth.token.ck || (!resource.data.cityKey && request.auth.token.ck != null));
-      // No se permite crear, actualizar ni borrar desde el cliente
-      allow create, update, delete: if false;
-      // No se permite crear, actualizar ni borrar desde el cliente
-      allow create, update, delete: if false;
     }
 
     // ── Puntos del conductor – sólo su propio documento y ranking top‑30 ────────

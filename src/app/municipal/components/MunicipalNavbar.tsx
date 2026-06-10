@@ -23,6 +23,7 @@ const navLinks = [
     { href: '/municipal/treasury',   label: 'Tesorería',   icon: 'landmark' },
     { href: '/municipal/team',       label: 'Equipo',      icon: 'shield' },
     { href: '/municipal/pricing',    label: 'Tarifas',     icon: 'banknote' },
+    { href: '/municipal/settings/payments', label: 'Cobros', icon: 'credit-card' },
     { href: '/municipal/settings',   label: 'Diseño',      icon: 'palette' },
 ]
 
@@ -44,6 +45,7 @@ export function MunicipalNavbar() {
       if (link.href === '/municipal/alerts') return isTraffic || isOperator || isMuniAdmin;
       if (link.href === '/municipal/treasury') return isTreasury || isMuniAdmin;
       if (link.href === '/municipal/traffic') return isTraffic || isMuniAdmin;
+      if (link.href === '/municipal/settings/payments') return isMuniAdmin;
       return true;
   });
 

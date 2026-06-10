@@ -4,12 +4,12 @@ import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { AppModeConfig, FinancialModelConfig } from '@/lib/types';
 
 const defaultAppMode: AppModeConfig = {
-    mode: 'independent', // Fallback to independent mode if config fails
-    municipalEnabled: false,
-    trafficPanelEnabled: false,
-    stopsPanelEnabled: false,
-    independentModeEnabled: true,
-    versionLabel: 'Versión B',
+    mode: 'municipal',
+    municipalEnabled: true,
+    trafficPanelEnabled: true,
+    stopsPanelEnabled: true,
+    independentModeEnabled: false,
+    versionLabel: 'Modo Institucional Municipal',
 };
 
 const defaultFinancialMode: FinancialModelConfig = {

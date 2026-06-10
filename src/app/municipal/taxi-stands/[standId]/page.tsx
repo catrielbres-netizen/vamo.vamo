@@ -272,7 +272,7 @@ function TaxiStandDetailContent() {
                 return;
             }
 
-            setStand({ id: standDoc.id, ...standData });
+            setStand({ ...standData, id: standDoc.id });
             setEditName(standData.name || '');
             setEditAddress(standData.address || '');
 
@@ -472,7 +472,7 @@ function TaxiStandDetailContent() {
                 name: editName,
                 address: editAddress,
                 location: new GeoPoint(latitude, longitude),
-                placeId: editPlaceId || null,
+                placeId: editPlaceId || undefined,
                 geocodedBy: 'google_places',
                 radiusMeters: editRadius,
                 status: editStatus,
@@ -487,7 +487,7 @@ function TaxiStandDetailContent() {
                 name: editName,
                 address: editAddress,
                 location: new GeoPoint(latitude, longitude),
-                placeId: editPlaceId || null,
+                placeId: editPlaceId || undefined,
                 geocodedBy: 'google_places',
                 radiusMeters: editRadius,
                 status: editStatus,

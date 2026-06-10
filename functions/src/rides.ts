@@ -26,6 +26,7 @@ import {
     ExpressBudget, SystemConfig, Promotion, Place, PricingConfig,
     CityConfig, Referral, UserReward, PricingSnapshot, PaymentSnapshot
 } from "./types";
+import { assertSharedPassengersHaveRequestIds } from "./lib/sharedHelpers";
 
 const OFFER_DURATION_SECONDS = 60;
 const MAX_MATCHING_ATTEMPTS = 10;
@@ -444,11 +445,22 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
                         dynamic: finalPricing.dynamic || null
                     } as any,
                     paymentMethod: rideData.paymentMethod || 'cash',
-                    distanceKm: rideData.distanceKm || 0,
                     durationMinutes: rideData.durationMinutes || 0,
                     passengerName,
                     cityKey: pricingMunicipalityKey,
-                    passengerRiskSummary: riskSummary
+                    passengerRiskSummary: riskSummary,
+                    // [VamO Compartido] Copy shared properties to offer
+                    rideType: rideData.rideType,
+                    isSharedRide: rideData.isSharedRide,
+                    sharedGroupId: (rideData as any).sharedGroupId,
+                    sharedPassengerCount: (rideData as any).sharedPassengerCount,
+                    sharedFarePerPassenger: (rideData as any).sharedFarePerPassenger,
+                    pickupStopsCount: (rideData as any).pickupStops?.length,
+                    dropoffStopsCount: (rideData as any).dropoffStops?.length,
+                    orderedStopsPreview: (rideData as any).orderedStops,
+                    individualFareReference: (rideData as any).estimatedIndividualFare || 0,
+                    driverBenefitAmount: (rideData as any).driverBenefitAmount || 0,
+                    sharedPassengers: (rideData as any).sharedPassengers || []
                 };
                 batch.set(db.collection('rideOffers').doc(offerId), offerData);
                 console.log(`[MATCH_DEBUG] rideOffer created (broadcast):`, offerId);
@@ -517,11 +529,22 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
                         dynamic: finalPricing.dynamic || null
                     } as any,
                     paymentMethod: rideData.paymentMethod || 'cash',
-                    distanceKm: rideData.distanceKm || 0,
                     durationMinutes: rideData.durationMinutes || 0,
                     passengerName,
                     cityKey: pricingMunicipalityKey,
-                    passengerRiskSummary: riskSummary
+                    passengerRiskSummary: riskSummary,
+                    // [VamO Compartido] Copy shared properties to offer
+                    rideType: rideData.rideType,
+                    isSharedRide: rideData.isSharedRide,
+                    sharedGroupId: (rideData as any).sharedGroupId,
+                    sharedPassengerCount: (rideData as any).sharedPassengerCount,
+                    sharedFarePerPassenger: (rideData as any).sharedFarePerPassenger,
+                    pickupStopsCount: (rideData as any).pickupStops?.length,
+                    dropoffStopsCount: (rideData as any).dropoffStops?.length,
+                    orderedStopsPreview: (rideData as any).orderedStops,
+                    individualFareReference: (rideData as any).estimatedIndividualFare || 0,
+                    driverBenefitAmount: (rideData as any).driverBenefitAmount || 0,
+                    sharedPassengers: (rideData as any).sharedPassengers || []
                 };
 
                 tx.set(db.collection('rideOffers').doc(offerId), offerData);
@@ -859,6 +882,11 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
             const isScheduled = !!scheduledAt;
             const rideStatus = isScheduled ? 'scheduled' : 'searching';
 
+            // [SETTLEMENT_FIX] Derive driverSubtypeSnapshot from serviceType at creation time.
+            // Even though the driver is not assigned yet, 'professional' service implies professional driver.
+            // This guarantees onRideSettlementV6 always finds this field and never silently falls back to 'express'.
+            const driverSubtypeSnapshotAtCreation = serviceType === 'professional' ? 'professional' : 'particular';
+
             console.log('[createRideV1] tx.set ride. Status:', rideStatus);
             tx.set(newRideRef, {
                 passengerId, origin, destination, serviceType,
@@ -869,6 +897,7 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
                 pricing: pricingModel,
                 paymentMethod: paymentMethodSnapshot,
                 paymentSnapshot,
+                pricingSnapshot: pricingModel.pricingSnapshot, // [SETTLEMENT_FIX] top-level for easy access
                 scheduledAt: isScheduled ? (typeof scheduledAt === 'number' ? Timestamp.fromMillis(scheduledAt) : scheduledAt) : null,
                 legalAcceptance: {
                     termsVersion: passengerProfile.termsVersion || 'v1.2',
@@ -879,6 +908,8 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 passengerName: passengerData.name || 'Pasajero',
+                // [SETTLEMENT_FIX] Financial snapshot fields — always present from creation
+                driverSubtypeSnapshot: driverSubtypeSnapshotAtCreation,
                 // [AUDIT] Financial metadata
                 walletLockStatus: finalLockResult ? 'locked' : (walletCoveredAmount > 0 ? 'pending' : 'none'),
                 walletLockedAmount: finalLockResult ? finalLockResult.totalLocked : 0,
@@ -946,6 +977,57 @@ export const ignoreRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
     return { success: true };
 });
 
+// --- SHARED ROUTE OPTIMIZATION HELPERS ---
+function getDistanceM(p1: any, p2: any): number {
+    const R = 6371e3;
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const dLat = toRad(p2.lat - p1.lat);
+    const dLng = toRad(p2.lng - p1.lng);
+    const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+function optimizePickupStopsFromDriverLocation(
+    orderedStops: any[],
+    driverLocation: { lat: number; lng: number }
+): any[] {
+    const pickups = orderedStops.filter((s: any) => s.type === 'pickup');
+    const dropoffs = orderedStops.filter((s: any) => s.type === 'dropoff');
+
+    if (pickups.length === 0) return orderedStops;
+
+    const driverPlace = { lat: driverLocation.lat, lng: driverLocation.lng };
+    const optimized: any[] = [];
+
+    // Optimize Pickups
+    let lastLoc = driverPlace;
+    let remainingPickups = [...pickups];
+    while (remainingPickups.length > 0) {
+        let nextIdx = 0;
+        let nextDist = Infinity;
+        remainingPickups.forEach((r, idx) => {
+            const d = r.location ? getDistanceM(lastLoc, r.location) : Infinity;
+            if (d < nextDist) {
+                nextDist = d;
+                nextIdx = idx;
+            }
+        });
+        const next = remainingPickups.splice(nextIdx, 1)[0];
+        optimized.push(next);
+        lastLoc = next.location;
+    }
+
+    optimized.push(...dropoffs);
+
+    // Re-assign order field
+    return optimized.map((s, idx) => ({ ...s, order: idx + 1 }));
+}
+// -----------------------------------------
+
 export const acceptRideV2 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const db = getDb();
@@ -966,6 +1048,7 @@ export const acceptRideV2 = onCall({ cors: true, region: 'us-central1' }, async 
             const driverSnap = await tx.get(db.doc(`users/${driverId}`));
             const rideSnap = await tx.get(db.doc(`rides/${rideId}`));
             const offerSnap = await tx.get(offerDoc.ref);
+            const driverLocationSnap = await tx.get(db.doc(`drivers_locations/${driverId}`));
 
             if (!offerSnap.exists || offerSnap.data()?.status !== 'pending') {
                 logger.warn(`[ACCEPT_GUARD] offer not pending. Offer ID: ${offerDoc.id}`);
@@ -981,8 +1064,24 @@ export const acceptRideV2 = onCall({ cors: true, region: 'us-central1' }, async 
 
             logger.info(`[MATCH_DEBUG] accepted winner: ${driverId} for ride ${rideId}`);
 
-            const driverSubtypeSnap = driverSnap.data()?.driverSubtype || 'particular';
+            const profileSubtype = driverSnap.data()?.driverSubtype;
+            // [SETTLEMENT_FIX] 'express' is a SERVICE TYPE, not a driver category.
+            // Never propagate it as driverSubtypeSnapshot — that field must be 'professional' or 'particular'.
+            // Priority: existing ride snapshot (if valid) > serviceType-derived > profile subtype > 'particular'
+            const existingSnapshot = (ride as any).driverSubtypeSnapshot;
+            const validSubtypes = ['professional', 'particular'];
+            const driverSubtypeSnap: string = validSubtypes.includes(existingSnapshot)
+                ? existingSnapshot  // Keep what was already set (e.g., from createRideV1 or station assignment)
+                : validSubtypes.includes(profileSubtype)
+                    ? profileSubtype  // Use real driver profile subtype if it's valid
+                    : (ride.serviceType === 'professional' ? 'professional' : 'particular'); // Derive from serviceType
+            
+            if (!validSubtypes.includes(profileSubtype)) {
+                logger.warn(`[ACCEPT_SUBTYPE_FIX] Driver ${driverId} has driverSubtype='${profileSubtype}' which is not a valid driver category. Resolved driverSubtypeSnapshot='${driverSubtypeSnap}' from serviceType='${ride.serviceType}'.`);
+            }
+            
             const snapshot = (ride as any).pricing?.pricingSnapshot;
+
             
             let vamoRateSnap;
             
@@ -1024,6 +1123,78 @@ export const acceptRideV2 = onCall({ cors: true, region: 'us-central1' }, async 
                 status: 'accepted',
                 finalizedAt: FieldValue.serverTimestamp()
             });
+
+            if (ride.isSharedRide && (ride as any).sharedGroupId && (ride as any).sharedPassengers) {
+                let updatedOrderedStops = ride.orderedStops || [];
+                let updatedRoutePlan = ride.routePlan || [];
+
+                // [GUARD – Opción A] Fail hard if ANY sharedPassenger is missing requestId.
+                // If this throws, the entire transaction is rolled back — no partial state updates.
+                // This guarantees we never assign a driver to a corrupted ride.
+                assertSharedPassengersHaveRequestIds(
+                    (ride as any).sharedPassengers,
+                    rideId,
+                    'acceptRideV2'
+                );
+
+                // 1. users/{driverId}.currentLocation
+                // 2. users/{driverId}.location
+                const locData = driverLocationSnap.exists ? driverLocationSnap.data() : null;
+                const usrData = driverSnap.exists ? driverSnap.data() : null;
+
+                let driverLocation = locData?.currentLocation || locData?.l || usrData?.currentLocation || usrData?.location || null;
+
+                if (driverLocation && updatedOrderedStops.length > 0) {
+                    updatedOrderedStops = optimizePickupStopsFromDriverLocation(updatedOrderedStops, driverLocation);
+                    updatedRoutePlan = updatedOrderedStops.map((stop: any, index: number) => ({
+                        order: index + 1,
+                        type: stop.type,
+                        passengerId: stop.passengerId || 'unknown',
+                        passengerName: stop.passengerName || 'Pasajero',
+                        address: stop.location?.address || '',
+                        status: stop.status || 'pending'
+                    }));
+
+                    // Update master ride with optimized route
+                    tx.update(db.doc(`rides/${rideId}`), {
+                        orderedStops: updatedOrderedStops,
+                        routePlan: updatedRoutePlan,
+                        routeUpdatedAt: FieldValue.serverTimestamp()
+                    });
+                } else if (!driverLocation) {
+                    logger.warn(`[ACCEPT_SHARED] PICKUP_OPTIMIZATION_SKIPPED_MISSING_DRIVER_LOCATION for ride ${rideId}`);
+                }
+
+                tx.update(db.doc(`shared_ride_groups/${(ride as any).sharedGroupId}`), {
+                    status: 'driver_assigned',
+                    driverId: driverId,
+                    assignedDriverId: driverId,
+                    ...(driverLocation && updatedOrderedStops.length > 0 ? { orderedStops: updatedOrderedStops } : {}),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+
+                // [FIX – Opción A] assertSharedPassengersHaveRequestIds already ran above,
+                // so every p.requestId is guaranteed to be present here.
+                for (const p of (ride as any).sharedPassengers) {
+                    // requestId is guaranteed by the assertion above — no need for an if/else
+                    tx.update(db.doc(`shared_ride_requests/${p.requestId}`), {
+                        status: 'driver_assigned',
+                        driverId: driverId,
+                        updatedAt: FieldValue.serverTimestamp()
+                    });
+                    if (p.passengerId) {
+                        tx.update(db.doc(`users/${p.passengerId}`), {
+                            activeRideId: rideId,
+                            activeSharedRideId: rideId,
+                            activeSharedRideGroupId: (ride as any).sharedGroupId,
+                            updatedAt: FieldValue.serverTimestamp()
+                        });
+                    } else {
+                        // passengerId missing is also caught by the assertion, but belt-and-suspenders
+                        logger.error(`[ACCEPT_SHARED] sharedPassenger missing passengerId. requestId=${p.requestId}. Skipping user update.`);
+                    }
+                }
+            }
         });
 
         // Log OUTSIDE transaction
@@ -1068,6 +1239,168 @@ export const acceptRideV2 = onCall({ cors: true, region: 'us-central1' }, async 
         if (error instanceof HttpsError) throw error;
         logger.error(`[ACCEPT_GUARD] conflict prevented. CRITICAL_ERROR:`, error);
         throw new HttpsError('internal', 'No se pudo aceptar el viaje.');
+    }
+});
+
+/**
+ * assignStationRideToDriverV1
+ * Callable function: allows a station_operator, admin_municipal or super_admin to
+ * manually assign a ride (pending station dispatch) to a specific driver.
+ * Creates a rideOffer so the driver is notified through the normal offer flow.
+ */
+export const assignStationRideToDriverV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
+    const db = getDb();
+    const { rideId, driverId } = request.data;
+    const operatorId = request.auth.uid;
+
+    if (!rideId || !driverId) {
+        throw new HttpsError('invalid-argument', 'Faltan parámetros: rideId y driverId son requeridos.');
+    }
+
+    logger.info(`[STATION_ASSIGN] Operator ${operatorId} assigning driver ${driverId} to ride ${rideId}`);
+
+    // --- Auth & Role Check ---
+    const operatorSnap = await db.doc(`users/${operatorId}`).get();
+    if (!operatorSnap.exists) throw new HttpsError('not-found', 'Perfil de operador no encontrado.');
+    const operatorData = operatorSnap.data() as UserProfile;
+
+    const allowedRoles = ['station_operator', 'admin_municipal', 'admin', 'super_admin'];
+    if (!allowedRoles.includes(operatorData.role as string)) {
+        throw new HttpsError('permission-denied', 'No tenés permisos para asignar viajes desde parada.');
+    }
+
+    // --- Load Ride ---
+    const rideSnap = await db.doc(`rides/${rideId}`).get();
+    if (!rideSnap.exists) throw new HttpsError('not-found', 'El viaje no existe.');
+    const ride = rideSnap.data() as Ride;
+
+    // --- Validate station_operator scope ---
+    if (operatorData.role === 'station_operator') {
+        const operatorStationId = (operatorData as any).stationId;
+        if (!operatorStationId) {
+            throw new HttpsError('permission-denied', 'El operador no tiene una parada asignada.');
+        }
+        if (ride.stationId !== operatorStationId) {
+            throw new HttpsError('permission-denied', 'Solo podés asignar viajes de tu propia parada.');
+        }
+    }
+
+    // --- Validate Ride Status ---
+    const assignableStatuses = ['pending_assignment', 'pending_reassignment'];
+    const rideDispatchStatus = (ride as any).stationDispatchStatus;
+    if (!assignableStatuses.includes(rideDispatchStatus)) {
+        throw new HttpsError(
+            'failed-precondition',
+            `El viaje no está pendiente de asignación (estado actual: ${rideDispatchStatus}).`
+        );
+    }
+    if (ride.status !== 'searching') {
+        throw new HttpsError(
+            'failed-precondition',
+            `El viaje no está en estado de búsqueda (estado actual: ${ride.status}).`
+        );
+    }
+
+    // --- Validate Taxi Stand ---
+    const stationId = (ride as any).stationId;
+    if (!stationId) throw new HttpsError('failed-precondition', 'El viaje no tiene una parada asignada.');
+    const stationSnap = await db.doc(`taxi_stands/${stationId}`).get();
+    if (!stationSnap.exists) throw new HttpsError('not-found', 'La parada no existe.');
+    const stationData = stationSnap.data() as any;
+    if (stationData.cityKey !== ride.cityKey) {
+        throw new HttpsError('failed-precondition', 'Inconsistencia de ciudad entre la parada y el viaje.');
+    }
+
+    // --- Validate Driver ---
+    const driverSnap = await db.doc(`users/${driverId}`).get();
+    if (!driverSnap.exists) throw new HttpsError('not-found', 'El conductor no existe.');
+    const driver = driverSnap.data() as UserProfile;
+
+    if (driver.approved !== true) {
+        throw new HttpsError('failed-precondition', 'El conductor no está aprobado.');
+    }
+    if ((driver as any).isSuspended === true) {
+        throw new HttpsError('failed-precondition', 'El conductor está suspendido.');
+    }
+    if (driver.driverStatus !== 'online') {
+        throw new HttpsError('failed-precondition', `El conductor no está online (estado: ${driver.driverStatus}).`);
+    }
+    if (driver.activeRideId && driver.activeRideId !== null) {
+        throw new HttpsError('failed-precondition', 'El conductor ya tiene un viaje activo.');
+    }
+
+    // Optionally check driver belongs to this station or is available for it
+    const driverStationId = (driver as any).stationId;
+    if (driverStationId && driverStationId !== stationId) {
+        logger.warn(`[STATION_ASSIGN] Driver ${driverId} belongs to station ${driverStationId}, assigning to station ${stationId}. Proceeding anyway.`);
+    }
+
+    // --- Compute snapshot values ---
+    const driverSubtypeSnap = driver.driverSubtype || 'professional';
+    const pricingSnap = (ride as any).pricing?.pricingSnapshot;
+    let commissionRate: number;
+    if (pricingSnap) {
+        commissionRate = driverSubtypeSnap === 'professional'
+            ? (pricingSnap.commission_taxi_remis ?? 0.12)
+            : (pricingSnap.commission_particular ?? 0.18);
+    } else {
+        commissionRate = driverSubtypeSnap === 'professional' ? 0.12 : 0.18;
+    }
+
+    // --- Transactional Assignment ---
+    const offerRef = db.collection('rideOffers').doc();
+    const offerId = offerRef.id;
+    const offerExpiresAt = Timestamp.fromMillis(Date.now() + 60 * 1000); // 60 seconds
+
+    try {
+        await db.runTransaction(async (tx) => {
+            // Re-read inside transaction for consistency
+            const freshRideSnap = await tx.get(db.doc(`rides/${rideId}`));
+            const freshRide = freshRideSnap.data() as Ride;
+
+            if (!assignableStatuses.includes((freshRide as any).stationDispatchStatus)) {
+                throw new HttpsError('already-exists', 'El viaje ya fue asignado por otro operador.');
+            }
+
+            // Create the rideOffer — driver will receive this and can accept via acceptRideV2
+            tx.set(offerRef, {
+                rideId,
+                driverId,
+                passengerId: ride.passengerId,
+                status: 'pending',
+                source: 'station_dispatch',
+                stationId,
+                sentAt: FieldValue.serverTimestamp(),
+                expiresAt: offerExpiresAt,
+                round: 1,
+                assignedByOperatorId: operatorId,
+                createdAt: FieldValue.serverTimestamp()
+            });
+
+            // Update the ride
+            tx.update(db.doc(`rides/${rideId}`), {
+                stationDispatchStatus: 'assigned_to_driver',
+                stationAssignedDriverId: driverId,
+                assignedDriverId: driverId,
+                currentOfferedDriverId: driverId,
+                stationAssignedAt: FieldValue.serverTimestamp(),
+                stationAssignedByOperatorUid: operatorId,
+                matchingExpiresAt: offerExpiresAt,
+                // [SETTLEMENT_FIX] Freeze driverSubtypeSnapshot at assignment if not already set
+                driverSubtypeSnapshot: (freshRide as any).driverSubtypeSnapshot || driverSubtypeSnap,
+                commissionRateSnapshot: commissionRate,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        });
+
+        logger.info(`[STATION_ASSIGN] Success: ride ${rideId} assigned to driver ${driverId}, offer ${offerId} created.`);
+        return { success: true, offerId, rideId, driverId };
+
+    } catch (error: any) {
+        logger.error(`[STATION_ASSIGN] Error assigning ride ${rideId} to driver ${driverId}:`, error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', error.message || 'Error al asignar el conductor.');
     }
 });
 
@@ -1247,6 +1580,82 @@ export const onRideCreatedV1 = onDocumentCreated({ document: "rides/{rideId}", r
     // scheduledRideWorker or proactive matching usually handles this, but we keep the trigger for robustness.
     await findNextDriverAndCreateOffer(rideId);
     obs.trackLatency("onRideCreatedV1_Total", startTime, { rideId });
+});
+
+export const onRideUpdatedV1 = onDocumentUpdated({ document: "rides/{rideId}", region: 'us-central1' }, async (event: any) => {
+    const beforeData = event.data?.before.data();
+    const afterData = event.data?.after.data();
+    const rideId = event.params.rideId;
+    if (!beforeData || !afterData) return;
+
+    // Trigger only when transitioning to completed
+    if (afterData.status === 'completed' && beforeData.status !== 'completed') {
+        const db = getDb();
+        const cityKey = afterData.cityKey || 'unknown';
+        
+        // 1. Calculate fare and shares
+        // If paymentSnapshot exists, use finalPassengerFare. Otherwise use estimatedTotal.
+        const totalFare = afterData.paymentSnapshot?.finalPassengerFare ?? (afterData.pricing?.estimatedTotal ?? 0);
+        if (totalFare <= 0) return;
+
+        // Fetch municipal share from city config, fallback to 5%
+        let municipalSharePercent = 5;
+        try {
+            const citySnap = await db.doc(`cities/${cityKey}`).get();
+            if (citySnap.exists) {
+                const cityConfig = citySnap.data();
+                if (cityConfig?.pricing?.municipalSharePercent !== undefined) {
+                    municipalSharePercent = cityConfig.pricing.municipalSharePercent;
+                }
+            }
+        } catch (e) {
+            logger.warn(`Could not read city config for ${cityKey}. Using default municipal share 5%`);
+        }
+
+        const municipalShareAmount = Math.floor(totalFare * (municipalSharePercent / 100));
+
+        // 2. Determine source and settlement status
+        const sourceMap: Record<string, string> = {
+            'cash': 'cash',
+            'wallet': 'wallet',
+            'mercado_pago': 'mercado_pago',
+            'mixed': 'mixed'
+        };
+        const paymentMethod = afterData.paymentMethod || 'cash';
+        const source = sourceMap[paymentMethod] || 'other';
+
+        // Phase 1 rule: everything is pending_transfer as we are in ledger_first mode.
+        const settlementStatus = 'pending_transfer';
+
+        // 3. Optional: check for municipal account to link it
+        let municipalityAccountId = null;
+        try {
+            const accountSnap = await db.doc(`municipal_accounts/${cityKey}`).get();
+            if (accountSnap.exists && accountSnap.data()?.enabled) {
+                municipalityAccountId = accountSnap.id;
+            }
+        } catch (e) {
+            logger.warn(`Could not read municipal account for ${cityKey}`, e);
+        }
+
+        // 4. Create Ledger Entry
+        const ledgerEntry = {
+            cityKey,
+            rideId,
+            paymentMethod,
+            totalFare,
+            municipalSharePercent,
+            municipalShareAmount,
+            source,
+            settlementStatus,
+            municipalityAccountId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        const ledgerRef = db.collection('municipal_ledger').doc(rideId);
+        await ledgerRef.set(ledgerEntry);
+        logger.info(`[LEDGER] Created municipal_ledger entry for ride ${rideId} (City: ${cityKey}, Amount: ${municipalShareAmount})`);
+    }
 });
 
 /**

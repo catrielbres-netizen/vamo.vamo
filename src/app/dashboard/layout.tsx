@@ -67,8 +67,17 @@ function PassengerDashboard({ children, profile, user }: { children: React.React
     };
   }, [isRideLoading, ride, rideError, profile.activeRideId, firestore, user, toast]);
 
-  const isVisuallyLocked = ride && VISUALLY_LOCKED_STATUSES.includes(ride.status);
+  // Lock UI for shared rides too (activeRideId for normal rides,
+  // activeSharedRequestId/activeSharedRideGroupId for the forming phase)
+  const isInActiveSharedRide = !!(
+      (profile as any).activeSharedRequestId ||
+      (profile as any).activeSharedRideGroupId ||
+      profile.activeRideId?.startsWith('shared_') ||
+      (profile as any).activeSharedRideId?.startsWith('shared_')
+  );
+  const isVisuallyLocked = isInActiveSharedRide || !!(ride && VISUALLY_LOCKED_STATUSES.includes(ride.status));
   useBackNavigationLock(!!isVisuallyLocked);
+
 
   // [PASSENGER_PRESENCE_HEARTBEAT]
   const telemetry = useTelemetry();

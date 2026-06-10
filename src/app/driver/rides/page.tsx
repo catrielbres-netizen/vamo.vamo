@@ -40,14 +40,14 @@ const statusMessages: Record<string, {title: string, description: string, icon: 
 export default function DriverRidesPage() {
   const { profile, rides: availableOffers, newRideIds, ready, error } = useDriverData();
 
-  const isPendingReview = profile.planBStatus === 'pending_docs' || profile.planBStatus === 'pending_approval';
-  const statusKey = isPendingReview ? 'pending_review' : (profile.approved ? 'approved' : 'unverified');
+  const isPendingReview = (profile as any)?.planBStatus === 'pending_docs' || (profile as any)?.planBStatus === 'pending_approval';
+  const statusKey = isPendingReview ? 'pending_review' : (profile?.approved ? 'approved' : 'unverified');
   const message = statusMessages[statusKey] || statusMessages.unverified;
 
   const isOnline = profile?.driverStatus === 'online';
   const balance = profile?.currentBalance ?? 0;
   // [VamO AUDIT] Allow rendering offers even if balance is low, so driver can see the penalty.
-  const driverIsAvailable = isOnline && profile.approved;
+  const driverIsAvailable = isOnline && profile?.approved;
   
   console.log(`[DRIVER_PAGE] Render. Online: ${isOnline}, Balance: ${balance}, Offers: ${availableOffers.length}`);
 
@@ -63,7 +63,7 @@ export default function DriverRidesPage() {
             </Alert>
         )}
 
-        {(!profile.approved && !isPendingReview) && (
+        {(!profile?.approved && !isPendingReview) && (
             <Alert variant="destructive" className="rounded-2xl">
                 <VamoIcon name={message.icon} className="h-4 w-4" />
                 <AlertTitle>{message.title}</AlertTitle>
@@ -113,7 +113,7 @@ export default function DriverRidesPage() {
             {driverIsAvailable && <DailyEarningsWidget />}
         </div>
 
-        {profile.approved && (
+        {profile?.approved && (
             <div className="pt-10 pb-20">
                 {/* [VamO PRO] Heatmap section removed */}
             </div>

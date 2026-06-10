@@ -20,6 +20,7 @@ const navLinks = [
     { href: '/admin/live-rides', label: 'Operativo En Vivo', icon: 'activity' },
     { href: '/admin/fraud', label: 'Control de Fraude', icon: 'shield-alert' },
     { href: '/admin/withdrawals', label: 'Finanzas & Retiros', icon: 'banknote' },
+    { href: '/admin/municipal-settlements', label: 'Liquidaciones', icon: 'landmark' },
     { href: '/admin/simulator', label: 'Simulador Financiero', icon: 'line-chart' },
     { href: '/admin/drivers', label: 'Gestión de Flota', icon: 'users' },
     { href: '/admin/alerts', label: 'Pánico SOS', icon: 'volume-2' },

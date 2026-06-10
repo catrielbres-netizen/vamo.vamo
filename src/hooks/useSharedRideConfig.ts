@@ -17,7 +17,7 @@ export function useSharedRideConfig() {
   const featureConfigRef = useMemo(() => 
     firestore ? doc(firestore, 'features', 'sharedRide') : null
   , [firestore]);
-  const { data: featureConfig, loading } = useDoc<SharedRideFeatureConfig>(featureConfigRef);
+  const { data: featureConfig, isLoading } = useDoc<SharedRideFeatureConfig>(featureConfigRef);
 
   const isEnabled = useMemo(() => {
     // [VamO Versión B] VamO Compartido SIEMPRE habilitado
@@ -27,6 +27,6 @@ export function useSharedRideConfig() {
   return {
     isEnabled,
     config: featureConfig,
-    loading
+    loading: isLoading
   };
 }

@@ -10,9 +10,10 @@ import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { VamoMarker } from '@/components/VamoMarker';
 import { Badge } from '@/components/ui/badge';
+import { useLiveDriversMap } from '@/hooks/useLiveDriversMap';
 
 // --- Types ---
 interface DriverLiveStatus {
@@ -116,75 +117,28 @@ function LegendItem({ color, label }: { color: string, label: string }) {
 }
 
 function MunicipalDriversLayer({ cityKey }: { cityKey: string | null }) {
-    const db = useFirestore();
     const map = useMap();
-    const [drivers, setDrivers] = useState<DriverLiveStatus[]>([]);
+    const { drivers, debugDrivers, rawCounts } = useLiveDriversMap(cityKey);
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
-    const selectedDriver = useMemo(() => drivers.find(d => d.id === selectedDriverId), [drivers, selectedDriverId]);
+    const selectedDriver = useMemo(() => drivers.find((d: any) => d.driverId === selectedDriverId), [drivers, selectedDriverId]);
     const router = useRouter();
-
-    useEffect(() => {
-        if (!db || !cityKey) return;
-
-        console.log(`[TAKTIK_MAP] Subscribing to drivers in ${cityKey}`);
-        
-        // Query only drivers of THIS city
-        const q = query(
-            collection(db, 'drivers_locations'),
-            where('cityKey', '==', cityKey),
-            limit(100) // Safety limit for dashboard
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetched = snapshot.docs.map(doc => {
-                const data = doc.data();
-                let loc = null;
-                if (data.currentLocation) {
-                    const lat = Number(data.currentLocation.latitude ?? data.currentLocation.lat);
-                    const lng = Number(data.currentLocation.longitude ?? data.currentLocation.lng);
-                    if (!isNaN(lat) && !isNaN(lng)) {
-                        loc = { lat, lng };
-                    }
-                }
-                return {
-                    id: doc.id,
-                    driverName: data.driverName || 'Conductor',
-                    driverStatus: data.driverStatus || 'offline',
-                    currentLocation: loc,
-                    lastSeenAt: data.lastSeenAt,
-                    driverType: data.driverType || 'No informado',
-                    municipalStatus: data.municipalStatus || 'No informado',
-                    vehicleBrand: data.vehicle?.brand || 'No informado',
-                    vehicleModel: data.vehicle?.model || '',
-                    vehiclePlate: data.vehicle?.plate || 'No informado',
-                    vehicleColor: data.vehicle?.color || '',
-                    docsComplete: data.docsComplete,
-                    missingDocs: data.missingDocs || [],
-                    expiredDocs: data.expiredDocs || [],
-                    photoUrl: data.photoUrl || null
-                } as DriverLiveStatus;
-            }).filter(d => d.currentLocation !== null); // Only those with valid location
-
-            setDrivers(fetched);
-        });
-
-        return () => unsubscribe();
-    }, [db, cityKey, map]);
+    
+    const searchParams = useSearchParams();
+    const isDebug = searchParams.get('debug') === 'true';
 
     return (
         <>
-            {drivers.map(driver => {
-                if (driver.driverStatus === 'offline' || !driver.currentLocation) return null;
+            {drivers.filter((d: any) => d.visibleOnMap).map((driver: any) => {
                 return (
                     <VamoMarker
-                        key={driver.id}
-                        position={driver.currentLocation}
+                        key={driver.driverId}
+                        position={driver.location}
                         onClick={() => {
-                            setSelectedDriverId(driver.id);
-                            console.log("📍 [LIVE_MAP_DRIVER_SELECTED] Municipal:", driver.id);
+                            setSelectedDriverId(driver.driverId);
+                            console.log("📍 [LIVE_MAP_DRIVER_SELECTED] Municipal:", driver.driverId);
                         }}
                     >
-                        <DriverMarker driver={driver} isSelected={selectedDriverId === driver.id} onClick={() => setSelectedDriverId(driver.id)} />
+                        <DriverMarker driver={driver} isSelected={selectedDriverId === driver.driverId} onClick={() => setSelectedDriverId(driver.driverId)} />
                     </VamoMarker>
                 );
             })}
@@ -204,9 +158,9 @@ function MunicipalDriversLayer({ cityKey }: { cityKey: string | null }) {
                             {selectedDriver.photoUrl ? <img src={selectedDriver.photoUrl} alt="" className="w-full h-full object-cover" /> : <VamoIcon name="user" className="w-6 h-6 text-zinc-700" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="font-black text-white truncate">{selectedDriver.driverName}</p>
-                            <Badge className={cn("text-[8px] font-black uppercase mt-1", selectedDriver.driverStatus === 'online' ? "bg-emerald-500/20 text-emerald-500" : "bg-indigo-500/20 text-indigo-400")}>
-                                {selectedDriver.driverStatus}
+                            <p className="font-black text-white truncate">{selectedDriver.displayName}</p>
+                            <Badge className={cn("text-[8px] font-black uppercase mt-1", selectedDriver.liveStatus === 'online' ? "bg-emerald-500/20 text-emerald-500" : "bg-indigo-500/20 text-indigo-400")}>
+                                {selectedDriver.liveStatus}
                             </Badge>
                         </div>
                     </div>
@@ -215,12 +169,12 @@ function MunicipalDriversLayer({ cityKey }: { cityKey: string | null }) {
                         <div className="grid grid-cols-2 gap-2">
                             <div className="p-3 rounded-xl bg-white/5 border border-white/5">
                                 <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Patente</p>
-                                <p className="text-xs font-mono font-bold text-indigo-400">{selectedDriver.vehiclePlate}</p>
+                                <p className="text-xs font-mono font-bold text-indigo-400">{selectedDriver.plate}</p>
                             </div>
                             <div className="p-3 rounded-xl bg-white/5 border border-white/5">
                                 <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Estado</p>
                                 <p className={cn("text-xs font-bold uppercase", selectedDriver.municipalStatus === 'active' ? "text-emerald-500" : "text-amber-500")}>
-                                    {selectedDriver.municipalStatus}
+                                    {selectedDriver.municipalStatus || 'N/A'}
                                 </p>
                             </div>
                         </div>
@@ -232,8 +186,8 @@ function MunicipalDriversLayer({ cityKey }: { cityKey: string | null }) {
 
                     <button 
                         onClick={() => {
-                            console.log("📍 [LIVE_MAP_DRIVER_DETAIL_OPEN] Municipal:", selectedDriver.id);
-                            router.push(`/municipal/drivers/${selectedDriver.id}`);
+                            console.log("📍 [LIVE_MAP_DRIVER_DETAIL_OPEN] Municipal:", selectedDriver.driverId);
+                            router.push(`/municipal/drivers/${selectedDriver.driverId}`);
                         }}
                         className="w-full bg-indigo-600 hover:bg-indigo-500 text-white h-12 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-indigo-500/20"
                     >
@@ -241,15 +195,45 @@ function MunicipalDriversLayer({ cityKey }: { cityKey: string | null }) {
                     </button>
                 </div>
             )}
+            {/* Debug Overlay */}
+            {isDebug && (
+                <div className="absolute bottom-6 right-6 z-50 w-96 bg-black/90 border border-red-500/50 p-4 rounded-xl text-xs font-mono text-zinc-300 max-h-[400px] overflow-y-auto">
+                    <h3 className="text-red-400 font-bold mb-2 uppercase tracking-widest border-b border-red-500/20 pb-2">Debug Panel Muni</h3>
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                        <div>Users: <span className="text-white">{rawCounts?.users}</span></div>
+                        <div>Locations: <span className="text-white">{rawCounts?.locations}</span></div>
+                        <div>Profiles: <span className="text-white">{rawCounts?.profiles}</span></div>
+                        <div>Rides: <span className="text-white">{rawCounts?.rides}</span></div>
+                    </div>
+                    <div className="space-y-3">
+                        {debugDrivers?.slice(0, 20).map((d: any) => (
+                            <div key={d.driverId} className="border border-white/10 p-2 rounded bg-white/5">
+                                <div className="font-bold text-white mb-1">{d.displayName} ({d.driverId.slice(0,5)}...)</div>
+                                <div>U:<span className={d._debug.hasUser ? "text-green-400" : "text-red-400"}>{d._debug.hasUser?"Y":"N"}</span> ({d._debug.userStatus}) 
+                                L:<span className={d._debug.hasLocation ? "text-green-400" : "text-red-400"}>{d._debug.hasLocation?"Y":"N"}</span> ({d._debug.locStatus}) 
+                                P:<span className={d._debug.hasProfile ? "text-green-400" : "text-red-400"}>{d._debug.hasProfile?"Y":"N"}</span>
+                                </div>
+                                <div className="mt-1">
+                                    Map: <span className={d.visibleOnMap ? "text-green-400" : "text-red-400"}>{d.visibleOnMap?"Y":"N"}</span> | 
+                                    List: <span className={d.visibleInSideList ? "text-green-400" : "text-red-400"}>{d.visibleInSideList?"Y":"N"}</span>
+                                </div>
+                                {(!d.visibleOnMap && !d.visibleInSideList) && (
+                                    <div className="text-red-400 mt-1 truncate">Discard: {d._debug.discardReason}</div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </>
     );
 }
 
-function DriverMarker({ driver, isSelected, onClick }: { driver: DriverLiveStatus, isSelected?: boolean, onClick?: () => void }) {
-    const isOnline = driver.driverStatus === 'online';
-    const isBusy = driver.driverStatus === 'in_ride';
+function DriverMarker({ driver, isSelected, onClick }: { driver: any, isSelected?: boolean, onClick?: () => void }) {
+    const isOnline = driver.liveStatus === 'online';
+    const isBusy = driver.liveStatus === 'in_ride';
 
-    const colorClass = isOnline ? 'bg-[#22c55e]' : isBusy ? 'bg-[#1D7CFF]' : 'bg-[#6b7280]';
+    const colorClass = isOnline ? (driver.locationStale ? 'bg-amber-500' : 'bg-[#22c55e]') : isBusy ? 'bg-[#1D7CFF]' : driver.isSuspended ? 'bg-rose-500' : 'bg-[#6b7280]';
     const shadowClass = isOnline ? 'shadow-[0_2px_4px_rgba(0,0,0,0.3)]' : isBusy ? 'shadow-[0_0_12px_rgba(29,124,255,0.6)]' : 'shadow-sm';
     const animationClass = isOnline ? 'animate-pulse' : '';
 
@@ -282,13 +266,13 @@ function DriverMarker({ driver, isSelected, onClick }: { driver: DriverLiveStatu
                             )}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-black text-white truncate">{driver.driverName}</h3>
+                            <h3 className="text-sm font-black text-white truncate">{driver.displayName}</h3>
                             <div className="flex flex-wrap gap-1 mt-1">
-                                <span className="px-1.5 py-0.5 rounded-md bg-zinc-800 text-[9px] font-bold text-zinc-300 uppercase">{driver.driverType || 'No informado'}</span>
+                                <span className="px-1.5 py-0.5 rounded-md bg-zinc-800 text-[9px] font-bold text-zinc-300 uppercase">{driver.driverSubtype || 'No informado'}</span>
                                 <span className={cn(
                                     "px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase",
                                     isOnline ? 'bg-[#22c55e]/20 text-[#22c55e]' : isBusy ? 'bg-[#1D7CFF]/20 text-[#1D7CFF]' : 'bg-zinc-800 text-zinc-400'
-                                )}>{driver.driverStatus}</span>
+                                )}>{driver.liveStatus}</span>
                             </div>
                         </div>
                     </div>
@@ -300,7 +284,7 @@ function DriverMarker({ driver, isSelected, onClick }: { driver: DriverLiveStatu
                             </div>
                             <div>
                                 <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Patente</p>
-                                <p className="text-xs font-mono font-bold text-[#1D7CFF]">{driver.vehiclePlate}</p>
+                                <p className="text-xs font-mono font-bold text-[#1D7CFF]">{driver.plate}</p>
                             </div>
                         </div>
                         <div>
@@ -380,7 +364,7 @@ function MunicipalRidesLayer({ cityKey }: { cityKey: string | null }) {
         const q = query(
             collection(db, 'rides'),
             where('cityKey', '==', cityKey),
-            where('status', 'in', ['searching', 'offered', 'driver_assigned', 'accepted', 'arrived', 'picked_up', 'in_progress', 'paused']),
+            where('status', 'in', ['searching', 'offered', 'driver_assigned', 'accepted', 'in_progress', 'arrived', 'picked_up']),
             limit(100)
         );
 

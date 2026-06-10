@@ -155,7 +155,7 @@ export default function TrafficDriversList() {
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2 flex-wrap">
-                                                <StatusBadge status={driver.municipalStatus} />
+                                                <StatusBadge opStatus={driver.operationalStatus} municipalStatus={driver.municipalStatus} />
                                                 {(driver.isSuspended || driver.trafficSuspended || driver.municipalSuspended || driver.adminSuspended || driver.municipalStatus === 'suspended_by_traffic') && (
                                                     <Badge className="rounded-lg border-red-500/20 bg-red-500/10 text-[9px] font-black uppercase tracking-widest px-2 py-1 text-red-400">
                                                         {driver.adminSuspended ? 'Susp. Admin' : (driver.municipalSuspended ? 'Susp. Municipal' : 'Susp. Tránsito')}
@@ -196,21 +196,12 @@ export default function TrafficDriversList() {
     );
 }
 
-function StatusBadge({ status }: { status: string }) {
-    const map: any = {
-        pending_municipal_review: { label: 'Pendiente',   cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-        municipal_observed:       { label: 'Observado',   cls: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
-        municipal_approved:       { label: 'En proceso',  cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-        active:                   { label: 'Habilitado',  cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-400/20' },
-        renewal_under_review:     { label: 'Renovación',  cls: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
-        suspended_expired_license:   { label: 'Lic. vencida',  cls: 'bg-red-500/10 text-red-400 border-red-500/20' },
-        suspended_expired_insurance: { label: 'Seg. vencido',  cls: 'bg-red-500/10 text-red-400 border-red-500/20' },
-        suspended_unpaid_canon:      { label: 'Canon impago',  cls: 'bg-red-500/10 text-red-400 border-red-500/20' },
-        suspended_by_municipality:   { label: 'Suspendido',    cls: 'bg-red-500/10 text-red-400 border-red-500/20' },
-        rejected_by_municipality:    { label: 'Rechazado',     cls: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' },
-    };
-    const cfg = map[status] || { label: status || 'S/D', cls: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20' };
-    return <Badge className={`${cfg.cls} rounded-lg font-black text-[9px] uppercase tracking-widest px-2 py-1`}>{cfg.label}</Badge>;
+function StatusBadge({ opStatus, municipalStatus }: { opStatus: string, municipalStatus: string }) {
+    if (opStatus === 'suspended') return <Badge className="bg-red-500/10 text-red-400 border-red-500/20 rounded-lg font-black text-[9px] uppercase tracking-widest px-2 py-1">Suspendido</Badge>;
+    if (opStatus === 'observed') return <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 rounded-lg font-black text-[9px] uppercase tracking-widest px-2 py-1">Observado</Badge>;
+    if (opStatus === 'enabled') return <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 rounded-lg font-black text-[9px] uppercase tracking-widest px-2 py-1">Habilitado</Badge>;
+    
+    return <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 rounded-lg font-black text-[9px] uppercase tracking-widest px-2 py-1">Pendiente</Badge>;
 }
 
 function FilterButton({ active, onClick, label, color = 'zinc' }: any) {

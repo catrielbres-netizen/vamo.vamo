@@ -5,17 +5,17 @@
 
 export const featureFlags = {
   // Modo Plan B activo: prioriza conductores particulares, oculta intermediación municipal
-  vamoParticularModeEnabled: true,
+  vamoParticularModeEnabled: false,
 
   // Paneles y modos a ocultar en Plan B
-  municipalModeEnabled: false,
-  trafficPanelEnabled: false,
-  taxiStopsEnabled: false,
-  taxiRemisEnabled: false,
-  showMunicipalPendingBanner: false,
+  municipalModeEnabled: true,
+  trafficPanelEnabled: true,
+  taxiStopsEnabled: true,
+  taxiRemisEnabled: true,
+  showMunicipalPendingBanner: true,
   
   // Wallet del pasajero: desactivar recarga
-  passengerWalletTopupEnabled: false,
+  passengerWalletTopupEnabled: true,
 
   // Matching y Tarifas
   simpleDistanceMatchingEnabled: true,

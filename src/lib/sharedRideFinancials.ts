@@ -95,5 +95,40 @@ export function getSharedPassengerFinancialSnapshot(request: SharedRideRequest):
         };
     }
 
+    // Recibo financiero temprano (antes del settlement)
+    if (request.status === 'dropped_off') {
+        return {
+            farePaid: request.finalFareCash || request.sharedFareEstimate || 0,
+            individualFareReference: request.individualFareReference || 0,
+            sharedFareRaw: (request as any).sharedFareRaw,
+            sharedPaymentPercent: (request as any).sharedPaymentPercent,
+            sharedPassengerCount: (request as any).sharedPassengerCount,
+            savingsAmount: (request as any).passengerSavingAmount || 0,
+            savingsPercent: (request as any).passengerSavingPercent || 0,
+            paymentMethod: request.paymentMethod || 'cash',
+            completedAt: (request as any).droppedOffAt || request.updatedAt,
+            settledAt: null,
+            isShared: true,
+            status: request.status,
+            isFinancialReceipt: true
+        };
+    }
+
+    if (request.status === 'no_show' || request.status === 'cancelled' || request.status === 'undeclared_companion') {
+        return {
+            farePaid: 0,
+            individualFareReference: request.individualFareReference || 0,
+            savingsAmount: 0,
+            savingsPercent: 0,
+            paymentMethod: 'cash',
+            completedAt: null,
+            settledAt: null,
+            isShared: true,
+            status: request.status,
+            isFinancialReceipt: false,
+            reason: request.status === 'no_show' ? 'Pasajero no se presentó' : (request.status === 'undeclared_companion' ? 'Acompañante no declarado' : 'Cancelado')
+        };
+    }
+
     return null;
 }

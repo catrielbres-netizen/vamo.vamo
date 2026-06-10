@@ -287,12 +287,40 @@ function SharedRideOfferDetails({ offer }: { offer: EnrichedRideOffer }) {
             {(offer as any).sharedPassengers && (offer as any).sharedPassengers.length > 0 && (
                 <div className="p-4 rounded-2xl bg-zinc-950/40 border border-white/5 space-y-2">
                     <span className="text-[9px] font-black text-white/40 uppercase tracking-wider block">Desglose de pasajeros</span>
-                    {(offer as any).sharedPassengers.map((pax: any, index: number) => (
-                        <div key={index} className="flex justify-between items-center text-xs py-1 border-b border-white/5 last:border-b-0">
-                            <span className="font-bold text-white/80">{pax.passengerName || `Pasajero ${index + 1}`}</span>
-                            <span className="font-black text-indigo-300">{formatCurrency(offer.sharedFarePerPassenger || 0)}</span>
-                        </div>
-                    ))}
+                    {(offer as any).sharedPassengers.map((pax: any, index: number) => {
+                        const paxFare = pax.sharedFare || pax.sharedFareEstimate || offer.sharedFarePerPassenger || 0;
+                        return (
+                            <div key={index} className="flex justify-between items-center text-xs py-1 border-b border-white/5 last:border-b-0">
+                                <span className="font-bold text-white/80">{pax.passengerName || `Pasajero ${index + 1}`}</span>
+                                <span className="font-black text-indigo-300">{formatCurrency(paxFare)}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* HOJA DE RUTA PRELIMINAR */}
+            {offer.orderedStopsPreview && offer.orderedStopsPreview.length > 0 && (
+                <div className="p-4 rounded-[2rem] bg-zinc-900 border border-white/5 space-y-4">
+                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block text-center">Hoja de Ruta (Ordenada)</span>
+                    <div className="relative space-y-3">
+                        {/* Línea vertical de tiempo */}
+                        <div className="absolute left-[15px] top-2 bottom-4 w-0.5 bg-white/5" />
+                        {offer.orderedStopsPreview.map((stop: any, idx: number) => (
+                            <div key={idx} className="relative flex gap-4 z-10">
+                                <div className={cn(
+                                    "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border",
+                                    stop.type === 'pickup' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-indigo-500/10 border-indigo-500/20 text-indigo-500"
+                                )}>
+                                    <VamoIcon name={stop.type === 'pickup' ? "user-plus" : "user-minus"} className="w-4 h-4" />
+                                </div>
+                                <div className="flex flex-col justify-center">
+                                    <span className="text-xs font-black uppercase text-white/80 tracking-tight leading-tight">{stop.type === 'pickup' ? 'Subida' : 'Bajada'} • Pasajero</span>
+                                    <span className="text-[10px] font-medium text-zinc-500 line-clamp-1">{stop.location?.address}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 

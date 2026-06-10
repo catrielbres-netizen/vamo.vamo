@@ -4,7 +4,6 @@ import React from 'react';
 import { useDriverData } from '@/context/DriverRealtimeProvider';
 import { useWeeklyPool } from '@/hooks/useWeeklyPool';
 import { VamoIcon } from '@/components/VamoIcon';
-import { motion } from 'framer-motion';
 import { getArgentinaDateStr } from '@/lib/date';
 import { safeFixed } from '@/lib/formatters';
 
@@ -33,21 +32,16 @@ export function DailyEarningsWidget() {
     };
 
     return (
-        <motion.div 
-            drag 
-            dragConstraints={{ left: -300, right: 0, top: -500, bottom: 0 }}
-            dragMomentum={false}
-            whileDrag={{ scale: 1.05 }}
-            className="fixed bottom-24 right-4 z-40 bg-zinc-950/90 backdrop-blur-xl border border-white/10 shadow-2xl rounded-[2.5rem] p-4 flex items-center gap-4 animate-in slide-in-from-right-4 fade-in duration-500 cursor-move min-w-[240px]"
-        >
-            <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center shrink-0 border border-indigo-500/20">
-                <VamoIcon name="trending-up" className="w-5 h-5 text-indigo-400" />
-            </div>
-            <div className="flex flex-col select-none flex-1">
-                <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Hoy</span>
-                    <span className="text-sm font-black text-white italic tabular-nums">{formatCurrency(stats.earningsDaily || 0)}</span>
+        <div className="relative w-full bg-zinc-950/90 border border-white/10 rounded-[2rem] p-5 flex flex-col gap-4 animate-in fade-in duration-500 shadow-xl">
+            <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-indigo-500/10 flex items-center justify-center shrink-0 border border-indigo-500/20">
+                    <VamoIcon name="trending-up" className="w-6 h-6 text-indigo-400" />
                 </div>
+                <div className="flex flex-col flex-1">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-0.5">Ganancias Hoy</span>
+                    <span className="text-2xl font-black text-white italic tracking-tighter leading-none">{formatCurrency(stats.earningsDaily || 0)}</span>
+                </div>
+            </div>
                 
                 <div className="grid grid-cols-3 gap-2 mt-1 border-t border-white/5 pt-2">
                     <div className="flex flex-col">
@@ -81,7 +75,6 @@ export function DailyEarningsWidget() {
                         )}
                     </div>
                 </div>
-            </div>
-        </motion.div>
+        </div>
     );
 }

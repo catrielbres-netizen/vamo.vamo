@@ -299,7 +299,7 @@ export default function MunicipalDashboardPage() {
     const active      = stats?.active || 0;
     const suspended   = stats?.suspended || 0;
     const expired     = stats?.expired || 0; // Skipped for now
-    const municipalParticipation = stats?.cityData?.stats?.totalMunicipalContribution || 0;
+    const municipalParticipation = stats?.cityData?.stats?.totalMunicipalCommission || stats?.cityData?.stats?.totalMunicipalContribution || 0;
 
     const handleQuickSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setQuickSearch(e.target.value);

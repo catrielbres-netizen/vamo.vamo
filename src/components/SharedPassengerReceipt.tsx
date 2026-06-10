@@ -34,9 +34,11 @@ export function SharedPassengerReceipt({ ride, className }: SharedPassengerRecei
   useEffect(() => {
     if (!firestore || !user || !ride.id) return;
 
+    const targetRideId = (ride as any).masterRideId || ride.id;
+
     const q = query(
       collection(firestore, 'shared_ride_requests'),
-      where('finalRideId', '==', ride.id),
+      where('finalRideId', '==', targetRideId),
       where('passengerId', '==', user.uid)
     );
 

@@ -13,6 +13,7 @@ import { getPricingConfig } from "./handlers";
 import { normalizeCityKey } from "./lib/city";
 import { resolveActiveSharedRideState } from "./lib/sharedCleanup";
 import { findNextDriverAndCreateOffer } from "./rides";
+import { buildSharedPassengerGroupEntry, assertSharedPassengersHaveRequestIds, assertOrderedStopsHaveRequestIds } from "./lib/sharedHelpers";
 
 /**
  * [VamO PRO] Full Shared Ride Cancellation Helper
@@ -65,6 +66,7 @@ export async function performFullSharedRideCancellation(
             status: 'cancelled',
             cancelledAt: FieldValue.serverTimestamp(),
             cancelledBy: 'passenger',
+            cancelReason: reason,
             updatedAt: FieldValue.serverTimestamp()
         });
     }
@@ -90,6 +92,102 @@ export async function performFullSharedRideCancellation(
             updatedAt: FieldValue.serverTimestamp()
         });
     });
+}
+
+/**
+ * Executes a partial cancellation for a shared ride.
+ * Removes a specific passenger, recalculates fares for the rest, and updates the group/ride.
+ */
+export async function performPartialSharedRideCancellation(
+    db: FirebaseFirestore.Firestore,
+    tx: FirebaseFirestore.Transaction,
+    group: SharedRideGroup,
+    groupId: string,
+    rideId: string | null,
+    initiatorId: string,
+    requestIdToCancel: string,
+    reason: string,
+    newStatus: string = 'cancelled',
+    cancelledBy: string = 'passenger'
+) {
+    const rideRef = rideId ? db.doc(`rides/${rideId}`) : null;
+    const groupRef = db.doc(`shared_ride_groups/${groupId}`);
+    
+    // Remove the passenger from the group
+    const newPassengerIds = group.passengerIds.filter(id => id !== initiatorId);
+    const newRequestIds = group.requestIds.filter(id => id !== requestIdToCancel);
+    const newOccupiedSeats = group.occupiedSeats - 1;
+
+    // Fetch the remaining requests to recalculate pricing
+    const remainingRequestsSnaps = await Promise.all(newRequestIds.map(rid => tx.get(db.doc(`shared_ride_requests/${rid}`))));
+    const remainingRequests = remainingRequestsSnaps.map(snap => snap.data() as any).filter(r => !!r);
+
+    let totalSharedFare = 0;
+    const updatedRequestPricings = remainingRequests.map((req) => {
+        const isCreator = req.roleInGroup === 'creator';
+        const reqPricing = calculateSharedPricing({
+            totalOccupiedSeats: newOccupiedSeats,
+            requestSeatCount: req.seatCount || 1,
+            individualFareReference: req.individualFareReference,
+            cityKey: req.cityKey || group.cityKey || 'rawson'
+        });
+        totalSharedFare += reqPricing.sharedFarePerPassenger;
+        return { requestId: req.id, pricing: reqPricing };
+    });
+
+    const creatorPricing = updatedRequestPricings.find(p => p.requestId === newRequestIds[0])?.pricing || updatedRequestPricings[0].pricing;
+
+    // Update group
+    tx.update(groupRef, {
+        passengerIds: newPassengerIds,
+        requestIds: newRequestIds,
+        occupiedSeats: newOccupiedSeats,
+        estimatedIndividualFare: creatorPricing.sharedFarePerPassenger,
+        sharedFarePerPassenger: creatorPricing.sharedFarePerPassenger,
+        estimatedSharedTotal: totalSharedFare,
+        estimatedDriverTotal: totalSharedFare, 
+        updatedAt: FieldValue.serverTimestamp()
+    });
+
+    // Update remaining requests
+    for (const item of updatedRequestPricings) {
+        tx.update(db.doc(`shared_ride_requests/${item.requestId}`), {
+            sharedFareEstimate: item.pricing.sharedFarePerPassenger,
+            passengerSavingAmount: item.pricing.passengerSavingAmount,
+            passengerSavingPercent: item.pricing.passengerSavingPercent,
+            updatedAt: FieldValue.serverTimestamp()
+        });
+    }
+
+    // Cancel the specific request
+    tx.update(db.doc(`shared_ride_requests/${requestIdToCancel}`), {
+        status: newStatus,
+        cancelledAt: FieldValue.serverTimestamp(),
+        cancelledBy: cancelledBy,
+        cancelReason: reason,
+        updatedAt: FieldValue.serverTimestamp()
+    });
+
+    // Clear state for the cancelled passenger
+    await clearPassengerSharedRideState(tx, initiatorId, reason);
+
+    // Update the ride if it exists
+    if (rideRef) {
+        const rideSnap = await tx.get(rideRef);
+        if (rideSnap.exists) {
+            const ride = rideSnap.data() as Ride;
+            // Filter out stops for the cancelled passenger
+            const newOrderedStops = ride.orderedStops?.filter((stop: any) => stop.requestId !== requestIdToCancel) || [];
+            
+            tx.update(rideRef, {
+                passengerId: newPassengerIds[0], // ensure the creator is the main passengerId
+                orderedStops: newOrderedStops,
+                estimatedIndividualFare: creatorPricing.sharedFarePerPassenger, 
+                estimatedDriverTotal: totalSharedFare,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        }
+    }
 }
 
 /**
@@ -120,6 +218,28 @@ async function clearPassengerSharedRideState(
  * VamO Compartido V2B - Grouping & Confirmation Logic
  */
 
+export const retrySharedRideSettlementV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Debe estar autenticado.');
+    }
+    const { rideId } = request.data;
+    if (!rideId) {
+        throw new HttpsError('invalid-argument', 'Falta el rideId.');
+    }
+    try {
+        const db = getDb();
+        await db.doc(`rides/${rideId}`).update({
+            settlementError: FieldValue.delete(),
+            sharedSettlementStatus: 'pending_shared_settlement'
+        });
+        await settleSharedRideFinancialsV1(rideId);
+        return { ok: true };
+    } catch (error: any) {
+        logger.error(`[RETRY_SETTLE_FAILED] Ride ${rideId}:`, error);
+        throw new HttpsError('internal', error.message || 'Error en la liquidación');
+    }
+});
+
 /**
  * Endpoint para que el pasajero inicie una solicitud de viaje compartido.
  */
@@ -128,12 +248,21 @@ export const requestSharedRideV1 = onCall({ cors: true, region: 'us-central1' },
     const passengerId = request.auth.uid;
     const db = getDb();
 
-    const { origin, destination, individualFareReference, cityKey: rawCityKey, sharedRideNoticeAccepted } = request.data;
+    const { origin, destination, individualFareReference, cityKey: rawCityKey, sharedRideNoticeAccepted, selectedSeats = [] } = request.data;
     const cityKey = normalizeCityKey(rawCityKey || '');
 
     if (!origin || !destination || !individualFareReference || !cityKey) {
         throw new HttpsError('invalid-argument', 'Faltan parámetros obligatorios.');
     }
+
+    if (!Array.isArray(selectedSeats) || selectedSeats.length > 2) {
+        throw new HttpsError('invalid-argument', 'Puedes seleccionar un máximo de 2 asientos.');
+    }
+    const validSeats = ['front_passenger', 'rear_left', 'rear_center', 'rear_right'];
+    for (const seat of selectedSeats) {
+        if (!validSeats.includes(seat)) throw new HttpsError('invalid-argument', 'Asiento inválido.');
+    }
+    const requestSeatCount = Math.max(1, selectedSeats.length);
 
     const userRef = db.doc(`users/${passengerId}`);
     const featureRef = db.doc(`features/sharedRide`);
@@ -186,6 +315,8 @@ export const requestSharedRideV1 = onCall({ cors: true, region: 'us-central1' },
                 throw new HttpsError('permission-denied', 'Los conductores no pueden solicitar viajes como pasajeros.');
             }
 
+            // Removido: Los usuarios con beneficio Express pueden pedir compartido (con tarifa plana compartida).
+
             // 3. Validar que no tenga una solicitud activa (Idempotency)
             if (userData.activeSharedRequestId) {
                 const existingReqSnap = await tx.get(db.doc(`shared_ride_requests/${userData.activeSharedRequestId}`));
@@ -210,7 +341,12 @@ export const requestSharedRideV1 = onCall({ cors: true, region: 'us-central1' },
             if (userData.activeRideId) {
                 const blockingState = await resolveActiveSharedRideState(passengerId, db, tx);
                 if (blockingState.isBlocked) {
-                    throw new HttpsError('already-exists', blockingState.reason || 'Ya tienes un viaje activo.');
+                    throw new HttpsError('already-exists', blockingState.reason || 'Ya tienes un viaje activo.', {
+                        activeRideId: userData.activeRideId || null,
+                        activeSharedGroupId: (userData as any).activeSharedGroupId || null,
+                        activeSharedRequestId: userData.activeSharedRequestId || null,
+                        isRecoverable: true
+                    });
                 }
             }
 
@@ -219,24 +355,42 @@ export const requestSharedRideV1 = onCall({ cors: true, region: 'us-central1' },
             
             let finalGroupId = null;
             let finalRoleInGroup = manualCreation ? 'creator' : 'joined';
-            let finalStatus = 'collecting_passengers';
-            let finalGroupStatus = 'collecting_passengers';
+            let finalStatus = 'forming';
+            let finalGroupStatus = 'forming';
             let newOccupiedSeats = 1;
 
             let currentRequestPricing = null;
+
+            type SeatId = 'front_passenger' | 'rear_left' | 'rear_center' | 'rear_right';
+            let initialSeatLabels: SeatId[] = [];
+            if (Array.isArray(selectedSeats) && selectedSeats.length > 0) {
+                initialSeatLabels = selectedSeats as SeatId[];
+            }
 
             if (!manualCreation) {
                 const activeGroupsSnap = await tx.get(
                     db.collection('shared_ride_groups')
                       .where('cityKey', '==', cityKey)
-                      .where('status', '==', 'collecting_passengers')
+                      .where('status', '==', 'forming')
                       .limit(5)
                 );
 
                 for (const groupDoc of activeGroupsSnap.docs) {
                     const groupData = groupDoc.data();
                     if (groupData.passengerIds.includes(passengerId)) continue;
-                    if (groupData.occupiedSeats >= 4) continue;
+                    if (groupData.occupiedSeats + requestSeatCount > 4) continue;
+                    if (groupData.requestIds.length >= 2) continue; // Max 2 requests per group
+                    
+                    // Comprobar colisión de asientos
+                    let seatCollision = false;
+                    const currentSeatMap = groupData.seatMap || {};
+                    for (const seat of selectedSeats) {
+                        if (currentSeatMap[seat]) {
+                            seatCollision = true;
+                            break;
+                        }
+                    }
+                    if (seatCollision) continue;
 
                     const memberRequests: any[] = [];
                     for (const rid of groupData.requestIds) {
@@ -244,7 +398,7 @@ export const requestSharedRideV1 = onCall({ cors: true, region: 'us-central1' },
                         if (rSnap.exists) memberRequests.push(rSnap.data());
                     }
 
-                    const virtualRequest: any = { passengerId, origin, destination };
+                    const virtualRequest: any = { id: requestId, passengerId, origin, destination };
                     const compatibility = evaluateSharedRouteCompatibility([...memberRequests, virtualRequest]);
                     
                     if (compatibility.compatible) {
@@ -253,16 +407,32 @@ export const requestSharedRideV1 = onCall({ cors: true, region: 'us-central1' },
                         
                         const updatedRequestIds = [...groupData.requestIds, requestId];
                         const updatedPassengerIds = [...groupData.passengerIds, passengerId];
-                        newOccupiedSeats = updatedPassengerIds.length;
+                        newOccupiedSeats = groupData.occupiedSeats + requestSeatCount;
+
+                        const newSeatMap = { ...(groupData.seatMap || {}) };
+                        let finalSeats = initialSeatLabels;
+                        if (finalSeats.length === 0) {
+                            const validSeats: SeatId[] = ['rear_right', 'front_passenger', 'rear_left', 'rear_center'];
+                            const available = validSeats.filter(s => !newSeatMap[s]);
+                            if (available.length >= requestSeatCount) {
+                                finalSeats = available.slice(0, requestSeatCount);
+                            } else {
+                                throw new HttpsError('failed-precondition', 'No hay suficientes asientos disponibles en el grupo.');
+                            }
+                        }
+                        for (const seat of finalSeats) {
+                            newSeatMap[seat] = { passengerId, requestId, passengerName: userData.name || 'Pasajero' };
+                        }
 
                         // Recalcular precios para todos
                         let totalSharedFare = 0;
-                        const allRequests = [...memberRequests, { ...virtualRequest, individualFareReference, id: requestId }];
+                        const allRequests = [...memberRequests, { ...virtualRequest, individualFareReference, id: requestId, seatCount: requestSeatCount }];
                         
                         const updatedRequestPricings = allRequests.map((req: any) => {
                             const reqPricing = calculateSharedPricing({
                                 individualFareReference: req.individualFareReference,
-                                confirmedPassengerCount: newOccupiedSeats,
+                                totalOccupiedSeats: newOccupiedSeats,
+                                requestSeatCount: req.seatCount || 1,
                                 cityKey
                             });
                             totalSharedFare += reqPricing.sharedFarePerPassenger;
@@ -276,23 +446,25 @@ export const requestSharedRideV1 = onCall({ cors: true, region: 'us-central1' },
                             ? driverBenefitAmount / groupData.estimatedIndividualFare 
                             : 0;
 
-                        const newPassengerEntry = {
+                        // [FIX] Use builder to guarantee requestId is always present
+                        const newPassengerEntry = buildSharedPassengerGroupEntry({
+                            requestId,           // ← from db.collection().doc().id above
                             passengerId,
                             passengerName: userData.name || 'Pasajero',
                             roleInGroup: 'joined',
-                            joinedAt: Timestamp.now(),
-                            status: 'joined',
-                            pickupAddress: origin.address,
-                            dropoffAddress: destination.address
-                        };
+                            pickupAddress: origin.address || '',
+                            dropoffAddress: destination.address || ''
+                        });
 
-                        finalGroupStatus = newOccupiedSeats >= 2 ? 'ready_for_driver_dispatch' : 'collecting_passengers';
+                        finalGroupStatus = newOccupiedSeats >= 2 ? 'ready_for_driver' : 'forming';
                         
                         tx.update(groupDoc.ref, {
                             requestIds: updatedRequestIds,
                             passengerIds: updatedPassengerIds,
                             passengers: FieldValue.arrayUnion(newPassengerEntry),
                             occupiedSeats: newOccupiedSeats,
+                            requestCount: updatedRequestIds.length,
+                            seatMap: newSeatMap,
                             sharedFarePerPassenger: creatorPricing.sharedFarePerPassenger,
                             estimatedSharedTotal: totalSharedFare,
                             driverBenefitAmount,
@@ -331,30 +503,44 @@ export const requestSharedRideV1 = onCall({ cors: true, region: 'us-central1' },
             if (!finalGroupId) {
                 finalGroupId = db.collection('shared_ride_groups').doc().id;
                 finalRoleInGroup = 'creator';
-                finalGroupStatus = 'collecting_passengers';
+                finalGroupStatus = 'forming';
                 
+                const initialSeatMap: any = {};
+                let finalSeats = initialSeatLabels;
+                if (finalSeats.length === 0) {
+                    finalSeats = ['rear_right'];
+                }
+                for (const seat of finalSeats) {
+                    initialSeatMap[seat] = { passengerId, requestId, passengerName: userData.name || 'Pasajero' };
+                }
+
                 const newGroup = {
                     id: finalGroupId,
                     cityKey,
-                    status: 'collecting_passengers',
+                    status: 'forming',
                     requestIds: [requestId],
                     passengerIds: [passengerId],
-                    passengers: [{
-                        passengerId,
-                        passengerName: userData.name || 'Pasajero',
-                        roleInGroup: 'creator',
-                        joinedAt: Timestamp.now(),
-                        status: 'joined',
-                        pickupAddress: origin.address,
-                        dropoffAddress: destination.address
-                    }],
-                    occupiedSeats: 1,
+                    passengers: [
+                        // [FIX] requestId is now mandatory — use buildSharedPassengerGroupEntry
+                        buildSharedPassengerGroupEntry({
+                            requestId,           // ← from db.collection().doc().id above
+                            passengerId,
+                            passengerName: userData.name || 'Pasajero',
+                            roleInGroup: 'creator',
+                            pickupAddress: origin.address || '',
+                            dropoffAddress: destination.address || ''
+                        })
+                    ],
+                    occupiedSeats: requestSeatCount,
+                    requestCount: 1,
+                    maxRequests: 2,
+                    seatMap: initialSeatMap,
                     maxSeats: 4,
                     paymentMethod: 'cash',
                     estimatedIndividualFare: individualFareReference,
-                    sharedFarePerPassenger: individualFareReference, 
-                    estimatedSharedTotal: individualFareReference,
-                    estimatedDriverTotal: individualFareReference,
+                    sharedFarePerPassenger: individualFareReference * requestSeatCount, 
+                    estimatedSharedTotal: individualFareReference * requestSeatCount,
+                    estimatedDriverTotal: individualFareReference * requestSeatCount,
                     driverBenefitAmount: 0,
                     driverBenefitPercent: 0,
                     passengerSavingAmount: 0,
@@ -379,6 +565,13 @@ export const requestSharedRideV1 = onCall({ cors: true, region: 'us-central1' },
                 finalStatus = 'grouped';
             }
 
+            const projectedPricing = currentRequestPricing || calculateSharedPricing({
+                individualFareReference,
+                totalOccupiedSeats: 2, // Siempre proyectamos el descuento de 2 asientos como mínimo
+                requestSeatCount,
+                cityKey
+            });
+
             const newRequest = {
                 id: requestId,
                 passengerId,
@@ -398,12 +591,14 @@ export const requestSharedRideV1 = onCall({ cors: true, region: 'us-central1' },
                 updatedAt: FieldValue.serverTimestamp(),
                 blockedBenefits: ["social", "retired", "disability", "express", "promo", "coupon"],
                 appliedBenefitType: "shared_fare_only",
-                sharedFareEstimate: currentRequestPricing?.sharedFarePerPassenger || individualFareReference,
-                sharedFareRaw: currentRequestPricing?.rawSharedFare || individualFareReference,
-                sharedPaymentPercent: currentRequestPricing?.sharedPaymentPercent || 1,
+                selectedSeats: initialSeatLabels,
+                seatCount: requestSeatCount,
+                sharedFareEstimate: projectedPricing.sharedFarePerPassenger,
+                sharedFareRaw: projectedPricing.rawSharedFare,
+                sharedPaymentPercent: projectedPricing.sharedPaymentPercent,
                 sharedPassengerCount: newOccupiedSeats,
-                passengerSavingAmount: currentRequestPricing?.passengerSavingAmount || 0,
-                passengerSavingPercent: currentRequestPricing?.passengerSavingPercent || 0,
+                passengerSavingAmount: projectedPricing.passengerSavingAmount,
+                passengerSavingPercent: projectedPricing.passengerSavingPercent,
             };
 
             tx.set(db.doc(`shared_ride_requests/${requestId}`), newRequest);
@@ -510,9 +705,15 @@ export const confirmSharedRidePriceV1 = onCall({ cors: true, region: 'us-central
             });
 
             if (allConfirmed) {
-                logger.info(`[SHARED_GROUP_READY_FOR_DRIVER] Group ${groupId} fully confirmed by ${allRequestsSnap.size} passengers.`);
+                // Grupo lleno cuando todos los usuarios registrados confirmaron (maxRequests = 2)
+                const groupSnapshot = await tx.get(groupRef);
+                const groupSnap = groupSnapshot.data() as SharedRideGroup;
+                const maxReq = groupSnap?.maxRequests ?? 2;
+                const isFull = allRequestsSnap.size >= maxReq;
+                const newGroupStatus = isFull ? 'ready_for_driver' : 'forming';
+                logger.info(`[SHARED_GROUP_CONFIRMED] Group ${groupId} fully confirmed by ${allRequestsSnap.size}/${maxReq} passengers. New status: ${newGroupStatus}`);
                 tx.update(groupRef, { 
-                    status: 'ready_for_driver',
+                    status: newGroupStatus,
                     updatedAt: FieldValue.serverTimestamp()
                 });
             }
@@ -577,9 +778,10 @@ export const onSharedRideRequestUpdateV1 = onDocumentUpdated("shared_ride_reques
                         let pricing = null;
 
                         if (remainingRequestIds.length >= 1) {
-                             pricing = calculateSharedPricing({
+                            pricing = calculateSharedPricing({
                                 individualFareReference: gData.estimatedIndividualFare,
-                                confirmedPassengerCount: remainingRequestIds.length,
+                                totalOccupiedSeats: remainingRequestIds.length,
+                                requestSeatCount: 1,
                                 cityKey: after.cityKey
                             });
                         }
@@ -627,70 +829,104 @@ export const onSharedRideRequestUpdateV1 = onDocumentUpdated("shared_ride_reques
 });
 
 /**
+ * Maneja la cancelación desde un pasajero
+ */
+async function handlePassengerCancellation(db: FirebaseFirestore.Firestore, tx: FirebaseFirestore.Transaction, passengerId: string, requestId: string | null, groupId: string | null, providedRideId: string | null) {
+    let finalGroupId = groupId;
+    let finalRequestId = requestId;
+
+    if (!finalGroupId && finalRequestId) {
+        const reqSnap = await tx.get(db.doc(`shared_ride_requests/${finalRequestId}`));
+        if (!reqSnap.exists) throw new HttpsError('not-found', 'Solicitud no encontrada.');
+        const data = reqSnap.data() as any;
+        if (data.passengerId !== passengerId) throw new HttpsError('permission-denied', 'No puedes cancelar una solicitud ajena.');
+        
+        const terminalStates = ['cancelled', 'completed', 'expired', 'no_show', 'undeclared_companion', 'rejected', 'dropped_off'];
+        if (terminalStates.includes(data.status)) {
+            await clearPassengerSharedRideState(tx, passengerId, 'cancel_already_terminal');
+            return { success: true, alreadyTerminal: true };
+        }
+        finalGroupId = data.groupId;
+    } else if (finalGroupId && !finalRequestId) {
+        const groupSnap = await tx.get(db.doc(`shared_ride_groups/${finalGroupId}`));
+        if (groupSnap.exists) {
+            const groupData = groupSnap.data() as SharedRideGroup;
+            const idx = groupData.passengerIds.indexOf(passengerId);
+            if (idx >= 0) {
+                finalRequestId = groupData.requestIds[idx];
+            } else {
+                throw new HttpsError('permission-denied', 'No eres parte del grupo.');
+            }
+        }
+    }
+
+    if (!finalGroupId || !finalRequestId) {
+        // Fallback for isolated requests
+        if (finalRequestId) {
+            tx.update(db.doc(`shared_ride_requests/${finalRequestId}`), { 
+                status: 'cancelled', cancelledAt: FieldValue.serverTimestamp(), cancelledBy: 'passenger'
+            });
+            await clearPassengerSharedRideState(tx, passengerId, 'manual_cancel');
+        }
+        return { success: true };
+    }
+
+    const groupRef = db.doc(`shared_ride_groups/${finalGroupId}`);
+    const groupSnap = await tx.get(groupRef);
+    if (!groupSnap.exists) return { success: true };
+    const group = groupSnap.data() as SharedRideGroup;
+
+    const rideId = providedRideId || `shared_${finalGroupId}`;
+    const rideRef = db.doc(`rides/${rideId}`);
+    const rideSnap = await tx.get(rideRef);
+    const ride = rideSnap.exists ? rideSnap.data() as Ride : null;
+
+    if (ride && ['in_progress', 'paused', 'driver_assigned', 'driver_arrived'].includes(ride.status)) {
+        throw new HttpsError('failed-precondition', 'El viaje ya inició o el conductor está asignado. No se puede cancelar desde aquí.');
+    }
+
+    const paxCount = group.occupiedSeats;
+
+    if (paxCount > 2) {
+        // 3 o 4 pasajeros -> baja a 2 o 3. Queda vivo siempre.
+        logger.info(`[SHARED_CANCEL_PARTIAL] Passenger ${passengerId} cancelled. Remaining: ${paxCount - 1}`);
+        await performPartialSharedRideCancellation(db, tx, group, finalGroupId, ride ? rideId : null, passengerId, finalRequestId, 'cancelled_by_passenger');
+    } else if (paxCount === 2) {
+        // Eran 2, queda 1.
+        if (ride) {
+            // Ya estaba buscando o asignado. Se desarma todo.
+            logger.info(`[SHARED_CANCEL_FULL_FROM_2] Group ${finalGroupId} drops to 1 pax while searching/assigned. Full cancellation.`);
+            await performFullSharedRideCancellation(db, tx, rideId, finalGroupId, passengerId, 'group_dismantled_1_pax_left');
+        } else {
+            // Estaba formando. Vuelve a 1 pasajero y forming.
+            logger.info(`[SHARED_CANCEL_PARTIAL_FORMING] Group ${finalGroupId} drops to 1 pax in forming. Removing hasMinimumPassengers.`);
+            await performPartialSharedRideCancellation(db, tx, group, finalGroupId, null, passengerId, finalRequestId, 'cancelled_by_passenger');
+            // Remove hasMinimumPassengers flag
+            tx.update(groupRef, { hasMinimumPassengers: false, status: 'forming' });
+        }
+    } else {
+        // paxCount === 1, el único pasajero cancela.
+        logger.info(`[SHARED_CANCEL_FULL_LAST] Last passenger ${passengerId} cancelled. Full cancellation.`);
+        await performFullSharedRideCancellation(db, tx, rideId, finalGroupId, passengerId, 'shared_search_cancelled_by_passenger');
+    }
+
+    return { success: true };
+}
+
+/**
  * Endpoint para que el pasajero cancele su solicitud de viaje compartido.
  */
 export const cancelSharedRideRequestV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const passengerId = request.auth.uid;
     const { requestId } = request.data;
-
     if (!requestId) throw new HttpsError('invalid-argument', 'Falta requestId.');
 
     const db = getDb();
-    const requestRef = db.doc(`shared_ride_requests/${requestId}`);
-
     try {
         await db.runTransaction(async (tx) => {
-            const snap = await tx.get(requestRef);
-            if (!snap.exists) throw new HttpsError('not-found', 'Solicitud no encontrada.');
-            const data = snap.data() as any;
-
-            if (data.passengerId !== passengerId) {
-                throw new HttpsError('permission-denied', 'No puedes cancelar una solicitud ajena.');
-            }
-
-            const terminalStates = ['cancelled', 'completed', 'expired', 'no_show', 'undeclared_companion', 'rejected'];
-            if (terminalStates.includes(data.status)) {
-                logger.info(`[SHARED_RIDE_CANCEL] Request ${requestId} already terminal (${data.status}). Cleaning up pointer for ${passengerId}.`);
-                await clearPassengerSharedRideState(tx, passengerId, 'cancel_already_terminal');
-                return { success: true, alreadyTerminal: true };
-            }
-
-            if (['confirmed', 'assigned'].includes(data.status)) {
-                if (data.groupId) {
-                    const rideId = data.finalRideId || `shared_${data.groupId}`;
-                    const rideRef = db.doc(`rides/${rideId}`);
-                    const rideSnap = await tx.get(rideRef);
-                    
-                    let canCancelSearch = true;
-                    if (rideSnap.exists) {
-                        const ride = rideSnap.data() as Ride;
-                        if (['accepted', 'driver_assigned', 'driver_arrived', 'started', 'ongoing'].includes(ride.status)) {
-                            canCancelSearch = false;
-                        }
-                    }
-
-                    if (canCancelSearch) {
-                        logger.info(`[SHARED_RIDE_CANCEL_SEARCH] Passenger ${passengerId} triggered full cancellation for group ${data.groupId}`);
-                        await performFullSharedRideCancellation(db, tx, rideId, data.groupId, passengerId, 'shared_search_cancelled_by_passenger');
-                        return { success: true };
-                    }
-                }
-            }
-
-            tx.update(requestRef, { 
-                status: 'cancelled',
-                cancelledAt: FieldValue.serverTimestamp(),
-                cancelledBy: 'passenger',
-                updatedAt: FieldValue.serverTimestamp()
-            });
-
-            // Limpieza inmediata del puntero en el usuario
-            await clearPassengerSharedRideState(tx, passengerId, 'manual_cancel');
-
-            return { success: true };
+            await handlePassengerCancellation(db, tx, passengerId, requestId, null, null);
         });
-
         return { success: true };
     } catch (error: any) {
         logger.error(`Error in cancelSharedRideRequestV1:`, error);
@@ -705,41 +941,14 @@ export const cancelSharedRideRequestV1 = onCall({ cors: true, region: 'us-centra
 export const cancelSharedRideSearchV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const passengerId = request.auth.uid;
-    const { groupId, rideId: providedRideId } = request.data;
-
+    const { groupId, rideId } = request.data;
     if (!groupId) throw new HttpsError('invalid-argument', 'Falta groupId.');
-    const rideId = providedRideId || `shared_${groupId}`;
 
     const db = getDb();
-    const groupRef = db.doc(`shared_ride_groups/${groupId}`);
-    const rideRef = db.doc(`rides/${rideId}`);
-
     try {
         await db.runTransaction(async (tx) => {
-            const [groupSnap, rideSnap] = await Promise.all([
-                tx.get(groupRef),
-                tx.get(rideRef)
-            ]);
-
-            if (!groupSnap.exists) throw new HttpsError('not-found', 'Grupo no encontrado.');
-            const group = groupSnap.data() as SharedRideGroup;
-
-            if (!group.passengerIds.includes(passengerId)) {
-                throw new HttpsError('permission-denied', 'No eres parte de este grupo.');
-            }
-
-            if (rideSnap.exists) {
-                const ride = rideSnap.data() as Ride;
-                // Si ya tiene conductor y el viaje empezó o fue aceptado, delegar al flujo normal
-                if (['accepted', 'driver_assigned', 'driver_arrived', 'started', 'ongoing'].includes(ride.status)) {
-                    throw new HttpsError('failed-precondition', 'El viaje ya fue aceptado por un conductor. Usa la cancelación normal.');
-                }
-            }
-
-            // Proceder con cancelación total
-            await performFullSharedRideCancellation(db, tx, rideId, groupId, passengerId, 'shared_search_cancelled_by_passenger');
+            await handlePassengerCancellation(db, tx, passengerId, null, groupId, rideId);
         });
-
         return { success: true };
     } catch (error: any) {
         logger.error(`[SHARED_CANCEL_CALLABLE_ERROR]`, error);
@@ -846,24 +1055,37 @@ export const updateSharedPassengerStatusV1 = onCall({ cors: true, region: 'us-ce
                     status: newStatus, 
                     updatedAt: FieldValue.serverTimestamp() 
                 });
+                
+                // Si el pasajero pasó a un estado terminal, liberarlo
+                const terminalStatesForPax = ['no_show', 'undeclared_companion', 'cancelled'];
+                if (terminalStatesForPax.includes(newStatus)) {
+                    tx.update(db.doc(`users/${reqData.passengerId}`), {
+                        activeRideId: FieldValue.delete(),
+                        activeSharedRequestId: FieldValue.delete(),
+                        activeSharedRideGroupId: FieldValue.delete(),
+                        sharedRideStatus: newStatus,
+                        updatedAt: FieldValue.serverTimestamp()
+                    });
+                }
             }
 
+            const now = admin.firestore.Timestamp.now();
             const updatedStops = (rideData.orderedStops || []).map((stop: any) => {
                 if (stop.requestId === requestId) {
                     if (action === 'arrive_at_stop' && stop.type === 'pickup' && (stop.status === 'pending' || !stop.status)) {
-                        return { ...stop, status: 'arrived' };
+                        return { ...stop, status: 'arrived', updatedAt: now, arrivedAt: now };
                     }
                     if (action === 'mark_picked_up' && stop.type === 'pickup') {
-                        return { ...stop, status: 'completed' };
+                        return { ...stop, status: 'completed', updatedAt: now, completedAt: now };
                     }
                     if ((action === 'mark_no_show' || action === 'mark_undeclared_companion') && stop.type === 'pickup') {
-                        return { ...stop, status: 'skipped' };
+                        return { ...stop, status: 'skipped', updatedAt: now, completedAt: now };
                     }
                     if ((action === 'mark_no_show' || action === 'mark_undeclared_companion') && stop.type === 'dropoff') {
-                        return { ...stop, status: 'skipped' };
+                        return { ...stop, status: 'skipped', updatedAt: now, completedAt: now };
                     }
                     if (action === 'mark_dropped_off' && stop.type === 'dropoff') {
-                        return { ...stop, status: 'completed' };
+                        return { ...stop, status: 'completed', updatedAt: now, completedAt: now };
                     }
                 }
                 return stop;
@@ -1021,14 +1243,33 @@ export const updateSharedPassengerStatusV1 = onCall({ cors: true, region: 'us-ce
  * Avanza el estado de una parada específica en un viaje compartido.
  * Maneja llegadas, subidas (pickup) y bajadas (dropoff).
  */
+function haversineDistance(coords1: { lat: number; lng: number; }, coords2: { lat: number; lng: number; }): number {
+    const toRad = (x: number) => x * Math.PI / 180;
+    const R = 6371e3; 
+    const dLat = toRad(coords2.lat - coords1.lat);
+    const dLon = toRad(coords2.lng - coords1.lng);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(coords1.lat)) * Math.cos(toRad(coords2.lat)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
 export const advanceSharedRideStopV1 = onCall({ cors: true, region: 'us-central1' }, async (request: CallableRequest<any>) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     
-    const { rideId, stopOrder, action } = request.data;
+    const { rideId, stopOrder, requestId, stopType, action } = request.data;
     const driverId = request.auth.uid;
 
-    if (!rideId || typeof stopOrder !== 'number' || !action) {
-        throw new HttpsError('invalid-argument', 'rideId, stopOrder y action son obligatorios.');
+    if (!rideId || !action) {
+        throw new HttpsError('invalid-argument', 'rideId y action son obligatorios.');
+    }
+    
+    // Validar identificadores
+    if (!requestId || !stopType) {
+        if (typeof stopOrder !== 'number') {
+            throw new HttpsError('invalid-argument', 'Debes proveer requestId y stopType, o stopOrder como fallback.');
+        }
     }
 
     const db = getDb();
@@ -1048,11 +1289,39 @@ export const advanceSharedRideStopV1 = onCall({ cors: true, region: 'us-central1
                 throw new Error('Este no es un viaje compartido válido.');
             }
 
-            const stopIndex = rideData.orderedStops.findIndex((s: any) => s.order === stopOrder);
-            if (stopIndex === -1) throw new Error('Parada no encontrada en la hoja de ruta.');
+            // [GUARD – Opción A] Validate ALL stops have requestId before proceeding.
+            // If any stop lacks requestId the ride was created with corrupt data and must
+            // NOT advance. Fail loudly so the group is flagged for manual cleanup.
+            assertOrderedStopsHaveRequestIds(
+                rideData.orderedStops as any[],
+                rideId,
+                'advanceSharedRideStopV1'
+            );
+
+            let stopIndex = -1;
+            if (requestId && stopType) {
+                stopIndex = rideData.orderedStops.findIndex((s: any) => s.requestId === requestId && s.type === stopType);
+            } else if (typeof stopOrder === 'number') {
+                stopIndex = rideData.orderedStops.findIndex((s: any, idx: number) => s.order === stopOrder || idx === stopOrder);
+            }
+
+            if (stopIndex === -1) throw new HttpsError('not-found', 'Parada no encontrada en la hoja de ruta.');
             
             const stop = rideData.orderedStops[stopIndex];
-            const requestId = stop.requestId;
+            const stopRequestId = stop.requestId;
+            const resolvedStopOrder = typeof stopOrder === 'number' ? stopOrder : ((stop as any).order ?? (stopIndex + 1));
+
+            // [GUARD] requestId is mandatory on every stop. If missing, it means the ride
+            // was created with corrupt sharedPassengers data. Fail loudly instead of silently.
+            if (!stopRequestId) {
+                logger.error(`[ADVANCE_STOP_CORRUPT_DATA] Stop at index ${stopIndex} in ride ${rideId} has no requestId. Stop data:`, JSON.stringify(stop));
+                throw new HttpsError('failed-precondition', `CORRUPT_STOP_DATA: La parada ${stopIndex} no tiene requestId. Contacta soporte. (rideId=${rideId})`);
+            }
+
+            // [GUARD] passengerId on stop must also be present
+            if (!stop.passengerId) {
+                logger.warn(`[ADVANCE_STOP_MISSING_PASSENGER_ID] Stop at index ${stopIndex} in ride ${rideId} has no passengerId. requestId=${stopRequestId}`);
+            }
 
             // Validar que no se salten paradas anteriores
             const previousStopsIncomplete = rideData.orderedStops.slice(0, stopIndex).some((s: any) => s.status !== 'completed' && s.status !== 'skipped');
@@ -1060,18 +1329,45 @@ export const advanceSharedRideStopV1 = onCall({ cors: true, region: 'us-central1
                 throw new Error('Debes completar las paradas anteriores primero.');
             }
 
+            // ==========================================
+            // FASE A: LECTURAS (STRICT)
+            // ==========================================
+            // (rideSnap is already read above)
+            const reqRef = db.doc(`shared_ride_requests/${stopRequestId}`);
+            const reqSnap = await tx.get(reqRef);
+            let reqData: any = null;
+            if (reqSnap.exists) {
+                reqData = reqSnap.data() as SharedRideRequest;
+            }
+
+            // [SAFETY] Read ALL group requests to cross-validate before any completion.
+            // This prevents completing the ride if a request says a passenger is still aboard
+            // even if orderedStops disagrees (data inconsistency defense).
+            const allGroupRequestsSnap = await tx.get(
+                db.collection('shared_ride_requests').where('groupId', '==', rideData.sharedGroupId)
+            );
+            const allGroupRequests = allGroupRequestsSnap.docs.map(d => ({ ...(d.data() as SharedRideRequest), id: d.id }));
+
+            // ==========================================
+            // FASE B: CÁLCULO PURO
+            // ==========================================
             let newStopStatus = stop.status || 'pending';
             let newPassengerStatus = '';
             let rideStatusUpdate = rideData.status;
 
             switch (action) {
                 case 'arrive':
-                    if (newStopStatus === 'completed' || newStopStatus === 'skipped') throw new Error('Esta parada ya fue procesada.');
+                    if (newStopStatus === 'completed' || newStopStatus === 'skipped' || newStopStatus === 'arrived') {
+                        return { success: true, message: 'La parada ya se encontraba en estado arrived/completed.' };
+                    }
                     newStopStatus = 'arrived';
                     break;
                 
                 case 'confirm_pickup':
-                    if (stop.type !== 'pickup') throw new Error('Esta acción solo es válida para paradas de subida.');
+                    if (stop.type !== 'pickup') throw new HttpsError('invalid-argument', 'Esta acción solo es válida para paradas de subida.');
+                    if (newStopStatus === 'completed' || newStopStatus === 'skipped') {
+                        return { success: true, message: 'La parada ya se encontraba completada.' };
+                    }
                     newStopStatus = 'completed';
                     newPassengerStatus = 'picked_up';
                     if (rideData.status === 'driver_assigned' || rideData.status === 'driver_arrived') {
@@ -1080,115 +1376,251 @@ export const advanceSharedRideStopV1 = onCall({ cors: true, region: 'us-central1
                     break;
                 
                 case 'confirm_dropoff':
-                    if (stop.type !== 'dropoff') throw new Error('Esta acción solo es válida para paradas de bajada.');
+                    if (stop.type !== 'dropoff') throw new HttpsError('invalid-argument', 'Esta acción solo es válida para paradas de bajada.');
+                    if (newStopStatus === 'completed' || newStopStatus === 'skipped') {
+                        return { success: true, message: 'La parada ya se encontraba completada.' };
+                    }
                     newStopStatus = 'completed';
                     newPassengerStatus = 'dropped_off';
                     break;
                 
                 case 'no_show':
-                    if (stop.type !== 'pickup') throw new Error('Esta acción solo es válida para paradas de subida.');
+                    if (stop.type !== 'pickup') throw new HttpsError('invalid-argument', 'Esta acción solo es válida para paradas de subida.');
+                    if (newStopStatus === 'completed' || newStopStatus === 'skipped') {
+                        return { success: true, message: 'La parada ya se encontraba procesada.' };
+                    }
                     newStopStatus = 'skipped';
                     newPassengerStatus = 'no_show';
                     // We'll also mark the corresponding dropoff as skipped
                     break;
                 
                 default:
-                    throw new Error('Acción no válida (arrive, confirm_pickup, confirm_dropoff, no_show).');
+                    throw new HttpsError('invalid-argument', 'Acción no válida (arrive, confirm_pickup, confirm_dropoff, no_show).');
             }
 
             // Actualizar orderedStops
-            const updatedOrderedStops = [...rideData.orderedStops];
+            let updatedOrderedStops = [...rideData.orderedStops];
+            const now = admin.firestore.Timestamp.now();
             updatedOrderedStops[stopIndex] = {
                 ...stop,
                 status: newStopStatus,
-                updatedAt: FieldValue.serverTimestamp() as any,
-                arrivedAt: action === 'arrive' ? FieldValue.serverTimestamp() : (stop.arrivedAt || null),
-                completedAt: (action === 'confirm_pickup' || action === 'confirm_dropoff' || action === 'no_show') ? FieldValue.serverTimestamp() : (stop.completedAt || null)
+                updatedAt: now,
+                arrivedAt: action === 'arrive' ? now : (stop.arrivedAt || null),
+                completedAt: (action === 'confirm_pickup' || action === 'confirm_dropoff' || action === 'no_show') ? now : (stop.completedAt || null)
             };
 
             // [NO_SHOW LOGIC] If no-show, skip the corresponding dropoff
             if (action === 'no_show') {
-                const dropoffIndex = updatedOrderedStops.findIndex((s: any) => s.type === 'dropoff' && s.requestId === requestId);
+                const dropoffIndex = updatedOrderedStops.findIndex((s: any) => s.type === 'dropoff' && s.requestId === stopRequestId);
                 if (dropoffIndex !== -1) {
                     updatedOrderedStops[dropoffIndex] = {
                         ...updatedOrderedStops[dropoffIndex],
                         status: 'skipped',
-                        updatedAt: FieldValue.serverTimestamp() as any,
-                        completedAt: FieldValue.serverTimestamp() as any
+                        updatedAt: now,
+                        completedAt: now
                     };
+                }
+            }
+
+            // [ROUTE_OPTIMIZATION] Greedy dropoff reordering if all pickups are complete
+            if (action === 'confirm_pickup' && newPassengerStatus === 'picked_up') {
+                const allPickupsDone = updatedOrderedStops.filter((s: any) => s.type === 'pickup').every((s: any) => s.status === 'completed' || s.status === 'skipped');
+                if (allPickupsDone) {
+                    let currentLoc = stop.location || rideData.origin; 
+                    const pendingDropoffs = updatedOrderedStops.filter((s: any) => s.type === 'dropoff' && (s.status === 'pending' || !s.status));
+                    const otherStops = updatedOrderedStops.filter((s: any) => !(s.type === 'dropoff' && (s.status === 'pending' || !s.status)));
+                    
+                    const optimizedDropoffs = [];
+                    
+                    while (pendingDropoffs.length > 0) {
+                        let nearestIdx = 0;
+                        let minDst = Infinity;
+                        for (let i = 0; i < pendingDropoffs.length; i++) {
+                            const dst = haversineDistance(currentLoc, pendingDropoffs[i].location);
+                            if (dst < minDst) {
+                                minDst = dst;
+                                nearestIdx = i;
+                            }
+                        }
+                        const nearest = pendingDropoffs.splice(nearestIdx, 1)[0];
+                        optimizedDropoffs.push(nearest);
+                        currentLoc = nearest.location;
+                    }
+                    
+                    // Reassemble preserving stable reference array length
+                    const newStops = [...otherStops, ...optimizedDropoffs];
+                    updatedOrderedStops = newStops.map((s, i) => ({ ...s, order: i }));
                 }
             }
 
             // Actualizar sharedPassengers array
             const updatedSharedPassengers = (rideData.sharedPassengers || []).map((p: any) => {
-                if (newPassengerStatus && (p.requestId === requestId || p.passengerId === stop.passengerId)) {
+                if (newPassengerStatus && (p.requestId === stopRequestId || p.passengerId === stop.passengerId)) {
                     return { ...p, status: newPassengerStatus };
                 }
                 return p;
             });
 
             // Actualizar routePlan (para compatibilidad)
-            const updatedRoutePlan = (rideData.routePlan || []).map((s: any) => {
-                if (s.order === stopOrder) {
-                    return { ...s, status: newStopStatus };
-                }
-                return s;
-            });
+            const updatedRoutePlan = updatedOrderedStops.map((s: any) => ({ ...s }));
 
+            // Preparar objetos de escritura
             const rideUpdates: any = {
                 orderedStops: updatedOrderedStops,
                 sharedPassengers: updatedSharedPassengers,
                 routePlan: updatedRoutePlan,
                 status: rideStatusUpdate,
+                currentStopIndex: stopIndex,
+                currentStopStatus: newStopStatus,
+                currentStopPassengerId: stop.passengerId,
+                currentStopType: stop.type,
+                routeUpdatedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp()
             };
 
-            // Verificar si el viaje completo ha terminado
             const allStopsCompleted = updatedOrderedStops.every((s: any) => s.status === 'completed' || s.status === 'skipped');
-            if (allStopsCompleted) {
+
+            // [SAFETY CROSS-CHECK] Verify that request statuses also confirm all passengers are done.
+            // A passenger in 'picked_up' state means they are physically still aboard the vehicle.
+            // We must NOT complete the ride if anyone is still picked_up, regardless of what orderedStops says.
+            const terminalStatesForStop = ['dropped_off', 'no_show', 'undeclared_companion', 'cancelled', 'expired'];
+            const updatedGroupRequestsForCheck = allGroupRequests.map((r: any) => {
+                if (r.id === stopRequestId && newPassengerStatus) {
+                    return { ...r, status: newPassengerStatus };
+                }
+                return r;
+            });
+            const allRequestsTerminal = allGroupRequests.length > 0
+                ? updatedGroupRequestsForCheck.every((r: any) => terminalStatesForStop.includes(r.status))
+                : true;
+            const safeAllStopsCompleted = allStopsCompleted && allRequestsTerminal;
+
+            if (allStopsCompleted && !allRequestsTerminal) {
+                logger.error(`[SAFETY_GUARD] allStopsCompleted=true BUT requests not terminal for ride ${rideId}. Passenger still aboard? Skipping premature completion.`, {
+                    requestStatuses: updatedGroupRequestsForCheck.map((r: any) => ({ id: r.id, status: r.status, passengerName: r.passengerName }))
+                });
+            }
+
+            if (safeAllStopsCompleted) {
                 rideUpdates.status = 'completed';
                 rideUpdates.completedAt = FieldValue.serverTimestamp();
             }
 
-            tx.update(rideRef, rideUpdates);
+            let childRideId: string | null = null;
+            let childRidePayload: any = null;
+            let reqUpdates: any = null;
+            let userUpdates: any = null;
 
-            // Actualizar solicitud individual
             if (newPassengerStatus) {
-                const reqRef = db.doc(`shared_ride_requests/${requestId}`);
-                tx.update(reqRef, {
-                    status: newPassengerStatus,
-                    updatedAt: FieldValue.serverTimestamp()
-                });
+                if (newPassengerStatus === 'dropped_off' && reqData) {
+                    childRideId = `shared_child_${rideId}_${stop.passengerId}`;
+                    reqUpdates = {
+                        status: newPassengerStatus,
+                        droppedOffAt: now,
+                        completedAt: now,
+                        updatedAt: FieldValue.serverTimestamp()
+                    };
+                    
+                    childRidePayload = {
+                        id: childRideId,
+                        isSharedChildRide: true,
+                        isSharedRide: true,
+                        masterRideId: rideId,
+                        sharedGroupId: rideData.sharedGroupId,
+                        sharedRequestId: requestId,
+                        passengerId: stop.passengerId,
+                        driverId: driverId,
+                        origin: reqData.origin,
+                        destination: reqData.destination,
+                        status: 'completed',
+                        completedAt: now,
+                        pickedUpAt: reqData.pickedUpAt || now,
+                        droppedOffAt: now,
+                        countsForHistory: true,
+                        countsForWeeklyPot: true,
+                        financialSettlementSource: "shared_master",
+                        preventDuplicateFinancialLedger: true,
+                        pricing: {
+                            estimatedTotal: reqData.finalFareCash || reqData.sharedFareEstimate || 0,
+                            originalTotal: reqData.individualFareReference || 0,
+                            breakdown: {
+                                baseFare: reqData.finalFareCash || reqData.sharedFareEstimate || 0,
+                                distanceFare: 0,
+                            }
+                        },
+                        individualQuotedFare: reqData.individualFareReference || 0,
+                        sharedFare: reqData.finalFareCash || reqData.sharedFareEstimate || 0,
+                        savingsAmount: reqData.passengerSavingAmount || 0,
+                        groupGrossAmount: rideData.pricing?.estimatedTotal || 0,
+                        paymentMethod: reqData.paymentMethod || 'cash',
+                        cityKey: rideData.cityKey || 'rawson',
+                        createdAt: reqData.createdAt,
+                        updatedAt: FieldValue.serverTimestamp()
+                    };
+                } else {
+                    reqUpdates = {
+                        status: newPassengerStatus,
+                        updatedAt: FieldValue.serverTimestamp()
+                    };
+                    if (action === 'confirm_pickup') {
+                        reqUpdates.pickedUpAt = now;
+                    }
+                }
 
-                // Si terminó (bajó o no se presentó), limpiar punteros del usuario
                 if (newPassengerStatus === 'dropped_off' || newPassengerStatus === 'no_show') {
-                    const userRef = db.doc(`users/${stop.passengerId}`);
-                    tx.update(userRef, {
-                        activeRideId: FieldValue.delete(),
+                    userUpdates = {
+                        activeRideId: newPassengerStatus === 'dropped_off' && childRideId ? childRideId : FieldValue.delete(),
                         activeSharedRequestId: FieldValue.delete(),
                         activeSharedRideGroupId: FieldValue.delete(),
                         sharedRideStatus: newPassengerStatus === 'dropped_off' ? 'completed' : 'no_show',
                         updatedAt: FieldValue.serverTimestamp()
-                    });
+                    };
                 }
             }
 
-            // Auditoría
-            const eventRef = db.collection(`rides/${rideId}/shared_events`).doc();
-            tx.set(eventRef, {
-                id: eventRef.id,
+            const eventPayload: any = {
+                id: db.collection(`rides/${rideId}/shared_events`).doc().id, // Se asigna ID
                 type: `shared_stop_${action}`,
                 rideId,
-                stopOrder,
+                stopOrder: resolvedStopOrder,
                 stopType: stop.type,
                 passengerId: stop.passengerId,
                 newStopStatus,
-                newPassengerStatus,
                 createdAt: FieldValue.serverTimestamp(),
                 source: "driver_app"
-            });
+            };
+            if (newPassengerStatus) {
+                eventPayload.newPassengerStatus = newPassengerStatus;
+            }
 
-            return { success: true, allStopsCompleted };
+            // ==========================================
+            // FASE C: ESCRITURAS (STRICT)
+            // ==========================================
+            tx.update(rideRef, rideUpdates);
+
+            if (newPassengerStatus && reqUpdates) {
+                tx.update(reqRef, reqUpdates);
+            }
+
+            if (childRideId && childRidePayload) {
+                const childRideRef = db.collection('rides').doc(childRideId);
+                tx.set(childRideRef, childRidePayload);
+            }
+
+            if (userUpdates) {
+                const targetPassengerId = reqData?.passengerId || stop.passengerId;
+                if (targetPassengerId) {
+                    const userRef = db.doc(`users/${targetPassengerId}`);
+                    tx.update(userRef, userUpdates);
+                } else {
+                    logger.warn(`[ADVANCE_STOP_WARNING] Cannot apply userUpdates, passengerId is missing for stop ${stopRequestId}`);
+                }
+            }
+
+            const eventRef = db.collection(`rides/${rideId}/shared_events`).doc(eventPayload.id);
+            tx.set(eventRef, eventPayload);
+
+            return { success: true, allStopsCompleted: safeAllStopsCompleted };
         });
 
         // Si terminó el viaje completo, disparar settlement y liberar conductor
@@ -1207,7 +1639,7 @@ export const advanceSharedRideStopV1 = onCall({ cors: true, region: 'us-central1
         return result;
 
     } catch (error: any) {
-        logger.error(`[ADVANCE_STOP_ERROR] Ride ${rideId}, Stop ${stopOrder}:`, error);
+        logger.error(`[ADVANCE_STOP_ERROR] Ride ${rideId}, Stop ${stopOrder || requestId || 'unknown'}:`, error);
         if (error instanceof HttpsError) throw error;
         throw new HttpsError('internal', error.message || 'Error al avanzar la parada.');
     }
@@ -1281,14 +1713,15 @@ export async function settleSharedRideFinancialsV1(rideId: string) {
             const totalPassengerSavings = settledRequests.reduce((sum, r) => sum + ((r as any).passengerSavingAmount || 0), 0);
             
             const driverSubtype = rideData.driverSubtypeSnapshot || 'express';
-            const commissionRate = driverSubtype === 'professional' 
-                ? (pricing.commission_taxi_remis || 0.12) 
-                : (pricing.commission_particular || 0.18);
-            const municipalRate = pricing.municipal_percentage || 0;
-
-            const totalCommissionAmount = Math.round(grossSharedCash * commissionRate);
-            const municipalAmount = Math.round(grossSharedCash * municipalRate);
-            const vamoNetAmount = totalCommissionAmount - municipalAmount;
+            
+            const totalCommissionRate = 0.10;
+            const totalCommissionAmount = Math.round(grossSharedCash * totalCommissionRate);
+            const vamoNetAmount = Math.round(grossSharedCash * 0.06);
+            const municipalAmount = Math.round(grossSharedCash * 0.02);
+            const taxiAssociationAmount = Math.round(grossSharedCash * 0.01);
+            const remisAssociationAmount = Math.round(grossSharedCash * 0.01);
+            const totalAssociationsAmount = taxiAssociationAmount + remisAssociationAmount;
+            
             const driverNetAfterCommission = grossSharedCash - totalCommissionAmount;
 
             const financialSummary = {
@@ -1303,9 +1736,12 @@ export async function settleSharedRideFinancialsV1(rideId: string) {
                 totalCommissionAmount,
                 municipalAmount,
                 vamoNetAmount,
+                taxiAssociationAmount,
+                remisAssociationAmount,
+                totalAssociationsAmount,
                 driverNetAfterCommission,
-                commissionRate,
-                municipalRate,
+                commissionRate: totalCommissionRate,
+                municipalRate: 0.02,
                 totalIndividualFare,
                 totalPassengerSavings,
                 currency: "ARS",
@@ -1422,25 +1858,25 @@ export async function generateSharedRideReceiptsV1(
             const receipt = {
                 type: "shared_passenger_receipt",
                 rideId,
-                sharedGroupId: rideData.sharedGroupId,
+                sharedGroupId: rideData.sharedGroupId || "",
                 requestId: doc.id,
                 passengerId: req.passengerId,
-                driverId: rideData.driverId,
-                driverName: rideData.driverName,
-                cityKey: rideData.cityKey,
+                driverId: rideData.driverId || "",
+                driverName: rideData.driverName || "Conductor",
+                cityKey: rideData.cityKey || "",
                 origin: req.origin,
                 destination: req.destination,
                 status: "completed",
                 paymentMethod: "cash",
                 farePaid: req.finalFareCash || req.sharedFareEstimate || 0,
-                individualFareReference: req.individualFareReference,
-                sharedFareRaw: (req as any).sharedFareRaw,
-                sharedPaymentPercent: (req as any).sharedPaymentPercent,
-                sharedPassengerCount: (req as any).sharedPassengerCount,
+                individualFareReference: req.individualFareReference || 0,
+                sharedFareRaw: (req as any).sharedFareRaw || 0,
+                sharedPaymentPercent: (req as any).sharedPaymentPercent || 1,
+                sharedPassengerCount: (req as any).sharedPassengerCount || 1,
                 savingsAmount: req.passengerSavingAmount || 0,
                 savingsPercent: req.passengerSavingPercent || 0,
-                completedAt: rideData.completedAt,
-                settledAt: summary.settledAt,
+                completedAt: rideData.completedAt || FieldValue.serverTimestamp(),
+                settledAt: summary.settledAt || FieldValue.serverTimestamp(),
                 isShared: true,
                 createdAt: FieldValue.serverTimestamp()
             };
@@ -1540,7 +1976,7 @@ export const listNearbySharedRideGroupsV1 = onCall({ cors: true, region: 'us-cen
     const db = getDb();
     const groupsSnap = await db.collection('shared_ride_groups')
         .where('cityKey', '==', cityKey)
-        .where('status', '==', 'forming')
+        .where('status', 'in', ['forming', 'pending_passenger_confirmation'])
         .where('isPubliclyJoinable', '==', true)
         .limit(20)
         .get();
@@ -1588,15 +2024,23 @@ export const listNearbySharedRideGroupsV1 = onCall({ cors: true, region: 'us-cen
 
         if (compatibility.compatible && IS_WITHIN_RANGE) {
             logger.info(`[SHARED_RIDE_GROUP_VISIBLE] Group ${group.id} is compatible and within range (${Math.round(distanceToPickupM)}m) for user ${request.auth.uid}`);
+            
+            // Derivar lista de seat IDs ocupados desde seatMap
+            const seatMapRaw = group.seatMap as any;
+            const occupiedSeatIds: string[] = (seatMapRaw && typeof seatMapRaw === 'object' && seatMapRaw !== 'LEGACY')
+                ? Object.keys(seatMapRaw)
+                : [];
+
             results.push({
                 groupId: group.id,
                 distanceToPickupM,
                 compatibilityScore: Math.round((1 - compatibility.extraDistancePercent) * 100),
-                passengerCount: group.occupiedSeats,
-                maxPassengers: group.maxSeats,
+                passengerCount: group.requestCount ?? group.passengerIds?.length ?? 1,
+                maxPassengers: group.maxRequests ?? 2,
                 expiresAt: group.expiresAt,
                 estimatedDelayMin: Math.round(compatibility.extraDurationSeconds / 60),
-                approximateDestinationLabel: group.dropoffStops[group.dropoffStops.length - 1].address || 'Destino cercano'
+                approximateDestinationLabel: group.dropoffStops[group.dropoffStops.length - 1].address || 'Destino cercano',
+                occupiedSeats: occupiedSeatIds,  // ← IDs de asientos ya tomados
             });
         } else {
             if (!IS_WITHIN_RANGE) {
@@ -1622,7 +2066,7 @@ export const listNearbySharedRideGroupsV1 = onCall({ cors: true, region: 'us-cen
 export const joinSharedRideGroupV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const passengerId = request.auth.uid;
-    const { groupId, origin, destination, cityKey: rawCityKey, individualFareReference, sharedRideNoticeAccepted } = request.data;
+    const { groupId, origin, destination, cityKey: rawCityKey, individualFareReference, sharedRideNoticeAccepted, selectedSeats } = request.data;
     const cityKey = normalizeCityKey(rawCityKey || '');
 
     if (!groupId || !origin || !destination || !cityKey || !individualFareReference) {
@@ -1641,18 +2085,26 @@ export const joinSharedRideGroupV1 = onCall({ cors: true, region: 'us-central1' 
             const userData = userSnap.data() as UserProfile;
 
             if (userData.activeSharedRequestId || userData.activeRideId) {
-                throw new HttpsError('already-exists', 'Ya tienes una solicitud o viaje activo.');
+                throw new HttpsError('already-exists', 'Ya tienes una solicitud o viaje activo.', {
+                    activeRideId: userData.activeRideId || null,
+                    activeSharedGroupId: (userData as any).activeSharedGroupId || null,
+                    activeSharedRequestId: userData.activeSharedRequestId || null,
+                    isRecoverable: true
+                });
             }
+
+            // Removido: Los usuarios con beneficio Express pueden unirse a compartidos (con tarifa plana compartida).
 
             if (!groupSnap.exists) throw new HttpsError('not-found', 'El grupo ya no existe.');
             const groupData = groupSnap.data() as SharedRideGroup;
 
-            if (groupData.status !== 'ready_for_driver' && groupData.status !== 'forming') {
+            if (!['forming', 'pending_passenger_confirmation'].includes(groupData.status)) {
                 throw new HttpsError('failed-precondition', 'El grupo no está en un estado válido para unirse.');
             }
 
-            if (groupData.occupiedSeats >= 4) {
-                throw new HttpsError('failed-precondition', 'El grupo ya está lleno.');
+            const maxRequests = groupData.maxRequests ?? 2;
+            if ((groupData.requestCount ?? groupData.requestIds.length) >= maxRequests) {
+                throw new HttpsError('failed-precondition', 'El grupo ya está lleno (máx ' + maxRequests + ' usuarios).');
             }
 
             const now = Date.now();
@@ -1669,6 +2121,24 @@ export const joinSharedRideGroupV1 = onCall({ cors: true, region: 'us-central1' 
             }
 
             const requestId = db.collection('shared_ride_requests').doc().id;
+
+            // Calcular asientos del nuevo pasajero ANTES de crear el request
+            type SeatId = 'front_passenger' | 'rear_left' | 'rear_center' | 'rear_right';
+            let newSeatLabels: SeatId[] = [];
+            if (Array.isArray(selectedSeats) && selectedSeats.length > 0) {
+                newSeatLabels = selectedSeats as SeatId[];
+            } else {
+                const validSeats: SeatId[] = ['rear_right', 'front_passenger', 'rear_left', 'rear_center'];
+                const currentSeatMap = (groupData.seatMap && typeof groupData.seatMap === 'object') ? { ...groupData.seatMap as any } : {};
+                const available = validSeats.filter(s => !currentSeatMap[s]);
+                if (available.length > 0) {
+                    newSeatLabels = [available[0]];
+                } else {
+                    throw new HttpsError('failed-precondition', 'No hay asientos disponibles en este grupo.');
+                }
+            }
+            const newSeatCount = newSeatLabels.length;
+
             const newRequest: SharedRideRequest = {
                 id: requestId,
                 passengerId,
@@ -1681,6 +2151,8 @@ export const joinSharedRideGroupV1 = onCall({ cors: true, region: 'us-central1' 
                 groupId: groupData.id,
                 individualFareReference,
                 paymentMethod: 'cash',
+                seatCount: newSeatCount,
+                selectedSeats: newSeatLabels,
                 sharedRideNoticeAccepted: !!sharedRideNoticeAccepted,
                 sharedRideNoticeAcceptedAt: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
@@ -1700,20 +2172,27 @@ export const joinSharedRideGroupV1 = onCall({ cors: true, region: 'us-central1' 
                 throw new HttpsError('failed-precondition', `No compatible: ${compatibility.reason}`);
             }
 
-            // Proceder con la unión
+            // Calcular nuevos asientos ocupados acumulando sobre los existentes
+            const existingOccupied = groupData.occupiedSeats ?? 0;
+            const newOccupiedSeats = existingOccupied + newSeatCount;
             const updatedRequestIds = [...groupData.requestIds, newRequest.id];
             const updatedPassengerIds = [...groupData.passengerIds, passengerId];
-            const newOccupiedSeats = updatedPassengerIds.length;
 
-            const newPassengerEntry = {
+            // Construir seatMap actualizado con los asientos del nuevo pasajero
+            const existingSeatMap = (groupData.seatMap && typeof groupData.seatMap === 'object') ? { ...groupData.seatMap as any } : {};
+            for (const seatId of newSeatLabels) {
+                existingSeatMap[seatId] = { passengerId, requestId, passengerName: userData.name || 'Pasajero' };
+            }
+
+            // [FIX] Use builder to guarantee requestId is always present in joinSharedRideGroupV1
+            const newPassengerEntry = buildSharedPassengerGroupEntry({
+                requestId,           // ← from db.collection().doc().id above
                 passengerId,
                 passengerName: userData.name || 'Pasajero',
-                roleInGroup: 'joined' as const,
-                joinedAt: Timestamp.now(),
-                status: 'joined',
-                pickupAddress: origin.address,
-                dropoffAddress: destination.address
-            };
+                roleInGroup: 'joined',
+                pickupAddress: origin.address || '',
+                dropoffAddress: destination.address || ''
+            });
 
             // Recalcular precios de forma individual para cada pasajero en el grupo
             let totalSharedFare = 0;
@@ -1722,7 +2201,8 @@ export const joinSharedRideGroupV1 = onCall({ cors: true, region: 'us-central1' 
             const updatedRequestPricings = allRequests.map(req => {
                 const reqPricing = calculateSharedPricing({
                     individualFareReference: req.individualFareReference,
-                    confirmedPassengerCount: newOccupiedSeats,
+                    totalOccupiedSeats: newOccupiedSeats,
+                    requestSeatCount: req.seatCount || 1,
                     cityKey
                 });
                 totalSharedFare += reqPricing.sharedFarePerPassenger;
@@ -1740,20 +2220,32 @@ export const joinSharedRideGroupV1 = onCall({ cors: true, region: 'us-central1' 
                 ? driverBenefitAmount / groupData.estimatedIndividualFare 
                 : 0;
 
+            // Validación estricta de requestId en orderedStops
+            if (!compatibility.orderedStops || compatibility.orderedStops.some((s: any) => !s.requestId || !s.location || !s.type)) {
+                logger.error(`[CRITICAL] Error al generar orderedStops. Hay campos undefined.`, compatibility.orderedStops);
+                throw new HttpsError('internal', 'Error fatal: no se pudo mapear la parada al pasajero correctamente.');
+            }
+
             const groupUpdate: any = {
                 requestIds: updatedRequestIds,
                 passengerIds: updatedPassengerIds,
                 passengers: FieldValue.arrayUnion(newPassengerEntry),
                 occupiedSeats: newOccupiedSeats,
+                requestCount: updatedRequestIds.length,  // ← incrementar contador de usuarios
+                seatMap: existingSeatMap,                // ← guardar seatMap con los asientos del nuevo pasajero
                 sharedFarePerPassenger: creatorPricing.sharedFarePerPassenger,
                 estimatedSharedTotal: totalSharedFare,
                 driverBenefitAmount,
                 driverBenefitPercent,
+                pickupStops: compatibility.pickupStops,
+                dropoffStops: compatibility.dropoffStops,
+                orderedStops: compatibility.orderedStops,
                 updatedAt: FieldValue.serverTimestamp()
             };
 
-            // Lógica de lanzamiento y confirmación
-            if (newOccupiedSeats >= 4) {
+            // Lanzar conductor cuando el grupo está lleno de usuarios (requestCount >= maxRequests)
+            const isGroupNowFull = updatedRequestIds.length >= maxRequests;
+            if (isGroupNowFull) {
                 groupUpdate.status = 'ready_for_driver';
                 groupUpdate.launchReason = 'group_full';
                 groupUpdate.hasMinimumPassengers = true;
@@ -1781,28 +2273,25 @@ export const joinSharedRideGroupV1 = onCall({ cors: true, region: 'us-central1' 
                         });
                     }
                 }
-            } else if (newOccupiedSeats >= 2 && !groupData.driverSearchStartsAt) {
-                const countdownSec = 60;
-                groupUpdate.status = 'pending_passenger_confirmation';
+            } else if (newOccupiedSeats >= 2 && !groupData.hasMinimumPassengers) {
+                groupUpdate.status = 'forming'; // Eliminamos pending_passenger_confirmation
                 groupUpdate.hasMinimumPassengers = true;
-                groupUpdate.isPubliclyJoinable = false;
-                groupUpdate.confirmationExpiresAt = Timestamp.fromMillis(Date.now() + 45000);
-                groupUpdate.driverSearchStartsAt = Timestamp.fromMillis(Date.now() + (countdownSec * 1000));
-                groupUpdate.closingExpiresAt = Timestamp.fromMillis(Date.now() + (countdownSec * 1000));
+                groupUpdate.isPubliclyJoinable = true; // Pax 3 y 4 pueden unirse
+                
                 groupUpdate.launchReason = 'min_passengers_reached';
                 groupUpdate.minPassengersToLaunch = 2;
-                logger.info(`[SHARED_RIDE_DRIVER_COUNTDOWN] Group ${groupId} reached 2 pax. Transitioned to pending_passenger_confirmation.`);
+                logger.info(`[SHARED_RIDE_DRIVER_COUNTDOWN] Group ${groupId} reached 2 pax. Maintaining forming status. Global timer preserved.`);
                 
-                // Todos pasan a pending_confirmation
+                // Todos pasan a grouped, ya no requieren confirmación
                 for (const item of updatedRequestPricings) {
                     if (item.requestId === requestId) {
                         newRequest.sharedFareEstimate = item.pricing.sharedFarePerPassenger;
                         newRequest.passengerSavingAmount = item.pricing.passengerSavingAmount;
                         newRequest.passengerSavingPercent = item.pricing.passengerSavingPercent;
-                        newRequest.status = 'pending_confirmation';
+                        newRequest.status = 'grouped';
                     } else {
                         tx.update(db.doc(`shared_ride_requests/${item.requestId}`), {
-                            status: 'pending_confirmation',
+                            status: 'grouped',
                             sharedFareEstimate: item.pricing.sharedFarePerPassenger,
                             passengerSavingAmount: item.pricing.passengerSavingAmount,
                             passengerSavingPercent: item.pricing.passengerSavingPercent,
@@ -2056,12 +2545,12 @@ export async function dispatchSharedRideGroupIfReady(groupId: string, reason: st
                     updatedAt: FieldValue.serverTimestamp()
                 });
 
-                // Actualizar solicitudes a confirmed
+                // Actualizar solicitudes a confirmed usando set con merge para evitar fallos FATALES si no existe el doc
                 for (const rid of group.requestIds) {
-                    tx.update(db.doc(`shared_ride_requests/${rid}`), {
+                    tx.set(db.doc(`shared_ride_requests/${rid}`), {
                         status: 'confirmed',
                         updatedAt: FieldValue.serverTimestamp()
-                    });
+                    }, { merge: true });
                 }
                 return;
             }
@@ -2098,6 +2587,7 @@ export async function dispatchSharedRideGroupIfReady(groupId: string, reason: st
                 passengerIds: group.passengerIds,
                 passengerId: primaryPassengerId, // CRITICAL FIX
                 sharedPassengerCount: group.occupiedSeats,
+                seatMap: group.seatMap || {},
                 pickupStops: group.pickupStops,
                 dropoffStops: group.dropoffStops,
                 orderedStops: group.orderedStops,
@@ -2183,23 +2673,60 @@ export async function dispatchSharedRideGroupIfReady(groupId: string, reason: st
             });
 
             // 3. Build enriched route and passengers
-            const enrichedOrderedStops = (group.orderedStops || []).map(stop => ({
-                ...stop,
-                passengerId: requestMap[stop.requestId]?.passengerId || 'unknown',
-                passengerName: requestMap[stop.requestId]?.passengerName || 'Pasajero',
-                status: 'pending'
-            }));
-
-            const sharedPassengers = (group.requestIds || []).map(rid => {
-                const req = requestMap[rid];
+            // [FIX] requestId MUST be present on every stop and sharedPassenger entry.
+            // Without it, acceptRideV2 and advanceSharedRideStopV1 cannot update requests.
+            const enrichedOrderedStops = (group.orderedStops || []).map(stop => {
+                if (!stop.requestId) {
+                    logger.error(`[CRITICAL_DATA_INTEGRITY] Stop in group ${groupId} missing requestId. Stop:`, JSON.stringify(stop));
+                    throw new HttpsError('failed-precondition', `CORRUPT_GROUP_DATA: Una parada del grupo no tiene requestId. groupId=${groupId}`);
+                }
+                const req = requestMap[stop.requestId];
+                const stopAny = stop as any;
                 return {
-                    passengerId: req?.passengerId || 'unknown',
-                    passengerName: req?.passengerName || 'Pasajero',
-                    pickupAddress: req?.origin?.address || '',
-                    dropoffAddress: req?.destination?.address || '',
-                    status: 'waiting_pickup'
+                    ...stop,
+                    passengerId: req?.passengerId || stopAny.passengerId || 'unknown',
+                    passengerName: req?.passengerName || stopAny.passengerName || 'Pasajero',
+                    requestId: stop.requestId, // [FIX] Explicitly preserve requestId
+                    status: 'pending'
                 };
             });
+
+            // [FIX] Each sharedPassenger MUST have requestId. This was the root cause
+            // of the cascading failure: acceptRideV2 iterated sharedPassengers and
+            // checked `if (p.requestId)` — which was always false, so requests were
+            // never updated to driver_assigned, causing stuck states for all users.
+            const sharedPassengers = (group.requestIds || []).map(rid => {
+                const req = requestMap[rid];
+                if (!req) {
+                    logger.error(`[CRITICAL_DATA_INTEGRITY] No request found for rid=${rid} in group ${groupId}`);
+                    throw new HttpsError('failed-precondition', `MISSING_REQUEST: No se encontró la solicitud ${rid} del grupo.`);
+                }
+                if (!req.passengerId) {
+                    logger.error(`[CRITICAL_DATA_INTEGRITY] Request ${rid} missing passengerId in group ${groupId}`);
+                    throw new HttpsError('failed-precondition', `CORRUPT_REQUEST_DATA: La solicitud ${rid} no tiene passengerId.`);
+                }
+                return {
+                    requestId: rid,              // [FIX] THE MISSING FIELD — was never set before
+                    passengerId: req.passengerId,
+                    passengerName: req.passengerName || 'Pasajero',
+                    pickupAddress: req.origin?.address || '',
+                    dropoffAddress: req.destination?.address || '',
+                    individualQuotedFare: req.individualFareReference || 0,
+                    sharedFare: req.sharedFareEstimate || req.finalFareCash || 0,
+                    savingsAmount: req.passengerSavingAmount || 0,
+                    status: 'waiting_pickup',
+                    seatCount: req.seatCount || 1,
+                    selectedSeats: req.selectedSeats || []
+                };
+            });
+
+            // [GUARD] Final integrity check before writing to Firestore
+            for (const p of sharedPassengers) {
+                if (!p.requestId || !p.passengerId) {
+                    logger.error(`[CRITICAL_GUARD_FAILED] sharedPassenger missing requestId or passengerId:`, JSON.stringify(p));
+                    throw new HttpsError('failed-precondition', 'INTEGRITY_GUARD: sharedPassenger incompleto. Abortando dispatch.');
+                }
+            }
 
             const routePlan = enrichedOrderedStops.map((stop, index) => ({
                 order: index + 1,
@@ -2228,20 +2755,20 @@ export async function dispatchSharedRideGroupIfReady(groupId: string, reason: st
 
             // 5. Actualizar solicitudes
             for (const rid of group.requestIds) {
-                tx.update(db.doc(`shared_ride_requests/${rid}`), {
+                tx.set(db.doc(`shared_ride_requests/${rid}`), {
                     status: 'assigned',
                     finalRideId: rideId,
                     updatedAt: FieldValue.serverTimestamp()
-                });
+                }, { merge: true });
             }
 
             // 6. Actualizar punteros de usuarios
             for (const pid of group.passengerIds) {
-                tx.update(db.doc(`users/${pid}`), {
+                tx.set(db.doc(`users/${pid}`), {
                     activeRideId: rideId,
                     sharedRideStatus: 'searching_driver',
                     updatedAt: FieldValue.serverTimestamp()
-                });
+                }, { merge: true });
             }
 
             shouldTriggerMatching = true;

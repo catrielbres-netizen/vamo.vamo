@@ -192,18 +192,13 @@ export default function FinishedRideSummary({
                     className="w-full bg-indigo-600 hover:bg-indigo-700 h-14 font-black rounded-2xl"
                     onClick={async () => {
                         try {
-                            const db = getFirestore(firebaseApp);
-                            // Primero limpiamos el error para que pase a estado de carga
-                            await updateDoc(doc(db, 'rides', ride.id), {
-                                settlementError: deleteField(),
-                                sharedSettlementStatus: 'pending_shared_settlement',
-                            });
-                            // Luego llamamos al backend para que realmente lo re-liquide
                             const functions = getFunctions(firebaseApp, 'us-central1');
                             const retrySettle = httpsCallable(functions, 'retrySharedRideSettlementV1');
                             await retrySettle({ rideId: ride.id });
-                        } catch (e) {
+                            window.location.reload();
+                        } catch (e: any) {
                             console.error(e);
+                            alert("Error al reintentar: " + e.message);
                         }
                     }}
                 >
