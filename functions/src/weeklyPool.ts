@@ -284,14 +284,27 @@ async function computeDistribution(weekId: string, dryRun: boolean, cityKeyParam
         // Transacción en platform_transactions para trazabilidad
         const ptRef = db.collection('platform_transactions').doc();
         batch.set(ptRef, {
+            driverId: dist.driverId,
             userId: dist.driverId,
-            type: 'weekly_pool_payout',
             amount: dist.payoutAmount,
-            weekId,
-            rank: dist.rank,
-            note: `Pozo Semanal VamO - Semana ${weekId} - Puesto #${dist.rank}`,
+            type: 'weekly_pool_bonus',
+            description: `Premio Pozo Semanal VamO - Puesto #${dist.rank}`,
+            status: 'completed',
             createdAt: now,
-            systemVersion: 'pool_v1',
+        });
+
+        // Enviar notificación in-app
+        const notifRef = db.collection('notifications').doc(dist.driverId).collection('items').doc();
+        batch.set(notifRef, {
+            userId: dist.driverId,
+            role: 'driver',
+            type: 'payment_received',
+            title: '¡Recibiste el Premio del Pozo Semanal!',
+            message: `Felicitaciones por quedar en el Puesto #${dist.rank}. Se te acreditaron $${dist.payoutAmount} a tu billetera.`,
+            read: false,
+            priority: 'success',
+            actionUrl: '/driver/earnings',
+            createdAt: now,
         });
     }
 
