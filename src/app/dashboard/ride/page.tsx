@@ -490,6 +490,13 @@ function RidePageContent() {
     if (!estimatedPrice) return null;
     return Math.ceil((estimatedPrice * 0.68) / 100) * 100;
   }, [estimatedPrice]);
+    
+  const sharedFareCalculation = useMemo(() => {
+      if (!estimatedPrice) return null;
+      const baseFare = Math.round((estimatedPrice * 0.60) / 100) * 100;
+      const seatMultiplier = selectedSeats.length >= 2 ? 1.10 : 1.00;
+      return Math.round((baseFare * seatMultiplier) / 100) * 100;
+  }, [estimatedPrice, selectedSeats]);
 
   // Solo mostrar si hay ahorro real vs tarifa normal visible
   const sharedOffersRealSaving = estimatedSharedFare !== null && estimatedSharedFare < (estimatedPrice ?? Infinity);
@@ -515,8 +522,13 @@ function RidePageContent() {
   
   const savingsSimulation = useMemo(() => {
      if (!estimatedPrice) return { benefit: 0, final: 0 };
-     // El precio base para restar billetera es después de Express
-     const priceAfterExpress = Math.max(0, estimatedPrice - (expressDiscountAmount || 0));
+     
+     // Si es compartido, usamos tarifa plana (sin descuento express ni dinámica, usando base del cálculo compartido)
+     const baseCalculationPrice = serviceType === 'shared' && sharedFareCalculation ? sharedFareCalculation : estimatedPrice;
+     
+     // El precio base para restar billetera es después de Express (solo si no es compartido)
+     const appliedExpressDiscount = serviceType === 'shared' ? 0 : (expressDiscountAmount || 0);
+     const priceAfterExpress = Math.max(0, baseCalculationPrice - appliedExpressDiscount);
 
      if (paymentMethod === 'cash') {
          return { benefit: 0, final: priceAfterExpress };
@@ -526,7 +538,7 @@ function RidePageContent() {
      const benefit = Math.min(priceAfterExpress, currentBalance);
      const final = Math.max(0, priceAfterExpress - benefit);
      return { benefit, final };
-  }, [estimatedPrice, expressDiscountAmount, profile?.currentBalance, paymentMethod]);
+  }, [estimatedPrice, expressDiscountAmount, profile?.currentBalance, paymentMethod, serviceType, sharedFareCalculation]);
 
   const [isCancelling, setIsCancelling] = useState(false);
 
@@ -556,7 +568,7 @@ function RidePageContent() {
               console.error("[CLEANUP] Failed to clear active ride pointers:", e);
           }
       }
-  }, [user, firestore, profile?.activeRideId]);
+    }, [user, firestore, profile?.activeRideId, (profile as any)?.activeSharedRideId]);
 
   const handleOpenMapSelector = (field: 'origin' | 'destination') => {
       setMapEditingField(field);
@@ -939,22 +951,15 @@ function RidePageContent() {
                                      <span className="text-[10px] text-emerald-100/70 font-bold leading-tight mb-1">
                                        {selectedSeats.length === 1 ? 'Por 1 asiento' : 'Por vos + 1 acompañante'}
                                      </span>
-                                     {estimatedPrice ? (() => {
-                                       // 1 asiento: precio_base × 0.60
-                                       // 2 asientos: precio_base × 0.60 × 1.10 (acompañante +10%)
-                                       const baseFare = Math.round((estimatedPrice * 0.60) / 100) * 100;
-                                       const seatMultiplier = selectedSeats.length >= 2 ? 1.10 : 1.00;
-                                       const sharedFare = Math.round((baseFare * seatMultiplier) / 100) * 100;
-                                       const saving = estimatedPrice - sharedFare;
-                                       return (
-                                         <>
-                                           <span className="text-sm sm:text-base font-black text-white">Pagás ${sharedFare.toLocaleString('es-AR')}</span>
-                                           <span className="text-[10px] font-bold text-emerald-300">Ahorrás ${saving.toLocaleString('es-AR')} vs viaje individual</span>
-                                         </>
-                                       );
-                                     })() : (
-                                         <span className="text-sm sm:text-base font-black text-white">Cargando precio...</span>
-                                     )}
+                                     {estimatedPrice && sharedFareCalculation ? (() => {
+                                         const saving = estimatedPrice - sharedFareCalculation;
+                                         return (
+                                           <>
+                                             <span className="text-sm sm:text-base font-black text-white">Pagás ${sharedFareCalculation.toLocaleString('es-AR')}</span>
+                                             <span className="text-[10px] font-bold text-emerald-300">Ahorrás ${saving.toLocaleString('es-AR')} vs individual</span>
+                                           </>
+                                         );
+                                     })() : null}
                                    </>
                                  ) : (
                                    <span className="text-[11px] font-bold text-emerald-300">Seleccioná tus asientos para ver el precio</span>
@@ -986,7 +991,16 @@ function RidePageContent() {
                      {savingsSimulation && (
                        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-3 shadow-inner">
                           {/* DYNAMIC PRICING BREAKDOWN */}
-                          {dynamicSnapshot?.applied ? (
+                          {serviceType === 'shared' ? (
+                             <>
+                                 <div className="flex justify-between items-center text-xs px-1">
+                                     <span className="font-bold text-white/40 uppercase tracking-tight">Tarifa compartida base</span>
+                                     <span className="font-black text-emerald-400">
+                                         ${sharedFareCalculation}
+                                     </span>
+                                 </div>
+                             </>
+                          ) : dynamicSnapshot?.applied ? (
                              <>
                                 <div className="flex items-center gap-2 mb-1">
                                    <div className="bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/20 flex items-center gap-1">
@@ -1009,11 +1023,11 @@ function RidePageContent() {
                              <>
                                  <div className="flex justify-between items-center text-xs px-1">
                                      <span className="font-bold text-white/40 uppercase tracking-tight">Tarifa reconocida</span>
-                                     <span className={cn("font-black", expressDiscountAmount > 0 ? "line-through text-white/40" : "text-white/80")}>
+                                     <span className={cn("font-black", expressDiscountAmount > 0 && serviceType !== 'shared' ? "line-through text-white/40" : "text-white/80")}>
                                          ${estimatedPrice}
                                      </span>
                                  </div>
-                                 {expressDiscountAmount > 0 && (
+                                 {expressDiscountAmount > 0 && serviceType !== 'shared' && (
                                      <div className="flex justify-between items-center text-xs px-1 mt-1">
                                          <div className="flex items-center gap-1.5 font-bold text-amber-400 uppercase tracking-tight">
                                              <VamoIcon name="zap" className="w-3 h-3" />
