@@ -11,6 +11,7 @@ import { onSchedule, ScheduledEvent } from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
 import { canDriverTakeRide } from "./eligibility";
 import { UserProfile, Ride, DriverLevel, ServiceType, RideStatus, CompletedRide, PricingConfig, WithdrawalRequest, WithId, RideOffer, DriverPoints, PricingSnapshot } from "./types";
+import { incrementPassengerPoints } from "./passengerWeeklyPool";
 import { getDb } from "./lib/firebaseAdmin";
 import { calculateRidePrice } from "./lib/pricing";
 import { normalizeCityKey, normalizeCity } from "./lib/city";
@@ -1206,6 +1207,14 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 driverUpdate['financialStats.monthlyRidesCount'] = FieldValue.increment(1);
             }
             driverUpdate['financialStats.totalHistoricalEarnings'] = FieldValue.increment(earningsForThisRide);
+
+            // [VamO PRO] Update Passenger Weekly Pool
+            if (rideData.passengerId && !rideData.isSharedRide) {
+                const pName = rideData.passengerName || "Pasajero";
+                incrementPassengerPoints(rideData.passengerId, pName, cityKey).catch(e => {
+                    logger.error(`[PASSENGER_POOL_ERROR] Failed to increment passenger points for ride ${rideId}:`, e);
+                });
+            }
 
             // Update driver_points for Weekly Pool (with Dynamic Pricing counters)
             const dynamicTripIncrement = getDynamicTripIncrement(rideData);

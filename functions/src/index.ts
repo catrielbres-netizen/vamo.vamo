@@ -59,6 +59,7 @@ export * from "./forecasting";
 export * from "./sharedRides";
 export * from "./admin";
 export * from "./weeklyPool";
+export * from "./passengerWeeklyPool";
 export * from "./mercadopago_oauth";
 export * from "./payments";
 

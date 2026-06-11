@@ -9,6 +9,7 @@ import { SharedRideRequest, UserProfile, Place, SharedRideGroup, Ride, PricingCo
 import { evaluateSharedRouteCompatibility, getDistanceM } from "./lib/sharedCompatibility";
 import { calculateSharedPricing } from "./lib/sharedPricing";
 import { addWalletMovements } from "./lib/wallet";
+import { incrementPassengerPoints } from "./passengerWeeklyPool";
 import { getPricingConfig } from "./handlers";
 import { normalizeCityKey } from "./lib/city";
 import { resolveActiveSharedRideState } from "./lib/sharedCleanup";
@@ -1809,6 +1810,14 @@ export async function settleSharedRideFinancialsV1(rideId: string) {
             });
 
             logger.info(`[SHARED_SETTLEMENT_SUCCESS] Ride ${rideId}, Gross: ${grossSharedCash}, Commission: ${totalCommissionAmount}`);
+
+            // [VamO PRO] Update Passenger Weekly Pool for all dropped-off passengers
+            for (const req of settledRequests) {
+                const pName = req.passengerName || "Pasajero";
+                incrementPassengerPoints(req.passengerId, pName, cityKey).catch(e => {
+                    logger.error(`[PASSENGER_POOL_ERROR] Failed to increment passenger points for shared ride ${rideId}, passenger ${req.passengerId}:`, e);
+                });
+            }
 
             await generateSharedRideReceiptsV1(rideId, tx, { ...rideData, sharedFinancialSummary: financialSummary }, financialSummary, requestsSnap);
         });
