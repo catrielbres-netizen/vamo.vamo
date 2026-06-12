@@ -546,7 +546,7 @@ export async function addWalletMovements(
     userId: string,
     movements: Array<{
         amount: number,
-        type: 'ride_earning' | 'cash_collected' | 'adjustment',
+        type: 'ride_earning' | 'cash_collected' | 'adjustment' | 'gross_receipts_withheld' | 'gross_receipts_withdrawal',
         rideId: string,
         note?: string
     }>,
@@ -584,6 +584,7 @@ export async function addWalletMovements(
     const initialBalance = currentBalance;
 
     
+    let currentGrossReceiptsBalance = wallet.grossReceiptsBalance || 0;
     const validMovesToExecute = [];
 
     // 3. PROCESAR LÓGICA
@@ -595,23 +596,35 @@ export async function addWalletMovements(
             continue;
         }
         
-        const balanceBefore = currentBalance;
-        currentBalance += req.amount;
+        let balanceBefore = 0;
+        let balanceAfter = 0;
+
+        if (req.type === 'gross_receipts_withheld' || req.type === 'gross_receipts_withdrawal') {
+            balanceBefore = currentGrossReceiptsBalance;
+            currentGrossReceiptsBalance += req.amount;
+            balanceAfter = currentGrossReceiptsBalance;
+        } else {
+            balanceBefore = currentBalance;
+            currentBalance += req.amount;
+            balanceAfter = currentBalance;
+        }
         
         validMovesToExecute.push({
             ...req,
             balanceBefore,
-            balanceAfter: currentBalance
+            balanceAfter
         });
     }
 
     if (validMovesToExecute.length === 0) return;
 
     // 4. EJECUTAR TODAS LAS ESCRITURAS (WRITES START)
-    tx.set(walletRef, {
+    const walletUpdateObj: any = {
         cashBalance: currentBalance,
+        grossReceiptsBalance: currentGrossReceiptsBalance,
         updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
+    };
+    tx.set(walletRef, walletUpdateObj, { merge: true });
 
     // [LEGACY_UI_MIRROR] Keep users.currentBalance in sync for old UI
     const totalDelta = currentBalance - initialBalance;

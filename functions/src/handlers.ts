@@ -463,10 +463,11 @@ export function calculateSettlement(
     const cityKey = rideData.cityKey || 'rawson';
 
     // Dynamic Commission Model based on Municipal Config
-    const vamoRate = 0.06;
+    const vamoRate = (cityConfig?.commissions?.vamoPercentage !== undefined ? cityConfig.commissions.vamoPercentage : 6) / 100;
     const muniRate = (cityConfig?.commissions?.municipalPercentage || 0) / 100;
     const taxiRate = (cityConfig?.commissions?.taxiUnionPercentage || 0) / 100;
     const remisRate = (cityConfig?.commissions?.remisUnionPercentage || 0) / 100;
+    const grossReceiptsTaxRate = (cityConfig?.grossReceiptsTaxRate || 0) / 100;
     
     const totalCommissionRate = vamoRate + muniRate + taxiRate + remisRate;
 
@@ -481,6 +482,9 @@ export function calculateSettlement(
     const totalAssociationsAmount = taxiAssociationAmount + remisAssociationAmount;
     
     const driverNetAmount  = driverFareRef - commissionAmount;
+    
+    // Ingresos Brutos se calcula sobre el totalFare
+    const grossReceiptsAmount = Math.round(driverFareRef * grossReceiptsTaxRate);
 
     const creditCoveredAmount = Math.max(0, rideData.pricing?.creditCoveredAmount || 0);
     
@@ -550,6 +554,8 @@ export function calculateSettlement(
         passengerPays: passengerPaysTotal,
         driverGrossAmount: driverFareRef,
         platformCommissionAmount: vamoAmount,
+        municipalShareAmount: municipalAmount,
+        grossReceiptsAmount,
         netVamoRevenue: vamoAmount - platformSubsidyAmount,
     };
 
@@ -1024,6 +1030,26 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 });
             }
 
+            // 3. Gross Receipts Withheld
+            const grossReceiptsAmount = settlementData.grossReceiptsAmount || 0;
+            if (grossReceiptsAmount > 0) {
+                // Deduct from regular balance (negative adjustment)
+                driverMovements.push({
+                    amount: -grossReceiptsAmount,
+                    type: 'adjustment' as const,
+                    rideId: `gr_${rideId}`,
+                    note: `Retención Ingresos Brutos viaje ${rideId}`
+                });
+                
+                // Add to gross receipts balance (positive)
+                driverMovements.push({
+                    amount: grossReceiptsAmount,
+                    type: 'gross_receipts_withheld' as const,
+                    rideId: rideId,
+                    note: `Apartado Ingresos Brutos viaje ${rideId}`
+                });
+            }
+
             // [WALLET_DEFERRED] Movements will be applied after mission check to maintain read-before-write integrity.
 
             // Passenger Reward Logic
@@ -1051,7 +1077,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 rideUpdate.weeklyPoolWeekId = weekId;
             }
 
-            // [FASE 5] finalDebit = VamO commission (Version B)
+            // [FASE 1] finalDebit = VamO commission + gross receipts
             const isSharedChild = (after as any).isSharedChildRide === true;
             const finalDebit = isSharedChild ? 0 : commissionAmount;
             logger.log(`[FINANCIAL] Debiting driver ${driverId}: commissionAmount=${commissionAmount} = finalDebit=${finalDebit}`);
@@ -1059,7 +1085,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             // --- DRIVER STATS & BALANCE LOGIC (VamO PRO v7.0) ---
             
             const walletCredit = (settlementData.walletCoveredAmount || 0) + (settlementData as any).vamoExpressCoverageAmount;
-            const netBalanceChange = isSharedChild ? 0 : (walletCredit - finalDebit);
+            const netBalanceChange = isSharedChild ? 0 : (walletCredit - finalDebit - (settlementData.grossReceiptsAmount || 0));
 
             // Determine if we need to reset daily/weekly/monthly stats
             const isNewDay = driverData.dailyStats?.lastResetDate !== todayStr;
@@ -1282,10 +1308,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             // --- PASSENGER BALANCE DEDUCTION (UNTOUCHED) ---
             if (!isSharedChild && walletCredit > 0) {
                 logger.log(`[FINANCIAL] Deducting $${walletCredit} from passenger ${passengerId} (VamO Pay)`);
-                // REMOVED REDUNDANT DEDUCTION: currentBalance decrement removed to avoid double charge (P0 fix).
-                // Real deduction is handled by consumeLockedWallet on the wallets collection.
-
-
+                
                 const creditTxRef = db.collection('platform_transactions').doc();
                 tx.set(creditTxRef, {
                     driverId, rideId, amount: walletCredit, type: 'wallet_credit',
@@ -1299,11 +1322,44 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                     userId: passengerId,
                     rideId,
                     amount: -walletCredit,
-                    type: 'wallet_payment',
-                    note: `Pago VamO Pay viaje ${rideId}`,
+                    type: 'ride_payment',
+                    note: `Pago de viaje con billetera ${rideId}`,
+                    cityKey, createdAt: now, systemVersion: 'v7_audit_fix'
+                });
+            }
+
+            // --- INTERNAL LEDGER RECORD ---
+            if (!isSharedChild && settlementData.driverGrossAmount && settlementData.driverGrossAmount > 0) {
+                const ledgerTxRef = db.collection('ledger_events').doc();
+                const totalGross = settlementData.driverGrossAmount;
+                const vamoA = settlementData.vamoAmount || 0;
+                const muniA = settlementData.municipalAmount || 0;
+                const taxiA = settlementData.taxiAssociationAmount || 0;
+                const remisA = settlementData.remisAssociationAmount || 0;
+                const grossR = settlementData.grossReceiptsAmount || 0;
+                
+                tx.set(ledgerTxRef, {
+                    rideId,
+                    driverId,
                     cityKey,
-                    createdAt: now,
-                    systemVersion: 'v7_audit_fix'
+                    timestamp: now,
+                    type: 'ride_settlement',
+                    amounts: {
+                        grossFare: totalGross,
+                        vamoCommission: vamoA,
+                        municipalCommission: muniA,
+                        taxiUnionCommission: taxiA,
+                        remisUnionCommission: remisA,
+                        grossReceiptsWithheld: grossR,
+                        driverNet: settlementData.driverNetAmount || 0
+                    },
+                    percentages: {
+                        vamo: vamoA / totalGross,
+                        muni: muniA / totalGross,
+                        taxi: taxiA / totalGross,
+                        remis: remisA / totalGross,
+                        grossReceipts: grossR / totalGross
+                    }
                 });
             }
 

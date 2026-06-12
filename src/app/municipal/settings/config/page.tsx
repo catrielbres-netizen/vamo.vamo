@@ -43,6 +43,7 @@ export default function MunicipalConfigPage() {
     const [enforceStrictDocumentExpiry, setEnforceStrictDocumentExpiry] = useState(true);
 
     // Commissions State
+    const [vamoPercentage, setVamoPercentage] = useState<number>(6);
     const [municipalPercentage, setMunicipalPercentage] = useState<number>(0);
     const [taxiUnionPercentage, setTaxiUnionPercentage] = useState<number>(0);
     const [taxiUnionMPAccount, setTaxiUnionMPAccount] = useState<string>('');
@@ -51,8 +52,11 @@ export default function MunicipalConfigPage() {
     const [remisUnionPercentage, setRemisUnionPercentage] = useState<number>(0);
     const [remisUnionMPAccount, setRemisUnionMPAccount] = useState<string>('');
     const [isRemisAccountLocked, setIsRemisAccountLocked] = useState<boolean>(false);
+    
+    // Gross Receipts State
+    const [grossReceiptsTaxRate, setGrossReceiptsTaxRate] = useState<number>(0);
 
-    const totalCommission = 6 + municipalPercentage + taxiUnionPercentage + remisUnionPercentage;
+    const totalCommission = vamoPercentage + municipalPercentage + taxiUnionPercentage + remisUnionPercentage;
 
     useEffect(() => {
         if (!cityKey || !firestore) return;
@@ -80,6 +84,7 @@ export default function MunicipalConfigPage() {
 
                     // Defaults for commissions
                     const comms = config.commissions || {};
+                    setVamoPercentage(comms.vamoPercentage ?? 6);
                     setMunicipalPercentage(comms.municipalPercentage ?? 0);
                     
                     setTaxiUnionPercentage(comms.taxiUnionPercentage ?? 0);
@@ -89,6 +94,8 @@ export default function MunicipalConfigPage() {
                     setRemisUnionPercentage(comms.remisUnionPercentage ?? 0);
                     setRemisUnionMPAccount(comms.remisUnionMPAccount ?? '');
                     setIsRemisAccountLocked(!!comms.remisUnionMPAccount);
+
+                    setGrossReceiptsTaxRate(config.grossReceiptsTaxRate ?? 0);
                 }
             } catch (err) {
                 console.error("Error loading config:", err);
@@ -112,12 +119,14 @@ export default function MunicipalConfigPage() {
                 'config.requireMunicipalApproval': requireMunicipalApproval,
                 'config.enforceStrictDocumentExpiry': enforceStrictDocumentExpiry,
                 'config.commissions': {
+                    vamoPercentage,
                     municipalPercentage,
                     taxiUnionPercentage,
                     taxiUnionMPAccount,
                     remisUnionPercentage,
                     remisUnionMPAccount
-                }
+                },
+                'config.grossReceiptsTaxRate': grossReceiptsTaxRate
             });
             toast({ title: 'Configuración Guardada', description: 'Los cambios ya están activos en la app de conductores.' });
         } catch (err) {
@@ -240,7 +249,19 @@ export default function MunicipalConfigPage() {
                                     <label className="text-sm font-black text-white uppercase tracking-tight">VamO (Plataforma)</label>
                                     <p className="text-xs text-zinc-500">Comisión base del sistema</p>
                                 </div>
-                                <div className="text-xl font-black text-zinc-500">6%</div>
+                                <Select value={vamoPercentage.toString()} onValueChange={(val) => setVamoPercentage(Number(val))}>
+                                    <SelectTrigger className="w-[100px] border-zinc-700 bg-zinc-900 font-bold">
+                                        <SelectValue placeholder="6%" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                        <SelectItem value="5">5%</SelectItem>
+                                        <SelectItem value="6">6%</SelectItem>
+                                        <SelectItem value="7">7%</SelectItem>
+                                        <SelectItem value="8">8%</SelectItem>
+                                        <SelectItem value="9">9%</SelectItem>
+                                        <SelectItem value="10">10%</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
 
                             <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 flex justify-between items-center">
@@ -328,6 +349,38 @@ export default function MunicipalConfigPage() {
                                 )}
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                {/* Ingresos Brutos */}
+                <div className="bg-card border border-border p-6 rounded-[2.5rem] space-y-6 md:col-span-2">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h2 className="text-lg font-black uppercase tracking-tight text-white flex items-center gap-2">
+                                <VamoIcon name="file-text" className="w-5 h-5 text-amber-400" />
+                                Apartado Ingresos Brutos
+                            </h2>
+                            <p className="text-xs text-zinc-400 mt-1">
+                                Porcentaje destinado a impuestos provinciales retenido por viaje.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 flex justify-between items-center max-w-sm">
+                        <div className="space-y-1">
+                            <label className="text-sm font-black text-white uppercase tracking-tight">Retención (%)</label>
+                            <p className="text-xs text-zinc-500">El máximo permitido es 2%</p>
+                        </div>
+                        <Select value={grossReceiptsTaxRate.toString()} onValueChange={(val) => setGrossReceiptsTaxRate(Number(val))}>
+                            <SelectTrigger className="w-[100px] border-zinc-700 bg-zinc-900 font-bold text-amber-400">
+                                <SelectValue placeholder="0%" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                <SelectItem value="0">0%</SelectItem>
+                                <SelectItem value="1">1%</SelectItem>
+                                <SelectItem value="2">2%</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
             </div>

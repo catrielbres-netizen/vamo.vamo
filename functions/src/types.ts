@@ -324,6 +324,7 @@ export interface CompletedRide {
     taxiAssociationAmount?: number;
     remisAssociationAmount?: number;
     totalAssociationsAmount?: number;
+    grossReceiptsAmount?: number;
 }
 
 export interface RideChatMessage {
@@ -963,6 +964,8 @@ export interface Wallet {
     lockedPromo: number;
     lockedRideId?: string | null;
     lockedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
+    grossReceiptsBalance?: number;
+    lastGrossReceiptsWithdrawalAt?: FirestoreTimestamp | FirestoreFieldValue | null;
     updatedAt: FirestoreTimestamp | FirestoreFieldValue;
 }
 
@@ -977,7 +980,9 @@ export type WalletTransactionType =
     | 'fap_compensation'
     | 'ride_earning'
     | 'cash_collected'
-    | 'adjustment';
+    | 'adjustment'
+    | 'gross_receipts_withheld'
+    | 'gross_receipts_withdrawal';
 
 export interface WalletTransaction {
     id: string;

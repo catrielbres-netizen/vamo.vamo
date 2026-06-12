@@ -364,6 +364,11 @@ export interface CompletedRide {
     baseCommissionRate: number;
     finalCommissionRate: number;
     commissionAmount: number;
+    vamoAmount?: number;
+    municipalAmount?: number;
+    taxiAssociationAmount?: number;
+    remisAssociationAmount?: number;
+    grossReceiptsAmount?: number;
     municipalFee?: number;
     municipalRate?: number;
     fapFee?: number;
@@ -1076,12 +1081,14 @@ export interface City {
         requireMunicipalApproval?: boolean;
         enforceStrictDocumentExpiry?: boolean;
         commissions?: {
+            vamoPercentage?: number;
             municipalPercentage: number;
             taxiUnionPercentage: number;
             taxiUnionMPAccount?: string;
             remisUnionPercentage: number;
             remisUnionMPAccount?: string;
         };
+        grossReceiptsTaxRate?: number;
     };
 
     createdAt: FirestoreTimestamp | FirestoreFieldValue;
@@ -1153,6 +1160,8 @@ export interface Wallet {
     promoBalance: number;
     lockedCash: number;  // Funds frozen for an active ride
     lockedPromo: number; // Funds frozen for an active ride
+    grossReceiptsBalance?: number;
+    lastGrossReceiptsWithdrawalAt?: any;
     updatedAt: FirestoreTimestamp | FirestoreFieldValue;
 }
 
@@ -1165,6 +1174,8 @@ export type WalletTransactionType =
     | 'ride_wallet_consume' 
     | 'cashback_reward'
     | 'fap_compensation'
+    | 'gross_receipts_withheld'
+    | 'gross_receipts_withdrawal'
     | 'adjustment';
 
 export interface WalletTransaction {

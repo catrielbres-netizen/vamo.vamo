@@ -5,6 +5,7 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { getDb } from "./lib/firebaseAdmin";
 import { addFunds, getOrCreateWallet, WALLET_CONFIG } from "./lib/wallet";
+import { addWalletMovements } from "./lib/wallet";
 
 /**
  * Fase 1: Crear Intención de Recarga (Orden)
@@ -156,5 +157,77 @@ export const getMyWalletV1 = onCall({ cors: true, region: 'us-central1' }, async
     } catch (error: any) {
         logger.error(`[WALLET] Fatal error getMyWalletV1 for ${userId}:`, error);
         throw new HttpsError('internal', 'No se pudo cargar la billetera. Reintentá.');
+    }
+});
+
+/**
+ * Fase 1: Retiro Mensual de Ingresos Brutos
+ */
+export const withdrawGrossReceiptsV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
+    
+    const userId = request.auth.uid;
+    const db = getDb();
+    const walletRef = db.collection('wallets').doc(userId);
+
+    try {
+        const result = await db.runTransaction(async (tx) => {
+            const walletSnap = await tx.get(walletRef);
+            if (!walletSnap.exists) {
+                throw new Error("WALLET_NOT_FOUND");
+            }
+
+            const walletData = walletSnap.data();
+            const grossReceiptsBalance = walletData?.grossReceiptsBalance || 0;
+
+            if (grossReceiptsBalance <= 0) {
+                throw new Error("NO_FUNDS");
+            }
+
+            // Validar que haya pasado al menos 1 mes desde el último retiro
+            if (walletData?.lastGrossReceiptsWithdrawalAt) {
+                const lastWithdrawal = walletData.lastGrossReceiptsWithdrawalAt.toDate();
+                const now = new Date();
+                const diffTime = Math.abs(now.getTime() - lastWithdrawal.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays < 28) {
+                    throw new Error("TOO_SOON");
+                }
+            }
+
+            const withdrawalId = `gr_withdraw_${Date.now()}`;
+
+            const movements: any[] = [
+                {
+                    amount: -grossReceiptsBalance,
+                    type: 'gross_receipts_withdrawal',
+                    rideId: withdrawalId,
+                    note: `Retiro mensual de Ingresos Brutos`
+                },
+                {
+                    amount: grossReceiptsBalance,
+                    type: 'adjustment',
+                    rideId: withdrawalId,
+                    note: `Acreditación por retiro de Ingresos Brutos`
+                }
+            ];
+
+            await addWalletMovements(userId, movements, 'rawson', tx, { walletSnap });
+            
+            tx.update(walletRef, {
+                lastGrossReceiptsWithdrawalAt: FieldValue.serverTimestamp()
+            });
+
+            return { status: 'SUCCESS', amountWithdrawn: grossReceiptsBalance };
+        });
+
+        return { success: true, result: result.status, amount: result.amountWithdrawn };
+    } catch (error: any) {
+        logger.error(`[GROSS_RECEIPTS_WITHDRAWAL] Failed for user ${userId}:`, error);
+        if (error.message === "WALLET_NOT_FOUND") throw new HttpsError('not-found', 'Billetera no encontrada.');
+        if (error.message === "NO_FUNDS") throw new HttpsError('failed-precondition', 'No hay saldo en Ingresos Brutos.');
+        if (error.message === "TOO_SOON") throw new HttpsError('failed-precondition', 'Debes esperar 1 mes entre retiros.');
+        throw new HttpsError('internal', `Error: ${error.message}`);
     }
 });
