@@ -6,7 +6,7 @@ import { useMapsLibrary } from '@vis.gl/react-google-maps';
 import { Input } from '@/components/ui/input';
 import { Place } from '@/lib/types';
 import { VamoIcon } from './VamoIcon';
-import { resolveCity } from '@/lib/city-resolution';
+import { resolveCity, getCityDefaultLocation } from '@/lib/city-resolution';
 
 interface PlaceAutocompleteInputProps {
   onPlaceSelect: (place: Place | null) => void;
@@ -16,6 +16,7 @@ interface PlaceAutocompleteInputProps {
   iconClassName?: string;
   className?: string;
   onFocus?: () => void;
+  cityKey?: string;
 }
 
 // NOTE: This component relies on the Google Maps Places Autocomplete API, which may incur costs.
@@ -29,6 +30,7 @@ export default function PlaceAutocompleteInput({
   iconClassName = '',
   className = '',
   onFocus,
+  cityKey,
 }: PlaceAutocompleteInputProps) {
   const places = useMapsLibrary('places');
   const maps = useMapsLibrary('maps');
@@ -44,6 +46,16 @@ export default function PlaceAutocompleteInput({
       fields: ['formatted_address', 'geometry.location', 'name', 'address_components'],
       componentRestrictions: { country: 'ar' }, // Restrict to Argentina
     });
+
+    if (cityKey && maps) {
+        const center = getCityDefaultLocation(cityKey);
+        const circle = new maps.Circle({
+            center: center,
+            radius: 20000, // 20km bias
+        });
+        autocompleteInstance.setBounds(circle.getBounds());
+    }
+
     setAutocomplete(autocompleteInstance);
     setGeocoder(new google.maps.Geocoder());
 

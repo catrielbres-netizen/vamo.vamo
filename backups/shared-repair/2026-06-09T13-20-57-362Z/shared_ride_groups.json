@@ -1,0 +1,199 @@
+[
+  {
+    "id": "M2wc0UysoxIgqokClwIi",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 8700,
+    "estimatedDriverTotal": 8700,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Gregorio Mayo 155",
+        "lat": -43.3000316,
+        "lng": -65.10204200000001,
+        "city": "Rawson"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Cacique Nahuelpan 844",
+        "lat": -43.316409,
+        "lng": -65.047395,
+        "city": "Rawson"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "AksoiuAuliU8ajtYGvfP",
+        "location": {
+          "address": "Gregorio Mayo 155",
+          "lat": -43.3000316,
+          "lng": -65.10204200000001,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "AksoiuAuliU8ajtYGvfP",
+        "location": {
+          "address": "Cacique Nahuelpan 844",
+          "lat": -43.316409,
+          "lng": -65.047395,
+          "city": "Rawson"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778943752,
+      "_nanoseconds": 627000000
+    },
+    "creatorPassengerId": "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+    "createdAt": {
+      "_seconds": 1778943272,
+      "_nanoseconds": 649000000
+    },
+    "isPubliclyJoinable": false,
+    "sharedFarePerPassenger": 6000,
+    "driverSearchStartsAt": {
+      "_seconds": 1778943446,
+      "_nanoseconds": 167000000
+    },
+    "minPassengersToLaunch": 2,
+    "hasMinimumPassengers": true,
+    "passengerIds": [
+      "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+      "qLtGStKw00fr7DuEW2A4FwigzJQ2"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778943446,
+      "_nanoseconds": 167000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "AksoiuAuliU8ajtYGvfP",
+      "8R94KsoVyKr48QU7bc1E"
+    ],
+    "estimatedSharedTotal": 12000,
+    "finalRideId": "shared_M2wc0UysoxIgqokClwIi",
+    "dispatchStartedAt": {
+      "_seconds": 1778991601,
+      "_nanoseconds": 417000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "status": "ready_for_driver",
+    "updatedAt": {
+      "_seconds": 1778991601,
+      "_nanoseconds": 417000000
+    }
+  },
+  {
+    "id": "TPfeLvd8YTu0tzXoGGpO",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 25800,
+    "estimatedDriverTotal": 25800,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Gregorio Mayo 155",
+        "lat": -43.3000316,
+        "lng": -65.10204200000001,
+        "city": "Rawson"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Cangallo 1569",
+        "lat": -43.2782662,
+        "lng": -65.29975,
+        "city": "Trelew"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "1rPgBFkYEZP5cII29L9U",
+        "location": {
+          "address": "Gregorio Mayo 155",
+          "lat": -43.3000316,
+          "lng": -65.10204200000001,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "1rPgBFkYEZP5cII29L9U",
+        "location": {
+          "address": "Cangallo 1569",
+          "lat": -43.2782662,
+          "lng": -65.29975,
+          "city": "Trelew"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778944085,
+      "_nanoseconds": 516000000
+    },
+    "creatorPassengerId": "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+    "createdAt": {
+      "_seconds": 1778943605,
+      "_nanoseconds": 546000000
+    },
+    "isPubliclyJoinable": false,
+    "sharedFarePerPassenger": 17600,
+    "driverSearchStartsAt": {
+      "_seconds": 1778943747,
+      "_nanoseconds": 189000000
+    },
+    "minPassengersToLaunch": 2,
+    "hasMinimumPassengers": true,
+    "passengerIds": [
+      "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+      "qLtGStKw00fr7DuEW2A4FwigzJQ2"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778943747,
+      "_nanoseconds": 189000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "1rPgBFkYEZP5cII29L9U",
+      "DjZvU4oW7PgBPCNwxjRG"
+    ],
+    "estimatedSharedTotal": 35200,
+    "finalRideId": "shared_TPfeLvd8YTu0tzXoGGpO",
+    "dispatchStartedAt": {
+      "_seconds": 1778991602,
+      "_nanoseconds": 41000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "status": "ready_for_driver",
+    "updatedAt": {
+      "_seconds": 1778991602,
+      "_nanoseconds": 41000000
+    }
+  },
+  {
+    "id": "sim_group_1_1780604067884",
+    "cityKey": "MENDIOLAZA",
+    "status": "ready_for_driver",
+    "occupiedSeats": 2,
+    "maxSeats": 4,
+    "passengerIds": [
+      "sim_pax_shared_1a",
+      "sim_pax_shared_1b"
+    ],
+    "isTestSimulation": true,
+    "finalRideId": "sim_ride_shared_1_1780604067884"
+  }
+]

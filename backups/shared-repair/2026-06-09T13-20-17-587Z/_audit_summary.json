@@ -1,0 +1,308 @@
+{
+  "timestamp": "2026-06-09T13-20-17-587Z",
+  "dryRun": false,
+  "issueCount": 50,
+  "repairCount": 52,
+  "issues": [
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "Adxrd2D9UelzrpIs2jFM",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [test_shared_a, test_shared_b]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "G0M0bQJxWW63rZ3C3P9r",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [test_shared_a, test_shared_b]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "Gpf7oDnPOuPewYcAFxwl",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [8rWJKMMONDbOBm5fYeNHf2bxoUb2, qLtGStKw00fr7DuEW2A4FwigzJQ2]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "K3OEzSKc7pEwVWeZPkIg",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [test_pax_parana_1, test_pax_parana_2]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "QYDMC5Vk0Wz3eUDcyObo",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [8rWJKMMONDbOBm5fYeNHf2bxoUb2, qLtGStKw00fr7DuEW2A4FwigzJQ2]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "UQyZOo9lfIeHV277ztnO",
+      "problem": "3 passenger(s) en groups.passengers[] sin requestId: [HYakOQJ8WqeauOHtn8VdcYlaSlK2, eMhDWqwmQMgoKMskjzTd2StwQaI3, qgKot462IpPER2l9uzB0uzJsqWP2]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "UR7CoG8AycBe3VxRBm4D",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [test_shared_a, test_shared_b]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "VyRgLm7g701bG8qJIKKJ",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [test_shared_a, test_shared_b]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "YNzFv1hHsZ2FyHBDf8sP",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [test_shared_a, test_shared_b]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "Z1wNossHOzDc3qMf5bdp",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [test_shared_a, test_shared_b]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "ZsFk7tzYyDzUGzVteSP1",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [HYakOQJ8WqeauOHtn8VdcYlaSlK2, eMhDWqwmQMgoKMskjzTd2StwQaI3]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "l0SMX3IvSy8ukaUiZsV1",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [HYakOQJ8WqeauOHtn8VdcYlaSlK2, qgKot462IpPER2l9uzB0uzJsqWP2]"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_groups",
+      "docId": "sim_group_1_1780604067884",
+      "problem": "requestIds.length=0 ≠ passengerIds.length=2 — arrays inconsistentes"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "test_group_1778985897890",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [test_shared_a, test_shared_b]"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "shared_ride_groups",
+      "docId": "yje1GCzGkC5lXwcb7ERY",
+      "problem": "2 passenger(s) en groups.passengers[] sin requestId: [HYakOQJ8WqeauOHtn8VdcYlaSlK2, qgKot462IpPER2l9uzB0uzJsqWP2]"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "3Epr8HwrRfxXbj7hwNeL",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "3Epr8HwrRfxXbj7hwNeL",
+      "problem": "Request en 'forming' con 35123 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "Ayc5R9x2fJXlne0p9lmp",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "Ayc5R9x2fJXlne0p9lmp",
+      "problem": "Request en 'forming' con 33801 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "J4I3fqFIHf8pJ1uMgRoI",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "J4I3fqFIHf8pJ1uMgRoI",
+      "problem": "Request en 'forming' con 32839 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "NVEMSlwREEPZOfNSUAM7",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "NVEMSlwREEPZOfNSUAM7",
+      "problem": "Request en 'forming' con 35297 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "QKTQ9JFFIXCif5qTTkKy",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "QKTQ9JFFIXCif5qTTkKy",
+      "problem": "Request en 'forming' con 26103 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "RgD6ZVLNhZvFQL92yQNO",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "RgD6ZVLNhZvFQL92yQNO",
+      "problem": "Request en 'forming' con 33656 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "SFPjutzzfSvsSWjYnHP4",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "SFPjutzzfSvsSWjYnHP4",
+      "problem": "Request en 'forming' con 4971 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "ZdUHHqv7FDGLpxmmwDNu",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "ZdUHHqv7FDGLpxmmwDNu",
+      "problem": "Request en 'forming' con 34495 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "aoqw4dkLlOw6ypNo9xc2",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "aoqw4dkLlOw6ypNo9xc2",
+      "problem": "Request en 'forming' con 32825 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "dvOAPqSoQuBoxrSvDWPh",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "dvOAPqSoQuBoxrSvDWPh",
+      "problem": "Request en 'forming' con 4878 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "i2JdVtRKig2GCeczrc9U",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "i2JdVtRKig2GCeczrc9U",
+      "problem": "Request en 'forming' con 4971 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "okPyrtlyuLdATrDszEHP",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "okPyrtlyuLdATrDszEHP",
+      "problem": "Request en 'forming' con 37239 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "onjTOn8T4lPXl4IkOMRv",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "onjTOn8T4lPXl4IkOMRv",
+      "problem": "Request en 'forming' con 4814 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "sim_req_b1_1778904413725",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "sim_req_b2_1778904413725",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "test_shared_next_1778764311906",
+      "problem": "Request activo sin groupId — huérfano (passengerId=115740886475467545470)"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "test_shared_next_1778764311906",
+      "problem": "Request en 'forming' con 37448 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "uNzkrpm7wPlqMzILm4Ia",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "vhSe9Tl7e3TRbYofXPPZ",
+      "problem": "Request activo (status=forming) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "MEDIUM",
+      "collection": "shared_ride_requests",
+      "docId": "vhSe9Tl7e3TRbYofXPPZ",
+      "problem": "Request en 'forming' con 26073 minutos de antigüedad (>60min)"
+    },
+    {
+      "severity": "CRITICAL",
+      "collection": "rides",
+      "docId": "shared_ZsFk7tzYyDzUGzVteSP1",
+      "problem": "2 sharedPassenger(s) sin requestId: [HYakOQJ8WqeauOHtn8VdcYlaSlK2, eMhDWqwmQMgoKMskjzTd2StwQaI3]. acceptRideV2 va a fallar."
+    },
+    {
+      "severity": "HIGH",
+      "collection": "rides",
+      "docId": "shared_ZsFk7tzYyDzUGzVteSP1",
+      "problem": "1 request(s) en estado incorrecto para ride con conductor asignado"
+    }
+  ]
+}

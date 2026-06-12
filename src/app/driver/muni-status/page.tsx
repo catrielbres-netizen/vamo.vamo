@@ -238,6 +238,8 @@ export default function DriverMuniStatusPage() {
     const [fileSelected, setFileSelected] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
 
+    const [cityConfig, setCityConfig] = useState<any>(null);
+
     useEffect(() => {
         if (featureFlags.vamoParticularModeEnabled || !featureFlags.municipalModeEnabled) {
             router.replace('/driver/profile');
@@ -273,6 +275,20 @@ export default function DriverMuniStatusPage() {
             unsubObs();
         };
     }, [firestore, user?.uid]);
+
+    useEffect(() => {
+        const targetCityKey = munProfile?.cityKey || profile?.cityKey;
+        if (!firestore || !targetCityKey) return;
+        console.log("[MUNI_STATUS] Subscribing to city config for:", targetCityKey);
+        const cityRef = doc(firestore, 'cities', targetCityKey);
+        const unsub = onSnapshot(cityRef, snap => {
+            if (snap.exists()) {
+                console.log("[MUNI_STATUS] Received city config:", snap.data().config);
+                setCityConfig(snap.data().config || {});
+            }
+        });
+        return () => unsub();
+    }, [firestore, munProfile?.cityKey, profile?.cityKey]);
 
     // All drivers use this page to manage their municipal status
     if (featureFlags.vamoParticularModeEnabled || !featureFlags.municipalModeEnabled) {
@@ -320,7 +336,13 @@ export default function DriverMuniStatusPage() {
     }
 
     const checklist = munProfile?.checklist;
-    const CHECKLIST_KEYS = Object.keys(CHECKLIST_LABELS) as MunicipalChecklistKey[];
+    const ALL_CHECKLIST_KEYS = Object.keys(CHECKLIST_LABELS) as MunicipalChecklistKey[];
+    
+    // Filtramos dinamicamente según la configuración de la ciudad
+    const CHECKLIST_KEYS = ALL_CHECKLIST_KEYS.filter(k => {
+        if (!cityConfig || !cityConfig.municipalRequirements) return true; // Default: se piden todos
+        return cityConfig.municipalRequirements[k] !== false; // Solo excluimos si está explícitamente en false
+    });
 
     const allApproved = checklist ? CHECKLIST_KEYS.every(k => checklist[k]?.status === 'approved') : false;
 
@@ -573,7 +595,7 @@ export default function DriverMuniStatusPage() {
                             <div className="flex flex-col items-center gap-6 py-6">
                                 <div className="relative p-4 bg-white rounded-3xl shadow-2xl overflow-hidden">
                                     <LazyQRCode 
-                                        value={`${typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.online'}/verify/driver/${user?.uid}`}
+                                        value={`${typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.com.ar'}/verify/driver/${user?.uid}`}
                                         size={180}
                                         level="H"
                                         marginSize={2}

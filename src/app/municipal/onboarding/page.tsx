@@ -17,7 +17,11 @@ import { httpsCallable } from 'firebase/functions';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { useAuth } from '@/firebase';
 
 interface City {
     id: string;
@@ -46,63 +50,31 @@ export default function OnboardingPage() {
     const [invitation, setInvitation] = useState<Invitation | null>(null);
     const [loading, setLoading] = useState(true);
     const [activating, setActivating] = useState(false);
+    const [password, setPassword] = useState('');
+    const auth = useAuth();
 
-    // Flujo Robusto: 
-    // 1. Si no hay usuario, mandarlo al login con redirect.
-    // 2. Si hay usuario, validar invitación directamente.
-    
     useEffect(() => {
-        if (userLoading) return;
-
-        if (!user) {
-            // No logueado: No podemos leer DB de forma segura/resiliente en prod sin reglas publicas.
-            // Mandamos a loguearse primero.
-            setLoading(false);
-            return;
-        }
-
         const resolveOnboarding = async () => {
             try {
-                if (!cityKey || !token || !firestore) return;
+                if (!cityKey || !token || !functions) return;
 
-                // Ahora que estamos logueados, tenemos permisos de lectura (signedIn)
-                const invitesSnap = await getDocs(query(
-                    collection(firestore, 'municipal_onboarding_invites'),
-                    where('token', '==', token),
-                    where('status', '==', 'sent')
-                ));
-
-                if (invitesSnap.empty) {
-                    setLoading(false);
-                    return;
-                }
-
-                const inviteData = invitesSnap.docs[0].data() as Invitation;
-                setInvitation(inviteData);
-
-                // Buscar la ciudad
-                const cityRef = doc(firestore, 'cities', cityKey);
-                const citySnap = await getDoc(cityRef);
+                const validateInvite = httpsCallable(functions, 'validateInvitationV1');
+                const result = await validateInvite({ cityKey, token });
+                const data = result.data as any;
                 
-                if (citySnap.exists()) {
-                    setCity({ ...citySnap.data(), id: citySnap.id } as City);
-                } else {
-                    // Fallback por si el ID no coincide pero el cityKey si
-                    const q = query(collection(firestore, 'cities'), where('cityKey', '==', cityKey));
-                    const qSnap = await getDocs(q);
-                    if (!qSnap.empty) {
-                        setCity({ ...qSnap.docs[0].data(), id: qSnap.docs[0].id } as City);
-                    }
-                }
-            } catch (e) {
+                setInvitation(data.invitation);
+                setCity(data.city);
+
+            } catch (e: any) {
                 console.error("Error resolving onboarding:", e);
+                // Si la invitacion no es valida, invitation queda null
             } finally {
                 setLoading(false);
             }
         };
 
         resolveOnboarding();
-    }, [user, userLoading, cityKey, token, firestore]);
+    }, [cityKey, token, functions]);
 
     const handleActivate = async () => {
         if (!user || !city || !invitation) return;
@@ -132,32 +104,32 @@ export default function OnboardingPage() {
         );
     }
 
-    // SI NO ESTÁ LOGUEADO: Mostrar pantalla de "Bienvenida + CTA Login"
-    if (!user) {
-        return (
-            <main className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-6">
-                <Card className="max-w-md w-full p-8 border-white/5 bg-zinc-900 shadow-2xl space-y-8 text-center">
-                    <div className="mx-auto w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center">
-                        <VamoIcon name="building" className="h-8 w-8 text-white" />
-                    </div>
-                    <div className="space-y-4">
-                        <h1 className="text-3xl font-black tracking-tighter">VamoMuni</h1>
-                        <p className="text-zinc-400 leading-relaxed">
-                            Has sido invitado a activar la gestión municipal de VamO. Para continuar, debés iniciar sesión con tu cuenta oficial.
-                        </p>
-                    </div>
-                    <Button 
-                        onClick={() => router.push(`/municipal/login?redirect=${encodeURIComponent(window.location.href)}`)}
-                        className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-lg font-bold rounded-xl"
-                    >
-                        Iniciar Sesión para Activar
-                    </Button>
-                </Card>
-            </main>
-        );
-    }
+    const handleRegisterAndActivate = async () => {
+        if (!auth || !city || !invitation || !invitation.municipalityEmail || !password) return;
+        setActivating(true);
 
-    // SI NO HAY INVITACIÓN (y ya está logueado)
+        try {
+            await createUserWithEmailAndPassword(auth, invitation.municipalityEmail, password);
+            // El usuario ahora está logueado y Firebase se encargará de setear 'user'
+            // Esperaremos a que 'user' se popule, o llamamos a handleActivate directo
+            // handleActivate usa 'user', pero createUser lo loguea.
+            
+            // Wait slightly for auth state to propagate, or just call the backend function since we are now authed!
+            const finalizeOnboarding = httpsCallable(functions, 'finalizeOnboardingV1');
+            await finalizeOnboarding({
+                cityKey: city.id,
+                token: token
+            });
+
+            toast({ title: "✅ Cuenta Creada y Activada", description: `Bienvenido a la gestión de ${city.name}.` });
+            router.push('/municipal/dashboard');
+        } catch (e: any) {
+            toast({ variant: "destructive", title: "Error al crear cuenta", description: e.message });
+            setActivating(false);
+        }
+    };
+
+    // SI NO HAY INVITACIÓN VALIDA
     if (!invitation || !city) {
         return (
             <main className="min-h-screen bg-black flex items-center justify-center p-6">
@@ -176,7 +148,7 @@ export default function OnboardingPage() {
         );
     }
 
-    // PANTALLA DE ACTIVACIÓN FINAL (Logueado + Invitación OK)
+    // PANTALLA DE ACTIVACIÓN FINAL
     return (
         <main className="min-h-screen bg-black text-white selection:bg-indigo-500/30">
             <div className="max-w-2xl mx-auto px-6 py-20 animate-in fade-in duration-700">
@@ -194,15 +166,45 @@ export default function OnboardingPage() {
                             </p>
                         </div>
 
-                        <div className="flex flex-col gap-4">
-                            <Button 
-                                onClick={handleActivate}
-                                disabled={activating}
-                                className="w-full h-16 bg-white hover:bg-zinc-100 text-black text-xl font-black rounded-2xl shadow-2xl transition-all active:scale-95 disabled:opacity-50"
-                            >
-                                {activating ? "ACTIVANDO..." : "CONFIRMAR ACTIVACIÓN"}
-                            </Button>
-                        </div>
+                        {!user ? (
+                            <div className="space-y-6 text-left bg-black/40 p-6 rounded-2xl border border-white/5">
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Email Oficial</Label>
+                                    <Input 
+                                        disabled
+                                        value={invitation.municipalityEmail}
+                                        className="h-12 bg-black border-white/10 text-zinc-400"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Crear Contraseña</Label>
+                                    <Input 
+                                        type="password"
+                                        placeholder="Mínimo 6 caracteres"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="h-12 bg-black border-white/10"
+                                    />
+                                </div>
+                                <Button 
+                                    onClick={handleRegisterAndActivate}
+                                    disabled={activating || password.length < 6}
+                                    className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl"
+                                >
+                                    {activating ? "ACTIVANDO..." : "CREAR CUENTA Y ACTIVAR"}
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-4">
+                                <Button 
+                                    onClick={handleActivate}
+                                    disabled={activating}
+                                    className="w-full h-16 bg-white hover:bg-zinc-100 text-black text-xl font-black rounded-2xl shadow-2xl transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    {activating ? "ACTIVANDO..." : "CONFIRMAR ACTIVACIÓN"}
+                                </Button>
+                            </div>
+                        )}
                     </section>
                 </Card>
             </div>

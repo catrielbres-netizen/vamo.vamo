@@ -62,6 +62,7 @@ export * from "./weeklyPool";
 export * from "./passengerWeeklyPool";
 export * from "./mercadopago_oauth";
 export * from "./payments";
+export * from "./fixUser";
 
 // Note: Ensure all sub-modules use getDb() from ./lib/firebaseAdmin 
 // to avoid "default Firebase app does not exist" errors.

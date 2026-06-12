@@ -106,9 +106,7 @@ export default function TaxiStandLoginPage() {
             <div className="w-full max-w-[420px] flex flex-col items-center animate-in fade-in zoom-in duration-500">
                 
                 <div className="w-full flex justify-center mb-10">
-                    <div className="w-[140px]">
-                        <VamoLogo variant="login" priority />
-                    </div>
+                    <VamoLogo variant="login" priority />
                 </div>
                 
                 <Card className="w-full bg-zinc-900 border-white/5 shadow-2xl rounded-[2.5rem] relative overflow-hidden">

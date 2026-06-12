@@ -15,13 +15,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { CURRENT_TERMS_VERSION } from "@/lib/legal-config";
 import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
+import { useSearchParams } from 'next/navigation';
+import { useActiveCities } from '@/hooks/useActiveCities';
+import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
 
 type Step = 'IDENTITY' | 'SECURITY' | 'PROFILE' | 'LEGAL' | 'PERMISSIONS' | 'FINALIZING';
 
-export default function OnboardingPasajeroPage() {
+function OnboardingPasajeroContent() {
     const router = useRouter();
     const { auth } = useFirebase();
     const { toast } = useToast();
+    const searchParams = useSearchParams();
+    const { cities, loading: citiesLoading } = useActiveCities();
+
+    const queryCity = searchParams.get('city');
+    const initialCity = queryCity || 'rawson';
+
     const [currentStep, setCurrentStep] = useState<Step>('IDENTITY');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -35,9 +44,33 @@ export default function OnboardingPasajeroPage() {
         surname: '',
         phone: '',
         dni: '',
-        cityKey: 'rawson',
+        cityKey: initialCity,
         termsAccepted: false
     });
+
+    // Update cityKey if query param or cities list changes and it's valid
+    useEffect(() => {
+        if (queryCity && cities.length > 0) {
+            const isValidCity = cities.some(c => c.cityKey === queryCity);
+            if (isValidCity) {
+                setFormData(prev => ({...prev, cityKey: queryCity}));
+            }
+        }
+    }, [queryCity, cities]);
+
+    // Handle Google SSO initialization
+    useEffect(() => {
+        const method = searchParams.get('method');
+        if (method === 'google' && auth?.currentUser) {
+            setCurrentStep('PROFILE');
+            setFormData(prev => ({
+                ...prev,
+                email: auth.currentUser?.email || prev.email,
+                name: prev.name || auth.currentUser?.displayName?.split(' ')[0] || '',
+                surname: prev.surname || auth.currentUser?.displayName?.split(' ').slice(1).join(' ') || ''
+            }));
+        }
+    }, [searchParams, auth?.currentUser]);
 
     // Security validation logic for the UI
     const isPasswordValid = formData.password.length >= 8;
@@ -112,6 +145,34 @@ export default function OnboardingPasajeroPage() {
         }
     };
 
+    const handleGoogleAuthSuccess = async (userCredential: any) => {
+        setIsSubmitting(true);
+        try {
+            const user = userCredential.user;
+            // Initialize Firestore document and Wallet (Atomic Backend)
+            const functions = getFunctions(undefined, 'us-central1');
+            const initBackend = httpsCallable(functions, 'completePassengerRegistrationV1');
+            await initBackend({
+                device: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'
+            });
+            console.log("[ONBOARDING] Backend initialized via Google.");
+            
+            setFormData(prev => ({
+                ...prev,
+                email: user.email || '',
+                name: user.displayName?.split(' ')[0] || '',
+                surname: user.displayName?.split(' ').slice(1).join(' ') || ''
+            }));
+            
+            nextStep('PROFILE');
+        } catch (error: any) {
+            console.error("[ONBOARDING_GOOGLE_ERROR]", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo completar el registro con Google.' });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const handleSaveProfile = async () => {
         if (!formData.name || !formData.surname || !formData.phone || !formData.dni) {
             toast({ variant: 'destructive', title: 'Faltan datos', description: 'Todos los campos son obligatorios.' });
@@ -162,14 +223,12 @@ export default function OnboardingPasajeroPage() {
     }
 
     return (
-        <main className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
             {/* Background elements */}
             <div className="absolute inset-0 bg-morphic opacity-20 pointer-events-none" />
             
             <div className="w-full max-w-sm flex flex-col items-center z-10">
-                <div className="w-24 mb-12">
-                    <VamoLogo variant="login" />
-                </div>
+                <div className="w-full flex justify-center mb-12"><VamoLogo variant="login" /></div>
 
                 {/* NO AnimatePresence or motion.div to ensure absolute stability */}
                 <div className="w-full">
@@ -202,6 +261,21 @@ export default function OnboardingPasajeroPage() {
                                 >
                                     Continuar
                                 </Button>
+                                <div className="pt-4">
+                                    <div className="relative mb-4">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <div className="w-full border-t border-white/5"></div>
+                                        </div>
+                                        <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
+                                            <span className="bg-zinc-950 px-4 text-zinc-600">O bien</span>
+                                        </div>
+                                    </div>
+                                    <GoogleAuthButton 
+                                        onSuccess={handleGoogleAuthSuccess}
+                                        disabled={isSubmitting}
+                                        mode="register"
+                                    />
+                                </div>
                             </div>
                         </div>
                     )}
@@ -298,17 +372,27 @@ export default function OnboardingPasajeroPage() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1">Ciudad</Label>
-                                    <Select value={formData.cityKey} onValueChange={val => setFormData({...formData, cityKey: val})}>
-                                        <SelectTrigger className="h-12 bg-zinc-900 border-white/5 rounded-xl text-white">
-                                            <SelectValue />
+                                    <Select 
+                                        value={formData.cityKey} 
+                                        onValueChange={val => setFormData({...formData, cityKey: val})}
+                                        disabled={!!queryCity || citiesLoading}
+                                    >
+                                        <SelectTrigger className="h-12 bg-zinc-900 border-white/5 rounded-xl text-white disabled:opacity-50">
+                                            <SelectValue placeholder={citiesLoading ? "Cargando..." : "Selecciona una ciudad"} />
                                         </SelectTrigger>
                                         <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                            <SelectItem value="rawson">Rawson / Playa</SelectItem>
-                                            <SelectItem value="trelew">Trelew</SelectItem>
-                                            <SelectItem value="comodoro">Comodoro Rivadavia</SelectItem>
-                                            <SelectItem value="parana">Paraná</SelectItem>
+                                            {citiesLoading ? (
+                                                <SelectItem value="loading" disabled>Cargando ciudades...</SelectItem>
+                                            ) : (
+                                                cities.map(city => (
+                                                    <SelectItem key={city.cityKey} value={city.cityKey}>{city.name}</SelectItem>
+                                                ))
+                                            )}
                                         </SelectContent>
                                     </Select>
+                                    {!!queryCity && (
+                                        <p className="text-[10px] text-indigo-400 italic ml-1 mt-1">Ciudad asignada por enlace municipal.</p>
+                                    )}
                                 </div>
                                 <Button 
                                     onClick={handleSaveProfile}
@@ -381,6 +465,14 @@ export default function OnboardingPasajeroPage() {
                     )}
                 </div>
             </div>
-        </main>
+        </div>
+    );
+}
+
+export default function OnboardingPasajeroPage() {
+    return (
+        <React.Suspense fallback={<VamoFullScreenLoader loadingText="Cargando entorno..." />}>
+            <OnboardingPasajeroContent />
+        </React.Suspense>
     );
 }

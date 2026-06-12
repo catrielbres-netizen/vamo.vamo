@@ -1,0 +1,30 @@
+[
+  {
+    "id": "nV0LXpW7VCqOA7QDVG1D",
+    "isSharedRide": true,
+    "sharedGroupId": "xz0OmE0a5xi2nzle0lbT",
+    "cityKey": "rawson",
+    "orderedStopsPreview": [],
+    "totalEstimatedPrice": 16956,
+    "status": "searching",
+    "origin": {
+      "address": "Gregorio Mayo 155",
+      "lat": -43.3000316,
+      "lng": -65.10204200000001,
+      "city": "Rawson"
+    },
+    "destination": {
+      "address": "John Thomas 213",
+      "lat": -43.3316683,
+      "lng": -65.0566317,
+      "city": "Rawson"
+    },
+    "lastMatchingFailureReason": "NO_DRIVERS_NEARBY",
+    "searchRadiusKmUsed": 2.5,
+    "matchingAttempts": 1,
+    "updatedAt": {
+      "_seconds": 1780765199,
+      "_nanoseconds": 396000000
+    }
+  }
+]

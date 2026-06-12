@@ -33,6 +33,22 @@ export function resolveCityFromCoords(lat: number, lng: number): string {
 }
 
 /**
+ * Returns the default map coordinates for a given cityKey.
+ * Useful for centering maps when there is no origin selected.
+ */
+export function getCityDefaultLocation(cityKey?: string): { lat: number, lng: number } {
+    switch (cityKey?.toLowerCase()) {
+        case 'trelew':
+            return { lat: -43.2533, lng: -65.3096 };
+        case 'mercedes':
+            return { lat: -34.6515, lng: -59.4307 };
+        case 'rawson':
+        default:
+            return { lat: -43.3002, lng: -65.1023 };
+    }
+}
+
+/**
  * Comprehensive resolver that logs the source and ensures a result.
  */
 export async function resolveCity(

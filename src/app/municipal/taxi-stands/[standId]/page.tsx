@@ -6,6 +6,8 @@ import { doc, getDoc, updateDoc, collection, query, where, getDocs, GeoPoint } f
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { QRCodeSVG } from 'qrcode.react';
+import { getCityDefaultLocation } from '@/lib/city-resolution';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -197,8 +199,8 @@ function TaxiStandDetailContent() {
     const [editRepEmail, setEditRepEmail] = useState('');
 
     // Map states
-    const [mapCenter, setMapCenter] = useState({ lat: -43.3002, lng: -65.1023 });
-    const [markerPosition, setMarkerPosition] = useState({ lat: -43.3002, lng: -65.1023 });
+    const [mapCenter, setMapCenter] = useState(getCityDefaultLocation(profile?.cityKey));
+    const [markerPosition, setMarkerPosition] = useState(getCityDefaultLocation(profile?.cityKey));
 
     // Reverse geocoding services
     const geocodingLib = useMapsLibrary('geocoding');
@@ -277,8 +279,8 @@ function TaxiStandDetailContent() {
             setEditAddress(standData.address || '');
 
             const coords = {
-                lat: getLat(standData.location) || -43.3002,
-                lng: getLng(standData.location) || -65.1023
+                lat: getLat(standData.location) || getCityDefaultLocation(profile?.cityKey).lat,
+                lng: getLng(standData.location) || getCityDefaultLocation(profile?.cityKey).lng
             };
             setEditLat(coords.lat.toString());
             setEditLng(coords.lng.toString());
@@ -378,8 +380,8 @@ function TaxiStandDetailContent() {
     useEffect(() => {
         if (stand && isEditing) {
             const coords = {
-                lat: stand.location?.latitude || -43.3002,
-                lng: stand.location?.longitude || -65.1023
+                lat: stand.location?.latitude || getCityDefaultLocation(profile?.cityKey).lat,
+                lng: stand.location?.longitude || getCityDefaultLocation(profile?.cityKey).lng
             };
             setMapCenter(coords);
             setMarkerPosition(coords);

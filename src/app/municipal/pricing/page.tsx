@@ -46,54 +46,44 @@ export default function MunicipalPricingPage() {
                     const data = municipalSnap.data() as PricingConfig;
                     setConfig(data);
                     
-                    // Unified Source: Extract dynamic config from the same document
                     if (data.dynamicPricing) {
                         setDynamicConfig(data.dynamicPricing);
                     } else {
                         console.log("[MUNI_PRICING] No dynamicPricing found in municipal doc");
                     }
                 } else {
-                    console.log("[MUNI_PRICING] No municipal doc found, fetching global fallback");
-                    // 2. Fallback to global pricing for default values
-                    const globalSnap = await getDoc(doc(firestore, 'config', 'pricing'));
-                    if (globalSnap.exists()) {
-                        console.log("[MUNI_PRICING] Global fallback loaded");
-                        setConfig(globalSnap.data() as PricingConfig);
-                    } else {
-                        console.log("[MUNI_PRICING] Total fallback triggered: using memory defaults");
-                        // 3. Last resort fallback (in memory defaults)
-                        setConfig({
-                            version: 1,
-                            DAY_BASE_FARE: 1483,
-                            DAY_PRICE_PER_100M: 152,
-                            DAY_WAITING_PER_MIN: 220,
-                            NIGHT_BASE_FARE: 1652,
-                            NIGHT_PRICE_PER_100M: 189,
-                            NIGHT_WAITING_PER_MIN: 277,
-                            MINIMUM_FARE: 1500,
-                            PLATFORM_COMMISSION_RATE: 200, 
-                            commission_particular: 0.13,
-                            commission_taxi_remis: 0.07,
-                            municipal_percentage: 0.05,
-                            ASSISTANCE_FEE: 400, 
-                            assistanceEnabled: true
-                        });
-                    }
+                    console.log("[MUNI_PRICING] No municipal doc found, initializing empty");
+                    // Force 0 for new municipalities so they have to fill it
+                    setConfig({
+                        version: 0,
+                        DAY_BASE_FARE: 0,
+                        DAY_PRICE_PER_100M: 0,
+                        DAY_WAITING_PER_MIN: 0,
+                        NIGHT_BASE_FARE: 0,
+                        NIGHT_PRICE_PER_100M: 0,
+                        NIGHT_WAITING_PER_MIN: 0,
+                        MINIMUM_FARE: 0,
+                        PLATFORM_COMMISSION_RATE: 200, 
+                        commission_particular: 0.13,
+                        commission_taxi_remis: 0.07,
+                        municipal_percentage: 0.05,
+                        ASSISTANCE_FEE: 400, 
+                        assistanceEnabled: true
+                    });
                 }
             } catch (error) {
                 console.error("[MUNI_PRICING] error loading:", error);
-                toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron cargar las tarifas de red. Usando valores sugeridos.' });
-                // Emergency fallback on error to let user save
+                toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron cargar las tarifas. Usando valores vacíos.' });
                 if (!config) {
                     setConfig({
                         version: 0,
-                        DAY_BASE_FARE: 1483,
-                        DAY_PRICE_PER_100M: 152,
-                        DAY_WAITING_PER_MIN: 220,
-                        NIGHT_BASE_FARE: 1652,
-                        NIGHT_PRICE_PER_100M: 189,
-                        NIGHT_WAITING_PER_MIN: 277,
-                        MINIMUM_FARE: 1500,
+                        DAY_BASE_FARE: 0,
+                        DAY_PRICE_PER_100M: 0,
+                        DAY_WAITING_PER_MIN: 0,
+                        NIGHT_BASE_FARE: 0,
+                        NIGHT_PRICE_PER_100M: 0,
+                        NIGHT_WAITING_PER_MIN: 0,
+                        MINIMUM_FARE: 0,
                         PLATFORM_COMMISSION_RATE: 200, 
                         commission_particular: 0.13,
                         commission_taxi_remis: 0.07,

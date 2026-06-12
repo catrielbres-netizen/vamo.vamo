@@ -74,7 +74,7 @@ export function DriverReferralsPanel() {
   const handleShare = async () => {
     const code = profile?.referralCode;
     if (!code) { handleGenerateCode(); return; }
-    const link = `https://vamoapp.online/driver?ref=${code}`;
+    const link = `https://vamoapp.com.ar/driver?ref=${code}`;
     const text = `Sumate a manejar con VamO y ganá más 🚀\nRegistrate desde mi link:\n${link}`;
     if (navigator.share) {
       try { await navigator.share({ title: 'VamO Conductor 🚀', text }); return; } catch (_) {}

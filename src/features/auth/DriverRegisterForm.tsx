@@ -11,17 +11,35 @@ import { useFirestore } from '@/firebase';
 import { AuthInput } from './AuthInput';
 import { Button } from '@/components/ui/button';
 import { VamoIcon } from '@/components/VamoIcon';
+import { useSearchParams } from 'next/navigation';
+import { useActiveCities } from '@/hooks/useActiveCities';
 
 export function DriverRegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const firestore = useFirestore();
+  const { cities, loading: citiesLoading } = useActiveCities();
+
+  const queryCity = searchParams.get('city');
+  const initialCity = queryCity || 'rawson';
+
   const [email, setEmail] = useState('');
   const [confirmEmail, setConfirmEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [cityKey, setCityKey] = useState<'rawson' | 'trelew' | 'comodoro'>('rawson');
+  const [cityKey, setCityKey] = useState(initialCity);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Update cityKey if query param or cities list changes and it's valid
+  useEffect(() => {
+      if (queryCity && cities.length > 0) {
+          const isValidCity = cities.some(c => c.cityKey === queryCity);
+          if (isValidCity) {
+              setCityKey(queryCity);
+          }
+      }
+  }, [queryCity, cities]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,13 +172,20 @@ export function DriverRegisterForm() {
             <select 
                 value={cityKey} 
                 onChange={(e: any) => setCityKey(e.target.value)}
-                className="w-full h-12 bg-white/[0.03] border border-white/10 rounded-2xl px-4 text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                disabled={!!queryCity || citiesLoading}
+                className="w-full h-12 bg-white/[0.03] border border-white/10 rounded-2xl px-4 text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                <option value="rawson" className="bg-zinc-900">Rawson / Playa Unión</option>
-                <option value="trelew" className="bg-zinc-900">Trelew</option>
-                <option value="comodoro" className="bg-zinc-900">Comodoro Rivadavia</option>
-                <option value="parana" className="bg-zinc-900">Paraná</option>
+                {citiesLoading ? (
+                    <option value="" className="bg-zinc-900">Cargando ciudades...</option>
+                ) : (
+                    cities.map(city => (
+                        <option key={city.cityKey} value={city.cityKey} className="bg-zinc-900">{city.name}</option>
+                    ))
+                )}
             </select>
+            {!!queryCity && (
+                <p className="text-[10px] text-indigo-400 italic ml-1">Ciudad asignada por enlace municipal.</p>
+            )}
         </div>
       </div>
 

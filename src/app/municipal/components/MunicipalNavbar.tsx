@@ -11,6 +11,8 @@ import { signOut } from 'firebase/auth'
 import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 import { CITIES } from '@/lib/cityData';
 import { VamoLogo } from '@/components/branding/VamoLogo';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useActiveCities } from '@/hooks/useActiveCities';
 
 const navLinks = [
     { href: '/municipal/dashboard',  label: 'Dashboard',   icon: 'layout-dashboard' },
@@ -21,10 +23,12 @@ const navLinks = [
     { href: '/municipal/passengers', label: 'Pasajeros',   icon: 'contact' },
     { href: '/traffic',              label: 'Tránsito',    icon: 'shield-check' },
     { href: '/municipal/treasury',   label: 'Tesorería',   icon: 'landmark' },
+    { href: '/municipal/benefits',   label: 'Beneficios',  icon: 'gift' },
     { href: '/municipal/team',       label: 'Equipo',      icon: 'shield' },
     { href: '/municipal/pricing',    label: 'Tarifas',     icon: 'banknote' },
     { href: '/municipal/settings/payments', label: 'Cobros', icon: 'credit-card' },
     { href: '/municipal/settings',   label: 'Diseño',      icon: 'palette' },
+    { href: '/municipal/settings/config', label: 'Configuración', icon: 'settings' },
 ]
 
 const HUB_CITY_KEY = 'rawson';
@@ -35,6 +39,7 @@ export function MunicipalNavbar() {
   const router    = useRouter()
   const { profile } = useUser()
   const { cityKey: currentCityKey, cityName, setCityOverride, isGlobalAdmin, isMuniAdmin, isOperator, isTreasury, isTraffic } = useMunicipalContext();
+  const { cities, loading: citiesLoading } = useActiveCities();
 
   const filteredLinks = navLinks.filter(link => {
       if (link.href === '/municipal/team') return isMuniAdmin;
@@ -44,8 +49,10 @@ export function MunicipalNavbar() {
       if (link.href === '/municipal/passengers') return isOperator || isMuniAdmin;
       if (link.href === '/municipal/alerts') return isTraffic || isOperator || isMuniAdmin;
       if (link.href === '/municipal/treasury') return isTreasury || isMuniAdmin;
+      if (link.href === '/municipal/benefits') return isMuniAdmin;
       if (link.href === '/municipal/traffic') return isTraffic || isMuniAdmin;
       if (link.href === '/municipal/settings/payments') return isMuniAdmin;
+      if (link.href === '/municipal/settings/config') return isMuniAdmin;
       return true;
   });
 
@@ -66,6 +73,20 @@ export function MunicipalNavbar() {
             <div className="flex flex-col items-start gap-2">
                 <VamoLogo variant="navbar" />
                 <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 pl-1 mt-1">Muni <span className="text-white">{currentCityName}</span></p>
+                {isGlobalAdmin && (
+                    <div className="mt-2 w-full">
+                        <Select value={currentCityKey || "rawson"} onValueChange={handleCityChange}>
+                            <SelectTrigger className="w-full h-8 bg-white/5 border-white/10 text-[10px] font-black uppercase tracking-widest text-white rounded-xl">
+                                <SelectValue placeholder={citiesLoading ? "CARGANDO..." : "CIUDAD"} />
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-950 border-white/10 text-white z-50">
+                                {cities.map(city => (
+                                    <SelectItem key={city.cityKey} value={city.cityKey}>{city.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
             </div>
         </div>
 

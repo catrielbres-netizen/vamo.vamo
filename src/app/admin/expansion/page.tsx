@@ -275,17 +275,6 @@ export default function ExpansionDashboardPage() {
                                             </div>
                                             
                                             <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] font-bold text-zinc-600 uppercase">Estado</span>
-                                                    <span className={cn(
-                                                        "text-xs font-black uppercase tracking-widest",
-                                                        city.status === 'active' ? 'text-emerald-400' 
-                                                        : city.status === 'invited' ? 'text-amber-500'
-                                                        : 'text-zinc-500'
-                                                    )}>
-                                                        {city.status}
-                                                    </span>
-                                                </div>
                                                 <div className="flex flex-col gap-3 w-full">
                                                     <div className="flex items-center justify-between w-full">
                                                         <div className="flex flex-col">
@@ -356,7 +345,7 @@ export default function ExpansionDashboardPage() {
                                                     {city.status === 'invited' && (processedInvites[city.cityKey] || processedInvites[city.cityKey.toLowerCase()]) && (
                                                         <div className="p-2 rounded bg-black/40 border border-white/5 overflow-hidden">
                                                             <p className="text-[9px] font-mono text-indigo-400/60 break-all select-all">
-                                                                {(processedInvites[city.cityKey] || processedInvites[city.cityKey.toLowerCase()]).replace(/https?:\/\/vamo\.vamo/g, process.env.NEXT_PUBLIC_BASE_URL || 'https://vamoapp.online')}
+                                                                {(processedInvites[city.cityKey] || processedInvites[city.cityKey.toLowerCase()]).replace(/https?:\/\/(vamo\.vamo|vamoapp\.online)/g, process.env.NEXT_PUBLIC_BASE_URL || 'https://studio-6697160840-7c67f.web.app')}
                                                             </p>
                                                         </div>
                                                     )}

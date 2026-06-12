@@ -349,7 +349,8 @@ export function calculateSettlement(
     trackingPoints: admin.firestore.DocumentData[], 
     pricing: PricingConfig,
     expansionRates?: ExpansionIncentive['currentRates'],
-    passengerData?: UserProfile
+    passengerData?: UserProfile,
+    cityConfig?: any
 ) {
     // 1. Prioritize pricing snapshot tariffMode if available
     let isNight = false;
@@ -461,17 +462,22 @@ export function calculateSettlement(
 
     const cityKey = rideData.cityKey || 'rawson';
 
-    // New Commission Model: 10% total (6% VamO, 2% Muni, 1% Taxi, 1% Remis)
-    const totalCommissionRate = 0.10;
+    // Dynamic Commission Model based on Municipal Config
+    const vamoRate = 0.06;
+    const muniRate = (cityConfig?.commissions?.municipalPercentage || 0) / 100;
+    const taxiRate = (cityConfig?.commissions?.taxiUnionPercentage || 0) / 100;
+    const remisRate = (cityConfig?.commissions?.remisUnionPercentage || 0) / 100;
+    
+    const totalCommissionRate = vamoRate + muniRate + taxiRate + remisRate;
 
     // Driver calculations use totalFare (Single Source of Truth for Gross Fare)
     const driverFareRef = totalFare;
     
     const commissionAmount = Math.round(driverFareRef * totalCommissionRate);
-    const vamoAmount = Math.round(driverFareRef * 0.06);
-    const municipalAmount = Math.round(driverFareRef * 0.02);
-    const taxiAssociationAmount = Math.round(driverFareRef * 0.01);
-    const remisAssociationAmount = Math.round(driverFareRef * 0.01);
+    const vamoAmount = Math.round(driverFareRef * vamoRate);
+    const municipalAmount = Math.round(driverFareRef * muniRate);
+    const taxiAssociationAmount = Math.round(driverFareRef * taxiRate);
+    const remisAssociationAmount = Math.round(driverFareRef * remisRate);
     const totalAssociationsAmount = taxiAssociationAmount + remisAssociationAmount;
     
     const driverNetAmount  = driverFareRef - commissionAmount;
@@ -762,13 +768,29 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
         const driverSubtype = after.driverSubtypeSnapshot || 'express';
         const totalFare = after.pricing?.estimatedTotal || 0;
         
-        // New Commission Model
-        const totalCommissionRate = 0.10;
+        // Fetch City Config for exact rates if available
+        let cityConfig: any = null;
+        try {
+            const cSnap = await db.collection('cities').doc(after.cityKey || 'rawson').get();
+            if (cSnap.exists) cityConfig = cSnap.data()?.config;
+        } catch (e) {
+            logger.warn(`Could not fetch cityConfig for simulation ${rideId}`, e);
+        }
+
+        // Dynamic Commission Model
+        const vamoRate = 0.06;
+        const muniRate = (cityConfig?.commissions?.municipalPercentage || 0) / 100;
+        const taxiRate = (cityConfig?.commissions?.taxiUnionPercentage || 0) / 100;
+        const remisRate = (cityConfig?.commissions?.remisUnionPercentage || 0) / 100;
+        
+        const totalCommissionRate = vamoRate + muniRate + taxiRate + remisRate;
         const commissionAmount = Math.round(totalFare * totalCommissionRate);
-        const vamoAmount = Math.round(totalFare * 0.06);
-        const municipalAmount = Math.round(totalFare * 0.02);
-        const taxiAssociationAmount = Math.round(totalFare * 0.01);
-        const remisAssociationAmount = Math.round(totalFare * 0.01);
+
+        const vamoAmount = Math.round(totalFare * vamoRate);
+        const municipalAmount = Math.round(totalFare * muniRate);
+        const taxiAssociationAmount = Math.round(totalFare * taxiRate);
+        const remisAssociationAmount = Math.round(totalFare * remisRate);
+        
         const totalAssociationsAmount = taxiAssociationAmount + remisAssociationAmount;
         const driverEarnings = totalFare - commissionAmount;
 
@@ -965,7 +987,8 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             const passengerData = passengerSnap.data() as UserProfile;
             logger.log(`[SETTLEMENT CALC] Calculating for driver: ${driverData.name}, Subtype: ${driverData.driverSubtype}`);
 
-            const settlementData = calculateSettlement(rideData, driverData, trackingPoints, pricingConfig, expansionRates, passengerData);
+            const cityDocData = citySnap.exists ? citySnap.data() : null;
+            const settlementData = calculateSettlement(rideData, driverData, trackingPoints, pricingConfig, expansionRates, passengerData, cityDocData?.config);
             const { commissionAmount } = settlementData;
             
             logger.log(`[SETTLEMENT VALUES] commission: ${commissionAmount}`);
@@ -3300,7 +3323,10 @@ export const updateProfileV1 = onCall({ cors: true, region: "us-central1" }, asy
             if (cityKey) {
                 const normalizedKey = normalizeCityKey(cityKey);
                 updates.cityKey = normalizedKey;
-                updates.city = city || (normalizedKey === 'rawson' ? 'Rawson' : (normalizedKey === 'trelew' ? 'Trelew' : city));
+                const derivedCity = city || cityLabel || (normalizedKey === 'rawson' ? 'Rawson' : (normalizedKey === 'trelew' ? 'Trelew' : (normalizedKey.charAt(0).toUpperCase() + normalizedKey.slice(1))));
+                if (derivedCity) {
+                    updates.city = derivedCity;
+                }
             } else if (city) {
                 updates.city = city;
             }

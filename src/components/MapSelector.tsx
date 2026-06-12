@@ -12,6 +12,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 interface MapSelectorProps {
     onLocationSelect: (place: Place) => void;
     initialLocation?: Place | null;
+    cityKey?: string;
 }
 
 const formatAddress = (fullAddress: string): string => {
@@ -19,8 +20,10 @@ const formatAddress = (fullAddress: string): string => {
     return parts.length > 1 ? parts[0] : fullAddress;
 }
 
-export default function MapSelector({ onLocationSelect, initialLocation }: MapSelectorProps) {
-    const defaultCenter = { lat: -43.3002, lng: -65.1023 };
+import { getCityDefaultLocation } from '@/lib/city-resolution';
+
+export default function MapSelector({ onLocationSelect, initialLocation, cityKey }: MapSelectorProps) {
+    const defaultCenter = getCityDefaultLocation(cityKey);
     const center = initialLocation ? { lat: initialLocation.lat, lng: initialLocation.lng } : defaultCenter;
     const [pinLocation, setPinLocation] = useState(center);
     const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);

@@ -26,7 +26,7 @@ export const inviteMunicipalityV1 = functions.https.onCall(async (data: any, con
     const inviteId = `${cityKey}_${Date.now()}`;
     const inviteRef = db.collection("municipal_onboarding_invites").doc(inviteId);
     
-    const baseUrl = process.env.VAMO_BASE_URL || 'https://vamoapp.online';
+    const baseUrl = process.env.VAMO_BASE_URL || 'https://studio-6697160840-7c67f.web.app';
     const onboardingUrl = `${baseUrl}/municipal/onboarding?cityKey=${cityKey}&token=${token}`;
 
     await inviteRef.set({
@@ -162,13 +162,13 @@ export const finalizeOnboardingV1 = functions.https.onCall(async (data: any, con
         updatedAt: FieldValue.serverTimestamp()
     });
 
-    // Update User
+    // Update User (use set with merge to avoid 'no document to update' errors for newly created users)
     const userRef = db.collection("users").doc(context.auth.uid);
-    batch.update(userRef, {
+    batch.set(userRef, {
         role: 'admin_municipal',
         cityKey,
         updatedAt: FieldValue.serverTimestamp()
-    });
+    }, { merge: true });
 
     // Mark Invite Used
     batch.update(inviteDoc.ref, { 

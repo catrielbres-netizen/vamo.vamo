@@ -1069,6 +1069,19 @@ export interface City {
         broadcastEnabled: boolean;
         pricing?: PricingConfig;
         rewardsConfig?: RewardsConfig;
+        
+        // --- Configuracion Operativa y Requisitos ---
+        municipalRequirements?: Partial<Record<MunicipalChecklistKey, boolean>>;
+        allowNewDriverRegistrations?: boolean;
+        requireMunicipalApproval?: boolean;
+        enforceStrictDocumentExpiry?: boolean;
+        commissions?: {
+            municipalPercentage: number;
+            taxiUnionPercentage: number;
+            taxiUnionMPAccount?: string;
+            remisUnionPercentage: number;
+            remisUnionMPAccount?: string;
+        };
     };
 
     createdAt: FirestoreTimestamp | FirestoreFieldValue;

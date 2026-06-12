@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { VamoIcon } from '@/components/VamoIcon';
 import { DriverOnboardingWizard } from './DriverOnboardingWizard';
 import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
+import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
 
 export default function DriverRegisterClient() {
     const { user, profile, loading } = useUser();
@@ -103,6 +104,27 @@ export default function DriverRegisterClient() {
         }
     };
 
+    const handleGoogleAuthSuccess = async (userCredential: any) => {
+        setIsSubmitting(true);
+        try {
+            console.log("[ONBOARDING_DEBUG] Google Auth success. Calling backend for atomic registration...");
+            const { getFunctions, httpsCallable } = await import('firebase/functions');
+            const functions = getFunctions(undefined, 'us-central1');
+            const completeRegistration = httpsCallable(functions, 'completeDriverRegistrationV1');
+
+            await completeRegistration({});
+            console.log("[ONBOARDING_DEBUG] Backend registration success.");
+
+            toast({ title: '¡Cuenta creada con Google!', description: 'Ahora completá tu perfil de conductor.' });
+            // The component will re-render and show the wizard because `user` is now defined
+        } catch (error: any) {
+            console.error('Google Signup Error:', error);
+            toast({ variant: 'destructive', title: 'Error de registro', description: error.message });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 py-12">
             <div className="w-full max-w-lg space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -171,6 +193,22 @@ export default function DriverRegisterClient() {
                             >
                                 {isSubmitting ? <VamoIcon name="loader" className="animate-spin h-5 w-5" /> : 'Siguiente Paso'}
                             </Button>
+
+                            <div className="pt-2">
+                                <div className="relative mb-4">
+                                    <div className="absolute inset-0 flex items-center">
+                                        <div className="w-full border-t border-white/5"></div>
+                                    </div>
+                                    <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
+                                        <span className="bg-zinc-900 px-4 text-zinc-600">O bien</span>
+                                    </div>
+                                </div>
+                                <GoogleAuthButton 
+                                    onSuccess={handleGoogleAuthSuccess}
+                                    disabled={isSubmitting}
+                                    mode="register"
+                                />
+                            </div>
 
                             <div className="text-center pt-2">
                                 <button 

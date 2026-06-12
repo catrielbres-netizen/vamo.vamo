@@ -16,6 +16,7 @@ import { useFirebase } from '@/firebase/provider';
 import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
 
 interface LoginPageClientProps {
     fixedRole?: 'passenger' | 'driver';
@@ -160,6 +161,50 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
         }
     };
 
+    const handleGoogleAuthSuccess = async (userCredential: any) => {
+        if (!firestore) return;
+        setIsSubmitting(true);
+        try {
+            const user = userCredential.user;
+            const userDoc = await getDoc(doc(firestore, 'users', user.uid));
+            if (userDoc.exists()) {
+                const profile = userDoc.data();
+                if (profile.role === 'admin') {
+                    router.push('/admin');
+                    return;
+                }
+                if (profile.registrationStatus !== 'active') {
+                    if (profile.role === 'driver') {
+                        router.push('/driver/register');
+                    } else {
+                        router.push('/dashboard/complete-profile');
+                    }
+                    return;
+                }
+                if (profile.role === 'driver') {
+                    router.push('/driver');
+                } else if (profile.role === 'passenger') {
+                    router.push('/dashboard');
+                } else {
+                    router.push('/auth/continue');
+                }
+            } else {
+                // Nuevo usuario de Google, redirigir a completar perfil
+                if (fixedRole === 'driver') {
+                    router.push('/driver/register?method=google');
+                } else {
+                    router.push('/pasajero/onboarding?method=google');
+                }
+            }
+        } catch (err) {
+            console.error("Error checking Google Auth profile:", err);
+            toast({ variant: 'destructive', title: 'Error', description: 'Ocurrió un error al verificar tu perfil.' });
+            await signOut(auth);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const handlePasswordReset = async () => {
         if (!email) {
             setErrors({ email: 'Ingresá tu email para restablecer.' });
@@ -186,9 +231,7 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
             <div className="w-full max-w-[420px] flex flex-col items-center animate-in fade-in zoom-in duration-500">
                 
                 <div className="w-full flex justify-center mb-10">
-                    <div className="w-[140px]">
-                        <VamoLogo variant="login" priority />
-                    </div>
+                    <VamoLogo variant="login" priority />
                 </div>
                 
                 <Card className="w-full bg-zinc-900 border-white/5 shadow-2xl rounded-[2.5rem]">
@@ -256,6 +299,14 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                             >
                                 {isSubmitting ? <VamoIcon name="loader" className="animate-spin" /> : 'INICIAR SESIÓN'}
                             </Button>
+
+                            <div className="pt-2">
+                                <GoogleAuthButton 
+                                    onSuccess={handleGoogleAuthSuccess}
+                                    disabled={isSubmitting}
+                                    mode="login"
+                                />
+                            </div>
                         </div>
 
                         <div className="relative">

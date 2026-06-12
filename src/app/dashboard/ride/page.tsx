@@ -21,7 +21,7 @@ import { RideReceipt } from '@/components/RideReceipt';
 import { useMapsAvailability } from '@/components/MapsProvider';
 import { useMapsLibrary } from '@vis.gl/react-google-maps';
 import { ACTIVE_RIDE_STATES } from '@/lib/ride-status';
-import { resolveCity } from '@/lib/city-resolution';
+import { resolveCity, getCityDefaultLocation } from '@/lib/city-resolution';
 import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
 import PlaceAutocompleteInput from '@/components/PlaceAutocompleteInput';
 import { canPassengerRequestRide } from '@/lib/eligibility';
@@ -742,7 +742,7 @@ function RidePageContent() {
           style={{ display: showRideStatus ? 'none' : 'block' }}
         >
           <Map
-            defaultCenter={{ lat: origin?.lat || -43.3002, lng: origin?.lng || -65.1023 }}
+            defaultCenter={origin ? { lat: origin.lat, lng: origin.lng } : getCityDefaultLocation(profile?.cityKey)}
             defaultZoom={15}
             disableDefaultUI={true}
             gestureHandling="greedy"
@@ -800,6 +800,7 @@ function RidePageContent() {
                             placeholder="Punto de partida" 
                             iconName="map-pin" 
                             iconClassName="text-indigo-400"
+                            cityKey={profile?.cityKey}
                         />
                         <button 
                             onClick={() => handleOpenMapSelector('origin')}
@@ -816,6 +817,7 @@ function RidePageContent() {
                             placeholder="¿A dónde vas?" 
                             iconName="flag" 
                             iconClassName="text-emerald-400"
+                            cityKey={profile?.cityKey}
                         />
                         <button 
                             onClick={() => handleOpenMapSelector('destination')}
@@ -1023,11 +1025,11 @@ function RidePageContent() {
                              <>
                                  <div className="flex justify-between items-center text-xs px-1">
                                      <span className="font-bold text-white/40 uppercase tracking-tight">Tarifa reconocida</span>
-                                     <span className={cn("font-black", expressDiscountAmount > 0 && serviceType !== 'shared' ? "line-through text-white/40" : "text-white/80")}>
+                                     <span className={cn("font-black", expressDiscountAmount > 0 ? "line-through text-white/40" : "text-white/80")}>
                                          ${estimatedPrice}
                                      </span>
                                  </div>
-                                 {expressDiscountAmount > 0 && serviceType !== 'shared' && (
+                                 {expressDiscountAmount > 0 && (
                                      <div className="flex justify-between items-center text-xs px-1 mt-1">
                                          <div className="flex items-center gap-1.5 font-bold text-amber-400 uppercase tracking-tight">
                                              <VamoIcon name="zap" className="w-3 h-3" />
@@ -1130,7 +1132,11 @@ function RidePageContent() {
                       Mueve el mapa para seleccionar el punto exacto de origen o destino.
                   </DialogDescription>
               </DialogHeader>
-              <MapSelector initialLocation={mapEditingField === 'origin' ? origin : destination} onLocationSelect={handleMapSelect} />
+              <MapSelector 
+                  onLocationSelect={handleMapSelect} 
+                  initialLocation={mapEditingField === 'origin' ? origin : destination} 
+                  cityKey={profile?.cityKey}
+              />
           </DialogContent>
       </Dialog>
 

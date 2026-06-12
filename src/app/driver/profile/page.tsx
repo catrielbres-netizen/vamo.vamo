@@ -333,7 +333,7 @@ export default function DriverProfilePage() {
                     <div className="flex flex-col items-center gap-4 text-center">
                         <div className="relative p-4 bg-white rounded-3xl shadow-2xl overflow-hidden">
                             <LazyQRCode
-                                value={`${typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.online'}/verify/driver/${user?.uid}`}
+                                value={`${typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.com.ar'}/verify/driver/${user?.uid}`}
                                 size={180}
                                 level="H"
                                 marginSize={2}

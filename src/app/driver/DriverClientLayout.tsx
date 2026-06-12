@@ -563,12 +563,7 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
 
   useBackNavigationLock(!!shouldShowActiveRide);
 
-  // LOCK EFFECT: Force redirect to active ride page if they attempt to escape
-  useEffect(() => {
-    if (shouldShowActiveRide && !pathname.startsWith('/driver/rides')) {
-       router.replace('/driver/rides');
-    }
-  }, [shouldShowActiveRide, pathname, router]);
+  // Navigation lock is handled by useBackNavigationLock and hidden tabs.
 
   if (!profile?.profileCompleted) return <main>{children}</main>;
 

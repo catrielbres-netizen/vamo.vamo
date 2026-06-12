@@ -19,6 +19,7 @@ import { VamoLogo } from '@/components/branding/VamoLogo';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { CURRENT_TERMS_VERSION } from '@/lib/legal-config';
 import { featureFlags, PLAN_B_DRIVER_SUBTYPE } from '@/config/features';
+import { useActiveCities } from '@/hooks/useActiveCities';
 
 // --- Steps Configuration ---
 const STEPS = [
@@ -38,6 +39,7 @@ export function DriverOnboardingWizard() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const { cities } = useActiveCities();
 
   console.log("[ONBOARDING_DEBUG] DriverOnboardingWizard mount - UID:", user?.uid, "Step:", currentStep);
 
@@ -585,13 +587,8 @@ export function DriverOnboardingWizard() {
                            <div className="flex items-center gap-2">
                              <VamoIcon name="map-pin" className="w-4 h-4" />
                              <span className="font-bold">{
-                                formData.cityKey === 'rawson' ? 'Rawson / Playa Unión' :
-                                formData.cityKey === 'trelew' ? 'Trelew' :
-                                formData.cityKey === 'madryn' ? 'Puerto Madryn' :
-                                formData.cityKey === 'comodoro' ? 'Comodoro Rivadavia' :
-                                formData.cityKey === 'esquel' ? 'Esquel' :
-                                formData.cityKey === 'sarmiento' ? 'Sarmiento' :
-                                formData.cityKey === 'parana' ? 'Paraná' : formData.cityKey
+                                cities.find(c => c.cityKey === formData.cityKey)?.name || 
+                                (formData.cityKey === 'rawson' ? 'Rawson / Playa Unión' : formData.cityKey.toUpperCase())
                              }</span>
                            </div>
                            <button type="button" onClick={getCurrentLocation} disabled={isLocating} className="text-xs font-bold uppercase hover:text-white transition-colors">

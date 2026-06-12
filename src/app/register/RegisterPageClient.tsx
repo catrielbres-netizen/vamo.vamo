@@ -115,9 +115,7 @@ export default function RegisterPageClient() {
             <Card className="w-full max-w-[420px] bg-zinc-900 border-white/5 shadow-2xl">
                 <CardHeader className="text-center pb-2">
                     <div className="w-full flex justify-center mb-6">
-                        <div className="w-[140px]">
-                            <VamoLogo variant="login" priority />
-                        </div>
+                        <VamoLogo variant="login" priority />
                     </div>
                     <CardTitle className="text-2xl font-black text-white">Crear Cuenta</CardTitle>
                     <CardDescription>Sumate a la red de pasajeros VamO</CardDescription>

@@ -133,7 +133,7 @@ function NewTaxiStandForm() {
     const { toast } = useToast();
     const router = useRouter();
 
-    const defaultCoords = { lat: -43.3002, lng: -65.1023 };
+    const defaultCoords = getCityDefaultLocation(profile?.cityKey);
 
     const [name, setName] = useState('');
     const [address, setAddress] = useState('');
