@@ -358,29 +358,36 @@ export default function MunicipalConfigPage() {
                         <div>
                             <h2 className="text-lg font-black uppercase tracking-tight text-white flex items-center gap-2">
                                 <VamoIcon name="file-text" className="w-5 h-5 text-amber-400" />
-                                Apartado Ingresos Brutos
+                                Ingresos Brutos del Conductor
                             </h2>
                             <p className="text-xs text-zinc-400 mt-1">
-                                Porcentaje destinado a impuestos provinciales retenido por viaje.
+                                Este porcentaje se aparta automáticamente de cada viaje para que el conductor pueda retirarlo una vez por mes y pagar ingresos brutos.
                             </p>
                         </div>
                     </div>
 
-                    <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 flex justify-between items-center max-w-sm">
-                        <div className="space-y-1">
-                            <label className="text-sm font-black text-white uppercase tracking-tight">Retención (%)</label>
-                            <p className="text-xs text-zinc-500">El máximo permitido es 2%</p>
+                    <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 space-y-4">
+                        <div className="flex justify-between items-center max-w-sm">
+                            <div className="space-y-1">
+                                <label className="text-sm font-black text-white uppercase tracking-tight">Retención (%)</label>
+                                <p className="text-xs text-zinc-500">Mínimo: 0% | Máximo recomendado: 2%</p>
+                            </div>
+                            <Select value={grossReceiptsTaxRate.toString()} onValueChange={(val) => setGrossReceiptsTaxRate(Number(val))}>
+                                <SelectTrigger className="w-[100px] border-zinc-700 bg-zinc-900 font-bold text-amber-400">
+                                    <SelectValue placeholder="2%" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                                    <SelectItem value="0">0%</SelectItem>
+                                    <SelectItem value="1">1%</SelectItem>
+                                    <SelectItem value="2">2%</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
-                        <Select value={grossReceiptsTaxRate.toString()} onValueChange={(val) => setGrossReceiptsTaxRate(Number(val))}>
-                            <SelectTrigger className="w-[100px] border-zinc-700 bg-zinc-900 font-bold text-amber-400">
-                                <SelectValue placeholder="0%" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                                <SelectItem value="0">0%</SelectItem>
-                                <SelectItem value="1">1%</SelectItem>
-                                <SelectItem value="2">2%</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                            <p className="text-xs text-blue-300 font-medium">
+                                💡 Este importe no forma parte de la comisión VamO, ni de la comisión municipal, ni de asociaciones. Es un apartado contable separado del saldo disponible del conductor.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
