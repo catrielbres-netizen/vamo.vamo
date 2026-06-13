@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VamoIcon } from '@/components/VamoIcon';
 import { MunicipalChecklistKey } from '@/lib/types';
 
@@ -34,8 +35,25 @@ export default function MunicipalConfigPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Requirements State
-    const [requirements, setRequirements] = useState<Record<MunicipalChecklistKey, boolean>>({} as any);
+    type DriverRequirements = Record<MunicipalChecklistKey, boolean>;
+    const defaultReqs = {} as DriverRequirements;
+    CHECKLIST_KEYS.forEach(k => defaultReqs[k] = true);
+
+    // Requirements State (per type)
+    const [requirements, setRequirements] = useState<Record<string, DriverRequirements>>({
+        taxi: { ...defaultReqs },
+        remis: { ...defaultReqs },
+        particular: { ...defaultReqs },
+        fleet_driver: { ...defaultReqs }
+    });
+
+    // Driver Types State
+    const [allowedDriverTypes, setAllowedDriverTypes] = useState({
+        particular: true,
+        taxi: true,
+        remis: true,
+        fleet_driver: true
+    });
 
     // Operational Settings State
     const [allowNewDriverRegistrations, setAllowNewDriverRegistrations] = useState(true);
@@ -69,13 +87,32 @@ export default function MunicipalConfigPage() {
                     const data = snapshot.data();
                     const config = data.config || {};
                     
-                    // Defaults for requirements: all true if undefined
-                    const reqs = config.municipalRequirements || {};
-                    const initialReqs = {} as Record<MunicipalChecklistKey, boolean>;
-                    CHECKLIST_KEYS.forEach(k => {
-                        initialReqs[k] = reqs[k] ?? true;
+                    // Legacy requirements fallback
+                    const legacyReqs = config.municipalRequirements || {};
+                    const buildReqs = (typeSpecific: any) => {
+                        const out = {} as DriverRequirements;
+                        CHECKLIST_KEYS.forEach(k => {
+                            out[k] = typeSpecific?.[k] ?? legacyReqs[k] ?? true;
+                        });
+                        return out;
+                    };
+
+                    const docReqs = config.documentRequirements || {};
+                    setRequirements({
+                        taxi: buildReqs(docReqs.taxi),
+                        remis: buildReqs(docReqs.remis),
+                        particular: buildReqs(docReqs.particular),
+                        fleet_driver: buildReqs(docReqs.fleet_driver)
                     });
-                    setRequirements(initialReqs);
+
+                    // Defaults for driver types
+                    const dTypes = config.allowedDriverTypes || {};
+                    setAllowedDriverTypes({
+                        particular: dTypes.particular ?? true,
+                        taxi: dTypes.taxi ?? true,
+                        remis: dTypes.remis ?? true,
+                        fleet_driver: dTypes.fleet_driver ?? true,
+                    });
 
                     // Defaults for operational
                     setAllowNewDriverRegistrations(config.allowNewDriverRegistrations ?? true);
@@ -114,7 +151,9 @@ export default function MunicipalConfigPage() {
         try {
             const docRef = doc(firestore, 'cities', cityKey);
             await updateDoc(docRef, {
-                'config.municipalRequirements': requirements,
+                'config.allowedDriverTypes': allowedDriverTypes,
+                'config.documentRequirements': requirements,
+                'config.municipalRequirements': requirements.taxi, // Legacy fallback
                 'config.allowNewDriverRegistrations': allowNewDriverRegistrations,
                 'config.requireMunicipalApproval': requireMunicipalApproval,
                 'config.enforceStrictDocumentExpiry': enforceStrictDocumentExpiry,
@@ -157,32 +196,100 @@ export default function MunicipalConfigPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Tipos de Conductor Habilitados */}
+                <div className="bg-card border border-border p-6 rounded-[2.5rem] space-y-6 md:col-span-2">
+                    <div>
+                        <h2 className="text-lg font-black uppercase tracking-tight text-white flex items-center gap-2">
+                            <VamoIcon name="users" className="w-5 h-5 text-indigo-400" />
+                            Tipos de Conductor Habilitados
+                        </h2>
+                        <p className="text-xs text-zinc-400 mt-1">
+                            Definí qué opciones le aparecerán a los conductores al momento de registrarse en esta municipalidad.
+                        </p>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="flex items-center justify-between bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800">
+                            <div className="space-y-1">
+                                <label className="text-sm font-semibold text-zinc-200 cursor-pointer">Taxi</label>
+                            </div>
+                            <Switch 
+                                checked={allowedDriverTypes.taxi}
+                                onCheckedChange={(val) => setAllowedDriverTypes(prev => ({ ...prev, taxi: val }))}
+                            />
+                        </div>
+                        <div className="flex items-center justify-between bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800">
+                            <div className="space-y-1">
+                                <label className="text-sm font-semibold text-zinc-200 cursor-pointer">Remís</label>
+                            </div>
+                            <Switch 
+                                checked={allowedDriverTypes.remis}
+                                onCheckedChange={(val) => setAllowedDriverTypes(prev => ({ ...prev, remis: val }))}
+                            />
+                        </div>
+                        <div className="flex items-center justify-between bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800">
+                            <div className="space-y-1">
+                                <label className="text-sm font-semibold text-zinc-200 cursor-pointer">Particular</label>
+                            </div>
+                            <Switch 
+                                checked={allowedDriverTypes.particular}
+                                onCheckedChange={(val) => setAllowedDriverTypes(prev => ({ ...prev, particular: val }))}
+                            />
+                        </div>
+                        <div className="flex items-center justify-between bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800">
+                            <div className="space-y-1">
+                                <label className="text-sm font-semibold text-zinc-200 cursor-pointer">Chofer Vinculado</label>
+                            </div>
+                            <Switch 
+                                checked={allowedDriverTypes.fleet_driver}
+                                onCheckedChange={(val) => setAllowedDriverTypes(prev => ({ ...prev, fleet_driver: val }))}
+                            />
+                        </div>
+                    </div>
+                </div>
+
                 {/* Documentación Requerida */}
-                <div className="bg-card border border-border p-6 rounded-[2.5rem] space-y-6">
+                <div className="bg-card border border-border p-6 rounded-[2.5rem] space-y-6 md:col-span-2">
                     <div>
                         <h2 className="text-lg font-black uppercase tracking-tight text-white flex items-center gap-2">
                             <VamoIcon name="file-text" className="w-5 h-5 text-indigo-400" />
                             Documentación Obligatoria
                         </h2>
                         <p className="text-xs text-zinc-400 mt-1">
-                            Desactivá los documentos que no apliquen en tu municipalidad.
+                            Configurá qué documentos son obligatorios para cada tipo de conductor en tu municipio.
                         </p>
                     </div>
                     
-                    <div className="space-y-4">
-                        {CHECKLIST_KEYS.map(key => (
-                            <div key={key} className="flex items-center justify-between">
-                                <label className="text-sm font-semibold text-zinc-200 cursor-pointer" htmlFor={`req-${key}`}>
-                                    {CHECKLIST_LABELS[key]}
-                                </label>
-                                <Switch 
-                                    id={`req-${key}`}
-                                    checked={requirements[key]}
-                                    onCheckedChange={(val) => setRequirements(prev => ({ ...prev, [key]: val }))}
-                                />
-                            </div>
+                    <Tabs defaultValue="taxi" className="w-full">
+                        <TabsList className="bg-zinc-900 border border-white/5 mb-6 rounded-2xl w-full flex overflow-x-auto h-auto p-1">
+                            <TabsTrigger value="taxi" className="flex-1 rounded-xl font-bold py-3 data-[state=active]:bg-indigo-600 data-[state=active]:text-white">Taxi</TabsTrigger>
+                            <TabsTrigger value="remis" className="flex-1 rounded-xl font-bold py-3 data-[state=active]:bg-indigo-600 data-[state=active]:text-white">Remís</TabsTrigger>
+                            <TabsTrigger value="particular" className="flex-1 rounded-xl font-bold py-3 data-[state=active]:bg-indigo-600 data-[state=active]:text-white">Particular</TabsTrigger>
+                            <TabsTrigger value="fleet_driver" className="flex-1 rounded-xl font-bold py-3 data-[state=active]:bg-indigo-600 data-[state=active]:text-white">Chofer</TabsTrigger>
+                        </TabsList>
+                        
+                        {['taxi', 'remis', 'particular', 'fleet_driver'].map((type) => (
+                            <TabsContent key={type} value={type} className="space-y-4 focus-visible:outline-none focus-visible:ring-0">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-zinc-900/30 p-6 rounded-3xl border border-white/5">
+                                    {CHECKLIST_KEYS.map(key => (
+                                        <div key={key} className="flex items-center justify-between p-3 rounded-2xl bg-zinc-900/50 border border-white/5">
+                                            <label className="text-sm font-semibold text-zinc-200 cursor-pointer" htmlFor={`req-${type}-${key}`}>
+                                                {CHECKLIST_LABELS[key]}
+                                            </label>
+                                            <Switch 
+                                                id={`req-${type}-${key}`}
+                                                checked={requirements[type][key]}
+                                                onCheckedChange={(val) => setRequirements(prev => ({ 
+                                                    ...prev, 
+                                                    [type]: { ...prev[type], [key]: val } 
+                                                }))}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </TabsContent>
                         ))}
-                    </div>
+                    </Tabs>
                 </div>
 
                 {/* Reglas Operativas */}

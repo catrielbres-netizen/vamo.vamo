@@ -198,10 +198,10 @@ export const completeDriverOnboardingV1 = onCall({ cors: true, region: "us-centr
         initialPlanBStatus = 'city_waiting_activation';
     }
 
-    const extraData: any = {};
-    if (featureFlags.vamoParticularModeEnabled) {
-        extraData.driverSubtype = PLAN_B_DRIVER_SUBTYPE; // Forzado en Plan B
-    }
+    const extraData: any = {
+        driverSubtype: data.driverSubtype,
+        fleetOwnerId: data.fleetOwnerId || null,
+    };
 
     const parseExpiry = (dateStr?: string) => {
         if (!dateStr) return null;
