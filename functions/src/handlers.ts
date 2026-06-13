@@ -2495,7 +2495,7 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
         
         // Also clear driver if assigned
         if (rideData.driverId) {
-            transaction.update(db.doc(`drivers/${rideData.driverId}`), {
+            transaction.update(db.doc(`users/${rideData.driverId}`), {
                 activeRideId: FieldValue.delete(),
                 updatedAt: FieldValue.serverTimestamp()
             });

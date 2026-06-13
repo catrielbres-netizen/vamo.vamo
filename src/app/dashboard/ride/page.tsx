@@ -552,6 +552,12 @@ function RidePageContent() {
       setIsCancelling(false);
       setWatchedRideId(null);
       setCompletedRideId(null);
+      setSheetState('collapsed');
+      setOverrideRequestId?.(null);
+
+      if (serviceType === 'shared') {
+          setOverrideGroupId?.(null);
+      }
 
       // [VamO PRO] Proactive Firestore Cleanup to avoid hangs
       if (user && firestore && (profile?.activeRideId || profile?.activeSharedRideId)) {
@@ -568,7 +574,7 @@ function RidePageContent() {
               console.error("[CLEANUP] Failed to clear active ride pointers:", e);
           }
       }
-    }, [user, firestore, profile?.activeRideId, (profile as any)?.activeSharedRideId]);
+    }, [user, firestore, profile?.activeRideId, (profile as any)?.activeSharedRideId, serviceType, setOverrideRequestId, setOverrideGroupId]);
 
   const handleOpenMapSelector = (field: 'origin' | 'destination') => {
       setMapEditingField(field);
