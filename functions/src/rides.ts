@@ -912,6 +912,7 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
                 paymentMethod: paymentMethodSnapshot,
                 paymentSnapshot,
                 pricingSnapshot: pricingModel.pricingSnapshot, // [SETTLEMENT_FIX] top-level for easy access
+                isScheduled,
                 scheduledAt: isScheduled ? (typeof scheduledAt === 'number' ? Timestamp.fromMillis(scheduledAt) : scheduledAt) : null,
                 legalAcceptance: {
                     termsVersion: passengerProfile.termsVersion || 'v1.2',
