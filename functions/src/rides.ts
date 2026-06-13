@@ -320,25 +320,30 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
                     const rData = rSnap.data() as Ride;
                     if (rData.status !== 'searching') return;
 
+                    const rideUpdate: any = {
+                        status: 'cancelled',
+                        cancelledBy: 'system',
+                        cancelReason: 'MAX_MATCHING_ATTEMPTS_REACHED',
+                        cancelledAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp()
+                    };
+                    const userUpdate: any = { activeRideId: null };
+
                     // [VamO PRO] Unified Financial & Policy Handler (Must read before write)
                     await handleRideCancellationFinancials({
                         rideId,
                         reason: 'MAX_MATCHING_ATTEMPTS_REACHED',
                         actor: 'system',
                         tx,
-                        rideData: rData
+                        rideData: rData,
+                        rideUpdate,
+                        userUpdate
                     });
 
-                    tx.update(rideRef, {
-                        status: 'cancelled',
-                        cancelledBy: 'system',
-                        cancelReason: 'MAX_MATCHING_ATTEMPTS_REACHED',
-                        cancelledAt: FieldValue.serverTimestamp(),
-                        updatedAt: FieldValue.serverTimestamp()
-                    });
+                    tx.update(rideRef, rideUpdate);
 
                     if (rData.passengerId) {
-                        tx.update(db.doc(`users/${rData.passengerId}`), { activeRideId: null });
+                        tx.update(db.doc(`users/${rData.passengerId}`), userUpdate);
                     }
                 });
             }
@@ -450,14 +455,14 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
                     cityKey: pricingMunicipalityKey,
                     passengerRiskSummary: riskSummary,
                     // [VamO Compartido] Copy shared properties to offer
-                    rideType: rideData.rideType,
-                    isSharedRide: rideData.isSharedRide,
-                    sharedGroupId: (rideData as any).sharedGroupId,
-                    sharedPassengerCount: (rideData as any).sharedPassengerCount,
-                    sharedFarePerPassenger: (rideData as any).sharedFarePerPassenger,
-                    pickupStopsCount: (rideData as any).pickupStops?.length,
-                    dropoffStopsCount: (rideData as any).dropoffStops?.length,
-                    orderedStopsPreview: (rideData as any).orderedStops,
+                    rideType: rideData.rideType || 'standard',
+                    isSharedRide: rideData.isSharedRide || false,
+                    sharedGroupId: (rideData as any).sharedGroupId ?? null,
+                    sharedPassengerCount: (rideData as any).sharedPassengerCount ?? null,
+                    sharedFarePerPassenger: (rideData as any).sharedFarePerPassenger ?? null,
+                    pickupStopsCount: (rideData as any).pickupStops?.length ?? null,
+                    dropoffStopsCount: (rideData as any).dropoffStops?.length ?? null,
+                    orderedStopsPreview: (rideData as any).orderedStops ?? null,
                     individualFareReference: (rideData as any).estimatedIndividualFare || 0,
                     driverBenefitAmount: (rideData as any).driverBenefitAmount || 0,
                     sharedPassengers: (rideData as any).sharedPassengers || []
@@ -534,14 +539,14 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
                     cityKey: pricingMunicipalityKey,
                     passengerRiskSummary: riskSummary,
                     // [VamO Compartido] Copy shared properties to offer
-                    rideType: rideData.rideType,
-                    isSharedRide: rideData.isSharedRide,
-                    sharedGroupId: (rideData as any).sharedGroupId,
-                    sharedPassengerCount: (rideData as any).sharedPassengerCount,
-                    sharedFarePerPassenger: (rideData as any).sharedFarePerPassenger,
-                    pickupStopsCount: (rideData as any).pickupStops?.length,
-                    dropoffStopsCount: (rideData as any).dropoffStops?.length,
-                    orderedStopsPreview: (rideData as any).orderedStops,
+                    rideType: rideData.rideType || 'standard',
+                    isSharedRide: rideData.isSharedRide || false,
+                    sharedGroupId: (rideData as any).sharedGroupId ?? null,
+                    sharedPassengerCount: (rideData as any).sharedPassengerCount ?? null,
+                    sharedFarePerPassenger: (rideData as any).sharedFarePerPassenger ?? null,
+                    pickupStopsCount: (rideData as any).pickupStops?.length ?? null,
+                    dropoffStopsCount: (rideData as any).dropoffStops?.length ?? null,
+                    orderedStopsPreview: (rideData as any).orderedStops ?? null,
                     individualFareReference: (rideData as any).estimatedIndividualFare || 0,
                     driverBenefitAmount: (rideData as any).driverBenefitAmount || 0,
                     sharedPassengers: (rideData as any).sharedPassengers || []
@@ -1479,25 +1484,30 @@ export const scheduledRideWorkerV1 = onSchedule({ schedule: "every 1 minutes", t
                 const rData = rSnap.data() as Ride;
                 if (rData.status !== 'searching') return;
 
+                const rideUpdate: any = {
+                    status: 'cancelled',
+                    cancelledBy: 'system',
+                    cancelReason: 'GLOBAL_SEARCH_TIMEOUT',
+                    updatedAt: now,
+                    cancelledAt: now
+                };
+                const userUpdate: any = { activeRideId: null };
+
                 // [VamO PRO] Unified Financial & Policy Handler (Must read before write)
                 await handleRideCancellationFinancials({
                     rideId,
                     reason: 'GLOBAL_SEARCH_TIMEOUT',
                     actor: 'system',
                     tx,
-                    rideData: rData
+                    rideData: rData,
+                    rideUpdate,
+                    userUpdate
                 });
 
-                tx.update(doc.ref, {
-                    status: 'cancelled',
-                    cancelledBy: 'system',
-                    cancelReason: 'GLOBAL_SEARCH_TIMEOUT',
-                    updatedAt: now,
-                    cancelledAt: now
-                });
+                tx.update(doc.ref, rideUpdate);
 
                 if (rData.passengerId) {
-                    tx.update(db.doc(`users/${rData.passengerId}`), { activeRideId: null });
+                    tx.update(db.doc(`users/${rData.passengerId}`), userUpdate);
                 }
             });
             continue;

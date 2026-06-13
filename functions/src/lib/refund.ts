@@ -15,13 +15,17 @@ export async function handleRideCancellationFinancials({
     reason,
     actor,
     tx,
-    rideData
+    rideData,
+    rideUpdate,
+    userUpdate
 }: {
     rideId: string,
     reason: string,
     actor: 'system' | 'passenger' | 'driver' | 'admin',
     tx: admin.firestore.Transaction,
-    rideData: Ride
+    rideData: Ride,
+    rideUpdate: any,
+    userUpdate: any
 }) {
     const db = getDb();
     const passengerId = rideData.passengerId;
@@ -34,8 +38,7 @@ export async function handleRideCancellationFinancials({
     const userRef = db.doc(`users/${passengerId}`);
     const lockTxRef = db.collection('wallet_transactions').doc(`lock_${rideId}`);
     const lockedCreditsQuery = db.collection('passenger_credits')
-        .where('rideId', '==', rideId)
-        .where('status', '==', 'locked');
+        .where('rideId', '==', rideId);
 
     // Perform all reads in parallel
     const [userSnap, lockSnap, lockedCreditsSnap] = await Promise.all([
@@ -71,16 +74,18 @@ export async function handleRideCancellationFinancials({
             // 1.2 Credits Release
             if (creditCovered > 0 && !lockedCreditsSnap.empty) {
                 lockedCreditsSnap.forEach(doc => {
-                    tx.update(doc.ref, {
-                        status: 'active',
-                        rideId: FieldValue.delete(),
-                        lockedAmount: FieldValue.delete()
-                    });
+                    if (doc.data().status === 'locked') {
+                        tx.update(doc.ref, {
+                            status: 'active',
+                            rideId: FieldValue.delete(),
+                            lockedAmount: FieldValue.delete()
+                        });
+                    }
                 });
             }
 
             // 1.3 Mark Ride as Refunded
-            tx.update(db.doc(`rides/${rideId}`), {
+            Object.assign(rideUpdate, {
                 walletRefunded: true,
                 walletRefundedAmount: walletCovered + creditCovered,
                 walletRefundedAt: FieldValue.serverTimestamp(),
@@ -115,7 +120,7 @@ export async function handleRideCancellationFinancials({
             const weekInMs = 7 * 24 * 60 * 60 * 1000;
             if (!lastResetAt || (now.toMillis() - lastResetAt.toMillis() > weekInMs)) {
                 currentCount = 0;
-                tx.update(userRef, {
+                Object.assign(userUpdate, {
                     weeklyCancellationsResetAt: now
                 });
             }
@@ -137,9 +142,9 @@ export async function handleRideCancellationFinancials({
                 logger.warn(`[PASSENGER_LIMIT] User ${passengerId} limited until ${blockedUntil.toDate().toISOString()} due to 3rd weekly cancellation.`);
             }
 
-            tx.update(userRef, updatePayload);
+            Object.assign(userUpdate, updatePayload);
             
-            tx.update(db.doc(`rides/${rideId}`), {
+            Object.assign(rideUpdate, {
                 countsAgainstPassenger: true,
                 passengerWeeklyCancellationCount: nextCount
             });

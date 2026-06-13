@@ -1672,6 +1672,11 @@ export async function settleSharedRideFinancialsV1(rideId: string) {
             const cityKey = rideData.cityKey || 'rawson';
             const pricing = await getPricingConfig(cityKey);
 
+            if (!rideData.sharedGroupId) {
+                logger.error(`[SHARED_SETTLEMENT_ERROR] Ride ${rideId} is missing sharedGroupId.`);
+                return;
+            }
+
             const requestsSnap = await tx.get(
                 db.collection('shared_ride_requests').where('groupId', '==', rideData.sharedGroupId)
             );

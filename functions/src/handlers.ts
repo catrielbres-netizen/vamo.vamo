@@ -2359,6 +2359,8 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
     }
 
     const { rideId, reason } = request.data;
+    logger.info(`[CANCEL_RIDE_START] User ${uid} attempting to cancel ride ${rideId} with reason ${reason}`);
+
     if (!rideId) {
         throw new HttpsError("invalid-argument", "Se requiere el ID del viaje.");
     }
@@ -2438,16 +2440,7 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
             }
         }
 
-        // [VamO PRO] Unified Financial & Policy Handler (All reads before writes)
-        await handleRideCancellationFinancials({
-            rideId,
-            reason: reason || 'CANCELLED_BY_USER',
-            actor: cancelledByRole,
-            tx: transaction,
-            rideData
-        });
-
-        transaction.update(rideRef, {
+        const rideUpdate: any = {
             status: 'cancelled',
             cancelledBy: cancelledByRole,
             cancelReason: reason || 'Sin motivo especificado',
@@ -2458,7 +2451,25 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
                 cancelFeeReason,
                 cancelFeeCharged: false,
             } : {})
+        };
+
+        const userUpdate: any = {
+            activeRideId: FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp()
+        };
+
+        // [VamO PRO] Unified Financial & Policy Handler (All reads before writes)
+        await handleRideCancellationFinancials({
+            rideId,
+            reason: reason || 'CANCELLED_BY_USER',
+            actor: cancelledByRole,
+            tx: transaction,
+            rideData,
+            rideUpdate,
+            userUpdate
         });
+
+        transaction.update(rideRef, rideUpdate);
 
         // [CRITICAL FIX] Clear activeRideId for passengers
         if (rideData.isSharedRide && rideData.sharedGroupId) {
@@ -2479,10 +2490,7 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
             }
         } else if (rideData.passengerId) {
             // Normal ride: Clear single passenger
-            transaction.update(db.doc(`users/${rideData.passengerId}`), {
-                activeRideId: FieldValue.delete(),
-                updatedAt: FieldValue.serverTimestamp()
-            });
+            transaction.update(db.doc(`users/${rideData.passengerId}`), userUpdate);
         }
         
         // Also clear driver if assigned
@@ -2492,6 +2500,9 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
                 updatedAt: FieldValue.serverTimestamp()
             });
         }
+    }).catch((error) => {
+        logger.error(`[CANCEL_RIDE_ERROR] Failed to cancel ride ${rideId}:`, error);
+        throw new HttpsError("internal", "Error interno al cancelar el viaje.", error.message);
     });
 
     return { success: true };

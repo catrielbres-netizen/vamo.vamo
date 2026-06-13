@@ -11,6 +11,7 @@ export interface WalletInfo {
     promoBalance: number;
     totalBalance: number;
     currency: string;
+    grossReceiptsBalance?: number;
     lastUpdated?: any;
 }
 

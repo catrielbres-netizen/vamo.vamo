@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Loader2 } from 'lucide-react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -50,6 +51,25 @@ export default function DriverEarningsPage() {
     const [isWithdrawalDialogOpen, setIsWithdrawalDialogOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [selectedTx, setSelectedTx] = useState<any | null>(null);
+    const [isWithdrawingGross, setIsWithdrawingGross] = useState(false);
+
+    const handleGrossReceiptsWithdrawal = async () => {
+        setIsWithdrawingGross(true);
+        try {
+            const functions = getFunctions(undefined, 'us-central1');
+            const withdrawGrossReceiptsV1 = httpsCallable(functions, 'withdrawGrossReceiptsV1');
+            const res: any = await withdrawGrossReceiptsV1();
+            if (res.data?.status === 'SUCCESS') {
+                toast({ title: 'Retiro Exitoso', description: `Se han acreditado ${formatCurrency(res.data.amountWithdrawn)} a tu saldo disponible.` });
+            } else {
+                toast({ variant: 'destructive', title: 'Error', description: 'No se pudo retirar el fondo.' });
+            }
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'No se pudo retirar el fondo.' });
+        } finally {
+            setIsWithdrawingGross(false);
+        }
+    };
 
     useEffect(() => {
         const mpStatus = searchParams.get('mp_status');
@@ -125,6 +145,29 @@ export default function DriverEarningsPage() {
                             <VamoIcon name="credit-card" className="mr-1 w-3 h-3" /> Cargar
                         </Button>
                     </div>
+                    
+                    {wallet?.grossReceiptsBalance !== undefined ? (
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-1">Fondo de Ingresos Brutos</p>
+                            <div className="flex justify-between items-center">
+                                <p className="text-2xl font-black text-amber-500 tracking-tighter">
+                                    {formatCurrency(wallet.grossReceiptsBalance)}
+                                </p>
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="text-amber-500 border-amber-500/30 hover:bg-amber-500/20 text-[10px] uppercase font-black tracking-widest h-9" 
+                                    onClick={handleGrossReceiptsWithdrawal}
+                                    disabled={isWithdrawingGross || wallet.grossReceiptsBalance <= 0}
+                                >
+                                    {isWithdrawingGross ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Reclamar'}
+                                </Button>
+                            </div>
+                            <p className="text-[9px] font-bold text-amber-500/60 mt-2 uppercase tracking-widest">
+                                Acumulado de retenciones mensuales.
+                            </p>
+                        </div>
+                    ) : null}
                 </CardContent>
             </Card>
 

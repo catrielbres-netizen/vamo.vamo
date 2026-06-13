@@ -419,34 +419,39 @@ async function cancelRideViaWatchdog(rideId: string, cancelReason: string) {
         const passengerRef = db.collection('users').doc(passengerId);
         const passengerSnap = await tx.get(passengerRef);
         
-        // Execute financials inside transaction (safely refunds/releases passenger locked wallet funds)
-        await handleRideCancellationFinancials({
-            rideId,
-            reason: cancelReason,
-            actor: 'system',
-            tx,
-            rideData
-        });
-        
-        // Update ride document
-        tx.update(rideRef, {
+        const rideUpdate: any = {
             status: 'cancelled',
             cancelledBy: 'system',
             cancelReason,
             cancelledAt: admin.firestore.Timestamp.now(),
             updatedAt: admin.firestore.Timestamp.now(),
             watchdogInterventionAt: admin.firestore.Timestamp.now()
+        };
+        const userUpdate: any = {
+            activeRideId: null,
+            activeSharedRequestId: admin.firestore.FieldValue.delete(),
+            activeSharedRideGroupId: admin.firestore.FieldValue.delete(),
+            sharedRideStatus: 'expired',
+            updatedAt: admin.firestore.Timestamp.now()
+        };
+
+        // Execute financials inside transaction (safely refunds/releases passenger locked wallet funds)
+        await handleRideCancellationFinancials({
+            rideId,
+            reason: cancelReason,
+            actor: 'system',
+            tx,
+            rideData,
+            rideUpdate,
+            userUpdate
         });
+        
+        // Update ride document
+        tx.update(rideRef, rideUpdate);
         
         // Release passenger
         if (passengerSnap.exists) {
-            tx.update(passengerRef, {
-                activeRideId: null,
-                activeSharedRequestId: admin.firestore.FieldValue.delete(),
-                activeSharedRideGroupId: admin.firestore.FieldValue.delete(),
-                sharedRideStatus: 'expired',
-                updatedAt: admin.firestore.Timestamp.now()
-            });
+            tx.update(passengerRef, userUpdate);
         }
     });
 }

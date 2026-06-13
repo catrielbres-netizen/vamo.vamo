@@ -591,8 +591,12 @@ function RidePageContent() {
         await cancelRideV1({ rideId, reason: 'cancelled_by_passenger' });
         telemetry.trackRideLifecycle(rideId, 'cancelled_by_passenger');
         handleReset();
-      } catch (e) {
+      } catch (e: any) {
           telemetry.trackError('ride_cancel_failed', e, { rideId });
+          // If the ride is already cancelled or not found in backend, force a local reset to unstick the UI
+          if (e.code === 'failed-precondition' || e.code === 'not-found' || e.message?.includes('cancelled') || e.message?.includes('cancelado')) {
+              handleReset();
+          }
       } finally { setIsCancelling(false); }
     } else { 
         telemetry.trackEvent({ type: 'ride_lifecycle', eventName: 'ride_reset_without_id' });
