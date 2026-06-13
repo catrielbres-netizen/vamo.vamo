@@ -50,13 +50,20 @@ export interface MunicipalLedgerEntry {
 
 export type RideStatus =
     | "scheduled"
+    | "pending_driver_assignment"
     | "searching"
     | "driver_assigned"
+    | "confirmed"
+    | "activating"
     | "driver_arrived"
     | "in_progress"
     | "paused"
     | "completed"
-    | "cancelled";
+    | "cancelled"
+    | "cancelled_by_passenger"
+    | "cancelled_by_driver"
+    | "expired"
+    | "failed_no_driver";
 
 export type VerificationStatus = "unverified" | "pending_review" | "approved" | "rejected";
 export type DocumentStatus = "valid" | "expired" | "pending_review" | "rejected";

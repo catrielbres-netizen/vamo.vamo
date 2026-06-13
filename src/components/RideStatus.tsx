@@ -58,12 +58,15 @@ function formatCurrency(value: number) {
 const STATUS_CONFIG: Record<string, { title: string; subtitle: string }> = {
     searching: { title: "Buscando conductor", subtitle: "Conectando con un vehículo cercano..." },
     searching_shared: { title: "Buscando conductor", subtitle: "El grupo está listo. Buscando conductor..." },
+    pending_driver_assignment: { title: "Buscando conductor", subtitle: "Asignando tu reserva..." },
     driver_assigned: { title: "Conductor en camino", subtitle: "Ya confirmamos tu viaje" },
+    activating: { title: "Viaje próximo", subtitle: "Tu conductor se está preparando" },
     driver_arrived: { title: "Conductor llegó", subtitle: "Te está esperando en el punto de encuentro" },
     in_progress: { title: "Viaje en curso", subtitle: "Dirigiéndote a tu destino" },
     paused: { title: "Viaje en espera", subtitle: "El conductor ha pausado el cronómetro" },
     completed: { title: "Viaje finalizado", subtitle: "Gracias por viajar con VamO" },
     cancelled: { title: "Viaje cancelado", subtitle: "No se pudo concretar el viaje" },
+    failed_no_driver: { title: "Sin conductor", subtitle: "No pudimos asignar tu reserva" },
     accepted: { title: "Viaje aceptado", subtitle: "El conductor está organizando la ruta" },
 };
 
@@ -298,16 +301,18 @@ export default function RideStatus({ ride, onNewRide, onCancel }: { ride: WithId
                   isCancelling={isCancelling}
                   notifiedCount={ride.notifiedDrivers?.length || 0}
               />
-          ) : (ride.status === 'cancelled' || (['driver_assigned', 'driver_arrived', 'in_progress', 'paused'].includes(ride.status) && !ride.driverId)) ? (
+          ) : (ride.status === 'cancelled' || ride.status === 'failed_no_driver' || (['driver_assigned', 'driver_arrived', 'in_progress', 'paused', 'activating'].includes(ride.status) && !ride.driverId)) ? (
              <div className="flex flex-col items-center justify-center p-10 text-center animate-in fade-in duration-500">
                  <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center mb-6">
                      <VamoIcon name="x-circle" className="w-10 h-10 text-red-500" />
                  </div>
-                 <h2 className="text-2xl font-black text-white uppercase mb-2">Viaje Cancelado</h2>
+                 <h2 className="text-2xl font-black text-white uppercase mb-2">{ride.status === 'failed_no_driver' ? 'Sin conductor' : 'Viaje Cancelado'}</h2>
                  <p className="text-zinc-500 font-medium mb-8">
-                     {ride.cancelReason === 'expired_no_acceptance' || ride.cancelReason === 'expired_no_drivers'
-                         ? "No encontramos conductores disponibles en este momento."
-                         : "El viaje no pudo completarse o fue cancelado."}
+                     {ride.status === 'failed_no_driver'
+                         ? "No pudimos asignar un conductor para tu reserva programada."
+                         : ride.cancelReason === 'expired_no_acceptance' || ride.cancelReason === 'expired_no_drivers'
+                             ? "No encontramos conductores disponibles en este momento."
+                             : "El viaje no pudo completarse o fue cancelado."}
                  </p>
                  <Button onClick={onNewRide} className="w-full h-14 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-black uppercase tracking-widest">
                     Volver a intentar

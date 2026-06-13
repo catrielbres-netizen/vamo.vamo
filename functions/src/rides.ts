@@ -586,12 +586,19 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
 export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const db = getDb();
-    const { origin, destination, serviceType, dryRun, promotionId, preferredDriverGender, clientRequestId, scheduledAt, paymentMethod = 'cash' } = request.data;
+    let { origin, destination, serviceType, dryRun, promotionId, preferredDriverGender, clientRequestId, scheduledAt, paymentMethod = 'cash' } = request.data;
+    const isScheduled = !!scheduledAt;
+    
+    // [FASE 3] Reservas: Solo efectivo por ahora, sin tocar wallet
+    if (isScheduled) {
+        paymentMethod = 'cash';
+    }
+
     const passengerId = request.auth.uid;
     // Log request receipt and payload
     console.log('[createRideV1] request recibido');
     console.log('[createRideV1] auth.uid', request.auth.uid);
-    console.log('[createRideV1] payload recibido', { origin, destination, serviceType, dryRun, promotionId, preferredDriverGender, clientRequestId });
+    console.log('[createRideV1] payload recibido', { origin, destination, serviceType, dryRun, promotionId, preferredDriverGender, clientRequestId, scheduledAt, paymentMethod });
     
     // Generate fallback clientRequestId if not provided by frontend
     const effectiveClientRequestId = clientRequestId || uuidv4();
@@ -772,17 +779,19 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
 
     // [FASE 2] Lock passenger credits BEFORE building pricingModel (separate TX, best-effort)
     let creditCoveredAmount = 0;
-    try {
-        const globalIncentiveBudget = Math.floor(total * (INCENTIVE_CONFIG.MAX_TOTAL_DISCOUNT_PERCENT / 100));
-        const creditResult = await db.runTransaction(async (creditTx) => {
-            return calculateAndLockCredits(passengerId, newRideId, total, globalIncentiveBudget, creditTx);
-        });
-        creditCoveredAmount = creditResult.creditAmount;
-        logger.info(`[CREDITS] available=${globalIncentiveBudget} | locked=${creditCoveredAmount} | rideId=${newRideId} | passengerId=${passengerId}`);
-    } catch (creditErr) {
-        // Non-fatal: if credit lock fails, ride proceeds without credit discount
-        logger.warn(`[CREDITS] Lock failed for ride ${newRideId}. Proceeding without credits.`, creditErr);
-        creditCoveredAmount = 0;
+    if (!isScheduled) {
+        try {
+            const globalIncentiveBudget = Math.floor(total * (INCENTIVE_CONFIG.MAX_TOTAL_DISCOUNT_PERCENT / 100));
+            const creditResult = await db.runTransaction(async (creditTx) => {
+                return calculateAndLockCredits(passengerId, newRideId, total, globalIncentiveBudget, creditTx);
+            });
+            creditCoveredAmount = creditResult.creditAmount;
+            logger.info(`[CREDITS] available=${globalIncentiveBudget} | locked=${creditCoveredAmount} | rideId=${newRideId} | passengerId=${passengerId}`);
+        } catch (creditErr) {
+            // Non-fatal: if credit lock fails, ride proceeds without credit discount
+            logger.warn(`[CREDITS] Lock failed for ride ${newRideId}. Proceeding without credits.`, creditErr);
+            creditCoveredAmount = 0;
+        }
     }
 
     // [PRICING_FIX] Explicitly check if user wants to use wallet
@@ -1413,10 +1422,12 @@ export const scheduledRideWorkerV1 = onSchedule({ schedule: "every 1 minutes", t
     const db = getDb();
     const now = Timestamp.now();
     
-    // 1. Activation: Process 'scheduled' rides that are close to their time
+    // 1. Activation: Process scheduled rides that are close to their time
     const activationWindowMs = 15 * 60 * 1000; // 15 minutes
+    
+    // 1a. Rides without driver -> searching (last attempt)
     const scheduledSnap = await db.collection('rides')
-        .where('status', '==', 'scheduled')
+        .where('status', 'in', ['scheduled', 'pending_driver_assignment'])
         .get();
 
     for (const doc of scheduledSnap.docs) {
@@ -1427,15 +1438,37 @@ export const scheduledRideWorkerV1 = onSchedule({ schedule: "every 1 minutes", t
         const timeDiff = scheduledTime - now.toMillis();
 
         if (timeDiff <= activationWindowMs) {
-            logger.info(`[RESERVATIONS] Activating ride ${doc.id}. Scheduled for: ${new Date(scheduledTime).toISOString()}`);
+            logger.info(`[RESERVATIONS] Activating unassigned ride ${doc.id}. Scheduled for: ${new Date(scheduledTime).toISOString()}`);
             await doc.ref.update({
                 status: 'searching',
                 activatedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-                matchingAttempts: 0 // Reset attempts for fresh start
+                matchingAttempts: 0
             });
-            // CRITICAL: findNextDriverAndCreateOffer will prioritize interested drivers
             findNextDriverAndCreateOffer(doc.id).catch(e => logger.error(`Activation matching failed for ${doc.id}`, e));
+        }
+    }
+
+    // 1b. Rides with driver -> activating
+    const assignedSnap = await db.collection('rides')
+        .where('status', '==', 'driver_assigned')
+        .get();
+
+    for (const doc of assignedSnap.docs) {
+        const data = doc.data() as Ride;
+        if (!data.scheduledAt) continue;
+
+        const scheduledTime = (data.scheduledAt as any).toMillis ? (data.scheduledAt as any).toMillis() : new Date(data.scheduledAt as any).getTime();
+        const timeDiff = scheduledTime - now.toMillis();
+
+        if (timeDiff <= activationWindowMs) {
+            logger.info(`[RESERVATIONS] Activating assigned ride ${doc.id}. Driver: ${data.driverId}. Scheduled for: ${new Date(scheduledTime).toISOString()}`);
+            await doc.ref.update({
+                status: 'activating',
+                activatedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+            // We could send a push notification here to the driver to start driving.
         }
     }
 
@@ -1484,10 +1517,14 @@ export const scheduledRideWorkerV1 = onSchedule({ schedule: "every 1 minutes", t
                 const rData = rSnap.data() as Ride;
                 if (rData.status !== 'searching') return;
 
+                const isScheduled = !!rData.scheduledAt;
+                const newStatus = isScheduled ? 'failed_no_driver' : 'cancelled';
+                const newReason = isScheduled ? 'NO_DRIVER_FOUND_FOR_RESERVATION' : 'GLOBAL_SEARCH_TIMEOUT';
+
                 const rideUpdate: any = {
-                    status: 'cancelled',
+                    status: newStatus,
                     cancelledBy: 'system',
-                    cancelReason: 'GLOBAL_SEARCH_TIMEOUT',
+                    cancelReason: newReason,
                     updatedAt: now,
                     cancelledAt: now
                 };
@@ -1496,7 +1533,7 @@ export const scheduledRideWorkerV1 = onSchedule({ schedule: "every 1 minutes", t
                 // [VamO PRO] Unified Financial & Policy Handler (Must read before write)
                 await handleRideCancellationFinancials({
                     rideId,
-                    reason: 'GLOBAL_SEARCH_TIMEOUT',
+                    reason: newReason,
                     actor: 'system',
                     tx,
                     rideData: rData,
@@ -2439,10 +2476,10 @@ export const scheduledWeeklyPoolAutoCloseV1 = onSchedule({
 });
 
 /**
- * [VamO PRO] Join Scheduled Ride Interest
- * Allows an approved driver to join the "interested" queue for a scheduled ride.
+ * [FASE 3] Reservas: Aceptar Reserva (Asignación Anticipada)
+ * Allows an approved driver to officially accept a scheduled ride.
  */
-export const joinScheduledRideInterestV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+export const acceptScheduledRideV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const db = getDb();
     const { rideId } = request.data;
@@ -2460,8 +2497,8 @@ export const joinScheduledRideInterestV1 = onCall({ cors: true, region: 'us-cent
             if (!rideSnap.exists) throw new HttpsError('not-found', 'Viaje no encontrado.');
             const ride = rideSnap.data() as Ride;
 
-            if (ride.status !== 'scheduled') {
-                throw new HttpsError('failed-precondition', 'El viaje ya no está en estado programado.');
+            if (ride.status !== 'scheduled' && ride.status !== 'pending_driver_assignment') {
+                throw new HttpsError('failed-precondition', 'La reserva ya fue tomada o no está disponible.');
             }
 
             const driver = driverSnap.data() as UserProfile;
@@ -2473,31 +2510,43 @@ export const joinScheduledRideInterestV1 = onCall({ cors: true, region: 'us-cent
                 throw new HttpsError('permission-denied', 'Tu cuenta aún no está habilitada para tomar reservas.');
             }
 
-            if (driver.activeRideId) {
-                throw new HttpsError('failed-precondition', 'Ya tenés un viaje activo.');
-            }
-
             // [VamO PRO] City Isolation: Driver must belong to the same city as the ride
             if (ride.cityKey !== driver.cityKey) {
-                throw new HttpsError('permission-denied', 'No podés anotarte en viajes de otra ciudad.');
+                throw new HttpsError('permission-denied', 'No podés tomar reservas de otra ciudad.');
             }
 
-            const interestedIds = ride.interestedDriverIds || [];
-            if (interestedIds.includes(driverId)) {
-                return { success: true, alreadyJoined: true };
+            // Derive snapshot for subtype
+            const validSubtypes = ['professional', 'particular'];
+            let driverSubtypeSnap = ride.serviceType === 'professional' ? 'professional' : 'particular';
+            if (validSubtypes.includes(driver.driverSubtype as string)) {
+                driverSubtypeSnap = driver.driverSubtype as string;
             }
 
+            // Assign driver to ride
             tx.update(rideRef, {
-                interestedDriverIds: FieldValue.arrayUnion(driverId),
+                status: 'driver_assigned',
+                driverId: driverId,
+                driverName: driver.name || 'Conductor',
+                driverRating: driver.averageRating || 5.0,
+                driverVehicle: driver.vehicle ? `${driver.vehicle.brand} ${driver.vehicle.model} (${driver.vehicle.color})` : 'Vehículo pendiente',
+                driverPlate: driver.vehicle?.plate || 'N/A',
+                driverVehiclePhoto: driver.vehicleFrontPhotoURL || (driver as any).vehiclePhotoFrontUrl || null,
+                driverPhotoUrl: driver.photoURL || null,
+                driverVehicleBrand: driver.vehicle?.brand || null,
+                driverVehicleModel: driver.vehicle?.model || null,
+                driverVehicleYear: driver.vehicle?.year || null,
+                driverVehicleColor: driver.vehicle?.color || null,
+                driverSubtypeSnapshot: driverSubtypeSnap,
+                driverAssignedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp()
             });
 
-            return { success: true, alreadyJoined: false };
+            return { success: true };
         });
 
         return result;
     } catch (error: any) {
-        logger.error(`[RESERVATIONS] Error in joinScheduledRideInterestV1 for ride ${rideId}`, error);
+        logger.error(`[RESERVATIONS] Error in acceptScheduledRideV1 for ride ${rideId}`, error);
         if (error instanceof HttpsError) throw error;
         throw new HttpsError('internal', 'Error al procesar la solicitud.');
     }

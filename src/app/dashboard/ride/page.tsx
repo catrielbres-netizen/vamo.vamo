@@ -987,11 +987,18 @@ function RidePageContent() {
                  )}
 
                  {/* BLOQUE B: SELECTOR DE PAGO SOBRIO */}
+                 {scheduledAt ? (
+                     <div className="flex flex-col gap-1.5 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl text-center">
+                         <span className="text-[11px] font-black uppercase text-indigo-400">Reserva Programada</span>
+                         <span className="text-[10px] text-indigo-300 font-medium">Las reservas se abonan únicamente en <b className="font-black text-white">Efectivo</b> al finalizar el viaje.</span>
+                     </div>
+                 ) : (
                     <div className="flex gap-1.5 p-1.5 bg-white/5 border border-white/5 rounded-2xl">
                         <button onClick={() => setPaymentMethod('cash')} className={cn("flex-1 py-1.5 rounded-xl text-[11px] font-black transition-all uppercase tracking-tight", paymentMethod === 'cash' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70')}>Efectivo</button>
                         <button onClick={() => setPaymentMethod('wallet')} className={cn("flex-1 py-1.5 rounded-xl text-[11px] font-black transition-all uppercase tracking-tight", paymentMethod === 'wallet' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70')}>Billetera</button>
                         <button onClick={() => setPaymentMethod('automatic')} className={cn("flex-1 py-1.5 rounded-xl text-[11px] font-black transition-all uppercase tracking-tight", paymentMethod === 'automatic' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70')}>Mercado Pago</button>
                     </div>
+                 )}
 
                      {/* BLOQUE C: DESGLOSE COMPLETO VamO (ESTÁNDAR UNIFICADO) */}
                      {savingsSimulation && (
