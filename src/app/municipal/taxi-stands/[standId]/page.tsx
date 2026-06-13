@@ -34,6 +34,7 @@ interface TaxiStand {
     representativePhone?: string;
     representativeEmail?: string;
     operatorUid?: string;
+    hasOperator?: boolean;
     createdAt?: any;
 }
 
@@ -194,6 +195,7 @@ function TaxiStandDetailContent() {
     const [editGeocoded, setEditGeocoded] = useState(true);
     const [editRadius, setEditRadius] = useState(500);
     const [editStatus, setEditStatus] = useState<'active' | 'pending' | 'suspended'>('active');
+    const [editHasOperator, setEditHasOperator] = useState<boolean>(true);
     const [editRepName, setEditRepName] = useState('');
     const [editRepPhone, setEditRepPhone] = useState('');
     const [editRepEmail, setEditRepEmail] = useState('');
@@ -287,6 +289,10 @@ function TaxiStandDetailContent() {
             setEditPlaceId(standData.placeId || '');
             setEditRadius(standData.radiusMeters || 500);
             setEditStatus(standData.status || 'active');
+            
+            const hasOp = standData.hasOperator !== false; // Fallback to true if missing
+            setEditHasOperator(hasOp);
+            
             setEditRepName(standData.representativeName || '');
             setEditRepPhone(standData.representativePhone || '');
             setEditRepEmail(standData.representativeEmail || '');
@@ -478,9 +484,11 @@ function TaxiStandDetailContent() {
                 geocodedBy: 'google_places',
                 radiusMeters: editRadius,
                 status: editStatus,
-                representativeName: editRepName,
-                representativePhone: editRepPhone,
-                representativeEmail: editRepEmail,
+                hasOperator: editHasOperator,
+                operatorUid: editHasOperator ? (stand.operatorUid || null) : null,
+                representativeName: editHasOperator ? editRepName : '',
+                representativePhone: editHasOperator ? editRepPhone : '',
+                representativeEmail: editHasOperator ? editRepEmail : '',
                 updatedAt: new Date()
             });
 
@@ -493,9 +501,11 @@ function TaxiStandDetailContent() {
                 geocodedBy: 'google_places',
                 radiusMeters: editRadius,
                 status: editStatus,
-                representativeName: editRepName,
-                representativePhone: editRepPhone,
-                representativeEmail: editRepEmail
+                hasOperator: editHasOperator,
+                operatorUid: editHasOperator ? prev.operatorUid : undefined,
+                representativeName: editHasOperator ? editRepName : '',
+                representativePhone: editHasOperator ? editRepPhone : '',
+                representativeEmail: editHasOperator ? editRepEmail : ''
             } : null);
 
             setIsEditing(false);
@@ -793,9 +803,41 @@ function TaxiStandDetailContent() {
                                     </select>
                                 </div>
                             </div>
+                            <div className="space-y-3 pt-4 border-t border-white/5">
+                                <Label className="text-zinc-400 text-xs font-bold uppercase">Tipo de Parada</Label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditHasOperator(true)}
+                                        className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                                            editHasOperator
+                                                ? 'border-[#1D7CFF] bg-[#1D7CFF]/10 text-[#1D7CFF]'
+                                                : 'border-white/10 bg-white/[0.02] text-zinc-400 hover:border-white/20'
+                                        }`}
+                                    >
+                                        <VamoIcon name="user-check" className="h-6 w-6 mb-2" />
+                                        <span className="text-sm font-bold">Con Operador</span>
+                                        <span className="text-[10px] text-center mt-1 opacity-70">Despacho manual y panel</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditHasOperator(false)}
+                                        className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                                            !editHasOperator
+                                                ? 'border-[#1D7CFF] bg-[#1D7CFF]/10 text-[#1D7CFF]'
+                                                : 'border-white/10 bg-white/[0.02] text-zinc-400 hover:border-white/20'
+                                        }`}
+                                    >
+                                        <VamoIcon name="map-pin" className="h-6 w-6 mb-2" />
+                                        <span className="text-sm font-bold">Sin Operador</span>
+                                        <span className="text-[10px] text-center mt-1 opacity-70">Prioridad geográfica</span>
+                                    </button>
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
 
+                    {editHasOperator && (
                     <Card className="bg-white/[0.02] border-white/5 backdrop-blur-xl">
                         <CardHeader className="border-b border-white/5 bg-white/[0.01]">
                             <CardTitle className="text-lg text-white">Editar Representante</CardTitle>
@@ -835,6 +877,7 @@ function TaxiStandDetailContent() {
                             </Button>
                         </CardContent>
                     </Card>
+                    )}
                 </form>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -862,23 +905,29 @@ function TaxiStandDetailContent() {
                                 <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Ciudad</p>
                                 <p className="text-white font-bold uppercase">{stand.cityKey}</p>
                             </div>
-                            <div className="h-px bg-white/5 sm:col-span-2" />
-                            <div className="space-y-1">
-                                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Representante</p>
-                                <p className="text-white font-bold">{stand.representativeName || '—'}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Email Representante</p>
-                                <p className="text-white font-bold">{stand.representativeEmail || '—'}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Teléfono de Contacto</p>
-                                <p className="text-white font-bold">{stand.representativePhone || '—'}</p>
-                            </div>
+                            
+                            {stand.hasOperator !== false && (
+                                <>
+                                    <div className="h-px bg-white/5 sm:col-span-2" />
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Representante</p>
+                                        <p className="text-white font-bold">{stand.representativeName || '—'}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Email Representante</p>
+                                        <p className="text-white font-bold">{stand.representativeEmail || '—'}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Teléfono de Contacto</p>
+                                        <p className="text-white font-bold">{stand.representativePhone || '—'}</p>
+                                    </div>
+                                </>
+                            )}
                         </CardContent>
                     </Card>
 
                     {/* Operator Access Management */}
+                    {stand.hasOperator !== false && (
                     <Card className="bg-white/[0.02] border-white/5 backdrop-blur-xl">
                         <CardHeader className="border-b border-white/5 bg-[#1D7CFF]/5">
                             <CardTitle className="text-lg text-white">Acceso del Operador</CardTitle>
@@ -1031,6 +1080,7 @@ function TaxiStandDetailContent() {
                             )}
                         </CardContent>
                     </Card>
+                    )}
                 </div>
             )}
 
