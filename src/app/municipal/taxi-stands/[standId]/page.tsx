@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, GeoPoint } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, GeoPoint, onSnapshot } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -336,33 +336,7 @@ function TaxiStandDetailContent() {
             });
             setDrivers(loadedDrivers);
 
-            // 3. Fetch Station Rides
-            const ridesSnap = await getDocs(
-                query(
-                    collection(firestore, 'rides'),
-                    where('stationId', '==', standId)
-                )
-            );
-            const loadedRides: StationRide[] = [];
-            ridesSnap.forEach(rDoc => {
-                const rData = rDoc.data();
-                loadedRides.push({
-                    id: rDoc.id,
-                    status: rData.status || 'pending',
-                    stationDispatchStatus: rData.stationDispatchStatus,
-                    origin: rData.origin || { address: 'Sin origen' },
-                    destination: rData.destination || { address: 'Sin destino' },
-                    driverName: rData.driverName,
-                    passengerName: rData.passengerName,
-                    createdAt: rData.createdAt
-                });
-            });
-            loadedRides.sort((a, b) => {
-                const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
-                const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
-                return tB - tA;
-            });
-            setRides(loadedRides);
+            // 3. Real-time Station Rides handled by a separate useEffect
         } catch (e: any) {
             console.error("Error loading stand details:", e);
             toast({
@@ -381,6 +355,43 @@ function TaxiStandDetailContent() {
             loadData();
         }
     }, [firestore, standId, contextLoading]);
+
+    // Real-time listener for Station Rides
+    useEffect(() => {
+        if (!firestore || !standId) return;
+
+        const q = query(
+            collection(firestore, 'rides'),
+            where('stationId', '==', standId)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const loadedRides: StationRide[] = [];
+            snapshot.forEach(rDoc => {
+                const rData = rDoc.data();
+                loadedRides.push({
+                    id: rDoc.id,
+                    status: rData.status || 'pending',
+                    stationDispatchStatus: rData.stationDispatchStatus,
+                    origin: rData.origin || { address: 'Sin origen' },
+                    destination: rData.destination || { address: 'Sin destino' },
+                    driverName: rData.driverName,
+                    passengerName: rData.passengerName,
+                    createdAt: rData.createdAt
+                });
+            });
+            loadedRides.sort((a, b) => {
+                const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+                const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+                return tB - tA;
+            });
+            setRides(loadedRides);
+        }, (err) => {
+            console.error("Error listening to station rides:", err);
+        });
+
+        return () => unsubscribe();
+    }, [firestore, standId]);
 
     // Update map coordinates state when toggling into edit mode
     useEffect(() => {

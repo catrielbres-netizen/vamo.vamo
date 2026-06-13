@@ -217,43 +217,62 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
         const isStationPriority = rideData.stationId && rideData.stationDispatchStatus === 'station_priority';
         
         if (geoCandidates.length === 0 && isStationPriority && currentAttempts === 0) {
-            logger.info(`[MATCH_DEBUG] Ride ${rideId} has station priority for ${rideData.stationId}. Checking station drivers.`);
-            const stationDriversSnap = await db.collection('drivers_locations')
+            logger.info(`[MATCH_DEBUG] Ride ${rideId} has station priority for ${rideData.stationId}. Checking station drivers in users collection.`);
+            
+            // 1. Fetch from 'users' collection to find who belongs to this station
+            const usersSnap = await db.collection('users')
+                .where('role', '==', 'driver')
                 .where('stationId', '==', rideData.stationId)
                 .get();
                 
-            stationDriversSnap.forEach(doc => {
-                const data = doc.data();
-                const id = doc.id;
+            logger.info(`[MATCH_DEBUG] Found ${usersSnap.size} drivers linked to station ${rideData.stationId} in users collection.`);
+
+            // 2. For each user, check their real-time status in drivers_locations
+            for (const userDoc of usersSnap.docs) {
+                const uid = userDoc.id;
+                const uData = userDoc.data();
+                
+                // Early validation of city
+                if (uData.cityKey && rideData.cityKey && uData.cityKey !== rideData.cityKey) continue;
+                
+                // Fetch drivers_locations to check online status and coordinates
+                const dLocSnap = await db.collection('drivers_locations').doc(uid).get();
+                if (!dLocSnap.exists) {
+                    logger.warn(`[MATCH_DEBUG] Station Priority candidate ${uid} discarded: No drivers_locations document`);
+                    continue;
+                }
+                
+                const data = dLocSnap.data();
+                if (!data) continue;
                 
                 const lat = data.currentLocation?.latitude ?? data.currentLocation?.lat;
                 const lng = data.currentLocation?.longitude ?? data.currentLocation?.lng;
-                if (lat === undefined || lng === undefined) return;
+                if (lat === undefined || lng === undefined) {
+                    logger.warn(`[MATCH_DEBUG] Station Priority candidate ${uid} discarded: No valid coordinates`);
+                    continue;
+                }
                 
                 const isOnline = data.driverStatus === 'online';
+                // we allow pending_municipal_review in some cases, but generally approved is needed. 
                 const isApproved = data.approved === true || data.municipalStatus === 'pending_municipal_review';
                 const notSuspended = data.isSuspended !== true;
                 const balance = data.walletBalance ?? 0;
-                const isProfessional = data.driverSubtype === 'professional';
+                
+                // Check if they are professional to apply the correct negative limit
+                // if driverSubtype is missing in drivers_locations, we check uData
+                const isProfessional = data.driverSubtype === 'professional' || uData.driverSubtype === 'professional';
                 const negativeLimit = isProfessional ? -15000 : -8000;
                 const hasFunds = balance > negativeLimit;
-                
-                // Avoid city mismatch
-                if (data.cityKey && rideData.cityKey && data.cityKey !== rideData.cityKey) return;
-                
-                // The user requested: taxi/remís/profesional permitido. 
-                // Currently handled by isApproved & driverSubtype mapping in general, but since any driver in drivers_locations 
-                // who is a taxi/remis would have isProfessional. We just make sure they meet all the valid conditions.
                 
                 if (isOnline && isApproved && notSuspended && hasFunds) {
                     const driverPos = [lat, lng] as geofire.Geopoint;
                     const distanceKm = geofire.distanceBetween(driverPos, center);
-                    geoCandidates.push({ id, distanceKm, walletBalance: balance });
-                    logger.info(`[MATCH_DEBUG] Station Priority candidate accepted: ${id}`);
+                    geoCandidates.push({ id: uid, distanceKm, walletBalance: balance });
+                    logger.info(`[MATCH_DEBUG] Station Priority candidate accepted: ${uid}`);
                 } else {
-                    logger.warn(`[MATCH_DEBUG] Station Priority candidate ${id} discarded: online=${isOnline}, approved=${isApproved}, notSuspended=${notSuspended}, hasFunds=${hasFunds}`);
+                    logger.warn(`[MATCH_DEBUG] Station Priority candidate ${uid} discarded: online=${isOnline}, approved=${isApproved}, notSuspended=${notSuspended}, hasFunds=${hasFunds}`);
                 }
-            });
+            }
             logger.info(`[MATCH_DEBUG] Found ${geoCandidates.length} eligible priority station drivers.`);
             
             if (geoCandidates.length > 0) {
