@@ -60,6 +60,7 @@ const STATUS_CONFIG: Record<string, { title: string; subtitle: string }> = {
     searching_shared: { title: "Buscando conductor", subtitle: "El grupo está listo. Buscando conductor..." },
     pending_driver_assignment: { title: "Buscando conductor", subtitle: "Asignando tu reserva..." },
     driver_assigned: { title: "Conductor en camino", subtitle: "Ya confirmamos tu viaje" },
+    driver_assigned_scheduled: { title: "Reserva confirmada", subtitle: "Conductor asignado. Te avisaremos cuando esté en camino" },
     activating: { title: "Viaje próximo", subtitle: "Tu conductor se está preparando" },
     driver_arrived: { title: "Conductor llegó", subtitle: "Te está esperando en el punto de encuentro" },
     in_progress: { title: "Viaje en curso", subtitle: "Dirigiéndote a tu destino" },
@@ -220,7 +221,9 @@ export default function RideStatus({ ride, onNewRide, onCancel }: { ride: WithId
   const currentTotalWithWait = baseCashToPay + waitCost;
   const showMap = ['searching', 'driver_assigned', 'driver_arrived', 'in_progress', 'paused'].includes(ride.status) && mapsAvailable;
   const canPassengerCancel = ride && ['searching', 'driver_assigned', 'driver_arrived'].includes(ride.status);
-  const statusKey = (ride.status === 'searching' && ride.isSharedRide) ? 'searching_shared' : ride.status;
+  const statusKey = (ride.status === 'searching' && ride.isSharedRide) ? 'searching_shared' 
+                    : (ride.status === 'driver_assigned' && ride.isScheduled && ride.activationStatus === 'waiting_scheduled_time') ? 'driver_assigned_scheduled'
+                    : ride.status;
   const config = STATUS_CONFIG[statusKey] || { title: "Estado del viaje", subtitle: "Actualizando..." };
 
 
@@ -332,8 +335,8 @@ export default function RideStatus({ ride, onNewRide, onCancel }: { ride: WithId
                         plate={ride.driverPlate || '...'}
                         vehiclePhoto={ride.driverVehiclePhoto}
                         photoURL={(ride as any).driverPhotoUrl}
-                        eta={ride.status === 'driver_assigned' ? driverEta : null}
-                        statusText={ride.status !== 'driver_assigned' ? (ride.status === 'driver_arrived' ? 'ESTÁ AFUERA' : 'EN VIAJE') : null}
+                        eta={(ride.status === 'driver_assigned' && ride.activationStatus !== 'waiting_scheduled_time') ? driverEta : null}
+                        statusText={(ride.status === 'driver_assigned' && ride.isScheduled && ride.activationStatus === 'waiting_scheduled_time') ? 'RESERVADO' : (ride.status !== 'driver_assigned' ? (ride.status === 'driver_arrived' ? 'ESTÁ AFUERA' : 'EN VIAJE') : null)}
                         isArrived={ride.status === 'driver_arrived'}
                         onChat={() => setIsChatOpen(true)}
                         unreadCount={ride.chatSummary?.unreadCountPassenger || 0}

@@ -913,6 +913,7 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
                 paymentSnapshot,
                 pricingSnapshot: pricingModel.pricingSnapshot, // [SETTLEMENT_FIX] top-level for easy access
                 isScheduled,
+                activationStatus: isScheduled ? 'waiting_scheduled_time' : 'active',
                 scheduledAt: isScheduled ? (typeof scheduledAt === 'number' ? Timestamp.fromMillis(scheduledAt) : scheduledAt) : null,
                 legalAcceptance: {
                     termsVersion: passengerProfile.termsVersion || 'v1.2',
@@ -1424,7 +1425,7 @@ export const scheduledRideWorkerV1 = onSchedule({ schedule: "every 1 minutes", t
     const now = Timestamp.now();
     
     // 1. Activation: Process scheduled rides that are close to their time
-    const activationWindowMs = 15 * 60 * 1000; // 15 minutes
+    const activationWindowMs = 10 * 60 * 1000; // 10 minutes (T-10)
     
     // 1a. Rides without driver -> searching (last attempt)
     const scheduledSnap = await db.collection('rides')
@@ -1439,9 +1440,10 @@ export const scheduledRideWorkerV1 = onSchedule({ schedule: "every 1 minutes", t
         const timeDiff = scheduledTime - now.toMillis();
 
         if (timeDiff <= activationWindowMs) {
-            logger.info(`[RESERVATIONS] Activating unassigned ride ${doc.id}. Scheduled for: ${new Date(scheduledTime).toISOString()}`);
+            logger.info(`[RESERVATIONS] Activating unassigned ride ${doc.id} (T-10). Scheduled for: ${new Date(scheduledTime).toISOString()}`);
             await doc.ref.update({
-                status: 'searching',
+                status: 'searching', // This triggers the normal matching flow
+                activationStatus: 'active',
                 activatedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 matchingAttempts: 0
@@ -1453,6 +1455,7 @@ export const scheduledRideWorkerV1 = onSchedule({ schedule: "every 1 minutes", t
     // 1b. Rides with driver -> activating
     const assignedSnap = await db.collection('rides')
         .where('status', '==', 'driver_assigned')
+        .where('activationStatus', '==', 'waiting_scheduled_time')
         .get();
 
     for (const doc of assignedSnap.docs) {
@@ -1463,9 +1466,10 @@ export const scheduledRideWorkerV1 = onSchedule({ schedule: "every 1 minutes", t
         const timeDiff = scheduledTime - now.toMillis();
 
         if (timeDiff <= activationWindowMs) {
-            logger.info(`[RESERVATIONS] Activating assigned ride ${doc.id}. Driver: ${data.driverId}. Scheduled for: ${new Date(scheduledTime).toISOString()}`);
+            logger.info(`[RESERVATIONS] Activating assigned ride ${doc.id} (T-10). Driver: ${data.driverId}. Scheduled for: ${new Date(scheduledTime).toISOString()}`);
             await doc.ref.update({
-                status: 'activating',
+                status: 'activating', // This triggers the driver active ride UI
+                activationStatus: 'active',
                 activatedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp()
             });
@@ -2526,6 +2530,7 @@ export const acceptScheduledRideV1 = onCall({ cors: true, region: 'us-central1' 
             // Assign driver to ride
             tx.update(rideRef, {
                 status: 'driver_assigned',
+                activationStatus: 'waiting_scheduled_time',
                 driverId: driverId,
                 driverName: driver.name || 'Conductor',
                 driverRating: driver.averageRating || 5.0,

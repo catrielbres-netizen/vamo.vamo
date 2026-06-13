@@ -209,8 +209,17 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
-            const rid = snapshot.docs[0].id;
+        const activeDocs = snapshot.docs.filter(d => {
+            const data = d.data();
+            // Ignorar reservas que el conductor aceptó pero que aún no es hora de iniciar
+            if (data.isScheduled && data.activationStatus === 'waiting_scheduled_time') {
+                return false;
+            }
+            return true;
+        });
+
+        if (activeDocs.length > 0) {
+            const rid = activeDocs[0].id;
             setWatchedRideId(rid);
             setCompletedRideId(null);
         } else if (!profile.activeRideId) {
