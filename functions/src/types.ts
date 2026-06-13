@@ -576,7 +576,7 @@ export interface Ride {
     stationId?: string | null;
     stationName?: string | null;
     stationDistanceMeters?: number | null;
-    stationDispatchStatus?: 'pending_assignment' | 'assigned_to_driver' | 'pending_reassignment' | 'accepted_by_driver' | 'released_to_general_matching' | null;
+    stationDispatchStatus?: 'pending_assignment' | 'assigned_to_driver' | 'pending_reassignment' | 'accepted_by_driver' | 'released_to_general_matching' | 'station_priority' | null;
     stationDispatchExpiresAt?: FirestoreTimestamp | null;
     stationAssignedDriverId?: string | null;
     stationReleasedToGeneralMatching?: boolean;

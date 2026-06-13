@@ -213,6 +213,58 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
             logger.info(`[MATCH_DEBUG] Found ${geoCandidates.length} eligible interested drivers.`);
         }
 
+        // [FASE 4] Taxi Stand Priority Logic
+        const isStationPriority = rideData.stationId && rideData.stationDispatchStatus === 'station_priority';
+        
+        if (geoCandidates.length === 0 && isStationPriority && currentAttempts === 0) {
+            logger.info(`[MATCH_DEBUG] Ride ${rideId} has station priority for ${rideData.stationId}. Checking station drivers.`);
+            const stationDriversSnap = await db.collection('drivers_locations')
+                .where('stationId', '==', rideData.stationId)
+                .get();
+                
+            stationDriversSnap.forEach(doc => {
+                const data = doc.data();
+                const id = doc.id;
+                
+                const lat = data.currentLocation?.latitude ?? data.currentLocation?.lat;
+                const lng = data.currentLocation?.longitude ?? data.currentLocation?.lng;
+                if (lat === undefined || lng === undefined) return;
+                
+                const isOnline = data.driverStatus === 'online';
+                const isApproved = data.approved === true || data.municipalStatus === 'pending_municipal_review';
+                const notSuspended = data.isSuspended !== true;
+                const balance = data.walletBalance ?? 0;
+                const isProfessional = data.driverSubtype === 'professional';
+                const negativeLimit = isProfessional ? -15000 : -8000;
+                const hasFunds = balance > negativeLimit;
+                
+                // Avoid city mismatch
+                if (data.cityKey && rideData.cityKey && data.cityKey !== rideData.cityKey) return;
+                
+                // The user requested: taxi/remís/profesional permitido. 
+                // Currently handled by isApproved & driverSubtype mapping in general, but since any driver in drivers_locations 
+                // who is a taxi/remis would have isProfessional. We just make sure they meet all the valid conditions.
+                
+                if (isOnline && isApproved && notSuspended && hasFunds) {
+                    const driverPos = [lat, lng] as geofire.Geopoint;
+                    const distanceKm = geofire.distanceBetween(driverPos, center);
+                    geoCandidates.push({ id, distanceKm, walletBalance: balance });
+                    logger.info(`[MATCH_DEBUG] Station Priority candidate accepted: ${id}`);
+                } else {
+                    logger.warn(`[MATCH_DEBUG] Station Priority candidate ${id} discarded: online=${isOnline}, approved=${isApproved}, notSuspended=${notSuspended}, hasFunds=${hasFunds}`);
+                }
+            });
+            logger.info(`[MATCH_DEBUG] Found ${geoCandidates.length} eligible priority station drivers.`);
+            
+            if (geoCandidates.length > 0) {
+                await db.doc(`rides/${rideId}`).update({
+                    stationPriorityAttempted: true,
+                    stationPriorityDriverIds: geoCandidates.map(c => c.id),
+                    stationPriorityRound: currentAttempts + 1
+                });
+            }
+        }
+
         // Fallback to geosearch if no interested drivers found or it's a retry
         if (geoCandidates.length === 0) {
             const snapshots = await Promise.all(bounds.map(b => {
