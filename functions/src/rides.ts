@@ -583,6 +583,46 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
     }
 }
 
+async function detectNearbyTaxiStand(db: FirebaseFirestore.Firestore, cityKey: string, originLat: number, originLng: number) {
+    try {
+        const standsQuery = await db.collection('taxi_stands')
+            .where('cityKey', '==', cityKey)
+            .get();
+            
+        let closestStand: any = null;
+        let minDistanceMeters = Infinity;
+
+        standsQuery.forEach(doc => {
+            const data = doc.data();
+            if (data.status !== 'active' && data.active !== true) return;
+            
+            const lat = data.location?._latitude ?? data.location?.latitude ?? data.location?.lat;
+            const lng = data.location?._longitude ?? data.location?.longitude ?? data.location?.lng;
+            const radiusM = data.radiusMeters || 500;
+            
+            if (lat !== undefined && lng !== undefined) {
+                const distKm = distanceInKm(originLat, originLng, lat, lng);
+                const distM = distKm * 1000;
+                
+                if (distM <= radiusM && distM < minDistanceMeters) {
+                    minDistanceMeters = distM;
+                    closestStand = {
+                        id: doc.id,
+                        name: data.name,
+                        radiusMeters: radiusM,
+                        distanceMeters: Math.round(distM)
+                    };
+                }
+            }
+        });
+
+        return closestStand;
+    } catch (e) {
+        logger.error('[detectNearbyTaxiStand] Error:', e);
+        return null;
+    }
+}
+
 export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     const db = getDb();
@@ -751,6 +791,17 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
     const userAgent = request.rawRequest.headers['user-agent'] || 'unknown';
     const ip = request.rawRequest.ip || request.rawRequest.headers['x-forwarded-for'] || '0.0.0.0';
 
+    // [FASE 4] Auto-detect nearby taxi stand
+    let detectedStand: any = null;
+    try {
+        detectedStand = await detectNearbyTaxiStand(db, cityKey, origin.lat, origin.lng);
+        if (detectedStand) {
+            console.log(`[createRideV1] Detectada parada cercana: ${detectedStand.name} (${detectedStand.id}) a ${detectedStand.distanceMeters}m`);
+        }
+    } catch (e) {
+        console.error('[createRideV1] Error detectando parada:', e);
+    }
+
     // Idempotency: check if a ride with the same clientRequestId already exists for this passenger
     const existingSnap = await db.collection('rides')
       .where('passengerId', '==', passengerId)
@@ -901,8 +952,7 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
             // This guarantees onRideSettlementV6 always finds this field and never silently falls back to 'express'.
             const driverSubtypeSnapshotAtCreation = serviceType === 'professional' ? 'professional' : 'particular';
 
-            console.log('[createRideV1] tx.set ride. Status:', rideStatus);
-            tx.set(newRideRef, {
+            const baseRideData: any = {
                 passengerId, origin, destination, serviceType,
                 status: rideStatus, 
                 city: finalCity,
@@ -930,7 +980,20 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
                 walletLockStatus: finalLockResult ? 'locked' : (walletCoveredAmount > 0 ? 'pending' : 'none'),
                 walletLockedAmount: finalLockResult ? finalLockResult.totalLocked : 0,
                 walletLockTxId: finalLockResult ? `lock_${newRideId}` : null
-            });
+            };
+
+            if (detectedStand) {
+                baseRideData.stationId = detectedStand.id;
+                baseRideData.stationName = detectedStand.name;
+                baseRideData.stationDispatchStatus = 'station_priority';
+                baseRideData.dispatchSource = 'taxi_stand';
+                baseRideData.fallbackToGeneralMatching = true;
+                baseRideData.stationRadiusMeters = detectedStand.radiusMeters;
+                baseRideData.stationDistanceMeters = detectedStand.distanceMeters;
+            }
+
+            console.log('[createRideV1] tx.set ride. Status:', rideStatus);
+            tx.set(newRideRef, baseRideData);
 
             console.log('[createRideV1] tx.update activeRideId');
             tx.update(userRef, { activeRideId: newRideRef.id });
