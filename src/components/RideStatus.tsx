@@ -298,8 +298,8 @@ export default function RideStatus({ ride, onNewRide, onCancel }: { ride: WithId
                   estimatedPrice={financial.totalFare}
                   walletCoveredAmount={financial.walletCoveredAmount}
                   cashToCollect={financial.cashToCollect}
-                  originAddress={ride.origin?.address || "Origen desconocido"}
-                  destinationAddress={ride.destination?.address || "Destino desconocido"}
+                  originAddress={ride.origin?.address || (ride as any).originAddress || "Origen desconocido"}
+                  destinationAddress={ride.destination?.address || (ride as any).destinationAddress || "Destino desconocido"}
                   onCancel={handleCancelRide}
                   isCancelling={isCancelling}
                   notifiedCount={ride.notifiedDrivers?.length || 0}
@@ -363,8 +363,8 @@ export default function RideStatus({ ride, onNewRide, onCancel }: { ride: WithId
                         <PassengerTripCard 
                             serviceType={ride.serviceType}
                             estimatedPrice={financial.totalFare}
-                            originAddress={ride.origin.address}
-                            destinationAddress={ride.destination.address}
+                            originAddress={ride.origin?.address || (ride as any).originAddress || 'Origen desconocido'}
+                            destinationAddress={ride.destination?.address || (ride as any).destinationAddress || 'Destino desconocido'}
                             walletCoveredAmount={financial.walletCoveredAmount}
                             netPassengerPay={financial.cashToCollect}
                             grossFare={financial.totalFare}
@@ -567,7 +567,7 @@ export default function RideStatus({ ride, onNewRide, onCancel }: { ride: WithId
             Recorrido del Viaje
           </DialogTitle>
           <DialogDescription className="text-zinc-500 text-xs font-medium uppercase tracking-widest">
-            Desde {ride.origin.address.split(',')[0]} hasta {ride.destination.address.split(',')[0]}
+            Desde {(ride.origin?.address || (ride as any).originAddress || "Origen no disponible").split(',')[0]} hasta {(ride.destination?.address || (ride as any).destinationAddress || "Destino no disponible").split(',')[0]}
           </DialogDescription>
         </DialogHeader>
         

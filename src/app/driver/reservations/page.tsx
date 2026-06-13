@@ -236,6 +236,9 @@ function ReservationCard({ ride, isEligibleDriver }: { ride: Ride; isEligibleDri
     const minutesUntil = timeDiff / 60000;
     const canAccept = minutesUntil <= 15;
 
+    const pickupAddress = ride.pickup?.address || ride.origin?.address || (ride as any).originAddress || "Origen no disponible";
+    const destinationAddress = ride.destination?.address || ride.dropoff?.address || (ride as any).destinationAddress || "Destino no disponible";
+
     return (
         <Card className={cn(
             "rounded-[2rem] overflow-hidden shadow-sm backdrop-blur-sm transition-all",
@@ -281,11 +284,11 @@ function ReservationCard({ ride, isEligibleDriver }: { ride: Ride; isEligibleDri
                 <div className="space-y-3 py-4 border-y border-border/50">
                     <div className="flex gap-3 items-center">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                        <p className="text-xs font-medium text-zinc-300 truncate">{ride.origin.address}</p>
+                        <p className="text-xs font-medium text-zinc-300 truncate">{pickupAddress}</p>
                     </div>
                     <div className="flex gap-3 items-center">
                         <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
-                        <p className="text-xs font-medium text-zinc-300 truncate">{ride.destination.address}</p>
+                        <p className="text-xs font-medium text-zinc-300 truncate">{destinationAddress}</p>
                     </div>
                 </div>
 

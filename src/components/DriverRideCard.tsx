@@ -104,14 +104,16 @@ export default function DriverRideCard({
             <VamoIcon name="user" className="w-4 h-4 mr-2 text-muted-foreground" />
             <strong>Pasajero:</strong> {ride.passengerName || 'No especificado'}
         </p>
-        <p className="flex items-center">
+        <div className="text-sm space-y-1">
+          <p className="flex items-center">
           <VamoIcon name="map-pin" className="w-4 h-4 mr-2 text-muted-foreground" />
-          <strong>Desde:</strong> {ride.origin.address || 'Ubicación simulada'}
-        </p>
-        <p className="flex items-center">
+          <strong>Desde:</strong> {ride.origin?.address || (ride as any).originAddress || 'Origen no disponible'}
+          </p>
+          <p className="flex items-center">
           <VamoIcon name="flag" className="w-4 h-4 mr-2 text-muted-foreground" />
-          <strong>Hasta:</strong> {ride.destination.address}
-        </p>
+          <strong>Hasta:</strong> {ride.destination?.address || (ride as any).destinationAddress || 'Destino no disponible'}
+          </p>
+        </div>
 
         <div className="!mt-4 grid grid-cols-2 gap-2 text-center text-xs text-muted-foreground">
             <div className="flex items-center justify-center gap-2">
