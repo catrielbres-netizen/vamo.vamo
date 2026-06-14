@@ -14,32 +14,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { VamoMarker } from '@/components/VamoMarker';
 import { Badge } from '@/components/ui/badge';
 import { useLiveDriversMap } from '@/hooks/useLiveDriversMap';
-
-// --- Types ---
-interface DriverLiveStatus {
-    id: string;
-    driverName: string;
-    driverStatus: 'online' | 'offline' | 'in_ride';
-    currentLocation: { lat: number; lng: number };
-    lastSeenAt: any;
-    driverType?: string;
-    municipalStatus: string;
-    vehicleBrand: string;
-    vehicleModel: string;
-    vehiclePlate: string;
-    vehicleColor: string;
-    docsComplete: boolean;
-    missingDocs?: string[];
-    expiredDocs?: string[];
-    photoUrl?: string;
-}
+import { LiveRidesLayer, TaxiStandsLayer } from '@/components/LiveMapLayers';
 
 export default function MunicipalMapPage() {
     const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
     const MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || 'vamo-muni-tactical';
 
-
     const { cityKey, cityName, cityCenter, cityZoom, loading: contextLoading } = useMunicipalContext();
+    const liveData = useLiveDriversMap(cityKey);
 
     // [MAP STABILITY ENGINE]
     const [mapCenter, setMapCenter] = useState(cityCenter);
@@ -83,8 +65,9 @@ export default function MunicipalMapPage() {
                 className="w-full h-full"
                 colorScheme="DARK"
             >
-                <MunicipalDriversLayer cityKey={cityKey} />
-                <MunicipalRidesLayer cityKey={cityKey} />
+                <MunicipalDriversLayer drivers={liveData.drivers} debugDrivers={liveData.debugDrivers} rawCounts={liveData.rawCounts} />
+                <LiveRidesLayer rides={liveData.activeRides} />
+                <TaxiStandsLayer stands={liveData.taxiStands} />
             </Map>
 
             {/* Tactical Overlay */}
@@ -101,6 +84,7 @@ export default function MunicipalMapPage() {
                <LegendItem color="bg-indigo-500" label="En Viaje" />
                <LegendItem color="bg-[#f59e0b] animate-pulse" label="Buscando Conductor" />
                <LegendItem color="bg-emerald-500 border border-white/40" label="Viaje Activo" />
+               <LegendItem color="bg-sky-500 border-2 border-white/90" label="Parada Oficial" />
                <LegendItem color="bg-zinc-600" label="Desconectado" />
             </div>
         </div>
@@ -110,15 +94,14 @@ export default function MunicipalMapPage() {
 function LegendItem({ color, label }: { color: string, label: string }) {
     return (
         <div className="flex items-center gap-2 px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-full border border-white/5">
-            <div className={cn("w-2 h-2 rounded-full", color)} />
+            <div className={cn("w-3 h-3 rounded-full", color)} />
             <span className="text-[10px] font-bold text-white uppercase tracking-tighter">{label}</span>
         </div>
     );
 }
 
-function MunicipalDriversLayer({ cityKey }: { cityKey: string | null }) {
+function MunicipalDriversLayer({ drivers, debugDrivers, rawCounts }: { drivers: any[], debugDrivers: any[], rawCounts: any }) {
     const map = useMap();
-    const { drivers, debugDrivers, rawCounts } = useLiveDriversMap(cityKey);
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
     const selectedDriver = useMemo(() => drivers.find((d: any) => d.driverId === selectedDriverId), [drivers, selectedDriverId]);
     const router = useRouter();
@@ -204,6 +187,7 @@ function MunicipalDriversLayer({ cityKey }: { cityKey: string | null }) {
                         <div>Locations: <span className="text-white">{rawCounts?.locations}</span></div>
                         <div>Profiles: <span className="text-white">{rawCounts?.profiles}</span></div>
                         <div>Rides: <span className="text-white">{rawCounts?.rides}</span></div>
+                        <div>Stands: <span className="text-white">{rawCounts?.stands}</span></div>
                     </div>
                     <div className="space-y-3">
                         {debugDrivers?.slice(0, 20).map((d: any) => (
@@ -328,192 +312,6 @@ function DriverMarker({ driver, isSelected, onClick }: { driver: any, isSelected
                     {/* Footer Disclaimer */}
                     <div className="bg-white/5 py-1.5 text-center">
                         <span className="text-[8px] uppercase tracking-widest font-black text-zinc-500 italic">Información actualizada del sistema</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── Live Rides Layer Component ────────────────────────────────────────────────
-interface RideLiveStatus {
-    id: string;
-    passengerId: string;
-    passengerName: string;
-    status: 'searching' | 'offered' | 'driver_assigned' | 'accepted' | 'arrived' | 'picked_up' | 'in_progress' | 'paused';
-    serviceType: string;
-    origin: { lat: number; lng: number; address: string; zoneName?: string };
-    destination: { lat: number; lng: number; address: string };
-    pricing?: { estimatedTotal: number; estimatedDistanceMeters: number };
-    isSimulation?: boolean;
-    driverId?: string;
-    driverName?: string;
-}
-
-function MunicipalRidesLayer({ cityKey }: { cityKey: string | null }) {
-    const db = useFirestore();
-    const [rides, setRides] = useState<RideLiveStatus[]>([]);
-    const [selectedRideId, setSelectedRideId] = useState<string | null>(null);
-    const selectedRide = useMemo(() => rides.find(r => r.id === selectedRideId), [rides, selectedRideId]);
-
-    useEffect(() => {
-        if (!db || !cityKey) return;
-
-        console.log(`[TAKTIK_MAP] Subscribing to active rides in ${cityKey}`);
-        
-        const q = query(
-            collection(db, 'rides'),
-            where('cityKey', '==', cityKey),
-            where('status', 'in', ['searching', 'offered', 'driver_assigned', 'accepted', 'in_progress', 'arrived', 'picked_up']),
-            limit(100)
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetched = snapshot.docs.map(doc => {
-                const data = doc.data();
-                let originLoc = null;
-                if (data.origin) {
-                    const lat = Number(data.origin.latitude ?? data.origin.lat);
-                    const lng = Number(data.origin.longitude ?? data.origin.lng);
-                    if (!isNaN(lat) && !isNaN(lng)) {
-                        originLoc = { ...data.origin, lat, lng };
-                    }
-                }
-                let destLoc = null;
-                if (data.destination) {
-                    const lat = Number(data.destination.latitude ?? data.destination.lat);
-                    const lng = Number(data.destination.longitude ?? data.destination.lng);
-                    if (!isNaN(lat) && !isNaN(lng)) {
-                        destLoc = { ...data.destination, lat, lng };
-                    }
-                }
-                return {
-                    id: doc.id,
-                    passengerId: data.passengerId,
-                    passengerName: data.passengerName || 'Pasajero',
-                    status: data.status,
-                    serviceType: data.serviceType || 'professional',
-                    origin: originLoc,
-                    destination: destLoc,
-                    pricing: data.pricing,
-                    isSimulation: data.isSimulation || false,
-                    driverId: data.driverId,
-                    driverName: data.driverName
-                } as any;
-            }).filter(r => r.origin !== null);
-
-            setRides(fetched);
-        });
-
-        return () => unsubscribe();
-    }, [db, cityKey]);
-
-    return (
-        <>
-            {rides.map(ride => (
-                <VamoMarker
-                    key={ride.id}
-                    position={{ lat: ride.origin.lat, lng: ride.origin.lng }}
-                    onClick={() => {
-                        setSelectedRideId(ride.id);
-                        console.log("📍 [LIVE_MAP_RIDE_SELECTED] Municipal:", ride.id);
-                    }}
-                >
-                    <RideMarker ride={ride} isSelected={selectedRideId === ride.id} onClick={() => setSelectedRideId(ride.id)} />
-                </VamoMarker>
-            ))}
-
-            {/* Selection Sidebar (Rides) */}
-            {selectedRide && (
-                <div className="absolute top-24 right-6 w-80 bg-zinc-950/90 backdrop-blur-2xl border border-white/10 rounded-[2rem] shadow-2xl p-6 animate-in slide-in-from-right-4 duration-300 z-50">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-[10px] font-black uppercase tracking-widest text-amber-500">Detalle del Viaje</h3>
-                        <button onClick={() => setSelectedRideId(null)} className="text-zinc-500 hover:text-white transition-colors">
-                            <VamoIcon name="x" className="w-4 h-4" />
-                        </button>
-                    </div>
-
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="w-12 h-12 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center">
-                            <VamoIcon name="user" className="w-6 h-6 text-amber-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="font-black text-white truncate">{selectedRide.passengerName}</p>
-                            <div className="flex gap-1.5 items-center mt-1">
-                                <Badge className="text-[8px] font-black uppercase bg-amber-500/20 text-amber-400">
-                                    {selectedRide.status}
-                                </Badge>
-                                {selectedRide.isSimulation && (
-                                    <Badge className="text-[8px] font-black uppercase bg-purple-500/20 text-purple-400">
-                                        SIMULACIÓN
-                                    </Badge>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4 mb-6">
-                        <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                            <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Origen</p>
-                            <p className="text-xs font-bold text-white truncate">{selectedRide.origin?.address || 'No informado'}</p>
-                        </div>
-                        <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                            <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Destino</p>
-                            <p className="text-xs font-bold text-white truncate">{selectedRide.destination?.address || 'No informado'}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                                <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Servicio</p>
-                                <p className="text-xs font-bold uppercase text-indigo-400">{selectedRide.serviceType}</p>
-                            </div>
-                            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                                <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Costo Estimado</p>
-                                <p className="text-xs font-bold text-emerald-400">
-                                    ${selectedRide.pricing?.estimatedTotal || 0}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </>
-    );
-}
-
-function RideMarker({ ride, isSelected, onClick }: { ride: RideLiveStatus, isSelected?: boolean, onClick?: () => void }) {
-    const isSearching = ride.status === 'searching' || ride.status === 'offered';
-    const isPool = ride.serviceType === 'pool';
-
-    const colorClass = isSearching ? 'bg-[#f59e0b]' : 'bg-[#10b981] border border-white/40';
-    const shadowClass = isSearching ? 'shadow-[0_0_12px_rgba(245,158,11,0.6)]' : 'shadow-[0_0_12px_rgba(16,185,129,0.6)]';
-    const animationClass = isSearching ? 'animate-pulse' : '';
-
-    return (
-        <div 
-            className="relative group cursor-pointer pointer-events-auto"
-            onClick={(e) => {
-                e.stopPropagation();
-                if (onClick) onClick();
-            }}
-        >
-            <div className={cn(
-                "relative flex items-center justify-center w-8 h-8 rounded-full border-[1.5px] border-white/90 transition-all duration-300 transform group-hover:scale-125",
-                isSelected ? "scale-150 ring-4 ring-white/20 z-50 border-white" : "",
-                colorClass,
-                shadowClass,
-                animationClass
-            )}>
-                <VamoIcon name={isPool ? "users" : "user"} className="h-4 w-4 text-white drop-shadow-sm" />
-            </div>
-
-            <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-50 origin-bottom scale-95 group-hover:scale-100">
-                <div className="w-[260px] bg-[#0B1220] border border-[#f59e0b]/25 shadow-[0_10px_40px_rgba(0,0,0,0.8)] rounded-2xl p-4 flex flex-col pointer-events-none">
-                    <h4 className="text-xs font-black text-white truncate">{ride.passengerName}</h4>
-                    <p className="text-[9px] text-[#f59e0b] font-bold uppercase mt-1 tracking-widest">{ride.status}</p>
-                    <div className="border-t border-white/5 mt-2 pt-2 text-[9px] text-zinc-400 space-y-1">
-                        <p className="truncate"><span className="font-bold text-zinc-500">De:</span> {ride.origin?.address || 'No informado'}</p>
-                        <p className="truncate"><span className="font-bold text-zinc-500">A:</span> {ride.destination?.address || 'No informado'}</p>
-                        <p><span className="font-bold text-zinc-500">Tipo:</span> <span className="uppercase font-bold text-indigo-400">{ride.serviceType}</span></p>
                     </div>
                 </div>
             </div>

@@ -9,6 +9,7 @@ export function useLiveDriversMap(cityKey: string | null) {
     const [rawLocations, setRawLocations] = useState<any[]>([]);
     const [rawProfiles, setRawProfiles] = useState<any[]>([]);
     const [activeRides, setActiveRides] = useState<any[]>([]);
+    const [taxiStands, setTaxiStands] = useState<any[]>([]);
 
     useEffect(() => {
         if (!db || !cityKey) return;
@@ -17,36 +18,44 @@ export function useLiveDriversMap(cityKey: string | null) {
             collection(db, 'users'),
             where('role', '==', 'driver'),
             where('cityKey', '==', cityKey),
-            limit(300)
+            limit(1000)
         );
         const unUsers = onSnapshot(qUsers, snap => setRawUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
         const qLocs = query(
             collection(db, 'drivers_locations'),
             where('cityKey', '==', cityKey),
-            limit(300)
+            limit(1000)
         );
         const unLocs = onSnapshot(qLocs, snap => setRawLocations(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
         const qProfs = query(
             collection(db, 'public_driver_profiles'),
             where('cityKey', '==', cityKey),
-            limit(300)
+            limit(1000)
         );
         const unProfs = onSnapshot(qProfs, snap => setRawProfiles(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
         const qRides = query(
             collection(db, 'rides'),
             where('cityKey', '==', cityKey),
-            where('status', 'in', ['searching', 'offered', 'driver_assigned', 'accepted', 'in_progress'])
+            where('status', 'in', ['searching', 'driver_assigned', 'driver_arrived', 'in_progress', 'paused'])
         );
         const unRides = onSnapshot(qRides, snap => setActiveRides(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+        const qStands = query(
+            collection(db, 'taxi_stands'),
+            where('cityKey', '==', cityKey),
+            limit(1000)
+        );
+        const unStands = onSnapshot(qStands, snap => setTaxiStands(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
         return () => {
             unUsers();
             unLocs();
             unProfs();
             unRides();
+            unStands();
         };
     }, [db, cityKey]);
 
@@ -113,12 +122,14 @@ export function useLiveDriversMap(cityKey: string | null) {
     return { 
         drivers: driversData.filtered, 
         activeRides, 
+        taxiStands,
         debugDrivers: driversData.unified,
         rawCounts: {
             users: rawUsers.length,
             locations: rawLocations.length,
             profiles: rawProfiles.length,
-            rides: activeRides.length
+            rides: activeRides.length,
+            stands: taxiStands.length
         }
     };
 }
