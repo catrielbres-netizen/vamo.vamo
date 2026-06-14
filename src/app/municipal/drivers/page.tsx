@@ -245,19 +245,30 @@ export default function MunicipalDriversPage() {
                                         </td>
                                         <td className="px-5 py-3">
                                             <div className="flex flex-col gap-1">
-                                                <span className={cn(
-                                                    "text-[9px] font-black px-2 py-0.5 rounded-md w-fit uppercase tracking-tighter",
-                                                    d.driverSubtype === 'express' ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                                                )}>
-                                                    {d.driverSubtype === 'express' ? 'Express' : 'Profesional'}
-                                                </span>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {d.driverSubtype === 'fleet_driver' ? (
+                                                        <span className="text-[9px] font-black px-2 py-0.5 rounded-md w-fit uppercase tracking-tighter bg-amber-500/10 text-amber-400 border border-amber-500/20">Chofer vinculado</span>
+                                                    ) : (d.driverSubtype === 'taxi' || d.driverSubtype === 'remis' || d.driverSubtype === 'particular' || d.driverSubtype === 'professional' || d.driverSubtype === 'express') ? (
+                                                        <span className="text-[9px] font-black px-2 py-0.5 rounded-md w-fit uppercase tracking-tighter bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Titular</span>
+                                                    ) : (
+                                                        <span className="text-[9px] font-black px-2 py-0.5 rounded-md w-fit uppercase tracking-tighter bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">Sin clasificar</span>
+                                                    )}
+                                                    
+                                                    {d.driverSubtype === 'taxi' ? (
+                                                        <span className="text-[9px] font-black px-2 py-0.5 rounded-md w-fit uppercase tracking-tighter bg-blue-500/10 text-blue-400 border border-blue-500/20">Taxi</span>
+                                                    ) : d.driverSubtype === 'remis' ? (
+                                                        <span className="text-[9px] font-black px-2 py-0.5 rounded-md w-fit uppercase tracking-tighter bg-blue-500/10 text-blue-400 border border-blue-500/20">Remís</span>
+                                                    ) : d.driverSubtype === 'particular' || d.driverSubtype === 'express' ? (
+                                                        <span className="text-[9px] font-black px-2 py-0.5 rounded-md w-fit uppercase tracking-tighter bg-blue-500/10 text-blue-400 border border-blue-500/20">Particular</span>
+                                                    ) : null}
+                                                </div>
                                                 <div className="flex items-center gap-1.5 mt-0.5">
                                                     <div className={cn(
                                                         "h-1.5 w-1.5 rounded-full",
-                                                        (d.driverSubtype === 'express' || d.driverPreferences?.acceptsDiscountedRides) ? "bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" : "bg-zinc-700"
+                                                        (d.driverSubtype === 'express' || d.driverPreferences?.acceptsDiscountedRides || d.driverSubtype === 'particular') ? "bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" : "bg-zinc-700"
                                                     )} />
                                                     <span className="text-[10px] font-bold text-zinc-500">
-                                                        {(d.driverSubtype === 'express' || d.driverPreferences?.acceptsDiscountedRides) ? 'Acepta Dinámica' : 'Tarifa Plana'}
+                                                        {(d.driverSubtype === 'express' || d.driverPreferences?.acceptsDiscountedRides || d.driverSubtype === 'particular') ? 'Acepta Dinámica' : 'Tarifa Plana'}
                                                     </span>
                                                 </div>
                                             </div>

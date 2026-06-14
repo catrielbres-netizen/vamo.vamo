@@ -38,6 +38,7 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useMunicipalContext } from "@/hooks/useMunicipalContext";
 import { Badge } from "@/components/ui/badge";
+import { LinkedDriverPanel } from "@/components/municipal/LinkedDriverPanel";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CHECKLIST_LABELS: Record<MunicipalChecklistKey, string> = {
@@ -776,61 +777,7 @@ export default function MunicipalDriverDetailPage() {
           </div>
 
           {/* ── ESTRUCTURA DE LA CUENTA (TITULAR/CHOFER) ─────────────────── */}
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
-            <div className="px-5 py-3 border-b border-white/5 flex justify-between items-center">
-              <p className="text-xs font-black uppercase tracking-widest text-zinc-500">
-                Estructura de la Cuenta
-              </p>
-              {userData?.isVehicleOwner ? (
-                <Badge className="bg-indigo-500/20 text-indigo-400 border-none text-[10px] uppercase font-black">Titular / Flota</Badge>
-              ) : userData?.vehicleOwnerId ? (
-                <Badge className="bg-amber-500/20 text-amber-400 border-none text-[10px] uppercase font-black">Chofer Autorizado</Badge>
-              ) : (
-                <Badge className="bg-zinc-800 text-zinc-500 border-none text-[10px] uppercase font-black">Independiente</Badge>
-              )}
-            </div>
-            <div className="p-5 space-y-4">
-              {userData?.isVehicleOwner ? (
-                <div className="space-y-4">
-                  <p className="text-xs text-zinc-400">Este usuario es titular de un vehículo y puede autorizar choferes.</p>
-                  <div className="grid grid-cols-1 gap-2">
-                    {userData.authorizedDriverIds?.length ? (
-                      userData.authorizedDriverIds.map(driverId => (
-                        <div key={driverId} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-500">UID</div>
-                            <div>
-                              <p className="text-sm font-bold text-white">{driverId}</p>
-                              <p className="text-[10px] text-zinc-600 font-bold uppercase">Chofer Autorizado</p>
-                            </div>
-                          </div>
-                          <Link href={`/municipal/drivers/${driverId}`}>
-                            <Button variant="ghost" size="sm" className="text-indigo-400 hover:text-indigo-300 text-[10px] font-black uppercase">Ver Perfil</Button>
-                          </Link>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-4 border border-dashed border-white/10 rounded-xl text-zinc-600 text-xs italic">
-                        No hay choferes autorizados cargados.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : userData?.vehicleOwnerId ? (
-                <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/70 mb-1">Dueño de Cuenta (Titular)</p>
-                    <p className="text-sm font-bold text-white">{userData.vehicleOwnerId}</p>
-                  </div>
-                  <Link href={`/municipal/drivers/${userData.vehicleOwnerId}`}>
-                    <Button variant="ghost" size="sm" className="text-amber-400 hover:text-amber-300 text-[10px] font-black uppercase">Ver Titular</Button>
-                  </Link>
-                </div>
-              ) : (
-                <p className="text-xs text-zinc-500 italic text-center py-2">Este conductor opera su propio vehículo (Titular e Independiente).</p>
-              )}
-            </div>
-          </div>
+          <LinkedDriverPanel userData={userData} mp={mp} />
 
           {/* ── PARADA DIGITAL ASIGNADA ───────────────────────────────────── */}
           <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden backdrop-blur-xl">
