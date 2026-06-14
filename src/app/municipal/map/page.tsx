@@ -14,7 +14,20 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { VamoMarker } from '@/components/VamoMarker';
 import { Badge } from '@/components/ui/badge';
 import { useLiveDriversMap } from '@/hooks/useLiveDriversMap';
-import { LiveRidesLayer, TaxiStandsLayer } from '@/components/LiveMapLayers';
+import { LiveRidesLayer, TaxiStandsLayer, AlertsLayer } from '@/components/LiveMapLayers';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+
+function normalizeSubtype(st: string | undefined | null) {
+    if (!st) return 'Sin clasificar';
+    const s = st.toLowerCase().trim();
+    if (s === 'taxi') return 'Taxi';
+    if (s === 'remis' || s === 'remís' || s === 'remise') return 'Remís';
+    if (s === 'express' || s === 'particular' || s === 'private') return 'Particular';
+    if (s === 'professional') return 'Taxi / Remís';
+    return 'Sin clasificar';
+}
 
 export default function MunicipalMapPage() {
     const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
@@ -27,7 +40,21 @@ export default function MunicipalMapPage() {
     const [mapCenter, setMapCenter] = useState(cityCenter);
     const [mapZoom, setMapZoom] = useState(cityZoom);
     const [hasInteracted, setHasInteracted] = useState(false);
-    const [showOffline, setShowOffline] = useState(false);
+    
+    // [LAYERS STATE]
+    const [layers, setLayers] = useState({
+        taxis: true,
+        remises: true,
+        particulares: true,
+        freeDrivers: true,
+        busyDrivers: true,
+        searchingRides: true,
+        activeRides: true,
+        scheduledRides: false,
+        taxiStands: true,
+        offlineDrivers: false,
+        alerts: true
+    });
 
     useEffect(() => {
         if (!hasInteracted && cityCenter) {
@@ -66,9 +93,32 @@ export default function MunicipalMapPage() {
                 className="w-full h-full"
                 colorScheme="DARK"
             >
-                <MunicipalDriversLayer drivers={liveData.drivers} debugDrivers={liveData.debugDrivers} rawCounts={liveData.rawCounts} showOffline={showOffline} />
-                <LiveRidesLayer rides={liveData.activeRides} />
-                <TaxiStandsLayer stands={liveData.taxiStands} />
+                <MunicipalDriversLayer 
+                    drivers={liveData.drivers.filter((d: any) => {
+                        if (!layers.offlineDrivers && d.liveStatus === 'offline' && !d.isSuspended) return false;
+                        if (!layers.freeDrivers && d.liveStatus === 'online') return false;
+                        if (!layers.busyDrivers && d.liveStatus === 'in_ride') return false;
+                        
+                        const norm = normalizeSubtype(d.driverSubtype);
+                        if (!layers.taxis && (norm === 'Taxi' || norm === 'Taxi / Remís')) return false;
+                        if (!layers.remises && (norm === 'Remís' || norm === 'Taxi / Remís')) return false;
+                        if (!layers.particulares && norm === 'Particular') return false;
+                        return true;
+                    })} 
+                    debugDrivers={liveData.debugDrivers} 
+                    rawCounts={liveData.rawCounts} 
+                    showOffline={layers.offlineDrivers} 
+                />
+                <LiveRidesLayer 
+                    rides={liveData.activeRides.filter((r: any) => {
+                        if (!layers.searchingRides && (r.status === 'searching' || r.status === 'offered')) return false;
+                        if (!layers.scheduledRides && r.status === 'scheduled') return false;
+                        if (!layers.activeRides && !['searching', 'offered', 'scheduled'].includes(r.status)) return false;
+                        return true;
+                    })} 
+                />
+                {layers.taxiStands && <TaxiStandsLayer stands={liveData.taxiStands} />}
+                {layers.alerts && <AlertsLayer alerts={liveData.panicAlerts} />}
             </Map>
 
             {/* Tactical Overlay */}
@@ -78,29 +128,68 @@ export default function MunicipalMapPage() {
                     <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Monitoreo en Tiempo Real</p>
                 </div>
                 
-                <button
-                    onClick={() => setShowOffline(!showOffline)}
-                    className={cn(
-                        "flex items-center gap-2 px-4 py-2 rounded-2xl shadow-2xl border transition-all w-full justify-center",
-                        showOffline 
-                            ? "bg-zinc-800 border-zinc-600 text-white" 
-                            : "bg-black/80 backdrop-blur-xl border-white/10 text-zinc-500 hover:text-white"
-                    )}
-                >
-                    <div className={cn("w-2 h-2 rounded-full", showOffline ? "bg-zinc-400" : "bg-transparent border border-zinc-600")} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Mostrar Desconectados</span>
-                </button>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <button className="flex items-center gap-2 px-4 py-2 rounded-2xl shadow-2xl border bg-black/80 backdrop-blur-xl border-white/10 text-zinc-300 hover:text-white transition-all w-full justify-center">
+                            <VamoIcon name="layers" className="w-4 h-4" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Capas del Mapa</span>
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 bg-zinc-950/95 backdrop-blur-3xl border-white/10 rounded-2xl p-4 shadow-2xl z-50 ml-6" align="start" sideOffset={8}>
+                        <h3 className="text-xs font-black text-white uppercase tracking-widest mb-4 border-b border-white/10 pb-2">Filtros Avanzados</h3>
+                        
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <h4 className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Conductores</h4>
+                                <LayerToggle id="freeDrivers" label="Libres (Online)" checked={layers.freeDrivers} onChange={(v) => setLayers(p => ({ ...p, freeDrivers: v }))} />
+                                <LayerToggle id="busyDrivers" label="En Viaje (Ocupados)" checked={layers.busyDrivers} onChange={(v) => setLayers(p => ({ ...p, busyDrivers: v }))} />
+                                <LayerToggle id="offlineDrivers" label="Desconectados" checked={layers.offlineDrivers} onChange={(v) => setLayers(p => ({ ...p, offlineDrivers: v }))} />
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <h4 className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Tipos de Servicio</h4>
+                                <LayerToggle id="taxis" label="Taxis" checked={layers.taxis} onChange={(v) => setLayers(p => ({ ...p, taxis: v }))} />
+                                <LayerToggle id="remises" label="Remises" checked={layers.remises} onChange={(v) => setLayers(p => ({ ...p, remises: v }))} />
+                                <LayerToggle id="particulares" label="Particulares (Express)" checked={layers.particulares} onChange={(v) => setLayers(p => ({ ...p, particulares: v }))} />
+                            </div>
+
+                            <div className="space-y-2">
+                                <h4 className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Viajes</h4>
+                                <LayerToggle id="activeRides" label="Viajes Activos" checked={layers.activeRides} onChange={(v) => setLayers(p => ({ ...p, activeRides: v }))} />
+                                <LayerToggle id="searchingRides" label="Buscando Conductor" checked={layers.searchingRides} onChange={(v) => setLayers(p => ({ ...p, searchingRides: v }))} />
+                                <LayerToggle id="scheduledRides" label="Reservas Próximas" checked={layers.scheduledRides} onChange={(v) => setLayers(p => ({ ...p, scheduledRides: v }))} />
+                            </div>
+
+                            <div className="space-y-2">
+                                <h4 className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Infraestructura</h4>
+                                <LayerToggle id="taxiStands" label="Paradas Oficiales" checked={layers.taxiStands} onChange={(v) => setLayers(p => ({ ...p, taxiStands: v }))} />
+                                <LayerToggle id="alerts" label="Alertas de Pánico" checked={layers.alerts} onChange={(v) => setLayers(p => ({ ...p, alerts: v }))} />
+                            </div>
+                        </div>
+                    </PopoverContent>
+                </Popover>
             </div>
 
             {/* Legend */}
             <div className="absolute bottom-10 left-6 z-10 flex gap-2 flex-wrap max-w-lg">
                <LegendItem color="bg-emerald-500" label="Libre" />
                <LegendItem color="bg-indigo-500" label="En Viaje" />
-               <LegendItem color="bg-[#f59e0b] animate-pulse" label="Buscando Conductor" />
+               <LegendItem color="bg-[#f59e0b] animate-pulse" label="Buscando" />
                <LegendItem color="bg-emerald-500 border border-white/40" label="Viaje Activo" />
+               <LegendItem color="bg-purple-500" label="Reserva" />
                <LegendItem color="bg-sky-500 border-2 border-white/90" label="Parada Oficial" />
-               {showOffline && <LegendItem color="bg-zinc-600" label="Desconectado" />}
+               <LegendItem color="bg-red-600 animate-pulse" label="Alerta" />
+               {layers.offlineDrivers && <LegendItem color="bg-zinc-600" label="Desconectado" />}
             </div>
+        </div>
+    );
+}
+
+function LayerToggle({ id, label, checked, onChange }: { id: string, label: string, checked: boolean, onChange: (v: boolean) => void }) {
+    return (
+        <div className="flex items-center justify-between">
+            <Label htmlFor={id} className="text-[10px] font-bold text-zinc-300 cursor-pointer">{label}</Label>
+            <Switch id={id} checked={checked} onCheckedChange={onChange} className="scale-75 data-[state=checked]:bg-indigo-500" />
         </div>
     );
 }

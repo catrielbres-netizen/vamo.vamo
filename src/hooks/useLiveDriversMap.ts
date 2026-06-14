@@ -10,6 +10,7 @@ export function useLiveDriversMap(cityKey: string | null) {
     const [rawProfiles, setRawProfiles] = useState<any[]>([]);
     const [activeRides, setActiveRides] = useState<any[]>([]);
     const [taxiStands, setTaxiStands] = useState<any[]>([]);
+    const [panicAlerts, setPanicAlerts] = useState<any[]>([]);
 
     useEffect(() => {
         if (!db || !cityKey) return;
@@ -39,7 +40,7 @@ export function useLiveDriversMap(cityKey: string | null) {
         const qRides = query(
             collection(db, 'rides'),
             where('cityKey', '==', cityKey),
-            where('status', 'in', ['searching', 'driver_assigned', 'driver_arrived', 'in_progress', 'paused'])
+            where('status', 'in', ['searching', 'driver_assigned', 'driver_arrived', 'in_progress', 'paused', 'scheduled'])
         );
         const unRides = onSnapshot(qRides, snap => setActiveRides(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
@@ -50,12 +51,20 @@ export function useLiveDriversMap(cityKey: string | null) {
         );
         const unStands = onSnapshot(qStands, snap => setTaxiStands(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
+        const qAlerts = query(
+            collection(db, 'panic_alerts'),
+            where('cityKey', '==', cityKey),
+            limit(50)
+        );
+        const unAlerts = onSnapshot(qAlerts, snap => setPanicAlerts(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
         return () => {
             unUsers();
             unLocs();
             unProfs();
             unRides();
             unStands();
+            unAlerts();
         };
     }, [db, cityKey]);
 
@@ -123,13 +132,15 @@ export function useLiveDriversMap(cityKey: string | null) {
         drivers: driversData.filtered, 
         activeRides, 
         taxiStands,
+        panicAlerts,
         debugDrivers: driversData.unified,
         rawCounts: {
             users: rawUsers.length,
             locations: rawLocations.length,
             profiles: rawProfiles.length,
             rides: activeRides.length,
-            stands: taxiStands.length
+            stands: taxiStands.length,
+            alerts: panicAlerts.length
         }
     };
 }
