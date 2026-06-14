@@ -223,7 +223,17 @@ function TrafficDriversLayer({ cityKey, drivers, activeRides, debugDrivers, rawC
 
             return true;
         });
-    }, [drivers, searchQuery, filterStatus, layers]);
+    }, [
+        drivers, 
+        searchQuery, 
+        filterStatus, 
+        layers.offlineDrivers,
+        layers.freeDrivers,
+        layers.busyDrivers,
+        layers.taxis,
+        layers.remises,
+        layers.particulares
+    ]);
 
     // Separate drivers based on coordinate validity
     const driversWithValidLocation = useMemo(() => {
