@@ -82,11 +82,33 @@ export default function TrafficMapPage() {
         }
     };
 
+    const filteredRides = useMemo(() => {
+        if (!liveData.activeRides) return [];
+        return liveData.activeRides.filter((r: any) => {
+            if (!layers.searchingRides && (r.status === 'searching' || r.status === 'offered')) return false;
+            if (!layers.scheduledRides && r.status === 'scheduled') return false;
+            if (!layers.activeRides && !['searching', 'offered', 'scheduled'].includes(r.status)) return false;
+            return true;
+        });
+    }, [liveData.activeRides, layers.searchingRides, layers.scheduledRides, layers.activeRides]);
+
     if (contextLoading) return (
         <div className="h-screen flex items-center justify-center bg-black">
             <VamoIcon name="loader" className="h-8 w-8 animate-spin text-indigo-500" />
         </div>
     );
+
+    if (!cityKey) {
+        return (
+            <div className="h-[calc(100vh-80px)] w-full flex flex-col items-center justify-center bg-zinc-950 border border-white/5 rounded-3xl">
+                <VamoIcon name="map-pin" className="h-12 w-12 text-zinc-700 mb-4" />
+                <h2 className="text-xl font-black text-white uppercase tracking-widest">Sin Ciudad Asignada</h2>
+                <p className="text-sm text-zinc-500 mt-2 max-w-md text-center">
+                    Su usuario de tránsito no tiene una ciudad vinculada para operar el mapa fiscalizador.
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="h-[calc(100vh-80px)] w-full relative overflow-hidden rounded-3xl border border-white/5 bg-zinc-950">
@@ -117,14 +139,7 @@ export default function TrafficMapPage() {
                     layers={layers}
                     setLayers={setLayers}
                 />
-                <LiveRidesLayer 
-                    rides={liveData.activeRides.filter((r: any) => {
-                        if (!layers.searchingRides && (r.status === 'searching' || r.status === 'offered')) return false;
-                        if (!layers.scheduledRides && r.status === 'scheduled') return false;
-                        if (!layers.activeRides && !['searching', 'offered', 'scheduled'].includes(r.status)) return false;
-                        return true;
-                    })} 
-                />
+                <LiveRidesLayer rides={filteredRides} />
                 {layers.taxiStands && <TaxiStandsLayer stands={liveData.taxiStands} />}
                 {layers.alerts && <AlertsLayer alerts={liveData.panicAlerts} />}
             </Map>

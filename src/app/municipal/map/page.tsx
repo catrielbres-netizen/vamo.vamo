@@ -63,6 +63,16 @@ export default function MunicipalMapPage() {
         }
     }, [cityCenter, cityZoom, hasInteracted]);
 
+    const filteredRides = useMemo(() => {
+        if (!liveData.activeRides) return [];
+        return liveData.activeRides.filter((r: any) => {
+            if (!layers.searchingRides && (r.status === 'searching' || r.status === 'offered')) return false;
+            if (!layers.scheduledRides && r.status === 'scheduled') return false;
+            if (!layers.activeRides && !['searching', 'offered', 'scheduled'].includes(r.status)) return false;
+            return true;
+        });
+    }, [liveData.activeRides, layers.searchingRides, layers.scheduledRides, layers.activeRides]);
+
     const handleMapInteraction = () => {
         if (!hasInteracted) {
             console.log("📍 [LIVE_MAP_USER_INTERACTION] Municipal User interacted.");
@@ -71,6 +81,18 @@ export default function MunicipalMapPage() {
     };
 
     if (contextLoading) return <div className="h-screen flex items-center justify-center bg-black"><VamoIcon name="loader" className="h-8 w-8 animate-spin text-indigo-500" /></div>;
+
+    if (!cityKey) {
+        return (
+            <div className="h-[calc(100vh-80px)] w-full flex flex-col items-center justify-center bg-zinc-950 border border-white/5 rounded-3xl">
+                <VamoIcon name="map-pin" className="h-12 w-12 text-zinc-700 mb-4" />
+                <h2 className="text-xl font-black text-white uppercase tracking-widest">Sin Ciudad Asignada</h2>
+                <p className="text-sm text-zinc-500 mt-2 max-w-md text-center">
+                    Su usuario municipal no tiene una ciudad vinculada para operar el mapa táctico.
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="h-[calc(100vh-80px)] w-full relative overflow-hidden rounded-3xl border border-white/5 bg-zinc-950">
@@ -94,29 +116,12 @@ export default function MunicipalMapPage() {
                 colorScheme="DARK"
             >
                 <MunicipalDriversLayer 
-                    drivers={liveData.drivers.filter((d: any) => {
-                        if (!layers.offlineDrivers && d.liveStatus === 'offline' && !d.isSuspended) return false;
-                        if (!layers.freeDrivers && d.liveStatus === 'online') return false;
-                        if (!layers.busyDrivers && d.liveStatus === 'in_ride') return false;
-                        
-                        const norm = normalizeSubtype(d.driverSubtype);
-                        if (!layers.taxis && (norm === 'Taxi' || norm === 'Taxi / Remís')) return false;
-                        if (!layers.remises && (norm === 'Remís' || norm === 'Taxi / Remís')) return false;
-                        if (!layers.particulares && norm === 'Particular') return false;
-                        return true;
-                    })} 
+                    drivers={liveData.drivers} 
                     debugDrivers={liveData.debugDrivers} 
                     rawCounts={liveData.rawCounts} 
-                    showOffline={layers.offlineDrivers} 
+                    layers={layers} 
                 />
-                <LiveRidesLayer 
-                    rides={liveData.activeRides.filter((r: any) => {
-                        if (!layers.searchingRides && (r.status === 'searching' || r.status === 'offered')) return false;
-                        if (!layers.scheduledRides && r.status === 'scheduled') return false;
-                        if (!layers.activeRides && !['searching', 'offered', 'scheduled'].includes(r.status)) return false;
-                        return true;
-                    })} 
-                />
+                <LiveRidesLayer rides={filteredRides} />
                 {layers.taxiStands && <TaxiStandsLayer stands={liveData.taxiStands} />}
                 {layers.alerts && <AlertsLayer alerts={liveData.panicAlerts} />}
             </Map>
@@ -203,22 +208,42 @@ function LegendItem({ color, label }: { color: string, label: string }) {
     );
 }
 
-function MunicipalDriversLayer({ drivers, debugDrivers, rawCounts, showOffline }: { drivers: any[], debugDrivers: any[], rawCounts: any, showOffline: boolean }) {
+function MunicipalDriversLayer({ drivers, debugDrivers, rawCounts, layers }: { drivers: any[], debugDrivers: any[], rawCounts: any, layers: any }) {
     const map = useMap();
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
-    const selectedDriver = useMemo(() => drivers.find((d: any) => d.driverId === selectedDriverId), [drivers, selectedDriverId]);
+    const selectedDriver = useMemo(() => drivers?.find((d: any) => d.driverId === selectedDriverId), [drivers, selectedDriverId]);
     const router = useRouter();
     
     const searchParams = useSearchParams();
     const isDebug = searchParams.get('debug') === 'true';
 
+    const filteredDrivers = useMemo(() => {
+        if (!drivers) return [];
+        return drivers.filter((d: any) => {
+            if (!d.visibleOnMap) return false;
+            if (!layers.offlineDrivers && d.liveStatus === 'offline' && !d.isSuspended) return false;
+            if (!layers.freeDrivers && d.liveStatus === 'online') return false;
+            if (!layers.busyDrivers && d.liveStatus === 'in_ride') return false;
+            
+            const norm = normalizeSubtype(d.driverSubtype);
+            if (!layers.taxis && (norm === 'Taxi' || norm === 'Taxi / Remís')) return false;
+            if (!layers.remises && (norm === 'Remís' || norm === 'Taxi / Remís')) return false;
+            if (!layers.particulares && norm === 'Particular') return false;
+            return true;
+        });
+    }, [
+        drivers, 
+        layers.offlineDrivers, 
+        layers.freeDrivers, 
+        layers.busyDrivers, 
+        layers.taxis, 
+        layers.remises, 
+        layers.particulares
+    ]);
+
     return (
         <>
-            {drivers.filter((d: any) => {
-                if (!d.visibleOnMap) return false;
-                if (!showOffline && d.liveStatus === 'offline' && !d.isSuspended) return false;
-                return true;
-            }).map((driver: any) => {
+            {filteredDrivers.map((driver: any) => {
                 return (
                     <VamoMarker
                         key={driver.driverId}
