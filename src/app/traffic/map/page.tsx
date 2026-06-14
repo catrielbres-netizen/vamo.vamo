@@ -101,6 +101,7 @@ export default function TrafficMapPage() {
                <LegendItem color="bg-emerald-500 border border-white/40" label="Viaje Activo" />
                <LegendItem color="bg-sky-500 border-2 border-white/90" label="Parada Oficial" />
                <LegendItem color="bg-rose-500" label="Suspendido" />
+               {showOffline && <LegendItem color="bg-zinc-600" label="Desconectado" />}
             </div>
         </div>
     );
@@ -124,6 +125,7 @@ function TrafficDriversLayer({ cityKey, drivers, activeRides, debugDrivers, rawC
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'in_ride' | 'stale' | 'suspended'>('all');
+    const [showOffline, setShowOffline] = useState(false);
     
     const searchParams = useSearchParams();
     const isDebug = searchParams.get('debug') === 'true';
@@ -145,6 +147,8 @@ function TrafficDriversLayer({ cityKey, drivers, activeRides, debugDrivers, rawC
     // Filter and search drivers in-memory
     const filteredDrivers = useMemo(() => {
         return drivers.filter((d: any) => {
+            if (!showOffline && d.liveStatus === 'offline' && !d.isSuspended) return false;
+
             const queryClean = searchQuery.toLowerCase().trim();
             const matchesSearch = !queryClean || 
                 d.displayName?.toLowerCase().includes(queryClean) ||
@@ -165,7 +169,7 @@ function TrafficDriversLayer({ cityKey, drivers, activeRides, debugDrivers, rawC
 
             return true;
         });
-    }, [drivers, searchQuery, filterStatus]);
+    }, [drivers, searchQuery, filterStatus, showOffline]);
 
     // Separate drivers based on coordinate validity
     const driversWithValidLocation = useMemo(() => {
@@ -257,6 +261,21 @@ function TrafficDriversLayer({ cityKey, drivers, activeRides, debugDrivers, rawC
                             {btn.label}
                         </button>
                     ))}
+                </div>
+
+                <div className="mt-3">
+                    <button
+                        onClick={() => setShowOffline(!showOffline)}
+                        className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-xl border transition-all w-full justify-center",
+                            showOffline 
+                                ? "bg-zinc-800 border-zinc-600 text-white" 
+                                : "bg-black/30 border-white/5 text-zinc-500 hover:text-white"
+                        )}
+                    >
+                        <div className={cn("w-2 h-2 rounded-full", showOffline ? "bg-zinc-400" : "bg-transparent border border-zinc-600")} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">Mostrar Desconectados</span>
+                    </button>
                 </div>
 
                 {/* Scrollable Results List */}
@@ -468,11 +487,13 @@ function TrafficDriverMarker({ driver, isSelected, isStale, onClick }: { driver:
 
     const colorClass = isSuspended 
         ? 'bg-rose-500' 
-        : isStale 
-            ? 'bg-amber-500' 
-            : isOnline 
-                ? 'bg-[#22c55e]' 
-                : 'bg-[#1D7CFF]';
+        : driver.driverStatus === 'offline'
+            ? 'bg-zinc-600'
+            : isStale 
+                ? 'bg-amber-500' 
+                : isOnline 
+                    ? 'bg-[#22c55e]' 
+                    : 'bg-[#1D7CFF]';
 
     const shadowClass = isSuspended 
         ? 'shadow-[0_0_12px_rgba(239,68,68,0.6)]' 

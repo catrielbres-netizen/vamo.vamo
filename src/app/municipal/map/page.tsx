@@ -27,6 +27,7 @@ export default function MunicipalMapPage() {
     const [mapCenter, setMapCenter] = useState(cityCenter);
     const [mapZoom, setMapZoom] = useState(cityZoom);
     const [hasInteracted, setHasInteracted] = useState(false);
+    const [showOffline, setShowOffline] = useState(false);
 
     useEffect(() => {
         if (!hasInteracted && cityCenter) {
@@ -65,17 +66,30 @@ export default function MunicipalMapPage() {
                 className="w-full h-full"
                 colorScheme="DARK"
             >
-                <MunicipalDriversLayer drivers={liveData.drivers} debugDrivers={liveData.debugDrivers} rawCounts={liveData.rawCounts} />
+                <MunicipalDriversLayer drivers={liveData.drivers} debugDrivers={liveData.debugDrivers} rawCounts={liveData.rawCounts} showOffline={showOffline} />
                 <LiveRidesLayer rides={liveData.activeRides} />
                 <TaxiStandsLayer stands={liveData.taxiStands} />
             </Map>
 
             {/* Tactical Overlay */}
-            <div className="absolute top-6 left-6 z-10 space-y-2">
+            <div className="absolute top-6 left-6 z-10 space-y-2 pointer-events-auto">
                 <div className="px-4 py-2 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl">
                     <h2 className="text-lg font-black text-white tracking-tight">Mapa Operativo: {cityName}</h2>
                     <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Monitoreo en Tiempo Real</p>
                 </div>
+                
+                <button
+                    onClick={() => setShowOffline(!showOffline)}
+                    className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-2xl shadow-2xl border transition-all w-full justify-center",
+                        showOffline 
+                            ? "bg-zinc-800 border-zinc-600 text-white" 
+                            : "bg-black/80 backdrop-blur-xl border-white/10 text-zinc-500 hover:text-white"
+                    )}
+                >
+                    <div className={cn("w-2 h-2 rounded-full", showOffline ? "bg-zinc-400" : "bg-transparent border border-zinc-600")} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Mostrar Desconectados</span>
+                </button>
             </div>
 
             {/* Legend */}
@@ -85,7 +99,7 @@ export default function MunicipalMapPage() {
                <LegendItem color="bg-[#f59e0b] animate-pulse" label="Buscando Conductor" />
                <LegendItem color="bg-emerald-500 border border-white/40" label="Viaje Activo" />
                <LegendItem color="bg-sky-500 border-2 border-white/90" label="Parada Oficial" />
-               <LegendItem color="bg-zinc-600" label="Desconectado" />
+               {showOffline && <LegendItem color="bg-zinc-600" label="Desconectado" />}
             </div>
         </div>
     );
@@ -100,7 +114,7 @@ function LegendItem({ color, label }: { color: string, label: string }) {
     );
 }
 
-function MunicipalDriversLayer({ drivers, debugDrivers, rawCounts }: { drivers: any[], debugDrivers: any[], rawCounts: any }) {
+function MunicipalDriversLayer({ drivers, debugDrivers, rawCounts, showOffline }: { drivers: any[], debugDrivers: any[], rawCounts: any, showOffline: boolean }) {
     const map = useMap();
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
     const selectedDriver = useMemo(() => drivers.find((d: any) => d.driverId === selectedDriverId), [drivers, selectedDriverId]);
@@ -111,7 +125,11 @@ function MunicipalDriversLayer({ drivers, debugDrivers, rawCounts }: { drivers: 
 
     return (
         <>
-            {drivers.filter((d: any) => d.visibleOnMap).map((driver: any) => {
+            {drivers.filter((d: any) => {
+                if (!d.visibleOnMap) return false;
+                if (!showOffline && d.liveStatus === 'offline' && !d.isSuspended) return false;
+                return true;
+            }).map((driver: any) => {
                 return (
                     <VamoMarker
                         key={driver.driverId}
