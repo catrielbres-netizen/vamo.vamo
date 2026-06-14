@@ -28,10 +28,11 @@ export function LinkedDriverPanel({ userData, mp }: LinkedDriverPanelProps) {
           <p className="text-xs font-black uppercase tracking-widest text-zinc-500">
             Relación Titular / Chofer
           </p>
-          <Badge className="bg-zinc-800 text-zinc-500 border-none text-[10px] uppercase font-black">Independiente</Badge>
+          <Badge className="bg-zinc-800 text-zinc-500 border-none text-[10px] uppercase font-black">Sin vínculo</Badge>
         </div>
-        <div className="p-5">
-          <p className="text-xs text-zinc-500 italic text-center py-2">Este conductor opera su propio vehículo (Titular e Independiente).</p>
+        <div className="p-6 text-center">
+          <p className="text-sm font-bold text-white mb-1.5">Sin vínculo titular/chofer registrado</p>
+          <p className="text-xs text-zinc-500">Este conductor no tiene actualmente un titular asociado ni choferes vinculados autorizados.</p>
         </div>
       </div>
     );
