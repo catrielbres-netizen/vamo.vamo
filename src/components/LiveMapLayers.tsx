@@ -147,15 +147,19 @@ export function TaxiStandsLayer({ stands }: { stands: any[] }) {
     const [selectedStandId, setSelectedStandId] = useState<string | null>(null);
     const selectedStand = useMemo(() => stands.find(s => s.id === selectedStandId), [stands, selectedStandId]);
 
-    // Ensure valid coordinates
-    const validStands = stands.filter(s => s.location && typeof s.location.lat === 'number' && typeof s.location.lng === 'number');
+    // Ensure valid coordinates using safe parsing for GeoPoint and plain objects
+    const validStands = stands.map(s => {
+        const lat = s.location?.lat ?? s.location?.latitude ?? s.location?._latitude;
+        const lng = s.location?.lng ?? s.location?.longitude ?? s.location?._longitude;
+        return { ...s, normalizedLocation: { lat, lng } };
+    }).filter(s => typeof s.normalizedLocation.lat === 'number' && typeof s.normalizedLocation.lng === 'number');
 
     return (
         <>
             {validStands.map(stand => (
                 <VamoMarker
                     key={stand.id}
-                    position={{ lat: stand.location.lat, lng: stand.location.lng }}
+                    position={{ lat: stand.normalizedLocation.lat, lng: stand.normalizedLocation.lng }}
                     onClick={() => {
                         setSelectedStandId(stand.id);
                         console.log("📍 [LIVE_MAP_STAND_SELECTED]:", stand.id);
