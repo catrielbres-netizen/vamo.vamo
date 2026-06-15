@@ -1,7 +1,7 @@
 import admin from 'firebase-admin';
 import * as dotenv from 'dotenv';
 
-dotenv.config({ path: '.env.local' });
+dotenv.config({ path: '.env.local', override: true });
 
 if (admin.apps.length === 0) {
     admin.initializeApp({
