@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { CURRENT_TERMS_VERSION } from '@/lib/legal-config';
 import { featureFlags, PLAN_B_DRIVER_SUBTYPE } from '@/config/features';
 import { useActiveCities } from '@/hooks/useActiveCities';
+import { DriverSubtype } from '@/lib/types';
 
 // --- Steps Configuration ---
 const STEPS = [
@@ -57,11 +58,12 @@ export function DriverOnboardingWizard() {
     cityKey: '',
     customCity: '',
     identityStatus: 'unverified' as 'unverified' | 'pending' | 'verified',
-    driverSubtype: PLAN_B_DRIVER_SUBTYPE as 'professional' | 'express',
+    driverSubtype: PLAN_B_DRIVER_SUBTYPE as DriverSubtype,
     licenseExpiry: '',
     insuranceExpiry: '',
     criminalRecordExpiry: '',
     termsAccepted: false,
+    fleetOwnerId: '',
   });
 
   // --- Documents State ---

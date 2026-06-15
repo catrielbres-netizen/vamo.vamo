@@ -471,7 +471,7 @@ function OnboardingPasajeroContent() {
 
 export default function OnboardingPasajeroPage() {
     return (
-        <React.Suspense fallback={<VamoFullScreenLoader loadingText="Cargando entorno..." />}>
+        <React.Suspense fallback={<VamoFullScreenLoader />}>
             <OnboardingPasajeroContent />
         </React.Suspense>
     );

@@ -270,6 +270,7 @@ export default function AdminAlertsPage() {
 function EmergencyDetail({ alert }: { alert: PanicAlert }) {
     const firestore = useFirestore();
     const { toast } = useToast();
+    const { cityKey: activeCityKey } = useMunicipalContext();
 
     // Fetch live ride and user data for the report
     const rideRef = useMemo(() => alert.rideId ? doc(firestore!, 'rides', alert.rideId) : null, [firestore, alert.rideId]);
@@ -356,7 +357,7 @@ function EmergencyDetail({ alert }: { alert: PanicAlert }) {
 
             <div className="h-[300px] rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl relative bg-zinc-900 group">
                 <Map
-                    defaultCenter={alert.location ? { lat: alert.location.lat, lng: alert.location.lng } : getCityDefaultLocation(profile?.cityKey)}
+                    defaultCenter={alert.location ? { lat: alert.location.lat, lng: alert.location.lng } : getCityDefaultLocation(activeCityKey || 'other')}
                     defaultZoom={15}
                     gestureHandling={'greedy'}
                     disableDefaultUI={true}

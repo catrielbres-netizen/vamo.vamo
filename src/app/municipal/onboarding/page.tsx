@@ -34,6 +34,7 @@ interface Invitation {
     cityKey: string;
     cityName: string;
     token: string;
+    municipalityEmail?: string;
 }
 
 export default function OnboardingPage() {
@@ -138,7 +139,7 @@ export default function OnboardingPage() {
                     <h2 className="text-xl font-bold text-white">Invitación no encontrada</h2>
                     <p className="text-zinc-500 text-sm">El link es inválido o ya fue utilizado. Por favor, generá uno nuevo desde el Admin.</p>
                     <div className="text-[10px] font-mono text-zinc-700 bg-black/50 p-2 rounded">
-                        ID: {cityKey} | UID: {user.uid.slice(0,5)}
+                        ID: {cityKey} | UID: {user?.uid?.slice(0,5)}
                     </div>
                     <Button onClick={() => router.push('/admin/expansion')} variant="outline" className="w-full">
                         Volver al Hub

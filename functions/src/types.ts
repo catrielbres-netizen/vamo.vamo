@@ -97,7 +97,7 @@ export function buildMunicipalCode(cityKey: string, sequence: number): string {
 
 export type DriverStatus = "offline" | "inactive" | "online" | "in_ride";
 export type DriverLevel = "bronce" | "plata" | "oro";
-export type DriverSubtype = 'professional' | 'express';
+export type DriverSubtype = 'professional' | 'express' | 'taxi' | 'remis' | 'fleet_driver' | 'particular';
 
 export type MunicipalExpressStatus = 
   | 'pending_municipal_review'
@@ -374,6 +374,7 @@ export interface Ride {
     isEscalated?: boolean;
     failureAlertSent?: boolean;
     activatedAt?: FirestoreTimestamp | null;
+    activationStatus?: string | null;
     interestedDriverIds?: string[];
     interestedDriversCount?: number;
     lastInterestAt?: FirestoreTimestamp | FirestoreFieldValue | null;

@@ -53,7 +53,10 @@ export default function PlaceAutocompleteInput({
             center: center,
             radius: 20000, // 20km bias
         });
-        autocompleteInstance.setBounds(circle.getBounds());
+        const bounds = circle.getBounds();
+        if (bounds) {
+            autocompleteInstance.setBounds(bounds);
+        }
     }
 
     setAutocomplete(autocompleteInstance);

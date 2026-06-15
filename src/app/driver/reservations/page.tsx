@@ -230,14 +230,14 @@ function ReservationCard({ ride, isEligibleDriver }: { ride: Ride; isEligibleDri
         }
     };
 
-    const isMine = ride.driverId === user?.uid || ride.driverId === user?.id;
+    const isMine = ride.driverId === user?.uid || ride.driverId === (user as any)?.id;
     const isAvailable = ride.status === 'scheduled' || ride.status === 'pending_driver_assignment';
     const timeDiff = scheduledDate.getTime() - Date.now();
     const minutesUntil = timeDiff / 60000;
     const canAccept = minutesUntil <= 15;
 
-    const pickupAddress = ride.pickup?.address || ride.origin?.address || (ride as any).originAddress || "Origen no disponible";
-    const destinationAddress = ride.destination?.address || ride.dropoff?.address || (ride as any).destinationAddress || "Destino no disponible";
+    const pickupAddress = (ride as any).pickup?.address || ride.origin?.address || (ride as any).originAddress || "Origen no disponible";
+    const destinationAddress = ride.destination?.address || (ride as any).dropoff?.address || (ride as any).destinationAddress || "Destino no disponible";
 
     return (
         <Card className={cn(

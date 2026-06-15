@@ -103,7 +103,7 @@ export default function MunicipalBenefitsPage() {
                 type: 'otros',
                 minLevel: 'bronce',
                 discountPercent: 10,
-                city: cityKey
+                city: cityKey || undefined
             });
         }
         setIsModalOpen(true);
@@ -128,7 +128,7 @@ export default function MunicipalBenefitsPage() {
                 await updateDoc(doc(firestore, 'benefits', editingId), savePayload);
                 toast({ title: 'Beneficio Actualizado', description: 'Los cambios fueron guardados.' });
             } else {
-                savePayload.createdAt = new Date();
+                (savePayload as any).createdAt = new Date();
                 await addDoc(collection(firestore, 'benefits'), savePayload);
                 toast({ title: 'Beneficio Creado', description: 'El nuevo beneficio ya está disponible.' });
             }

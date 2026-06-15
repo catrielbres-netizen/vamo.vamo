@@ -58,8 +58,8 @@ export function MunicipalNavbar() {
 
   const currentCityName = cityName;
 
-  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setCityOverride(e.target.value);
+  const handleCityChange = (val: string) => {
+    setCityOverride(val);
     window.location.reload();
   };
 

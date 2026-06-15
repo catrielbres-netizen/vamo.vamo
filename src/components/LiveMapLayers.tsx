@@ -13,7 +13,7 @@ export interface RideLiveStatus {
     id: string;
     passengerId: string;
     passengerName: string;
-    status: 'searching' | 'offered' | 'driver_assigned' | 'accepted' | 'arrived' | 'picked_up' | 'in_progress' | 'paused';
+    status: 'searching' | 'offered' | 'driver_assigned' | 'accepted' | 'arrived' | 'picked_up' | 'in_progress' | 'paused' | 'scheduled';
     serviceType: string;
     origin: { lat: number; lng: number; address: string; zoneName?: string };
     destination: { lat: number; lng: number; address: string };
