@@ -34,7 +34,7 @@ const DEMO_DRIVER_UID    = process.env.DEMO_DRIVER_UID    || 'BQqO4KZ7ALaIZ0vxO8
 // ─── Datos del pasajero ───────────────────────────────────────────────────────
 const passengerData: Record<string, any> = {
     uid:              DEMO_PASSENGER_UID,
-    email:            'demo_passenger@vamo.com',
+    email:            'demo.passenger@vamo.test',
     name:             'Pasajero Demo',
     role:             'passenger',
     profileCompleted: true,
@@ -42,6 +42,7 @@ const passengerData: Record<string, any> = {
     emailVerified:    true,
     phone:            '+542804000000',
     activeRideId:     null,
+    cityKey:          'rawson',
     city:             'Rawson',
 
     // Nivel de pasajero: nivel 2 "Express" con 8 viajes del mes
@@ -60,7 +61,7 @@ const passengerData: Record<string, any> = {
 // ─── Datos del conductor ──────────────────────────────────────────────────────
 const driverData: Record<string, any> = {
     uid:              DEMO_DRIVER_UID,
-    email:            'demo_driver@vamo.com',
+    email:            'demo.driver@vamo.test',
     name:             'Chofer Demo',
     role:             'driver',
     profileCompleted: true,
@@ -68,6 +69,7 @@ const driverData: Record<string, any> = {
     emailVerified:    true,
     phone:            '+542804111111',
     activeRideId:     null,
+    cityKey:          'rawson',
     city:             'Rawson',
     driverStatus:     'offline',   // empieza offline, la demo lo pondrá online
 

@@ -24,11 +24,11 @@ const auth = getAuth(app);
 const DEMO_USERS = {
   passenger: {
     uid: 'XadNzvLKNIfpCyjXBbZS7mvNeSC2',
-    email: 'demo_passenger@vamo.com',
-    password: '123456',
+    email: 'demo.passenger@vamo.test',
+    password: 'vamo2024pass',
     data: {
       uid: 'XadNzvLKNIfpCyjXBbZS7mvNeSC2',
-      email: 'demo_passenger@vamo.com',
+      email: 'demo.passenger@vamo.test',
       name: 'Pasajero Demo',
       role: 'passenger',
       profileCompleted: true,
@@ -38,6 +38,7 @@ const DEMO_USERS = {
       activeRideId: null,
       currentBalance: 0,
       serviceTier: 'premium',
+      cityKey: 'rawson',
       city: 'Rawson',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -45,11 +46,11 @@ const DEMO_USERS = {
   },
   driver: {
     uid: 'BQqO4KZ7ALaIZ0vxO8QHNuGZWY23',
-    email: 'demo_driver@vamo.com',
-    password: '123456',
+    email: 'demo.driver@vamo.test',
+    password: 'vamo2024pass',
     data: {
       uid: 'BQqO4KZ7ALaIZ0vxO8QHNuGZWY23',
-      email: 'demo_driver@vamo.com',
+      email: 'demo.driver@vamo.test',
       name: 'Chofer Demo',
       role: 'driver',
       profileCompleted: true,
@@ -68,6 +69,7 @@ const DEMO_USERS = {
       vehicleColor: 'Blanco',
       plateNumber: 'DEMO-123',
       vehicleVerificationStatus: 'approved',
+      cityKey: 'rawson',
       city: 'Rawson',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -84,16 +86,53 @@ const DEMO_USERS = {
   },
   admin: {
     uid: 'RHL8qVAPDvgdSAYF8P6J3rTHEqs2',
-    email: 'demo_admin@vamo.com',
-    password: '123456',
+    email: 'demo.superadmin@vamo.test',
+    password: 'vamo2024pass',
     data: {
       uid: 'RHL8qVAPDvgdSAYF8P6J3rTHEqs2',
-      email: 'demo_admin@vamo.com',
-      name: 'Admin Demo',
+      email: 'demo.superadmin@vamo.test',
+      name: 'Superadmin Demo',
       role: 'admin',
       profileCompleted: true,
       approved: true,
       emailVerified: true,
+      cityKey: 'rawson',
+      city: 'Rawson',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+  },
+  municipal: {
+    uid: 'MUNI000000000000000000000001',
+    email: 'demo.municipal@vamo.test',
+    password: 'vamo2024pass',
+    data: {
+      uid: 'MUNI000000000000000000000001',
+      email: 'demo.municipal@vamo.test',
+      name: 'Municipal Demo',
+      role: 'admin_municipal',
+      profileCompleted: true,
+      approved: true,
+      emailVerified: true,
+      cityKey: 'rawson',
+      city: 'Rawson',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+  },
+  traffic: {
+    uid: 'TRAFFIC000000000000000000001',
+    email: 'demo.transito@vamo.test',
+    password: 'vamo2024pass',
+    data: {
+      uid: 'TRAFFIC000000000000000000001',
+      email: 'demo.transito@vamo.test',
+      name: 'Tránsito Demo',
+      role: 'traffic_municipal',
+      profileCompleted: true,
+      approved: true,
+      emailVerified: true,
+      cityKey: 'rawson',
       city: 'Rawson',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -126,6 +165,8 @@ async function run() {
   await seedUser('passenger');
   await seedUser('driver');
   await seedUser('admin');
+  await seedUser('municipal');
+  await seedUser('traffic');
   console.log('🏁 Process finished.');
   process.exit(0);
 }
