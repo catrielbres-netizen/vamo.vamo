@@ -40,6 +40,8 @@ const DEMO_USERS = {
       serviceTier: 'premium',
       cityKey: 'rawson',
       city: 'Rawson',
+      demo: true,
+      isDemo: true,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }
@@ -71,6 +73,8 @@ const DEMO_USERS = {
       vehicleVerificationStatus: 'approved',
       cityKey: 'rawson',
       city: 'Rawson',
+      demo: true,
+      isDemo: true,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     },
@@ -98,6 +102,8 @@ const DEMO_USERS = {
       emailVerified: true,
       cityKey: 'rawson',
       city: 'Rawson',
+      demo: true,
+      isDemo: true,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }
@@ -116,6 +122,8 @@ const DEMO_USERS = {
       emailVerified: true,
       cityKey: 'rawson',
       city: 'Rawson',
+      demo: true,
+      isDemo: true,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }
@@ -134,6 +142,8 @@ const DEMO_USERS = {
       emailVerified: true,
       cityKey: 'rawson',
       city: 'Rawson',
+      demo: true,
+      isDemo: true,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }
