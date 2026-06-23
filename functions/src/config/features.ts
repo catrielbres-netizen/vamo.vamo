@@ -7,7 +7,7 @@ export const featureFlags = {
     passengerWalletTopupEnabled: false,
     simpleDistanceMatchingEnabled: true,
     simpleGlobalFareEnabled: false,
-    mercadoPagoRequiredEnabled: true,
+    mercadoPagoRequiredEnabled: false,
     mercadoPagoSplitEnabled: false,
     supportEmailEnabled: true
 };

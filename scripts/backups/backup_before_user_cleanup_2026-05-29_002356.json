@@ -9489,8 +9489,8 @@
     "1BIk2VyuwEZLmHRVbXE52rhFYen2": {
       "lastError": null,
       "refreshToken": "TG-6a186c279a560f00017403bc-665467758",
-      "accessToken": "APP_USR-6363903695837690-052812-91ac8a92d3cb18b8a78d101fe432aafd-665467758",
-      "publicKey": "APP_USR-584788ff-bf06-4978-870e-538ca68983fb",
+      "accessToken": "APP_USR-COMPROMISED",
+      "publicKey": "APP_USR-COMPROMISED",
       "expiresAt": {
         "_seconds": 1795537447,
         "_nanoseconds": 231000000

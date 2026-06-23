@@ -22,7 +22,7 @@ export const featureFlags = {
   simpleGlobalFareEnabled: false,
 
   // Mercado Pago
-  mercadoPagoRequiredEnabled: true,
+  mercadoPagoRequiredEnabled: false,
   mercadoPagoSplitEnabled: false, // Pendiente técnico
 
   // Soporte

@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 
 async function verifyToken() {
-    const token = "APP_USR-2821217112912946-123020-14930c7325c03c225477aeac1ab7582a-3102929531";
+    const token = "APP_USR-COMPROMISED";
     
     try {
         const res = await fetch('https://api.mercadopago.com/users/me', {

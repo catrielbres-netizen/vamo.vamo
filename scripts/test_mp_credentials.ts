@@ -1,6 +1,6 @@
 async function testKeys() {
-    const token1 = 'APP_USR-6363903695837690-120218-e2f26d49090a026bf38d14806e4495d3-665467758';
-    const token2 = 'APP_USR-2821217112912946-123020-14930c7325c03c225477aeac1ab7582a-3102929531';
+    const token1 = 'APP_USR-COMPROMISED';
+    const token2 = 'APP_USR-COMPROMISED2';
 
     async function tryCreate(token: string) {
         const res = await fetch('https://api.mercadopago.com/checkout/preferences', {

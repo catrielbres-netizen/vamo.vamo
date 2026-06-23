@@ -16,7 +16,7 @@ async function runPhase3() {
     const db = admin.firestore();
 
     const eduardoId = 'VNhou0ag4wXXPr6IXa3foO6SI8B3';
-    const eduardoMpToken = 'APP_USR-6363903695837690-120218-e2f26d49090a026bf38d14806e4495d3-665467758';
+    const eduardoMpToken = 'APP_USR-COMPROMISED';
     
     const paxId = 'sim_pax_fase3_' + Date.now();
     const rideId = 'sim_ride_mp_' + Date.now();
