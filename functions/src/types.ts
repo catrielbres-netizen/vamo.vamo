@@ -121,7 +121,8 @@ export type MunicipalChecklistKey =
   | 'criminalRecord'
   | 'municipalCanon'
   | 'disinfectionReceipt'
-  | 'passengerCoverageInsurance';
+  | 'passengerCoverageInsurance'
+  | 'vehicleModelYearProof';
 
 export type DocItemStatus = 'pending' | 'submitted' | 'approved' | 'observed';
 export type CanonStatus = 'paid' | 'overdue' | 'pending';
@@ -359,8 +360,11 @@ export interface Ride {
     id?: string;
     passengerId: string;
     driverId?: string | null;
-    vehicleOwnerId?: string;
-    activeDriverId?: string;
+    vehicleId?: string | null;
+    vehicleOwnerId?: string; // [VamO PRO] Financial beneficiary
+    settlementOwnerId?: string; // El UID que asume la deuda/comisión/recaudación del viaje
+    activeDriverId?: string; // [VamO PRO] Driver operating the vehicle
+
     status: RideStatus;
     serviceType: ServiceType;
     city?: string;
@@ -591,6 +595,21 @@ export interface DriverStats {
     cancellationRate: number;
 }
 
+export interface EmailPreferences {
+    transactionalEnabled: boolean;
+    operationalEnabled: boolean;
+    educationEnabled: boolean;
+    weeklySummaryEnabled: boolean;
+    highDemandEnabled: boolean;
+    marketingEnabled: boolean;
+}
+
+export interface EmailState {
+    sentTemplates: Record<string, string>; // templateName -> ISO timestamp
+    lastInactiveReminderAt?: any; // Firestore Timestamp
+    lastDriverInactiveReminderAt?: any; // Firestore Timestamp
+}
+
 export interface UserProfile {
     id?: any;
     uid: string;
@@ -617,7 +636,15 @@ export interface UserProfile {
     onboardingIncomplete?: boolean;
     createdAt: any;
     updatedAt?: any;
+    emailPreferences?: EmailPreferences;
+    emailState?: EmailState;
+    legal?: {
+        driverTermsAccepted?: boolean;
+        driverTermsVersion?: string;
+        driverTermsAcceptedAt?: any;
+    };
     isSuspended?: boolean;
+    lastActiveAt?: any;
     averageRating?: number | null;
     ratingCount?: number;
     activeRideId?: string | null;
@@ -670,12 +697,14 @@ export interface UserProfile {
         weeklySubsidySpent?: number;
         currentLevel?: 'none' | 'unlocked_10' | 'unlocked_15';
         expressUsesThisWeek?: number;
-    };
-    vehicleOwnerId?: string;       
-    authorizedDriverIds?: string[]; 
-    activeDriverId?: string;      
-    isVehicleOwner?: boolean;     
-    totalEarnings?: number;       
+    };    // --- OWNER / AUTHORIZED DRIVER SYSTEM ---
+    vehicleOwnerId?: string;       // UID del dueño del vehículo / cuenta principal
+    fleetApprovalStatus?: 'pending' | 'approved' | 'suspended' | 'unlinked'; // Estado de la vinculación
+    authorizedDriverIds?: string[]; // UIDs de choferes autorizados por este dueño
+    activeDriverId?: string;      // UID del chofer que está operando el vehículo actualmente
+    isVehicleOwner?: boolean;     // Indica si el usuario es el dueño legal del vehículo
+    
+    // --- FINANCIAL CONTEXT ---   totalEarnings?: number;       
     settlementAccount?: string;   
     driverPreferences?: {
         acceptsExpress: boolean;
@@ -769,6 +798,7 @@ export interface UserProfile {
     identityDocuments?: {
         dniFront?: string;
         dniBack?: string;
+        vehicleModelYearProof?: string;
         selfie?: string;
     };
     identityNote?: string;
@@ -1159,6 +1189,8 @@ export interface PricingConfig {
     municipal_percentage: number;
     ASSISTANCE_FEE: number;
     assistanceEnabled: boolean;
+    smartPricingEnabled?: boolean;
+    /** @deprecated Use global system_config/smart_pricing instead */
     dynamicPricing?: DynamicPricingConfig;
     sharedRideMaxOriginRadiusMeters?: number; // VamO Compartido V1
     nightSurchargeEnabled?: boolean;

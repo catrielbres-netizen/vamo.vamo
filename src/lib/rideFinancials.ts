@@ -130,3 +130,10 @@ export function isAccountingComplete(snapshot: RideFinancialSnapshot): boolean {
     }
     return snapshot.hasBreakdown;
 }
+/**
+ * [VamO PRO] DRIVER PRICING DISPLAY MASK
+ * Muestra al conductor su ganancia neta pero preserva el total a cobrar.
+ */
+export function getDriverDisplayFinancials(snapshot: RideFinancialSnapshot): RideFinancialSnapshot {
+    return snapshot; // Identity function, UI will handle the explicit display
+}

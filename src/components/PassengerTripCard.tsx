@@ -56,27 +56,11 @@ export const PassengerTripCard: React.FC<PassengerTripCardProps> = ({
         </div>
         {(displayPrice != null) ? (
           <div className="ml-auto text-right flex flex-col gap-1 animate-in fade-in zoom-in duration-300 min-w-[140px]">
-            {dynamicSnapshot?.applied ? (
-               <>
-                  <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-tight text-zinc-500">
-                      <span>Tarifa Muni.</span>
-                      <span>${new Intl.NumberFormat('es-AR').format(dynamicSnapshot.municipalBaseFare)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-tight text-indigo-400">
-                      <div className="flex items-center gap-1">
-                          <Sparkles className="w-2 h-2" />
-                          <span>Dto. VamO</span>
-                      </div>
-                      <span>-${new Intl.NumberFormat('es-AR').format(dynamicSnapshot.appliedDiscountAmount)}</span>
-                  </div>
-               </>
-            ) : (
                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-tight text-zinc-500">
                    <span>Tarifa</span>
                    <span>${new Intl.NumberFormat('es-AR').format(finalGrossFare)}</span>
                </div>
-            )}
-
+            
             {/* VamO Pay aplicado (Wallet) */}
             {finalWalletCovered > 0 && (
                 <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-tight text-emerald-400">

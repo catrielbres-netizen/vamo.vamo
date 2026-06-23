@@ -23,7 +23,7 @@ export const ensureMunicipalPricingV1 = onCall({ cors: true, region: 'us-central
     const citySnap = await db.doc(`cities/${pricingMunicipalityKey}`).get();
     let legacyPricing = citySnap.exists ? citySnap.data()?.pricing : null;
 
-    const defaultPricing: PricingConfig & { dynamicPricing: any } = {
+    const defaultPricing: PricingConfig = {
       version: 1,
       DAY_BASE_FARE: legacyPricing?.DAY_BASE_FARE ?? 1400,
       DAY_PRICE_PER_100M: legacyPricing?.DAY_PRICE_PER_100M ?? 152,
@@ -38,16 +38,7 @@ export const ensureMunicipalPricingV1 = onCall({ cors: true, region: 'us-central
       municipal_percentage: legacyPricing?.municipal_percentage ?? 0.02,
       ASSISTANCE_FEE: legacyPricing?.ASSISTANCE_FEE ?? 400,
       assistanceEnabled: legacyPricing?.assistanceEnabled ?? true,
-      dynamicPricing: {
-        enabled: false,
-        algorithmMode: "manual",
-        currentDiscountPercent: 0,
-        maxDiscountPercent: 30,
-        minDiscountPercent: 0,
-        reasonCodes: [],
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: "system_init"
-      },
+      smartPricingEnabled: false,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
     };
@@ -56,19 +47,10 @@ export const ensureMunicipalPricingV1 = onCall({ cors: true, region: 'us-central
     return { success: true, created: true, migrated: !!legacyPricing, pricingMunicipalityKey };
   }
 
-  // If it exists but lacks dynamicPricing, initialize it
-  if (!snap.data()?.dynamicPricing) {
+  // If it exists but lacks smartPricingEnabled, initialize it
+  if (snap.data()?.smartPricingEnabled === undefined) {
     await docRef.update({
-      dynamicPricing: {
-        enabled: false,
-        algorithmMode: "manual",
-        currentDiscountPercent: 0,
-        maxDiscountPercent: 30,
-        minDiscountPercent: 0,
-        reasonCodes: [],
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: "system_init"
-      }
+      smartPricingEnabled: false
     });
     return { success: true, updated: true, pricingMunicipalityKey };
   }

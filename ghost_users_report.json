@@ -1,0 +1,80 @@
+[
+  {
+    "uid": "1BIk2VyuwEZLmHRVbXE52rhFYen2",
+    "parentExists": false,
+    "subcollections": [
+      {
+        "name": "documents",
+        "count": 7
+      }
+    ],
+    "needs_manual_review": false,
+    "relations": [],
+    "reason": "Ghost user (documento padre no existe pero tiene subcolecciones)"
+  },
+  {
+    "uid": "BQqO4KZ7ALaIZ0vxO8QHNuGZWY23",
+    "parentExists": false,
+    "subcollections": [
+      {
+        "name": "transactions",
+        "count": 8
+      }
+    ],
+    "needs_manual_review": false,
+    "relations": [],
+    "reason": "Ghost user (documento padre no existe pero tiene subcolecciones)"
+  },
+  {
+    "uid": "Rth4cDNpDGZloH2wRvHm59DWZS83",
+    "parentExists": false,
+    "subcollections": [
+      {
+        "name": "documents",
+        "count": 1
+      }
+    ],
+    "needs_manual_review": false,
+    "relations": [],
+    "reason": "Ghost user (documento padre no existe pero tiene subcolecciones)"
+  },
+  {
+    "uid": "YRT0iHwiktVqeQY0sBDNDt09fu43",
+    "parentExists": false,
+    "subcollections": [
+      {
+        "name": "documents",
+        "count": 7
+      }
+    ],
+    "needs_manual_review": false,
+    "relations": [],
+    "reason": "Ghost user (documento padre no existe pero tiene subcolecciones)"
+  },
+  {
+    "uid": "lMF3iTNM5Tf0rPqEdXk0FBorWPJ2",
+    "parentExists": false,
+    "subcollections": [
+      {
+        "name": "documents",
+        "count": 3
+      }
+    ],
+    "needs_manual_review": false,
+    "relations": [],
+    "reason": "Ghost user (documento padre no existe pero tiene subcolecciones)"
+  },
+  {
+    "uid": "qLtGStKw00fr7DuEW2A4FwigzJQ2",
+    "parentExists": false,
+    "subcollections": [
+      {
+        "name": "documents",
+        "count": 1
+      }
+    ],
+    "needs_manual_review": false,
+    "relations": [],
+    "reason": "Ghost user (documento padre no existe pero tiene subcolecciones)"
+  }
+]

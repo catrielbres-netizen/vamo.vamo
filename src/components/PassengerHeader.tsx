@@ -22,25 +22,27 @@ export function PassengerHeader({ userName, location }: { userName: string, loca
   }
 
   return (
-    <div className="flex justify-between items-center">
-      <div className="flex items-center gap-3">
-        <VamoLogo variant="navbar" />
-        <div>
-          <p className="text-sm text-muted-foreground">Hola, {userName} 👋</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-           <VamoIcon name="star" className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-           <span className="font-bold text-sm text-foreground">{formatRating(profile?.averageRating)}</span>
-           <span className="text-muted-foreground mx-1">•</span>
-           <span className="font-medium text-sm">📍 {location || profile?.city || 'VamO'}</span>
+    <div className="flex justify-between items-center pt-2 pb-2">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2">
+          Hola, {userName.split(' ')[0]} 👋
+        </h1>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 bg-zinc-900/50 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/5 shadow-sm">
+             <VamoIcon name="star" className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+             <span className="font-bold text-xs text-zinc-200">{formatRating(profile?.averageRating)}</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md px-2.5 py-1 rounded-full border border-indigo-500/20 shadow-sm">
+             <VamoIcon name="map-pin" className="w-3.5 h-3.5 text-indigo-400" />
+             <span className="font-bold text-xs text-indigo-200">{location || profile?.city || 'VamO'}</span>
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-4">
-        <ThemeSwitcher />
+      <div className="flex items-center gap-3">
         <NotificationBell role="passenger" />
-        <Avatar className="border border-white/10 shadow-sm">
-            <AvatarImage src={user?.photoURL || undefined} alt={userName} />
-            <AvatarFallback className="bg-primary/10 text-primary font-bold">{getInitials(userName)}</AvatarFallback>
+        <Avatar className="h-12 w-12 border-2 border-white/10 shadow-xl bg-zinc-900">
+            <AvatarImage src={user?.photoURL || undefined} alt={userName} className="object-cover" />
+            <AvatarFallback className="bg-indigo-600 text-white font-black text-lg">{getInitials(userName)}</AvatarFallback>
         </Avatar>
       </div>
     </div>

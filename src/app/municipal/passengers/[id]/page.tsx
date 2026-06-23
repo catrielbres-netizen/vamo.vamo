@@ -49,15 +49,14 @@ export default function PassengerHistoryPage() {
                 }
 
                 // 2. Fetch Ride History
-                const ridesRef = collection(firestore, 'rides');
-                const simpleQ = query(ridesRef, where('passengerId', '==', passengerId), where('cityKey', '==', cityKey), limit(100));
+                const getRidesFn = httpsCallable(functions, 'getPassengerRidesV1');
                 try {
-                    const simpleSnap = await getDocs(simpleQ);
-                    const simpleRides = simpleSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Ride);
-                    // Sort locally since we might not have a composite index for passengerId + createdAt
+                    const result = await getRidesFn({ passengerId });
+                    const simpleRides = (result.data as any).rides as Ride[];
+                    // Sort locally
                     simpleRides.sort((a, b) => {
-                        const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
-                        const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+                        const dateA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.createdAt as unknown as number || 0);
+                        const dateB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.createdAt as unknown as number || 0);
                         return dateB - dateA;
                     });
                     setRides(simpleRides);

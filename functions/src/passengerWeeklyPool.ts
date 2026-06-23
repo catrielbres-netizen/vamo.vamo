@@ -3,6 +3,7 @@ import { getDb } from './lib/firebaseAdmin';
 import * as logger from 'firebase-functions/logger';
 import { FieldValue } from 'firebase-admin/firestore';
 import { addFunds } from './lib/wallet';
+import { passengerWeeklyPoolConfig, getPassengerMultiplierForRank } from './config/passengerWeeklyPoolConfig';
 
 // Helper to calculate YYYY-Www based on Argentina Timezone
 export function getPassengerWeekIdForDate(date: Date): string {
@@ -116,12 +117,13 @@ export const distributePassengerWeeklyPoolV1 = onSchedule({
             continue;
         }
 
-        // Obtener Top 100 pasajeros de la semana
+        // Obtener Top N pasajeros de la semana (donde N = eligibleTopCount)
+        const TOP_N = passengerWeeklyPoolConfig.eligibleTopCount;
         const topPassengersSnap = await db.collection('cities').doc(cityKey).collection('passenger_points')
             .where('weekId', '==', weekId)
             .where('weeklyTripsCount', '>', 0)
             .orderBy('weeklyTripsCount', 'desc')
-            .limit(100)
+            .limit(TOP_N)
             .get();
 
         if (topPassengersSnap.empty) {
@@ -130,57 +132,131 @@ export const distributePassengerWeeklyPoolV1 = onSchedule({
             continue;
         }
 
-        let rank = 1;
-        for (const passengerDoc of topPassengersSnap.docs) {
-            const data = passengerDoc.data();
-            const passengerId = data.passengerId;
-            let payoutAmount = 0;
+        // 1. Calcular poolTotal
+        const poolTotal = Math.min(
+            passengerWeeklyPoolConfig.initialPoolAmount + (poolData.completedValidRides || 0) * passengerWeeklyPoolConfig.contributionPerCompletedTrip,
+            passengerWeeklyPoolConfig.maxDisplayedGoal
+        );
 
-            if (rank <= 10) payoutAmount = 15000;
-            else if (rank <= 30) payoutAmount = 8000;
-            else if (rank <= 60) payoutAmount = 5000;
-            else if (rank <= 100) payoutAmount = 3500;
+        // 2. Determinar rankings y multiplicadores
+        const passengersWithMultipliers = [];
+        let currentRank = 1;
+        let lastTrips = -1;
+        let tiedRank = 1;
+        let totalMultipliers = 0;
 
-            if (payoutAmount > 0) {
-                try {
-                    // Pagar premio a la billetera
-                    await addFunds(passengerId, payoutAmount, 'adjustment', `Premio Pozo Semanal Pasajeros - Puesto #${rank}`);
-
-                    const batch = db.batch();
-                    
-                    // Notificación In-App
-                    const notifRef = db.collection('notifications').doc(passengerId).collection('items').doc();
-                    batch.set(notifRef, {
-                        userId: passengerId,
-                        role: 'passenger',
-                        type: 'payment_received',
-                        title: '¡Recibiste el Premio del Pozo Semanal!',
-                        message: `Felicitaciones por quedar en el Puesto #${rank}. Se te acreditaron $${payoutAmount} de saldo a tu favor para tus próximos viajes.`,
-                        read: false,
-                        priority: 'success',
-                        actionUrl: '/dashboard/rewards',
-                        createdAt: now,
-                    });
-
-                    // Trazabilidad
-                    const ptRef = db.collection('platform_transactions').doc();
-                    batch.set(ptRef, {
-                        userId: passengerId,
-                        amount: payoutAmount,
-                        type: 'passenger_weekly_pool_bonus',
-                        description: `Premio Pozo Pasajeros VamO - Puesto #${rank}`,
-                        status: 'completed',
-                        createdAt: now,
-                    });
-
-                    await batch.commit();
-                    logger.info(`[PASSENGER_POOL_DIST] Premio $${payoutAmount} acreditado a pasajero ${passengerId} (Rank #${rank}).`);
-                } catch (err) {
-                    logger.error(`[PASSENGER_POOL_DIST] Error acreditando a pasajero ${passengerId}:`, err);
-                }
+        topPassengersSnap.docs.forEach((docSnap, index) => {
+            const data = docSnap.data();
+            const trips = data.weeklyTripsCount || 0;
+            
+            if (trips !== lastTrips) {
+                tiedRank = index + 1;
+                lastTrips = trips;
             }
-            rank++;
+            
+            const multiplier = getPassengerMultiplierForRank(tiedRank);
+            totalMultipliers += multiplier;
+            
+            passengersWithMultipliers.push({
+                id: data.passengerId,
+                rank: tiedRank,
+                multiplier,
+                weeklyPoints: data.weeklyPoints || 0,
+                weeklyTripsCount: trips
+            });
+        });
+
+        // 3. Calcular montos e individual cap
+        const individualCap = poolTotal * passengerWeeklyPoolConfig.individualCapPercentage;
+        let totalPaid = 0;
+        
+        const distributions = passengersWithMultipliers.map(p => {
+            let payoutAmount = 0;
+            if (totalMultipliers > 0) {
+                const rawPayout = poolTotal * (p.multiplier / totalMultipliers);
+                payoutAmount = Math.floor(Math.min(rawPayout, individualCap));
+            }
+            totalPaid += payoutAmount;
+            return {
+                ...p,
+                payoutAmount
+            };
+        });
+
+        logger.info(`[PASSENGER_POOL_DIST] Computed distribution: ${distributions.length} passengers | totalPaid=$${totalPaid} | poolTotal=$${poolTotal}`);
+
+        // 4. Ejecutar pagos
+        const batch = db.batch();
+
+        for (const dist of distributions) {
+            if (dist.payoutAmount <= 0) continue;
+
+            const passengerId = dist.id;
+            const distDocId = `${weekId}_${passengerId}`;
+            const distRef = db.collection('passenger_weekly_pool_distributions').doc(distDocId);
+
+            // Evitar pagos duplicados
+            const existingSnap = await distRef.get();
+            if (existingSnap.exists) {
+                logger.warn(`[PASSENGER_POOL_DIST] Distribution ${distDocId} already exists. Skipping passenger ${passengerId}.`);
+                continue;
+            }
+
+            // Crear distribution record
+            const blockTier = dist.rank <= 3 ? '1-3' : dist.rank <= 10 ? '4-10' : dist.rank <= 20 ? '11-20' : 'Other';
+            batch.set(distRef, {
+                weekId,
+                passengerId,
+                rank: dist.rank,
+                multiplier: dist.multiplier,
+                blockTier,
+                poolTotal,
+                payoutAmount: dist.payoutAmount,
+                weeklyPoints: dist.weeklyPoints,
+                weeklyTripsCount: dist.weeklyTripsCount,
+                poolVersion: 'v2',
+                status: 'paid',
+                paidAt: now,
+                createdAt: now,
+            });
+
+            try {
+                // Pagar premio a la billetera
+                await addFunds(passengerId, dist.payoutAmount, 'adjustment', `Premio Pozo Semanal Pasajeros - Puesto #${dist.rank}`);
+                
+                // Notificación In-App
+                const notifRef = db.collection('notifications').doc(passengerId).collection('items').doc();
+                batch.set(notifRef, {
+                    userId: passengerId,
+                    role: 'passenger',
+                    type: 'payment_received',
+                    title: '¡Recibiste el Premio del Pozo Semanal!',
+                    message: `Felicitaciones por quedar en el Puesto #${dist.rank}. Se te acreditaron $${dist.payoutAmount} de saldo a tu favor para tus próximos viajes.`,
+                    read: false,
+                    priority: 'success',
+                    actionUrl: '/dashboard/rewards',
+                    createdAt: now,
+                });
+
+                // Trazabilidad
+                const ptRef = db.collection('platform_transactions').doc();
+                batch.set(ptRef, {
+                    userId: passengerId,
+                    amount: dist.payoutAmount,
+                    type: 'passenger_weekly_pool_bonus',
+                    description: `Premio Pozo Pasajeros VamO - Puesto #${dist.rank}`,
+                    status: 'completed',
+                    createdAt: now,
+                });
+
+                logger.info(`[PASSENGER_POOL_DIST] Premio $${dist.payoutAmount} acreditado a pasajero ${passengerId} (Rank #${dist.rank}).`);
+            } catch (err) {
+                logger.error(`[PASSENGER_POOL_DIST] Error acreditando a pasajero ${passengerId}:`, err);
+            }
         }
+
+        // Commit batch de records y notificaciones
+        await batch.commit();
 
         // Marcar pozo como distribuido
         await poolDocRef.update({

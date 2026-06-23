@@ -48,6 +48,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if signedIn() && (
         request.auth.uid == userId || 
+        resource.data.get('vehicleOwnerId', '') == request.auth.uid ||
         isAdmin() || isSuperAdmin() || 
         isMunicipalForCity(resource.data.get('cityKey', '')) ||
         isTrafficForCity(resource.data.get('cityKey', '')) ||
@@ -150,6 +151,8 @@ service cloud.firestore {
         resource.data.passengerId == request.auth.uid || 
         request.auth.uid in resource.data.get('passengerIds', []) ||
         resource.data.driverId == request.auth.uid ||
+        resource.data.get('vehicleOwnerId', '') == request.auth.uid ||
+        resource.data.get('settlementOwnerId', '') == request.auth.uid ||
         isAdmin() || isSuperAdmin() ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'station_operator' && 
@@ -166,6 +169,8 @@ service cloud.firestore {
         resource.data.passengerId == request.auth.uid || 
         request.auth.uid in resource.data.get('passengerIds', []) ||
         resource.data.driverId == request.auth.uid ||
+        resource.data.get('vehicleOwnerId', '') == request.auth.uid ||
+        resource.data.get('settlementOwnerId', '') == request.auth.uid ||
         (isDriver() && resource.data.status in ['scheduled', 'searching'] && resource.data.get('cityKey', '') == request.auth.token.ck) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'station_operator' && 
@@ -325,6 +330,13 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.driverSubtype == 'express';
     }
 
+    function isFleetDriver() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.driverSubtype == 'fleet_driver';
+    }
+
     // Un usuario municipal de cualquier tipo solo puede actuar sobre documentos de su ciudad.
     function isMunicipalForCity(docCityKey) {
       return signedIn() && request.auth.token.ck != null && 
@@ -409,8 +421,7 @@ service cloud.firestore {
       allow create: if
         signedIn() &&
         request.auth.uid == driverId &&
-        request.resource.data.municipalStatus == 'pending_municipal_review' &&
-        request.resource.data.municipalCode != null &&
+        request.resource.data.municipalStatus in ['pending_municipal_review', 'renewal_under_review'] &&
         request.resource.data.cityKey != null;
 
       // Conductor express can update his own profile ONLY for renewals.
@@ -418,19 +429,19 @@ service cloud.firestore {
         isAdmin() || isSuperAdmin() || 
         (isMunicipalForCity(resource.data.get('cityKey', '')) && 
          (request.resource.data.municipalStatus != 'active' || resource.data.municipalStatus == 'active')) ||
-        (signedIn() && request.auth.uid == driverId && 
+         (signedIn() && request.auth.uid == driverId && 
          request.resource.data.municipalStatus == 'renewal_under_review' &&
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['checklist', 'municipalStatus', 'updatedAt', 'lastTrafficRequest']) &&
-         (request.resource.data.checklist.get(['dniFront', 'status'], '') != 'approved' || resource.data.checklist.get(['dniFront', 'status'], '') == 'approved') &&
-         (request.resource.data.checklist.get(['dniBack', 'status'], '') != 'approved' || resource.data.checklist.get(['dniBack', 'status'], '') == 'approved') &&
-         (request.resource.data.checklist.get(['driverLicense', 'status'], '') != 'approved' || resource.data.checklist.get(['driverLicense', 'status'], '') == 'approved') &&
-         (request.resource.data.checklist.get(['vehicleInsurance', 'status'], '') != 'approved' || resource.data.checklist.get(['vehicleInsurance', 'status'], '') == 'approved') &&
-         (request.resource.data.checklist.get(['passengerCoverageInsurance', 'status'], '') != 'approved' || resource.data.checklist.get(['passengerCoverageInsurance', 'status'], '') == 'approved') &&
-         (request.resource.data.checklist.get(['vehicleRegistrationCard', 'status'], '') != 'approved' || resource.data.checklist.get(['vehicleRegistrationCard', 'status'], '') == 'approved') &&
-         (request.resource.data.checklist.get(['criminalRecord', 'status'], '') != 'approved' || resource.data.checklist.get(['criminalRecord', 'status'], '') == 'approved') &&
-         (request.resource.data.checklist.get(['municipalCanon', 'status'], '') != 'approved' || resource.data.checklist.get(['municipalCanon', 'status'], '') == 'approved') &&
-         (request.resource.data.checklist.get(['disinfectionReceipt', 'status'], '') != 'approved' || resource.data.checklist.get(['disinfectionReceipt', 'status'], '') == 'approved'));
+           .hasOnly(['checklist', 'municipalStatus', 'updatedAt', 'lastTrafficRequest', 'cityKey', 'uid', 'driverSubtype', 'vehicleOwnerId', 'vehicleId', 'createdBy']) &&
+         (request.resource.data.get('checklist', {}).get(['dniFront', 'status'], '') != 'approved' || resource.data.get('checklist', {}).get(['dniFront', 'status'], '') == 'approved') &&
+         (request.resource.data.get('checklist', {}).get(['dniBack', 'status'], '') != 'approved' || resource.data.get('checklist', {}).get(['dniBack', 'status'], '') == 'approved') &&
+         (request.resource.data.get('checklist', {}).get(['driverLicense', 'status'], '') != 'approved' || resource.data.get('checklist', {}).get(['driverLicense', 'status'], '') == 'approved') &&
+         (request.resource.data.get('checklist', {}).get(['vehicleInsurance', 'status'], '') != 'approved' || resource.data.get('checklist', {}).get(['vehicleInsurance', 'status'], '') == 'approved') &&
+         (request.resource.data.get('checklist', {}).get(['passengerCoverageInsurance', 'status'], '') != 'approved' || resource.data.get('checklist', {}).get(['passengerCoverageInsurance', 'status'], '') == 'approved') &&
+         (request.resource.data.get('checklist', {}).get(['vehicleRegistrationCard', 'status'], '') != 'approved' || resource.data.get('checklist', {}).get(['vehicleRegistrationCard', 'status'], '') == 'approved') &&
+         (request.resource.data.get('checklist', {}).get(['criminalRecord', 'status'], '') != 'approved' || resource.data.get('checklist', {}).get(['criminalRecord', 'status'], '') == 'approved') &&
+         (request.resource.data.get('checklist', {}).get(['municipalCanon', 'status'], '') != 'approved' || resource.data.get('checklist', {}).get(['municipalCanon', 'status'], '') == 'approved') &&
+         (request.resource.data.get('checklist', {}).get(['disinfectionReceipt', 'status'], '') != 'approved' || resource.data.get('checklist', {}).get(['disinfectionReceipt', 'status'], '') == 'approved'));
 
       allow delete: if isAdmin() || isSuperAdmin();
     }
@@ -460,7 +471,7 @@ service cloud.firestore {
         signedIn() &&
         request.resource.data.driverId == request.auth.uid &&
         request.resource.data.status == 'pending_review' &&
-        isExpressDriver() &&
+        isDriver() &&
         request.resource.data.storageUrl != null;
 
       // Solo el admin_municipal/admin puede actualizar (aprobar/rechazar).
@@ -588,14 +599,20 @@ service cloud.firestore {
       allow read, write: if isAdmin() || isSuperAdmin();
     }
 
+    match /system_config/smart_pricing {
+      allow read: if true;
+      allow write: if isAdmin() || isSuperAdmin();
+    }
+
     match /system_config/antifraud {
       allow read, write: if isAdmin() || isSuperAdmin();
     }
 
-    // 2. Libro Mayor (Ledger): Solo Backend/Admin/Municipal
+    // 2. Libro Mayor (Ledger): Solo Backend/Admin/Municipal/Dueños Económicos
     match /ledger_events/{eventId} {
       allow create: if false; // Solo vía Cloud Functions
-      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', '')) || 
+                  (signedIn() && (resource.data.get('settlementOwnerId', '') == request.auth.uid || resource.data.get('driverId', '') == request.auth.uid));
       allow update, delete: if false; // Inmutable
     }
 

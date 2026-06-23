@@ -39,7 +39,7 @@ export function MunicipalNavbar() {
   const router    = useRouter()
   const { profile } = useUser()
   const { cityKey: currentCityKey, cityName, setCityOverride, isGlobalAdmin, isMuniAdmin, isOperator, isTreasury, isTraffic } = useMunicipalContext();
-  const { cities, loading: citiesLoading } = useActiveCities();
+  const { cities, loading: citiesLoading } = useActiveCities({ context: 'municipal' });
 
   const filteredLinks = navLinks.filter(link => {
       if (link.href === '/municipal/team') return isMuniAdmin;

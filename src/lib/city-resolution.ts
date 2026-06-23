@@ -2,6 +2,7 @@
  * Shared utility for robust city resolution in the frontend.
  * Prioritizes structured data, then reverse geocoding, then coordinate-based fallback.
  */
+import { CITIES, DEFAULT_CENTER } from './cityData';
 
 export interface CityResolutionResult {
     city: string;
@@ -37,14 +38,17 @@ export function resolveCityFromCoords(lat: number, lng: number): string {
  * Useful for centering maps when there is no origin selected.
  */
 export function getCityDefaultLocation(cityKey?: string): { lat: number, lng: number } {
+    if (cityKey && CITIES[cityKey]) {
+        return CITIES[cityKey].center;
+    }
+    
+    // Fallbacks for legacy/unconfigured keys just in case
     switch (cityKey?.toLowerCase()) {
-        case 'trelew':
-            return { lat: -43.2533, lng: -65.3096 };
         case 'mercedes':
             return { lat: -34.6515, lng: -59.4307 };
         case 'rawson':
         default:
-            return { lat: -43.3002, lng: -65.1023 };
+            return DEFAULT_CENTER;
     }
 }
 

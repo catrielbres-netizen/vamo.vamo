@@ -26,13 +26,14 @@ interface BoundingBox {
   maxLng: number;
 }
 
-const CITY_DEFINITIONS: Record<
+export const CITY_DEFINITIONS: Record<
   string,
-  { nameMap: string[]; bbox: BoundingBox }
+  { nameMap: string[]; status: 'active' | 'draft'; bbox: BoundingBox }
 > = {
   rawson: {
     // accepted aliases for Rawson (including Playa Union)
     nameMap: ["rawson", "playa union"],
+    status: 'active',
     bbox: {
       minLat: -43.35,
       maxLat: -43.25,
@@ -42,11 +43,32 @@ const CITY_DEFINITIONS: Record<
   },
   trelew: {
     nameMap: ["trelew"],
+    status: 'draft',
     bbox: {
       minLat: -43.30,
       maxLat: -43.20,
       minLng: -65.30,
       maxLng: -65.20,
+    },
+  },
+  bariloche: {
+    nameMap: ["bariloche", "san carlos de bariloche"],
+    status: 'draft',
+    bbox: {
+      minLat: -41.25,
+      maxLat: -41.05,
+      minLng: -71.50,
+      maxLng: -71.10,
+    },
+  },
+  "villa-la-angostura": {
+    nameMap: ["villa la angostura", "angostura"],
+    status: 'draft',
+    bbox: {
+      minLat: -40.85,
+      maxLat: -40.70,
+      minLng: -71.75,
+      maxLng: -71.50,
     },
   },
   // ← add more municipalities here

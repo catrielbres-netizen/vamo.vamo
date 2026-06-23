@@ -413,7 +413,7 @@ export default function MunicipalDashboardPage() {
                 <KpiCard label="Vencidos"      value={expired}   icon="calendar"       color="red"     href="/municipal/vencimientos" />
                 {/* <KpiCard label="Canon pte."    value={canonPend} icon="receipt"        color="amber"   /> */}
                 <KpiCard 
-                    label={`Participación Municipal (${cityKey === 'rawson' ? '5%' : '2%'})`} 
+                    label={`Participación Municipal`} 
                     value={`$${municipalParticipation.toLocaleString('es-AR')}`} 
                     icon="coins" 
                     color="indigo" 

@@ -36,7 +36,7 @@ export function AdminNavbar() {
   const auth = useAuth()
   const router = useRouter()
   const { cityKey, setCityOverride } = useMunicipalContext();
-  const { cities, loading: citiesLoading } = useActiveCities();
+  const { cities, loading: citiesLoading } = useActiveCities({ context: 'admin' });
 
   const handleLogout = async () => {
     if (auth) {

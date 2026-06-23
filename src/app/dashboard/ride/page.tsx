@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { doc, updateDoc } from 'firebase/firestore';
 import { VamoIcon } from '@/components/VamoIcon';
 import { PassengerSearchingSheet } from "@/components/PassengerSearchingSheet";
+import { PassengerCityLaunchGate } from '@/components/PassengerCityLaunchGate';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -482,7 +483,7 @@ function RidePageContent() {
     }
   }, [isExpressUnlocked, expressHasUsesLeft, serviceType]);
 
-  // [COMPARTIDO BETA] Feature flag — solo alpha testers
+  // [COMPARTIDO] Feature flag
   const { isEnabled: isSharedEnabled } = useSharedRideConfig();
 
   // Estimación client-side: factor 0.68 (2 pasajeros), redondeado a $100
@@ -744,6 +745,7 @@ function RidePageContent() {
   };
 
   return (
+    <PassengerCityLaunchGate cityKey={profile?.cityKey}>
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#0a0a0a] animate-in fade-in duration-1000 fill-mode-both">
       {mapsAvailable && (
         <div 
@@ -943,7 +945,7 @@ function RidePageContent() {
                          <div className="border-b border-emerald-500/20 pb-3 mb-1">
                              <div className="flex items-center gap-2 mb-2">
                                  <VamoIcon name="users" className="w-5 h-5 text-emerald-400" />
-                                 <h3 className="font-black text-emerald-400 uppercase tracking-widest text-sm">NUEVO: VAMO COMPARTIDO</h3>
+                                 <h3 className="font-black text-emerald-400 uppercase tracking-widest text-sm">VAMO COMPARTIDO</h3>
                              </div>
                              <p className="text-xs text-emerald-100/80 leading-relaxed font-medium">
                                  Compartí el viaje con pasajeros cercanos, <span className="font-bold text-white">pagá menos</span> y ayudá a que el conductor <span className="font-bold text-white">gane más</span>.
@@ -1018,25 +1020,6 @@ function RidePageContent() {
                                          ${sharedFareCalculation}
                                      </span>
                                  </div>
-                             </>
-                          ) : dynamicSnapshot?.applied ? (
-                             <>
-                                <div className="flex items-center gap-2 mb-1">
-                                   <div className="bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/20 flex items-center gap-1">
-                                       <Sparkles className="w-2.5 h-2.5" />
-                                       <span className="text-[8px] font-black uppercase tracking-widest leading-none">Tarifa Dinámica VamO</span>
-                                   </div>
-                                </div>
-                                <div className="flex justify-between items-center text-xs px-1">
-                                    <span className="font-bold text-white/40 uppercase tracking-tight">Tarifa municipal</span>
-                                    <span className="font-black text-white/60">${dynamicSnapshot.municipalBaseFare}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-xs px-1">
-                                    <div className="flex items-center gap-1.5 font-bold text-indigo-400 uppercase tracking-tight">
-                                        <span>Descuento VamO</span>
-                                    </div>
-                                    <span className="font-black text-indigo-400">-${dynamicSnapshot.appliedDiscountAmount}</span>
-                                </div>
                              </>
                           ) : (
                              <>
@@ -1480,6 +1463,7 @@ function RidePageContent() {
       </AlertDialog>
 
     </div>
+    </PassengerCityLaunchGate>
 
   );
 }

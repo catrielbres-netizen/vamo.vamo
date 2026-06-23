@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFirebase } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,9 +17,13 @@ import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { VamoLogo } from '@/components/branding/VamoLogo';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { CURRENT_TERMS_VERSION } from '@/lib/legal-config';
+import { ShieldCheck, ArrowRight, CheckCircle2, ChevronRight, Upload, AlertTriangle, AlertCircle, FileText, Camera } from 'lucide-react';
+import { CURRENT_TERMS_VERSION } from "@/lib/legal-config";
+import { CITIES } from '@/lib/cityData';
 import { featureFlags, PLAN_B_DRIVER_SUBTYPE } from '@/config/features';
 import { useActiveCities } from '@/hooks/useActiveCities';
+import { CityHubAutocomplete } from '@/components/shared/CityHubAutocomplete';
+import { canonicalCityKey } from '@/lib/cityUtils';
 import { DriverSubtype } from '@/lib/types';
 
 // --- Steps Configuration ---
@@ -27,7 +31,6 @@ const STEPS = [
   { id: 'personal', title: 'Datos Personales', icon: 'user' },
   { id: 'vehicle', title: 'Tu Vehículo', icon: 'car' },
   { id: 'type', title: 'Tipo de Conductor', icon: 'shield' },
-  { id: 'documents', title: 'Documentación', icon: 'file-text' },
   { id: 'finish', title: 'Finalizar', icon: 'check-circle' },
 ];
 
@@ -40,9 +43,11 @@ export function DriverOnboardingWizard() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
-  const { cities } = useActiveCities();
+  const { cities } = useActiveCities({ context: 'driver_recruitment' });
 
   console.log("[ONBOARDING_DEBUG] DriverOnboardingWizard mount - UID:", user?.uid, "Step:", currentStep);
+
+  const [registrationCityKey, setRegistrationCityKey] = useState<string>('');
 
   // --- Form State ---
   const [formData, setFormData] = useState({
@@ -57,6 +62,9 @@ export function DriverOnboardingWizard() {
     color: '',
     cityKey: '',
     customCity: '',
+    cityResolutionStatus: 'unresolved',
+    cityResolutionSource: 'legacy_query_param',
+    registrationLocation: null as any,
     identityStatus: 'unverified' as 'unverified' | 'pending' | 'verified',
     driverSubtype: PLAN_B_DRIVER_SUBTYPE as DriverSubtype,
     licenseExpiry: '',
@@ -131,30 +139,77 @@ export function DriverOnboardingWizard() {
 
             if (city) {
               const normalizedCity = city.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-              let foundKey = 'other';
-              if (normalizedCity.includes('rawson') || normalizedCity.includes('playa union')) foundKey = 'rawson';
-              else if (normalizedCity.includes('trelew')) foundKey = 'trelew';
-              else if (normalizedCity.includes('madryn')) foundKey = 'madryn';
-              else if (normalizedCity.includes('comodoro')) foundKey = 'comodoro';
-              else if (normalizedCity.includes('esquel')) foundKey = 'esquel';
-              else if (normalizedCity.includes('sarmiento')) foundKey = 'sarmiento';
-              else if (normalizedCity.includes('parana')) foundKey = 'parana';
+              let foundKey = '';
+              let resolvedName = '';
+              
+              for (const c of availableCities) {
+                  // Direct match
+                  const cityMatchName = c.name?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || '';
+                  if (cityMatchName && normalizedCity.includes(cityMatchName)) {
+                      foundKey = c.cityKey || c.id;
+                      resolvedName = c.name;
+                      break;
+                  }
+                  // Alias match
+                  if (c.aliases && Array.isArray(c.aliases)) {
+                      const aliasMatch = c.aliases.some((alias: string) => {
+                          const normAlias = alias.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                          return normalizedCity.includes(normAlias);
+                      });
+                      if (aliasMatch) {
+                          foundKey = c.cityKey || c.id;
+                          resolvedName = c.name;
+                          break;
+                      }
+                  }
+              }
+
+              const isResolved = !!foundKey;
+              const finalKey = foundKey ? canonicalCityKey(foundKey) : '';
+
+              if (!finalKey) {
+                  toast({ variant: 'destructive', title: 'Error', description: 'La ciudad no pudo ser identificada o no está en zona de cobertura.' });
+                  setLoading(false);
+                  return;
+              }
+
+              const regLocation = {
+                  source: 'gps',
+                  lat: lat,
+                  lng: lng,
+                  address: data.results[0].formatted_address || '',
+                  detectedLocality: city,
+                  detectedNeighborhood: '',
+                  detectedProvince: '',
+                  detectedCountry: 'Argentina',
+                  resolvedMunicipalityKey: isResolved ? foundKey : '',
+                  resolvedMunicipalityName: isResolved ? resolvedName : '',
+                  resolvedCityKey: isResolved ? foundKey : '',
+                  resolvedAt: new Date().toISOString()
+              };
 
               setFormData(prev => ({ 
                 ...prev, 
-                cityKey: foundKey,
-                customCity: foundKey === 'other' ? city : ''
+                cityKey: finalKey,
+                customCity: !isResolved ? city : '',
+                cityResolutionStatus: isResolved ? 'resolved' : 'outside_service_area',
+                cityResolutionSource: 'gps',
+                registrationLocation: regLocation
               }));
-              toast({ title: 'Ubicación obtenida', description: `Localidad detectada: ${city}` });
+              if (isResolved) {
+                  toast({ title: 'Ubicación obtenida', description: `Zona operativa detectada: ${resolvedName} (Localidad: ${city})` });
+              } else {
+                  toast({ variant: 'destructive', title: 'Fuera de zona', description: 'Por el momento no operamos en tu localidad.' });
+              }
             } else {
               toast({ variant: 'destructive', title: 'Atención', description: 'No se pudo determinar la ciudad.' });
-              setFormData(prev => ({ ...prev, cityKey: 'other' }));
+              setFormData(prev => ({ ...prev, cityKey: '', cityResolutionStatus: 'outside_service_area', cityResolutionSource: 'gps' }));
             }
           }
         } catch (error) {
           console.error(error);
           toast({ variant: 'destructive', title: 'Error', description: 'Error al obtener la ciudad.' });
-          setFormData(prev => ({ ...prev, cityKey: 'other' }));
+          setFormData(prev => ({ ...prev, cityKey: '' }));
         } finally {
           setIsLocating(false);
         }
@@ -168,13 +223,79 @@ export function DriverOnboardingWizard() {
   };
 
   const [cityConfig, setCityConfig] = useState<any>(null);
+  const [availableCities, setAvailableCities] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!firestore) return;
+    const fetchCities = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(firestore, 'cities'));
+        const cities: any[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.enabled !== false) { // Default true or explicitly true
+            cities.push({ id: doc.id, ...data });
+          }
+        });
+        setAvailableCities(cities);
+      } catch (error) {
+        console.error('Error fetching available cities', error);
+      }
+    };
+    fetchCities();
+  }, [firestore]);
+
+  const searchParams = useSearchParams();
+
+  // --- Resolve Decoupled City Keys ---
+  useEffect(() => {
+    const resolveCityKeys = async () => {
+      let resolvedRegistrationKey = '';
+
+      // 0. URL param (highest priority for direct links like ?city=rawson)
+      const urlCity = searchParams?.get('city') || searchParams?.get('registrationCityKey') || searchParams?.get('cityKey');
+      if (urlCity) {
+        resolvedRegistrationKey = urlCity.toLowerCase().trim();
+      } else {
+        // 1. Explicit city from query param (saved by ReferralPage)
+        const explicitCity = localStorage.getItem('vamo_explicit_city_key');
+        if (explicitCity) {
+          resolvedRegistrationKey = explicitCity;
+        } else {
+          // 2. Referral code lookup
+          const refCode = localStorage.getItem('referralCode');
+          if (refCode && firestore) {
+            try {
+              const docRef = doc(firestore, 'referral_links', refCode);
+              const snap = await getDoc(docRef);
+              if (snap.exists() && snap.data().cityKey) {
+                resolvedRegistrationKey = canonicalCityKey(snap.data().cityKey);
+              } else if (snap.exists() && snap.data().city) {
+                resolvedRegistrationKey = canonicalCityKey(snap.data().city);
+              } else if (refCode.includes('RAWSON')) {
+                // 3. Fallback temporal para compatibilidad legacy
+                resolvedRegistrationKey = 'rawson';
+              }
+            } catch (e) {
+              console.error('Error fetching referral link', e);
+            }
+          }
+        }
+      }
+
+      setRegistrationCityKey(resolvedRegistrationKey);
+    };
+
+    resolveCityKeys();
+  }, [firestore]);
 
   // Fetch City Config
   useEffect(() => {
-    if (!formData.cityKey || formData.cityKey === 'other' || !firestore) return;
+    const targetKey = registrationCityKey || formData.cityKey;
+    if (!targetKey || targetKey === 'other' || !firestore) return;
     const fetchCityConfig = async () => {
       try {
-        const docRef = doc(firestore, 'cities', formData.cityKey);
+        const docRef = doc(firestore, 'cities', targetKey);
         const snap = await getDoc(docRef);
         if (snap.exists()) {
           setCityConfig(snap.data()?.config || null);
@@ -186,7 +307,7 @@ export function DriverOnboardingWizard() {
       }
     };
     fetchCityConfig();
-  }, [formData.cityKey, firestore]);
+  }, [registrationCityKey, formData.cityKey, firestore]);
 
   // --- Load Existing Data ---
   useEffect(() => {
@@ -212,7 +333,7 @@ export function DriverOnboardingWizard() {
             year: data.vehicle?.year?.toString() || data.carModelYear?.toString() || '',
             plate: data.vehicle?.plate || data.plateNumber || '',
             color: data.vehicle?.color || '',
-            cityKey: data.cityKey || '',
+            cityKey: data.registrationCityKey || data.cityKey || '',
             customCity: '',
             identityStatus: data.identityStatus || 'unverified',
             driverSubtype: data.driverSubtype || PLAN_B_DRIVER_SUBTYPE,
@@ -226,6 +347,8 @@ export function DriverOnboardingWizard() {
           if (data.documents) {
             setDocUrls(data.documents);
           }
+          
+          if (data.registrationCityKey) setRegistrationCityKey(data.registrationCityKey);
         } else {
           setFormData(prev => ({ ...prev, email: user.email || '' }));
         }
@@ -315,12 +438,20 @@ export function DriverOnboardingWizard() {
       );
     });
   };
+  const isMunicipalStrict = !!registrationCityKey;
+  
+  // Driver Types Logic
+  const hasDriverTypesConfig = !!cityConfig?.allowedDriverTypes;
+  const showParticular = hasDriverTypesConfig ? !!cityConfig.allowedDriverTypes.particular : !isMunicipalStrict;
+  const showTaxi = hasDriverTypesConfig ? !!cityConfig.allowedDriverTypes.taxi : true;
+  const showRemis = hasDriverTypesConfig ? !!cityConfig.allowedDriverTypes.remis : !isMunicipalStrict;
+  const showFleet = hasDriverTypesConfig ? !!cityConfig.allowedDriverTypes.fleet_driver : !isMunicipalStrict;
 
   const nextStep = () => {
     // Validation
     if (currentStep === 1) {
-      if (!formData.name || !formData.dni || !formData.phone || !formData.cityKey || (!docs.profilePhoto && !docUrls.profilePhoto)) {
-        return toast({ variant: 'destructive', title: 'Campos incompletos', description: 'Por favor completá todos los datos personales, seleccioná tu ciudad y subí tu foto.' });
+      if (!formData.name || !formData.dni || !formData.phone || !formData.cityKey) {
+        return toast({ variant: 'destructive', title: 'Campos incompletos', description: 'Por favor completá todos los datos personales y seleccioná tu ciudad.' });
       }
     }
     if (currentStep === 2) {
@@ -332,50 +463,16 @@ export function DriverOnboardingWizard() {
       if (isNaN(year) || year < 2011 || year > currentYear + 1) {
         return toast({ variant: 'destructive', title: 'Año inválido', description: 'Por ahora VamO acepta vehículos modelo 2011 en adelante.' });
       }
-      if (!docs.vehicleFrontPhoto && !docUrls.vehicleFront) {
-        return toast({ variant: 'destructive', title: 'Foto obligatoria', description: 'Por favor subí una foto frontal de tu vehículo.' });
-      }
     }
 
     if (currentStep === 3) {
-      // Step 3 is now "Tipo de Conductor", no complex validation right now, but must exist
+      // Step 3 is now "Tipo de Conductor"
       if (!formData.driverSubtype) {
           return toast({ variant: 'destructive', title: 'Requerido', description: 'Por favor seleccioná un tipo de conductor.' });
       }
     }
 
     if (currentStep === 4) {
-      const typeReqs = cityConfig?.documentRequirements?.[formData.driverSubtype] || {};
-      const needsDni = typeReqs.dniFront ?? true;
-      const needsLicense = typeReqs.driverLicense ?? true;
-      const needsInsurance = typeReqs.vehicleInsurance ?? true;
-      const needsCriminalRecord = typeReqs.criminalRecord ?? false;
-
-      if (needsDni && (!docs.dniPhoto && !docUrls.dniFront)) {
-          return toast({ variant: 'destructive', title: 'Documentos incompletos', description: 'El frente del DNI es obligatorio para tu tipo de conductor.' });
-      }
-      if (needsLicense && (!docs.licensePhoto && !docUrls.license)) {
-          return toast({ variant: 'destructive', title: 'Documentos incompletos', description: 'La licencia de conducir es obligatoria.' });
-      }
-      if (needsInsurance && (!docs.insurancePhoto && !docUrls.insurance)) {
-          return toast({ variant: 'destructive', title: 'Documentos incompletos', description: 'El seguro del vehículo es obligatorio.' });
-      }
-      if (needsCriminalRecord && (!docs.criminalRecordPhoto && !docUrls.criminalRecord)) {
-          return toast({ variant: 'destructive', title: 'Documentos incompletos', description: 'Los antecedentes penales son obligatorios en este municipio para tu tipo de conductor.' });
-      }
-
-      if (needsLicense && !formData.licenseExpiry) {
-        return toast({ variant: 'destructive', title: 'Fechas requeridas', description: 'Por favor ingresá la fecha de vencimiento de tu licencia.' });
-      }
-      if (needsInsurance && !formData.insuranceExpiry) {
-        return toast({ variant: 'destructive', title: 'Fechas requeridas', description: 'Por favor ingresá la fecha de vencimiento de tu seguro.' });
-      }
-      if ((docs.criminalRecordPhoto || docUrls.criminalRecord) && !formData.criminalRecordExpiry) {
-        return toast({ variant: 'destructive', title: 'Fecha requerida', description: 'Si subís antecedentes penales, debés indicar su fecha de vencimiento.' });
-      }
-    }
-
-    if (currentStep === 5) {
       if (!formData.termsAccepted) {
         return toast({ variant: 'destructive', title: 'Acuerdo legal', description: 'Debés aceptar los términos y condiciones para continuar.' });
       }
@@ -396,91 +493,78 @@ export function DriverOnboardingWizard() {
     console.log("[ONBOARDING_WRITE] Starting process for UID:", user.uid);
     
     try {
-      // 1. Upload remaining documents
-      const finalDocUrls: Record<string, string> = { ...docUrls };
-      const uploadPromises = [];
-
-      console.log("[DRIVER_ONBOARDING_UPLOAD_START] Starting document uploads...");
-      
-      const wrapUpload = async (file: File, key: string) => {
-        console.log(`[ONBOARDING_WRITE] start upload: ${key}`);
-        
-        const validation = validateFile(file, key);
-        if (!validation.valid) {
-            console.error(`[ONBOARDING_FILE_ERROR] ${key}: ${validation.reason}`);
-            throw new Error(validation.reason);
-        }
-
-        try {
-          const { url, path } = await uploadFile(file, key);
-          
-          // 1.5 Register Document Authority (FASE 2A)
-          console.log(`[ONBOARDING_WRITE] registering authority: ${key}`);
-          const submitDoc = httpsCallable(functions!, 'submitDocumentV1');
-          await submitDoc({
-            ownerUid: user!.uid,
-            docType: key,
-            category: 'municipal',
-            storagePath: path,
-            downloadURL: url,
-            contentType: validation.mimeToUse || file.type,
-            originalFilename: file.name
-          });
-
-          console.log(`[ONBOARDING_WRITE] success upload & registration: ${key}`);
-          finalDocUrls[key] = url;
-        } catch (e) {
-          console.error(`[ONBOARDING_WRITE] fail upload/registration: ${key}`, e);
-          throw e;
-        }
-      };
-
-      // Mandatory Photos with fixed paths
-      const uploadAsset = async (file: File, key: string, path: string, stateKey: string) => {
-        console.log(`[ONBOARDING_WRITE] uploading asset: ${key} to ${path}`);
-        const { url } = await uploadFile(file, key, path);
-        finalDocUrls[stateKey] = url;
-      };
-
+      // 1. Upload profile photo if provided
+      let photoURL = null;
       if (docs.profilePhoto) {
-        uploadPromises.push(uploadAsset(docs.profilePhoto, 'profilePhoto', `drivers/${user!.uid}/profile/profile.jpg`, 'profilePhoto'));
-      }
-      if (docs.vehicleFrontPhoto) {
-        uploadPromises.push(uploadAsset(docs.vehicleFrontPhoto, 'vehicleFrontPhoto', `drivers/${user!.uid}/vehicle/front.jpg`, 'vehicleFront'));
-      }
-      if (docs.dniPhoto) {
-        uploadPromises.push(uploadAsset(docs.dniPhoto, 'dniFront', `driver_documents/${user!.uid}/dni_front`, 'dniFront'));
-      }
-      if (docs.dniBackPhoto) {
-        uploadPromises.push(uploadAsset(docs.dniBackPhoto, 'dniBack', `driver_documents/${user!.uid}/dni_back`, 'dniBack'));
-      }
-      if (docs.licensePhoto) {
-        uploadPromises.push(uploadAsset(docs.licensePhoto, 'license', `driver_documents/${user!.uid}/license`, 'license'));
-      }
-      if (docs.insurancePhoto) {
-        uploadPromises.push(uploadAsset(docs.insurancePhoto, 'insurance', `driver_documents/${user!.uid}/insurance`, 'insurance'));
-      }
-      if (docs.criminalRecordPhoto) {
-        uploadPromises.push(uploadAsset(docs.criminalRecordPhoto, 'criminalRecord', `driver_documents/${user!.uid}/criminal_record`, 'criminalRecord'));
-      }
-      
-      await Promise.all(uploadPromises);
-      console.log("[DRIVER_ONBOARDING_UPLOAD_OK] Required photos uploaded successfully.");
-
-      // Final validation: Ensure required documents are present
-      if ((!finalDocUrls.profilePhoto && !docUrls.profilePhoto) || (!finalDocUrls.vehicleFront && !docUrls.vehicleFront) || (!finalDocUrls.dniFront && !docUrls.dniFront) || (!finalDocUrls.license && !docUrls.license) || (!finalDocUrls.insurance && !docUrls.insurance)) {
-        setLoading(false);
-        return toast({ variant: 'destructive', title: 'Fotos incompletas', description: 'Debés subir todos los documentos obligatorios.' });
+        try {
+            console.log("[ONBOARDING_WRITE] Uploading profile photo...");
+            const uploadResult = await uploadFile(docs.profilePhoto, 'profilePhoto');
+            photoURL = uploadResult.url;
+        } catch (err) {
+            console.error("Error uploading profile photo:", err);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo subir la foto de perfil, pero el registro continuará.' });
+        }
       }
 
-      // 2. Call Secure Cloud Function (Fase 4C)
       console.log("[DRIVER_ONBOARDING_CALLABLE_START] Calling completeDriverOnboardingV1...");
       const completeDriverOnboarding = httpsCallable(functions!, 'completeDriverOnboardingV1');
       
+      let finalCityKey = canonicalCityKey(formData.cityKey);
+      let finalCityLabel = CITIES[formData.cityKey]?.name || formData.cityKey;
+      let cityResolutionStatus = formData.cityResolutionStatus;
+      let cityResolutionSource = formData.cityResolutionSource;
+
+      // Resolve manual customCity if 'other'
+      if (!finalCityKey && formData.customCity) {
+          const manualCity = formData.customCity.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          let foundKey = '';
+          let resolvedName = '';
+          for (const c of availableCities) {
+              const cityMatchName = c.name?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || '';
+              if (cityMatchName && manualCity.includes(cityMatchName)) {
+                  foundKey = c.cityKey || c.id;
+                  resolvedName = c.name;
+                  break;
+              }
+              if (c.aliases && Array.isArray(c.aliases)) {
+                  const aliasMatch = c.aliases.some((alias: string) => manualCity.includes(alias.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
+                  if (aliasMatch) {
+                      foundKey = c.cityKey || c.id;
+                      resolvedName = c.name;
+                      break;
+                  }
+              }
+          }
+          if (foundKey) {
+              finalCityKey = foundKey;
+              finalCityLabel = resolvedName;
+              cityResolutionStatus = 'resolved';
+              cityResolutionSource = 'manual';
+          } else {
+              finalCityKey = '';
+              finalCityLabel = formData.customCity;
+              cityResolutionStatus = 'outside_service_area';
+              cityResolutionSource = 'manual';
+          }
+      } else if (finalCityKey !== 'other' && finalCityKey !== '') {
+         // Resolve from CITIES or availableCities
+         const c = availableCities.find(c => c.cityKey === finalCityKey || c.id === finalCityKey);
+         if (c) {
+             finalCityLabel = c.name;
+             cityResolutionStatus = 'resolved';
+         }
+      }
+
+      if (finalCityKey === 'other' || !finalCityKey) {
+         cityResolutionStatus = 'outside_service_area';
+         finalCityKey = '';
+      }
+
       const payload: any = {
         name: formData.name,
         dni: formData.dni,
         phone: formData.phone.replace(/[\s\-\+()]/g, ''),
+        photoURL,
         vehicle: {
           brand: formData.brand,
           model: formData.model,
@@ -490,26 +574,18 @@ export function DriverOnboardingWizard() {
         },
         plateNumber: formData.plate.toUpperCase().trim(),
         carModelYear: parseInt(formData.year, 10),
-        cityKey: formData.cityKey === 'other' ? formData.customCity.toLowerCase().replace(/[^a-z0-9]/g, '') : formData.cityKey,
-        cityLabel: formData.cityKey === 'other' ? formData.customCity : (formData.cityKey === 'rawson' ? 'Rawson / Playa Unión' : formData.cityKey),
+        cityKey: finalCityKey,
+        registrationCityKey,
+        cityLabel: finalCityLabel,
+        cityResolutionStatus,
+        cityResolutionSource,
+        registrationLocation: formData.registrationLocation,
         driverSubtype: formData.driverSubtype,
-        fleetOwnerId: (formData as any).fleetOwnerId || '',
         commissionRate: 0.18, // Forzado Plan B
         termsAccepted: true,
         driverTermsAccepted: true,
         acceptedDriverTerms: true,
         termsVersion: CURRENT_TERMS_VERSION, // Consistent with legal-config
-        documents: finalDocUrls,
-        photoURL: finalDocUrls.profilePhoto || docUrls.profilePhoto,
-        vehiclePhotoFrontUrl: finalDocUrls.vehicleFront || docUrls.vehicleFront,
-        vehiclePhotos: {
-          front: finalDocUrls.vehicleFront || docUrls.vehicleFront,
-          back: finalDocUrls.vehicleBack || docUrls.vehicleBack,
-          interior: finalDocUrls.vehicleInterior || docUrls.vehicleInterior,
-        },
-        licenseExpiryStr: formData.licenseExpiry,
-        insuranceExpiryStr: formData.insuranceExpiry,
-        criminalRecordExpiryStr: formData.criminalRecordExpiry
       };
 
       await completeDriverOnboarding(payload);
@@ -525,10 +601,17 @@ export function DriverOnboardingWizard() {
         sessionStorage.setItem('driverOnboardingJustCompleted', 'true');
       }
 
-      toast({
-        title: '¡Registro completo!',
-        description: 'Tu perfil ha sido enviado para revisión.',
-      });
+      if (payload.cityResolutionStatus === 'outside_service_area') {
+         toast({
+           title: 'Lista de espera',
+           description: 'Todavía no tenemos habilitada tu zona. Dejá tus datos y te avisamos cuando VamO esté disponible en tu localidad.',
+         });
+      } else {
+         toast({
+           title: '¡Registro completo!',
+           description: 'Tu perfil ha sido enviado para revisión municipal.',
+         });
+      }
 
       setIsSuccessModalOpen(true);
     } catch (error: any) {
@@ -603,86 +686,59 @@ export function DriverOnboardingWizard() {
                          />
                     </div>
 
-                    <div className="space-y-4 pt-2">
-                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">Foto de Perfil (Obligatoria)</Label>
-                        <div 
-                            className="w-32 h-32 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all mx-auto"
-                            onClick={() => document.getElementById('input-profilePhoto')?.click()}
-                        >
-                            {(previews.profilePhoto || docUrls.profilePhoto) ? (
-                                <img src={previews.profilePhoto || docUrls.profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+                    <div className="space-y-2 pt-2">
+                        <Label className="text-xs uppercase tracking-widest text-zinc-400 mb-2 block">Foto de Perfil (Opcional pero recomendada)</Label>
+                        <div className="flex items-center gap-4">
+                            {previews.profilePhoto ? (
+                                <img src={previews.profilePhoto} alt="Profile" className="w-16 h-16 rounded-full object-cover border-2 border-indigo-500" />
                             ) : (
-                                <>
-                                    <VamoIcon name="camera" className="w-8 h-8 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
-                                    <span className="text-[10px] font-bold text-zinc-600 uppercase mt-1">Subir Foto</span>
-                                </>
+                                <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                    <Camera className="w-6 h-6 text-zinc-500" />
+                                </div>
                             )}
-                            <input 
-                                id="input-profilePhoto" type="file" accept="image/*" className="hidden" 
-                                onChange={(e) => handleFileChange(e, 'profilePhoto')} 
-                            />
+                            <div className="flex-1 relative">
+                                <Input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    onChange={(e) => handleFileChange(e, 'profilePhoto')} 
+                                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" 
+                                />
+                                <Button type="button" variant="outline" className="w-full bg-white/5 border-white/10 text-xs">
+                                    {docs.profilePhoto ? 'Cambiar Foto' : 'Subir Foto'}
+                                </Button>
+                            </div>
                         </div>
-                        <p className="text-[10px] text-zinc-500 text-center italic">Esta foto será visible para tus pasajeros durante los viajes.</p>
-                    </div>
-
-                    {/* Ciudad: Ubicación actual */}
+                    </div>                    
+                    
+                    {/* Ciudad: Selección y Ubicación actual */}
                     <div className="space-y-2">
-                      <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-1">Ciudad / Localidad</Label>
-                      
-                      {formData.cityKey && formData.cityKey !== 'other' && formData.cityKey !== '' ? (
-                        <div className="flex items-center justify-between p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-                           <div className="flex items-center gap-2">
-                             <VamoIcon name="map-pin" className="w-4 h-4" />
-                             <span className="font-bold">{
-                                cities.find(c => c.cityKey === formData.cityKey)?.name || 
-                                (formData.cityKey === 'rawson' ? 'Rawson / Playa Unión' : formData.cityKey.toUpperCase())
-                             }</span>
-                           </div>
-                           <button type="button" onClick={getCurrentLocation} disabled={isLocating} className="text-xs font-bold uppercase hover:text-white transition-colors">
-                             {isLocating ? 'Buscando...' : 'Actualizar'}
-                           </button>
-                        </div>
-                      ) : formData.customCity && formData.cityKey !== '' ? (
-                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 text-white">
-                           <div className="flex items-center gap-2">
-                             <VamoIcon name="map-pin" className="w-4 h-4 text-zinc-400" />
-                             <span className="font-bold">{formData.customCity}</span>
-                           </div>
-                           <button type="button" onClick={getCurrentLocation} disabled={isLocating} className="text-xs font-bold uppercase text-indigo-400 hover:text-indigo-300 transition-colors">
-                             {isLocating ? 'Buscando...' : 'Actualizar'}
-                           </button>
-                        </div>
-                      ) : (
-                        <Button 
-                          type="button" 
-                          onClick={getCurrentLocation} 
+                      <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-1">Hub Operativo</Label>
+                      <CityHubAutocomplete
+                          value={formData.cityKey}
+                          onChange={(key, city) => {
+                              setFormData(p => ({ 
+                                  ...p, 
+                                  cityKey: canonicalCityKey(key),
+                                  cityResolutionSource: 'manual',
+                                  cityResolutionStatus: 'resolved'
+                              }));
+                          }}
                           disabled={isLocating}
-                          className="w-full h-12 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-400 font-bold uppercase tracking-widest"
-                        >
-                          {isLocating ? <VamoIcon name="loader" className="w-4 h-4 animate-spin mr-2" /> : <VamoIcon name="map-pin" className="w-4 h-4 mr-2" />}
-                          Obtener mi ubicación actual
-                        </Button>
-                      )}
-
-                      {(!formData.cityKey || formData.cityKey === 'other' || formData.cityKey === '') && !isLocating && !formData.customCity && (
-                        <div className="pt-2">
-                          <button 
+                      />
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
+                           {formData.cityResolutionSource === 'gps' ? 'Ciudad sugerida por GPS' : formData.cityResolutionSource === 'manual' ? 'Selección manual' : ''}
+                        </span>
+                        <button 
                             type="button" 
-                            onClick={() => setFormData(p => ({ ...p, cityKey: 'other', customCity: ' ' }))} 
-                            className="text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-white"
-                          >
-                            ¿No funciona? Ingresar manualmente
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {formData.cityKey === 'other' && formData.customCity !== '' && (
-                      <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-top-2">
-                        <Label className="text-xs uppercase tracking-widest text-zinc-400">Ingresá tu localidad manualmente</Label>
-                        <Input value={formData.customCity === ' ' ? '' : formData.customCity} onChange={(e) => setFormData(p => ({ ...p, customCity: e.target.value }))} placeholder="Ej: Gaiman" className="h-12 bg-white/5 border-white/5 rounded-xl" />
+                            onClick={getCurrentLocation} 
+                            disabled={isLocating} 
+                            className="text-[10px] uppercase tracking-widest font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
+                        >
+                            {isLocating ? 'Buscando...' : 'Autodetectar con GPS'}
+                        </button>
                       </div>
-                    )}
+                    </div>
                     <div className="space-y-2">
                       <Label className="text-xs uppercase tracking-widest text-zinc-400">Email</Label>
                       <Input value={formData.email} readOnly className="h-12 bg-white/5 border-white/5 rounded-xl opacity-50" />
@@ -718,26 +774,8 @@ export function DriverOnboardingWizard() {
                       <Input name="color" value={formData.color} onChange={handleInputChange} placeholder="Ej: Blanco" className="h-12 bg-white/5 border-white/5 rounded-xl" />
                     </div>
 
-                    <div className="space-y-4 pt-2">
-                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">Foto Frontal del Vehículo (Obligatoria)</Label>
-                        <div 
-                            className="w-full h-48 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all"
-                            onClick={() => document.getElementById('input-vehicleFrontPhoto')?.click()}
-                        >
-                            {(previews.vehicleFrontPhoto || docUrls.vehicleFront) ? (
-                                <img src={previews.vehicleFrontPhoto || docUrls.vehicleFront} alt="Vehicle Front" className="w-full h-full object-cover" />
-                            ) : (
-                                <>
-                                    <VamoIcon name="camera" className="w-10 h-10 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
-                                    <span className="text-[10px] font-bold text-zinc-600 uppercase mt-2">Subir Foto del Auto</span>
-                                </>
-                            )}
-                            <input 
-                                id="input-vehicleFrontPhoto" type="file" accept="image/*" className="hidden" 
-                                onChange={(e) => handleFileChange(e, 'vehicleFrontPhoto')} 
-                            />
-                        </div>
-                        <p className="text-[10px] text-zinc-500 text-center italic">Asegurate que la patente sea legible en la foto.</p>
+                    <div className="space-y-2 pt-2">
+                        {/* Vehicle photo upload removed */}
                     </div>
                   </div>
                 )}
@@ -748,26 +786,26 @@ export function DriverOnboardingWizard() {
                     <p className="text-xs text-zinc-400 mb-4">Seleccioná cómo vas a trabajar. Esto define tu comisión y beneficios.</p>
                     <div className="grid grid-cols-1 gap-4">
                       
-                      {(!cityConfig?.allowedDriverTypes || cityConfig.allowedDriverTypes.particular) && (
-                        <button
-                          type="button"
-                          onClick={() => setFormData(p => ({ ...p, driverSubtype: 'particular' }))}
-                          className={cn(
-                            "p-6 rounded-3xl border text-left transition-all",
-                            formData.driverSubtype === 'particular' || formData.driverSubtype === 'express'
-                              ? "bg-indigo-600/10 border-indigo-600 ring-2 ring-indigo-600/20" 
-                              : "bg-white/5 border-white/5 hover:bg-white/10"
+                      {showParticular && (
+                            <button
+                              type="button"
+                              onClick={() => setFormData(p => ({ ...p, driverSubtype: 'particular' }))}
+                              className={cn(
+                                "p-6 rounded-3xl border text-left transition-all",
+                                formData.driverSubtype === 'particular' || formData.driverSubtype === 'express'
+                                  ? "bg-indigo-600/10 border-indigo-600 ring-2 ring-indigo-600/20" 
+                                  : "bg-white/5 border-white/5 hover:bg-white/10"
+                              )}
+                            >
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-lg font-black uppercase italic tracking-tighter">Particular</span>
+                                {(formData.driverSubtype === 'particular' || formData.driverSubtype === 'express') && <VamoIcon name="check-circle" className="w-6 h-6 text-indigo-400" />}
+                              </div>
+                              <p className="text-xs text-zinc-500 leading-relaxed font-medium">Vehículo propio. Operás como conductor particular dentro de VamO.</p>
+                            </button>
                           )}
-                        >
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-lg font-black uppercase italic tracking-tighter">Particular</span>
-                            {(formData.driverSubtype === 'particular' || formData.driverSubtype === 'express') && <VamoIcon name="check-circle" className="w-6 h-6 text-indigo-400" />}
-                          </div>
-                          <p className="text-xs text-zinc-500 leading-relaxed font-medium">Vehículo propio. Operás como conductor particular dentro de VamO.</p>
-                        </button>
-                      )}
 
-                      {(!cityConfig?.allowedDriverTypes || cityConfig.allowedDriverTypes.taxi) && (
+                      {showTaxi && (
                         <button
                           type="button"
                           onClick={() => setFormData(p => ({ ...p, driverSubtype: 'taxi' }))}
@@ -786,7 +824,7 @@ export function DriverOnboardingWizard() {
                         </button>
                       )}
 
-                      {(!cityConfig?.allowedDriverTypes || cityConfig.allowedDriverTypes.remis) && (
+                      {showRemis && (
                         <button
                           type="button"
                           onClick={() => setFormData(p => ({ ...p, driverSubtype: 'remis' }))}
@@ -805,7 +843,7 @@ export function DriverOnboardingWizard() {
                         </button>
                       )}
 
-                      {(!cityConfig?.allowedDriverTypes || cityConfig.allowedDriverTypes.fleet_driver) && (
+                      {showFleet && (
                         <div className={cn(
                             "p-6 rounded-3xl border text-left transition-all",
                             formData.driverSubtype === 'fleet_driver' 
@@ -844,146 +882,15 @@ export function DriverOnboardingWizard() {
                   </div>
                 )}
                     
-                {/* --- STEP 4: DOCUMENTS --- */}
+                {/* --- STEP 4: FINISH --- */}
                 {currentStep === 4 && (
-                  <div className="space-y-6">
-                    <p className="text-xs text-zinc-400">Subí la documentación obligatoria para validar tu identidad y tu vehículo.</p>
-                    
-                    {/* DNI Frente */}
-                    {(!cityConfig?.documentRequirements?.[formData.driverSubtype] || cityConfig.documentRequirements[formData.driverSubtype].dniFront) && (
-                    <div className="space-y-4">
-                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">DNI Frente (Obligatorio)</Label>
-                        <div 
-                            className="w-full h-32 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all"
-                            onClick={() => document.getElementById('input-dniPhoto')?.click()}
-                        >
-                            {(previews.dniPhoto || docUrls.dniFront) ? (
-                                <img src={previews.dniPhoto || docUrls.dniFront} alt="DNI Frente" className="w-full h-full object-cover" />
-                            ) : (
-                                <>
-                                    <VamoIcon name="camera" className="w-8 h-8 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
-                                    <span className="text-[10px] font-bold text-zinc-600 uppercase mt-2">Subir DNI Frente</span>
-                                </>
-                            )}
-                            <input id="input-dniPhoto" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => handleFileChange(e, 'dniPhoto')} />
-                        </div>
-                    </div>
-                    )}
-
-                    {/* DNI Dorso */}
-                    {(!cityConfig?.documentRequirements?.[formData.driverSubtype] || cityConfig.documentRequirements[formData.driverSubtype].dniBack) && (
-                    <div className="space-y-4">
-                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">DNI Dorso</Label>
-                        <div 
-                            className="w-full h-32 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all"
-                            onClick={() => document.getElementById('input-dniBackPhoto')?.click()}
-                        >
-                            {(previews.dniBackPhoto || docUrls.dniBack) ? (
-                                <img src={previews.dniBackPhoto || docUrls.dniBack} alt="DNI Dorso" className="w-full h-full object-cover" />
-                            ) : (
-                                <>
-                                    <VamoIcon name="camera" className="w-8 h-8 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
-                                    <span className="text-[10px] font-bold text-zinc-600 uppercase mt-2">Subir DNI Dorso</span>
-                                </>
-                            )}
-                            <input id="input-dniBackPhoto" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => handleFileChange(e, 'dniBackPhoto')} />
-                        </div>
-                    </div>
-                    )}
-
-                    {/* Licencia */}
-                    {(!cityConfig?.documentRequirements?.[formData.driverSubtype] || cityConfig.documentRequirements[formData.driverSubtype].driverLicense) && (
-                    <div className="space-y-4 pt-4 border-t border-white/5">
-                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">Licencia de Conducir (Obligatorio)</Label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div 
-                                className="w-full h-32 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all"
-                                onClick={() => document.getElementById('input-licensePhoto')?.click()}
-                            >
-                                {(previews.licensePhoto || docUrls.license) ? (
-                                    <img src={previews.licensePhoto || docUrls.license} alt="Licencia" className="w-full h-full object-cover" />
-                                ) : (
-                                    <>
-                                        <VamoIcon name="camera" className="w-8 h-8 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
-                                        <span className="text-[10px] font-bold text-zinc-600 uppercase mt-2">Subir Licencia</span>
-                                    </>
-                                )}
-                                <input id="input-licensePhoto" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => handleFileChange(e, 'licensePhoto')} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] uppercase tracking-widest text-zinc-500">Fecha de Vencimiento</Label>
-                                <Input type="date" name="licenseExpiry" value={formData.licenseExpiry} onChange={handleInputChange} className="h-12 bg-white/5 border-white/5 rounded-xl [color-scheme:dark]" />
-                            </div>
-                        </div>
-                    </div>
-                    )}
-
-                    {/* Seguro */}
-                    {(!cityConfig?.documentRequirements?.[formData.driverSubtype] || cityConfig.documentRequirements[formData.driverSubtype].vehicleInsurance) && (
-                    <div className="space-y-4 pt-4 border-t border-white/5">
-                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">Seguro del Vehículo (Obligatorio)</Label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div 
-                                className="w-full h-32 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all"
-                                onClick={() => document.getElementById('input-insurancePhoto')?.click()}
-                            >
-                                {(previews.insurancePhoto || docUrls.insurance) ? (
-                                    <img src={previews.insurancePhoto || docUrls.insurance} alt="Seguro" className="w-full h-full object-cover" />
-                                ) : (
-                                    <>
-                                        <VamoIcon name="camera" className="w-8 h-8 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
-                                        <span className="text-[10px] font-bold text-zinc-600 uppercase mt-2">Subir Seguro</span>
-                                    </>
-                                )}
-                                <input id="input-insurancePhoto" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => handleFileChange(e, 'insurancePhoto')} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] uppercase tracking-widest text-zinc-500">Fecha de Vencimiento</Label>
-                                <Input type="date" name="insuranceExpiry" value={formData.insuranceExpiry} onChange={handleInputChange} className="h-12 bg-white/5 border-white/5 rounded-xl [color-scheme:dark]" />
-                            </div>
-                        </div>
-                    </div>
-                    )}
-
-                    {/* Antecedentes Penales */}
-                    {(!cityConfig?.documentRequirements?.[formData.driverSubtype] || cityConfig.documentRequirements[formData.driverSubtype].criminalRecord) && (
-                    <div className="space-y-4 pt-4 border-t border-white/5">
-                        <Label className="text-xs uppercase tracking-widest text-zinc-400 block mb-2">Antecedentes Penales</Label>
-                        <p className="text-[10px] text-zinc-500 italic mb-2">Si son obligatorios para tu municipalidad, es requisito subirlos.</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div 
-                                className="w-full h-32 rounded-3xl bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-indigo-500/50 transition-all"
-                                onClick={() => document.getElementById('input-criminalRecordPhoto')?.click()}
-                            >
-                                {(previews.criminalRecordPhoto || docUrls.criminalRecord) ? (
-                                    <img src={previews.criminalRecordPhoto || docUrls.criminalRecord} alt="Antecedentes" className="w-full h-full object-cover" />
-                                ) : (
-                                    <>
-                                        <VamoIcon name="camera" className="w-8 h-8 text-zinc-700 group-hover:text-indigo-400 transition-colors" />
-                                        <span className="text-[10px] font-bold text-zinc-600 uppercase mt-2">Subir Antecedentes</span>
-                                    </>
-                                )}
-                                <input id="input-criminalRecordPhoto" type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => handleFileChange(e, 'criminalRecordPhoto')} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-[10px] uppercase tracking-widest text-zinc-500">Fecha de Vencimiento</Label>
-                                <Input type="date" name="criminalRecordExpiry" value={formData.criminalRecordExpiry} onChange={handleInputChange} className="h-12 bg-white/5 border-white/5 rounded-xl [color-scheme:dark]" />
-                            </div>
-                        </div>
-                    </div>
-                    )}
-                  </div>
-                )}
-
-                {/* --- STEP 5: FINISH --- */}
-                {currentStep === 5 && (
                   <div className="text-center space-y-6 py-8">
                     <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto border border-emerald-500/30">
                       <VamoIcon name="check-circle" className="w-10 h-10 text-emerald-500" />
                     </div>
                     <div className="space-y-2">
                       <h3 className="text-2xl font-black uppercase tracking-tighter italic">¡Todo listo!</h3>
-                      <p className="text-zinc-500 text-sm max-w-xs mx-auto">Al finalizar, enviaremos tus datos para la aprobación de tu cuenta.</p>
+                      <p className="text-zinc-500 text-sm max-w-xs mx-auto">Al finalizar, enviaremos tus datos para la creación de tu cuenta.</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-zinc-950 border border-white/5 text-left space-y-2">
                         <div className="flex justify-between text-[11px] uppercase tracking-widest font-black text-zinc-500">
@@ -1059,9 +966,9 @@ export function DriverOnboardingWizard() {
                 </div>
 
                 <div className="space-y-2">
-                    <h2 className="text-2xl font-black text-white tracking-tighter uppercase italic">¡Registro Enviado!</h2>
+                    <h2 className="text-2xl font-black text-white tracking-tighter uppercase italic">¡Cuenta Creada!</h2>
                     <p className="text-zinc-400 text-sm leading-relaxed">
-                        Tu perfil de conductor ha sido creado y enviado para revisión. Ya podés acceder a tu panel para ver tu estado.
+                        Cuenta creada correctamente. Ahora completá tu habilitación desde la pestaña Habilitación.
                     </p>
                 </div>
 

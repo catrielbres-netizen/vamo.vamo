@@ -26,10 +26,10 @@ function OnboardingPasajeroContent() {
     const { auth } = useFirebase();
     const { toast } = useToast();
     const searchParams = useSearchParams();
-    const { cities, loading: citiesLoading } = useActiveCities();
+    const { cities, loading: citiesLoading } = useActiveCities({ context: 'passenger' });
 
     const queryCity = searchParams.get('city');
-    const initialCity = queryCity || 'rawson';
+    const initialCity = queryCity || '';
 
     const [currentStep, setCurrentStep] = useState<Step>('IDENTITY');
     const [isSubmitting, setIsSubmitting] = useState(false);

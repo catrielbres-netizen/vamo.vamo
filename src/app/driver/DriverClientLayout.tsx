@@ -36,6 +36,7 @@ import { DriverProgressPanel } from '@/components/DriverProgressPanel';
 import { DriverMissionPanel } from '@/components/DriverMissionPanel';
 import { AuthGuard } from '@/features/auth/AuthGuard';
 import { TermsGuard } from '@/features/auth/TermsGuard';
+import { DriverLegalGuard } from '@/features/auth/DriverLegalGuard';
 import { useBackNavigationLock } from '@/hooks/useBackNavigationLock';
 import { NotificationToggle } from '@/components/NotificationToggle';
 import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
@@ -43,14 +44,13 @@ import { cn } from '@/lib/utils';
 import DriverSuspensionBanner from '@/components/driver/DriverSuspensionBanner';
 import { featureFlags } from '@/config/features';
 import { NotificationBell } from '@/components/NotificationBell';
-
-const MAX_ACCURACY_METERS = 3000;
+import { DriverBottomNav } from '@/components/driver/DriverBottomNav';
 const MIN_DISTANCE_UPDATE_METERS = 25;
 
 const RAWSON_MOCK_LOCATION = { 
-  lat: -43.3002, 
-  lng: -65.1023, 
-  address: "Mariano Moreno 650, Rawson, Chubut" 
+  lat: -51.6226, 
+  lng: -69.2181, 
+  address: "Centro, Río Gallegos, Santa Cruz" 
 };
 
 /**
@@ -588,29 +588,43 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
           forced={showTerms} 
           onClose={() => setShowTerms(false)} 
       />
+      <DriverLegalGuard />
       <CancellationModal />
-      <div className="container mx-auto max-w-md p-4">
+      <div className="container mx-auto max-w-md p-4 relative min-h-screen">
+          {/* Watermark Logo */}
+          <div className="fixed inset-0 z-[-1] flex items-center justify-center pointer-events-none overflow-hidden">
+             <div className="opacity-[0.03] -rotate-12 scale-[2] md:scale-[1.5] mix-blend-screen">
+                 <VamoLogo variant="login" />
+             </div>
+          </div>
+
         <DriverSuspensionBanner profile={profile} />
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <p className="text-sm text-muted-foreground">Hola, {profile?.name} 👋</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-               <VamoIcon name="star" className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-               <span className="font-bold text-sm text-foreground">{formatRating(profile?.averageRating)}</span>
-               <span className="text-muted-foreground mx-1">•</span>
-               <span className="font-medium text-sm">📍 {profile?.city || 'VamO'}</span>
+        
+        <div className="flex justify-between items-center pt-2 pb-6">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2">
+              Hola, {profile?.name?.split(' ')[0]} 👋
+            </h1>
+            <div className="flex items-center gap-2 flex-wrap">
+               <div className="flex items-center gap-1.5 bg-zinc-900/50 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/5 shadow-sm">
+                 <VamoIcon name="star" className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                 <span className="font-bold text-xs text-zinc-200">{formatRating(profile?.averageRating)}</span>
+               </div>
+               <div className="flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md px-2.5 py-1 rounded-full border border-indigo-500/20 shadow-sm">
+                 <VamoIcon name="map-pin" className="w-3.5 h-3.5 text-indigo-400" />
+                 <span className="font-bold text-xs text-indigo-200">{profile?.city || 'VamO'}</span>
+               </div>
                
                {/* [VamO PRO] Weekly Points Badge */}
-               <div className="flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 animate-in fade-in zoom-in duration-700">
-                  <VamoIcon name="award" className="w-3 h-3 text-primary" />
-                  <span className="text-[10px] font-black text-primary">
+               <div className="flex items-center gap-1.5 bg-indigo-600/20 backdrop-blur-md px-2.5 py-1 rounded-full border border-indigo-500/30 shadow-sm animate-in fade-in zoom-in duration-700">
+                  <VamoIcon name="award" className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">
                     {driverStats?.weeklyPoints || 0} pts
                   </span>
                </div>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-              <ThemeSwitcher />
+          <div className="flex items-center gap-3">
               <NotificationBell role="driver" />
           </div>
         </div>
@@ -618,26 +632,24 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
         {!shouldShowActiveRide && (
             <>
               {(profile?.profileCompleted) && (
-                  <div className="flex items-center justify-between p-4 rounded-lg bg-card border mb-6">
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-[#0B0F19] border border-white/5 mb-6 shadow-xl">
                       <div className="flex flex-col">
-                          <Label htmlFor="online-toggle" className="font-semibold">{profile.driverStatus === 'online' ? "Estás En Línea" : "Estás Desconectado"}</Label>
-                          <span className="text-xs text-muted-foreground">
+                          <Label htmlFor="online-toggle" className="font-bold text-white tracking-tight">{profile.driverStatus === 'online' ? "Estás En Línea" : "Estás Desconectado"}</Label>
+                          <span className="text-[10px] text-zinc-500 font-medium tracking-wide mt-0.5">
                               {isSuspended 
                                   ? "No podés conectarte porque tu cuenta está suspendida." 
                                   : (profile.driverStatus === 'online' ? "Listo para recibir viajes." : "Activá para empezar a trabajar.")}
                           </span>
                       </div>
                        <div className="flex items-center gap-4">
-                           {process.env.NODE_ENV === 'development' && (
-                               <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className={`h-8 text-[10px] uppercase font-bold tracking-widest ${isMockingLocation ? 'bg-amber-500/10 text-amber-500 border-amber-500/50' : 'text-muted-foreground'}`}
-                                  onClick={() => setIsMockingLocation(!isMockingLocation)}
-                               >
-                                   {isMockingLocation ? 'MOCK GPS: ON' : 'MOCK GPS: OFF'}
-                               </Button>
-                           )}
+                           <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className={`h-8 text-[10px] uppercase font-bold tracking-widest ${isMockingLocation ? 'bg-amber-500/10 text-amber-500 border-amber-500/50' : 'text-muted-foreground'}`}
+                              onClick={() => setIsMockingLocation(!isMockingLocation)}
+                           >
+                               {isMockingLocation ? 'MOCK GPS: ON' : 'MOCK GPS: OFF'}
+                           </Button>
                            <Switch 
                               id="online-toggle" 
                               checked={profile.driverStatus === 'online'} 
@@ -730,74 +742,13 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
               
               <NotificationToggle />
 
-              <Tabs value={pathname.split('/driver/')[1] || 'rides'} className="w-full">
-                    <TabsList className="flex flex-wrap w-full justify-center gap-1 bg-secondary/50 p-1 mb-2 h-auto">
-                        <TabsTrigger value="rides" asChild>
-                            <Link href="/driver/rides" className="gap-1.5 text-xs px-3 py-1.5 flex items-center justify-center">
-                                <VamoIcon name="car" className="w-4 h-4" /> Viajes
-                            </Link>
-                        </TabsTrigger>
-                        <TabsTrigger value="reservations" asChild>
-                            <Link
-                                href="/driver/reservations"
-                                className={cn(
-                                    "gap-1.5 text-xs px-3 py-1.5 flex items-center justify-center relative transition-all duration-300",
-                                    scheduledRidesCount > 0
-                                        ? "bg-indigo-600 text-white rounded-md shadow-[0_0_12px_rgba(99,102,241,0.5)] font-black"
-                                        : ""
-                                )}
-                            >
-                                <VamoIcon
-                                    name="calendar"
-                                    className={cn(
-                                        "w-4 h-4 transition-all",
-                                        scheduledRidesCount > 0 ? "text-white animate-pulse" : ""
-                                    )}
-                                />
-                                Reservas
-                                {scheduledRidesCount > 0 && (
-                                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center">
-                                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
-                                        <span className="relative inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white text-indigo-700 font-black" style={{ fontSize: '8px' }}>
-                                            {scheduledRidesCount > 9 ? '9+' : scheduledRidesCount}
-                                        </span>
-                                    </span>
-                                )}
-                            </Link>
-                        </TabsTrigger>
-                        <TabsTrigger value="history" asChild>
-                            <Link href="/driver/history" className="gap-1.5 text-xs px-3 py-1.5 flex items-center justify-center">
-                                <VamoIcon name="clock" className="w-4 h-4" /> Historial
-                            </Link>
-                        </TabsTrigger>
-                        <TabsTrigger value="earnings" asChild>
-                            <Link href="/driver/earnings" className="gap-1.5 text-xs px-3 py-1.5 flex items-center justify-center">
-                                <VamoIcon name="wallet" className="w-4 h-4" /> Billetera
-                            </Link>
-                        </TabsTrigger>
-                        {featureFlags.municipalModeEnabled && (
-                            <TabsTrigger value="muni-status" asChild>
-                                <Link href="/driver/muni-status" className="gap-1.5 text-xs px-3 py-1.5 flex items-center justify-center">
-                                    <VamoIcon name="landmark" className="w-4 h-4" /> Habilitación
-                                </Link>
-                            </TabsTrigger>
-                        )}
-                        <TabsTrigger value="profile" asChild>
-                            <Link href="/driver/profile" className="gap-1.5 text-xs px-3 py-1.5 flex items-center justify-center">
-                                <VamoIcon name="user" className="w-4 h-4" /> Perfil
-                            </Link>
-                        </TabsTrigger>
-                    </TabsList>
-              </Tabs>
-
-
               <div className="space-y-4 mb-4">
                 {profile?.profileCompleted && <EmailVerificationCard />}
                 <PWAInstallPrompt />
               </div>
             </>
         )}
-        <main className="mt-6">
+        <main className="mt-6 relative z-10 pb-20">
             {shouldShowActiveRide ? (
               <ActiveDriverRide 
                 ride={activeRide} 
@@ -805,6 +756,10 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
               />
             ) : children}
         </main>
+        
+        {!shouldShowActiveRide && (
+            <DriverBottomNav />
+        )}
       </div>
     </>
   );

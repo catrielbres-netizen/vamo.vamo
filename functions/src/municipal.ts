@@ -5,6 +5,7 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { getDb } from "./lib/firebaseAdmin";
 import { MunicipalProfile, UserProfile, MunicipalChecklistKey, buildMunicipalCode } from "./types";
+import { enqueueTransactionalEmailV1 } from "./lib/emails";
 
 /**
  * [VamO MUNICIPAL] Atomic Driver Approval
@@ -38,22 +39,70 @@ export const approveDriverV1 = onCall({ cors: true, region: 'us-central1' }, asy
                 throw new Error('Ciudad no permitida.');
             }
 
+            const cityRef = db.doc(`cities/${muni.cityKey}`);
+            const citySnap = await tx.get(cityRef);
+            const cityConfig = citySnap.exists ? citySnap.data()?.config : null;
+
             // Validations
             const now = Timestamp.now().toMillis();
             const checklist = muni.checklist || {};
-            const requiredKeys: MunicipalChecklistKey[] = [
-                'dniFront', 'dniBack', 'driverLicense', 'vehicleInsurance',
-                'vehicleRegistrationCard', 'criminalRecord', 'municipalCanon', 'disinfectionReceipt'
-            ];
+            const isFleetDriver = user.driverSubtype === 'fleet_driver' || muni.driverSubtype === 'fleet_driver';
             
-            if (!requiredKeys.every(key => (checklist as any)[key]?.status === 'approved')) {
-                throw new Error('Checklist incompleta.');
+            const baseKeys = ['dniFront', 'dniBack', 'driverLicense', 'vehicleInsurance', 'passengerCoverageInsurance', 'vehicleRegistrationCard', 'criminalRecord', 'municipalCanon', 'disinfectionReceipt', 'vehicleModelYearProof'];
+            
+            const requiredKeys: string[] = isFleetDriver
+                ? ['driverLicense', 'criminalRecord']
+                : baseKeys.filter(k => {
+                    if (!cityConfig || !cityConfig.municipalRequirements) return true;
+                    return cityConfig.municipalRequirements[k] !== false;
+                });
+            
+            const missingKeys = requiredKeys.filter(key => (checklist as any)[key]?.status !== 'approved');
+
+            if (missingKeys.length > 0) {
+                const errorDetails = {
+                    requiredKeys,
+                    approvedKeys: requiredKeys.filter(k => !missingKeys.includes(k)),
+                    missingKeys,
+                    driverSubtype: user.driverSubtype || muni.driverSubtype,
+                    municipalStatus: muni.municipalStatus,
+                    checklist
+                };
+                
+                const keyLabels: Record<string, string> = {
+                    driverLicense: "Licencia de conducir",
+                    criminalRecord: "Antecedentes penales",
+                    dniFront: "DNI frente",
+                    dniBack: "DNI dorso",
+                    vehicleInsurance: "Seguro del vehículo",
+                    passengerCoverageInsurance: "Cobertura pasajeros",
+                    vehicleRegistrationCard: "Cédula",
+                    municipalCanon: "Canon municipal",
+                    disinfectionReceipt: "Desinfección",
+                    vehicleModelYearProof: "Comprobante de modelo/año del vehículo"
+                };
+                const translatedMissing = missingKeys.map(k => keyLabels[k] || k);
+                
+                const err = new Error(`Checklist incompleto. Falta aprobar: ${translatedMissing.join(', ')}`);
+                (err as any).details = errorDetails;
+                throw err;
             }
-            if (muni.canonStatus !== 'paid' || (muni.canonExpiry && muni.canonExpiry.toMillis() < now)) {
-                throw new Error('Canon vencido o impago.');
+
+            if (!isFleetDriver) {
+                const canonRequired = !cityConfig?.municipalRequirements || cityConfig.municipalRequirements.municipalCanon !== false;
+                const insuranceRequired = !cityConfig?.municipalRequirements || cityConfig.municipalRequirements.vehicleInsurance !== false;
+
+                if (canonRequired) {
+                    if (muni.canonStatus !== 'paid' || (muni.canonExpiry && muni.canonExpiry.toMillis() < now)) {
+                        throw new Error('Canon vencido o impago.');
+                    }
+                }
+                if (insuranceRequired) {
+                    if (!muni.insuranceExpiry || muni.insuranceExpiry.toMillis() < now) throw new Error('Seguro vencido.');
+                }
             }
+
             if (!muni.licenseExpiry || muni.licenseExpiry.toMillis() < now) throw new Error('Licencia vencida.');
-            if (!muni.insuranceExpiry || muni.insuranceExpiry.toMillis() < now) throw new Error('Seguro vencido.');
 
             const timestamp = FieldValue.serverTimestamp();
 
@@ -101,7 +150,7 @@ export const approveDriverV1 = onCall({ cors: true, region: 'us-central1' }, asy
 
             tx.set(db.collection('municipal_audit_log').doc(), {
                 driverId,
-                municipalCode: muni.municipalCode,
+                municipalCode: muni.municipalCode || null,
                 cityKey: muni.cityKey,
                 actionBy: operatorUid,
                 action: 'driver_approved_at_muni',
@@ -115,12 +164,22 @@ export const approveDriverV1 = onCall({ cors: true, region: 'us-central1' }, asy
                 updatedAt: timestamp
             }, { merge: true });
 
-            return { driverId, status: 'active' };
+            return { driverId, status: 'active', user };
         });
+
+        if (result && result.user) {
+            await enqueueTransactionalEmailV1({
+                to: result.user.email,
+                template: 'driver_enabled',
+                subject: '¡Tu cuenta de conductor fue habilitada!',
+                data: { name: result.user.name },
+                dedupeKey: `driver_enabled_${driverId}`
+            });
+        }
 
         return { success: true, ...result };
     } catch (error: any) {
-        throw new HttpsError('failed-precondition', error.message);
+        throw new HttpsError('failed-precondition', error.message, error.details);
     }
 });
 
@@ -138,13 +197,31 @@ export const updateMunicipalChecklistItemV1 = onCall({ cors: true, region: 'us-c
         const operatorSnap = await db.doc(`users/${operatorUid}`).get();
         const operator = operatorSnap.data() as UserProfile;
 
-        await db.runTransaction(async (tx) => {
+        const result = await db.runTransaction(async (tx) => {
             const muniRef = db.doc(`municipal_profiles/${driverId}`);
             const userRef = db.doc(`users/${driverId}`);
-            const [muniSnap, userSnap] = await Promise.all([tx.get(muniRef), tx.get(userRef)]);
+            
+            const prevQuery = db.collection('municipal_doc_submissions')
+                .where('driverId', '==', driverId)
+                .where('docType', '==', key)
+                .where('isCurrent', '==', true);
+
+            const obsQuery = db.collection('traffic_observations')
+                .where('driverId', '==', driverId)
+                .where('requestedDocumentType', '==', key)
+                .where('status', 'in', ['pending_traffic_review', 'awaiting_driver_response', 'open']);
+
+            // --- 1. ALL READS FIRST ---
+            const [muniSnap, userSnap, prevSnap, obsSnap] = await Promise.all([
+                tx.get(muniRef), 
+                tx.get(userRef), 
+                tx.get(prevQuery),
+                status === 'approved' ? tx.get(obsQuery) : Promise.resolve(null)
+            ]);
 
             if (!muniSnap.exists) throw new Error('Legajo no encontrado.');
             const muni = muniSnap.data() as MunicipalProfile;
+            const user = userSnap.data() as UserProfile;
 
             if (operator.role === 'admin_municipal' && muni.cityKey !== operator.cityKey) throw new Error('Ciudad no permitida.');
 
@@ -161,6 +238,55 @@ export const updateMunicipalChecklistItemV1 = onCall({ cors: true, region: 'us-c
                 muniUpdates[`checklist.${key}.observationSource`] = 'traffic';
             }
 
+            const currentItem = (muni.checklist as any)?.[key] || {};
+            const isApproving = status === 'approved';
+            let dateObj: any = null;
+            
+            if (isApproving && expiryDate) {
+                dateObj = Timestamp.fromDate(new Date(expiryDate + "T12:00:00"));
+                muniUpdates[`checklist.${key}.expiresAt`] = dateObj;
+            }
+
+            if (isApproving && currentItem.pendingStorageUrl) {
+                muniUpdates[`checklist.${key}.currentStorageUrl`] = currentItem.pendingStorageUrl;
+                muniUpdates[`checklist.${key}.currentStoragePath`] = currentItem.pendingStoragePath || null;
+                muniUpdates[`checklist.${key}.currentSubmissionId`] = currentItem.pendingSubmissionId || null;
+                muniUpdates[`checklist.${key}.approvedAt`] = timestamp;
+                muniUpdates[`checklist.${key}.approvedBy`] = operatorUid;
+
+                muniUpdates[`checklist.${key}.pendingStorageUrl`] = FieldValue.delete();
+                muniUpdates[`checklist.${key}.pendingStoragePath`] = FieldValue.delete();
+                muniUpdates[`checklist.${key}.pendingSubmissionId`] = FieldValue.delete();
+                muniUpdates[`checklist.${key}.pendingSubmittedAt`] = FieldValue.delete();
+
+                if (currentItem.pendingSubmissionId) {
+                    tx.update(db.doc(`municipal_doc_submissions/${currentItem.pendingSubmissionId}`), {
+                        status: 'approved',
+                        reviewedAt: timestamp,
+                        reviewedBy: operatorUid,
+                        expiresAt: dateObj || null,
+                        isCurrent: true
+                    });
+
+                    prevSnap.docs.forEach(d => {
+                        if (d.id !== currentItem.pendingSubmissionId) {
+                            tx.update(d.ref, {
+                                isCurrent: false,
+                                archivedAt: timestamp,
+                                archivedReason: 'replaced_by_new_approved_document'
+                            });
+                        }
+                    });
+                }
+            } else if (status === 'observed' && currentItem.pendingSubmissionId) {
+                tx.update(db.doc(`municipal_doc_submissions/${currentItem.pendingSubmissionId}`), {
+                    status: 'observed',
+                    reviewedAt: timestamp,
+                    reviewedBy: operatorUid,
+                    observation: observation || null
+                });
+            }
+
             const expiryMap: Record<string, string> = {
                 driverLicense: "licenseExpiry",
                 vehicleInsurance: "insuranceExpiry",
@@ -171,19 +297,13 @@ export const updateMunicipalChecklistItemV1 = onCall({ cors: true, region: 'us-c
             let userUpdates: any = { updatedAt: timestamp };
 
             let obsDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
-            if (status === 'approved') {
-                const obsQuery = db.collection('traffic_observations')
-                    .where('driverId', '==', driverId)
-                    .where('requestedDocumentType', '==', key)
-                    .where('status', 'in', ['pending_traffic_review', 'awaiting_driver_response', 'open']);
-                const obsSnap = await tx.get(obsQuery);
+            if (obsSnap) {
                 obsDocs = obsSnap.docs;
             }
 
             if (status === 'approved' && expiryMap[key] && expiryDate) {
-                const date = Timestamp.fromDate(new Date(expiryDate + "T12:00:00"));
-                muniUpdates[expiryMap[key]] = date;
-                userUpdates[expiryMap[key]] = date;
+                muniUpdates[expiryMap[key]] = dateObj;
+                userUpdates[expiryMap[key]] = dateObj;
             }
             if (status === 'observed') {
                 const isTraffic = operator.role.startsWith('traffic');
@@ -239,7 +359,7 @@ export const updateMunicipalChecklistItemV1 = onCall({ cors: true, region: 'us-c
 
             tx.set(db.collection('municipal_audit_log').doc(), {
                 driverId,
-                municipalCode: muni.municipalCode,
+                municipalCode: muni.municipalCode || null,
                 cityKey: muni.cityKey,
                 actionBy: operatorUid,
                 action: status === 'approved' ? 'checklist_item_approved' : 'checklist_item_observed',
@@ -247,7 +367,33 @@ export const updateMunicipalChecklistItemV1 = onCall({ cors: true, region: 'us-c
                 note: observation || null,
                 createdAt: timestamp
             });
+
+            return { 
+                userEmail: user.email, 
+                userName: user.name, 
+                subId: currentItem.pendingSubmissionId || null 
+            };
         });
+
+        if (result && result.userEmail) {
+            if (status === 'approved') {
+                await enqueueTransactionalEmailV1({
+                    to: result.userEmail,
+                    template: 'document_approved',
+                    subject: 'Tu documento fue aprobado',
+                    data: { name: result.userName, documentName: key },
+                    dedupeKey: `document_approved_${driverId}_${key}_${result.subId || Date.now()}`
+                });
+            } else if (status === 'observed') {
+                await enqueueTransactionalEmailV1({
+                    to: result.userEmail,
+                    template: 'document_observed',
+                    subject: 'Documento observado',
+                    data: { name: result.userName, documentName: key, reason: observation },
+                    dedupeKey: `document_observed_${driverId}_${key}_${result.subId || Date.now()}`
+                });
+            }
+        }
 
         return { success: true };
     } catch (error: any) {
@@ -367,7 +513,7 @@ export const updateMunicipalStatusV1 = onCall({ cors: true, region: 'us-central1
 
             tx.set(db.collection('municipal_audit_log').doc(), {
                 driverId,
-                municipalCode: muni.municipalCode,
+                municipalCode: muni.municipalCode || null,
                 cityKey: muni.cityKey,
                 actionBy: operatorUid,
                 action: 'status_change',
@@ -424,7 +570,7 @@ export const updateMunicipalCanonV1 = onCall({ cors: true, region: 'us-central1'
             
             tx.set(db.collection('municipal_audit_log').doc(), {
                 driverId,
-                municipalCode: muni.municipalCode,
+                municipalCode: muni.municipalCode || null,
                 cityKey: muni.cityKey,
                 actionBy: operatorUid,
                 action: paid ? 'canon_marked_paid' : 'canon_marked_overdue',
@@ -473,7 +619,7 @@ export const initializeMunicipalProfileV1 = onCall({ cors: true, region: 'us-cen
                 driverName: user.name || "",
                 driverPhone: user.phone || "",
                 driverEmail: user.email || "",
-                municipalCode: muniCode,
+                municipalCode: muniCode || null,
                 municipalStatus: "pending_municipal_review",
                 cityKey,
                 city: cityName,
@@ -486,6 +632,7 @@ export const initializeMunicipalProfileV1 = onCall({ cors: true, region: 'us-cen
                     criminalRecord: { status: "pending" },
                     municipalCanon: { status: "pending" },
                     disinfectionReceipt: { status: "pending" },
+                    vehicleModelYearProof: { status: "pending" },
                 } as any,
                 createdAt: timestamp,
                 updatedAt: timestamp,
@@ -500,7 +647,7 @@ export const initializeMunicipalProfileV1 = onCall({ cors: true, region: 'us-cen
 
             tx.set(db.collection('municipal_audit_log').doc(), {
                 driverId,
-                municipalCode: muniCode,
+                municipalCode: muniCode || null,
                 cityKey,
                 actionBy: operatorUid,
                 action: 'file_initialized',
@@ -553,7 +700,7 @@ export const updateMunicipalExpirationsV1 = onCall({ cors: true, region: 'us-cen
 
             tx.set(db.collection('municipal_audit_log').doc(), {
                 driverId,
-                municipalCode: muni.municipalCode,
+                municipalCode: muni.municipalCode || null,
                 cityKey: muni.cityKey,
                 actionBy: operatorUid,
                 action: auditAction || 'expiry_updated',
@@ -897,6 +1044,7 @@ export const onDriverProfileCompletedV1 = onDocumentUpdated({ document: "users/{
                     criminalRecord: { status: "pending" },
                     municipalCanon: { status: "pending" },
                     disinfectionReceipt: { status: "pending" },
+                    vehicleModelYearProof: { status: "pending" },
                 } as any,
                 createdAt: timestamp,
                 updatedAt: timestamp,
@@ -1068,6 +1216,138 @@ export const updatePassengerSpecialStatusV1 = onCall({ cors: true, region: 'us-c
         return { success: true };
     } catch (error: any) {
         logger.error(`[MUNI_PASSENGER_VERIFY_ERROR] Error:`, error);
+        throw new HttpsError('failed-precondition', error.message);
+    }
+});
+
+export const submitMunicipalDriverDocumentV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'No autorizado.');
+
+    const uid = request.auth.uid;
+    const db = getDb();
+    const { docType, storageUrl, storagePath, cityKey } = request.data;
+
+    if (!docType || !storageUrl || !storagePath || !cityKey) {
+        throw new HttpsError('invalid-argument', 'Parámetros incompletos.');
+    }
+
+    const allowedDocs = [
+        'driverLicense', 
+        'criminalRecord', 
+        'dniFront', 
+        'dniBack', 
+        'profilePhoto',
+        'vehicleInsurance',
+        'passengerCoverageInsurance',
+        'vehicleRegistrationCard',
+        'municipalCanon',
+        'disinfectionReceipt',
+        'vehicleModelYearProof'
+    ];
+    if (!allowedDocs.includes(docType)) {
+        throw new HttpsError('invalid-argument', 'Tipo de documento no permitido.');
+    }
+
+    try {
+        const userRef = db.doc(`users/${uid}`);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) throw new Error('Usuario no encontrado.');
+
+        const user = userSnap.data() as any;
+        if (user.role !== 'driver') throw new Error('No es un conductor válido.');
+
+        if (user.driverSubtype === 'fleet_driver') {
+            if (!user.vehicleOwnerId || !user.vehicleId) {
+                throw new Error('El chofer de flota no tiene asignado un titular o vehículo.');
+            }
+        }
+
+        const now = FieldValue.serverTimestamp();
+
+        const muniRef = db.doc(`municipal_profiles/${uid}`);
+        const muniSnap = await muniRef.get();
+        const isNewMuni = !muniSnap.exists;
+
+        const subRef = db.collection('municipal_doc_submissions').doc();
+        const muniData = muniSnap.exists ? muniSnap.data() : null;
+        const existingItem = muniData?.checklist?.[docType];
+
+        let checklistItemUpdate: any = {
+            pendingSubmissionId: subRef.id,
+            pendingStorageUrl: storageUrl,
+            pendingStoragePath: storagePath,
+            pendingSubmittedAt: now
+        };
+
+        if (!existingItem || existingItem.status !== 'approved') {
+            checklistItemUpdate.status = 'submitted';
+            checklistItemUpdate.submittedAt = now;
+        }
+
+        const muniPayload: any = {
+            uid,
+            cityKey,
+            driverSubtype: user.driverSubtype || 'express',
+            municipalStatus: 'renewal_under_review',
+            createdBy: 'driver_document_upload',
+            updatedAt: now,
+            checklist: {
+                [docType]: checklistItemUpdate
+            }
+        };
+
+        if (isNewMuni) {
+            muniPayload.createdAt = now;
+        }
+
+        if (user.driverSubtype === 'fleet_driver') {
+            muniPayload.vehicleOwnerId = user.vehicleOwnerId;
+            muniPayload.vehicleId = user.vehicleId;
+        }
+
+        const subPayload = {
+            submissionId: subRef.id,
+            driverId: uid,
+            cityKey,
+            docType,
+            storageUrl,
+            storagePath,
+            status: 'pending_review',
+            uploadedAt: now,
+            submittedBy: uid,
+            isCurrent: false,
+            supersedesSubmissionId: existingItem?.currentSubmissionId || null,
+            reviewedAt: null,
+            reviewedBy: null,
+            observation: null,
+            source: 'submitMunicipalDriverDocumentV1'
+        };
+
+        const userPayload = {
+            documentsStatus: 'pending_municipal_review',
+            municipalStatus: 'renewal_under_review',
+            updatedAt: now
+        };
+
+        const batch = db.batch();
+        batch.set(muniRef, muniPayload, { merge: true });
+        batch.set(subRef, subPayload);
+        batch.update(userRef, userPayload);
+
+        await batch.commit();
+
+        await enqueueTransactionalEmailV1({
+            to: user.email,
+            template: 'document_received',
+            subject: 'Recibimos tu documento',
+            data: { name: user.name, documentName: docType },
+            dedupeKey: `document_received_${uid}_${docType}_${subRef.id}`
+        });
+
+        logger.info(`[MUNI_DOC_SUBMIT] uid=${uid} doc=${docType}`);
+        return { success: true };
+    } catch (error: any) {
+        logger.error(`[MUNI_DOC_SUBMIT_ERROR] uid=${uid}`, error);
         throw new HttpsError('failed-precondition', error.message);
     }
 });

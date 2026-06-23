@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { featureFlags } from '@/config/features';
 import { LazyQRCode } from '@/components/LazyQRCode';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Dialog,
     DialogContent,
@@ -169,6 +170,7 @@ const CHECKLIST_LABELS: Record<MunicipalChecklistKey, string> = {
     criminalRecord:         'Antecedentes penales vigentes',
     municipalCanon:         'Canon municipal (arancel)',
     disinfectionReceipt:    'Certificado de Desinfección',
+    vehicleModelYearProof:  'Comprobante de modelo/año del vehículo',
 };
 
 const DOC_STATUS_BADGE: Record<DocItemStatus, { label: string; color: string; bg: string }> = {
@@ -190,33 +192,7 @@ function daysUntil(ts: any): number | null {
     return Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
-function ExpiryBadge({ ts, label }: { ts: any; label: string }) {
-    const days = daysUntil(ts);
-    if (days === null) return (
-        <div className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
-            <span className="text-sm text-zinc-500">{label}</span>
-            <span className="text-xs font-bold text-zinc-600 bg-zinc-800/50 px-2 py-0.5 rounded-full">Sin cargar</span>
-        </div>
-    );
-    const isExpired  = days < 0;
-    const isCritical = days >= 0 && days <= 14;
-    return (
-        <div className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
-            <span className="text-sm text-zinc-300">{label}</span>
-            <span className={cn(
-                'text-xs font-bold px-2 py-0.5 rounded-full',
-                isExpired  ? 'text-red-400 bg-red-500/10'
-                           : isCritical ? 'text-amber-400 bg-amber-500/10'
-                                        : 'text-emerald-400 bg-emerald-500/10'
-            )}>
-                {isExpired
-                    ? `Vencido (hace ${Math.abs(days)}d)`
-                    : days === 0 ? 'Vence hoy'
-                                : `Vence ${formatDate(ts)}`}
-            </span>
-        </div>
-    );
-}
+
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const isExpired = (ts: any) => {
@@ -355,7 +331,7 @@ export default function DriverMuniStatusPage() {
             const path = `municipal_docs/${munProfile.cityKey}/${user.uid}/${uploadingDoc}_${Date.now()}.${ext}`;
             const docRef = storageRef(storage, path);
             
-            await uploadBytes(docRef, fileSelected);
+            await uploadBytes(docRef, fileSelected, { contentType: fileSelected.type });
             const url = await getDownloadURL(docRef);
 
             // Registrar en Firestore municipal_doc_submissions
@@ -433,10 +409,19 @@ export default function DriverMuniStatusPage() {
         <div className="space-y-5 pb-10">
 
             {/* ── HEADER ──────────────────────────────────────────────────── */}
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-4">
                 <VamoIcon name="landmark" className="h-5 w-5 text-amber-400" />
                 <h2 className="text-lg font-black text-white tracking-tight">Habilitación Municipal</h2>
             </div>
+
+            <Tabs defaultValue="status" className="w-full">
+                <TabsList className="w-full grid grid-cols-3 h-12 bg-[#0B0F19] border border-white/5 rounded-2xl p-1 gap-1 mb-6">
+                    <TabsTrigger value="status" className="rounded-xl font-bold text-[10px] uppercase tracking-widest">Estado</TabsTrigger>
+                    <TabsTrigger value="docs" className="rounded-xl font-bold text-[10px] uppercase tracking-widest">Docs</TabsTrigger>
+                    <TabsTrigger value="gestion" className="rounded-xl font-bold text-[10px] uppercase tracking-widest">Gestión</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="status" className="space-y-5 animate-in fade-in duration-300">
 
             {/* TRAFFIC OBSERVATIONS BLOCK */}
             {observations.filter(o => ['open', 'awaiting_driver_response', 'pending_traffic_review', 'rejected'].includes(o.status)).map(obs => (
@@ -492,7 +477,7 @@ export default function DriverMuniStatusPage() {
                                         const ext = file.name.split('.').pop() || 'tmp';
                                         const path = `municipal_docs/${munProfile?.cityKey || 'unknown'}/${user?.uid}/${obs.observationId}_${Date.now()}.${ext}`;
                                         const docRef = storageRef(storage, path);
-                                        await uploadBytes(docRef, file);
+                                        await uploadBytes(docRef, file, { contentType: file.type });
                                         const url = await getDownloadURL(docRef);
                                         
                                         const { getFunctions, httpsCallable } = await import('firebase/functions');
@@ -703,6 +688,9 @@ export default function DriverMuniStatusPage() {
                 )}
             </div>
 
+                </TabsContent>
+
+                <TabsContent value="docs" className="space-y-5 animate-in fade-in duration-300">
             {/* ── CONDITIONAL CONTENT ─────────────────────────────────────── */}
             {munStatus === 'active' ? (
                 <div className="space-y-5">
@@ -765,19 +753,11 @@ export default function DriverMuniStatusPage() {
                 </>
             )}
 
-            {/* ── VENCIMIENTOS ────────────────────────────────────────────── */}
-            <div className="rounded-2xl bg-white/[0.03] border border-white/5 overflow-hidden">
-                <div className="px-4 py-3 border-b border-white/5">
-                    <p className="text-xs font-black uppercase tracking-widest text-zinc-500">Vencimientos</p>
-                </div>
-                <div className="px-4 py-2">
-                    <ExpiryBadge ts={munProfile?.licenseExpiry}          label="Licencia de conducir" />
-                    <ExpiryBadge ts={munProfile?.insuranceExpiry}         label="Seguro del vehículo" />
-                    <ExpiryBadge ts={munProfile?.itvExpiry}               label="ITV / VTV del vehículo" />
-                    <ExpiryBadge ts={munProfile?.backgroundCheckExpiry}   label="Antecedentes penales" />
-                </div>
-            </div>
 
+
+                </TabsContent>
+
+                <TabsContent value="gestion" className="space-y-5 animate-in fade-in duration-300">
             {/* ── CANON MUNICIPAL ─────────────────────────────────────────── */}
             <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4 flex items-center justify-between">
                 <div>
@@ -881,8 +861,22 @@ export default function DriverMuniStatusPage() {
                             </Button>
                         )}
                     </div>
+                    
+                    <div className="pt-4 border-t border-white/10 mt-4 text-center">
+                        <p className="text-xs text-zinc-400 mb-2">¿Tenés problemas para subir algún documento?</p>
+                        <Button 
+                            variant="outline" 
+                            className="w-full h-12 rounded-xl text-xs font-bold border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/10"
+                            onClick={() => window.location.href = `mailto:documentos@vamoapp.com.ar?subject=Renovacion%20Documentos%20Municipalidad%20-%20${profile.name}%20(${user.uid})&body=Hola%20equipo%20de%20VamO,%0A%0AAdjunto%20mis%20documentos%20para%20renovación%20municipal%20porque%20tuve%20problemas%20para%20subirlos%20desde%20la%20app.%0A%0AGracias.`}
+                        >
+                            <VamoIcon name="mail" className="w-4 h-4 mr-2" /> Enviar por Email
+                        </Button>
+                    </div>
                 </div>
             )}
+
+                </TabsContent>
+            </Tabs>
 
             {/* ── AYUDA ───────────────────────────────────────────────────── */}
             <div className="text-center space-y-1 pt-2">

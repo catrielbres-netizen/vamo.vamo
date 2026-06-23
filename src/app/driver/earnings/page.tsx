@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { useState, useEffect, useMemo } from 'react';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useDriverData } from '@/context/DriverRealtimeProvider';
 import { useDriverTransactions } from '@/hooks/useDriverTransactions'; 
 import { useDriverStats } from '@/hooks/useDriverStats';
@@ -22,6 +23,7 @@ import { PaymentForm } from './PaymentForm';
 import { WithdrawalForm } from './WithdrawalForm';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WeeklyPoolCard } from '@/components/WeeklyPoolCard';
+import { DriverMissionPanel } from '@/components/DriverMissionPanel';
 import { safeFixed } from '@/lib/formatters';
 
 function formatCurrency(value: number) {
@@ -52,6 +54,25 @@ export default function DriverEarningsPage() {
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [selectedTx, setSelectedTx] = useState<any | null>(null);
     const [isWithdrawingGross, setIsWithdrawingGross] = useState(false);
+    const [pendingWithdrawalBalance, setPendingWithdrawalBalance] = useState(0);
+    const firestore = useFirestore();
+
+    useEffect(() => {
+        if (!firestore || !profile?.id) return;
+        const q = query(
+            collection(firestore, 'withdrawal_requests'),
+            where('driverId', '==', profile.id),
+            where('status', '==', 'pending')
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            let total = 0;
+            snap.forEach(doc => {
+                total += (doc.data().amount || 0);
+            });
+            setPendingWithdrawalBalance(total);
+        });
+        return () => unsub();
+    }, [firestore, profile?.id]);
 
     const handleGrossReceiptsWithdrawal = async () => {
         setIsWithdrawingGross(true);
@@ -96,7 +117,7 @@ export default function DriverEarningsPage() {
     
     const balance = profile?.currentBalance ?? 0;
     const nonWithdrawable = profile?.nonWithdrawableBalance ?? 0;
-    const withdrawableBalance = Math.max(0, balance - nonWithdrawable);
+    const withdrawableBalance = Math.max(0, balance - nonWithdrawable - pendingWithdrawalBalance);
 
     if (isTransactionsLoading || statsLoading) {
         return (
@@ -123,8 +144,13 @@ export default function DriverEarningsPage() {
                         <p className={cn("text-5xl font-black tracking-tighter drop-shadow-sm", balance >= 0 ? "text-white" : "text-destructive")}>
                             {formatCurrency(balance)}
                         </p>
-                        <div className="flex items-center gap-2 mt-3">
-                            <Badge variant="outline" className="text-[8px] font-black uppercase border-white/10 text-zinc-400 py-0.5">
+                        <div className="flex flex-col gap-2 mt-3">
+                            {pendingWithdrawalBalance > 0 && (
+                                <Badge variant="outline" className="text-[10px] font-black uppercase border-amber-500/20 text-amber-500 py-1 px-3 self-start bg-amber-500/10">
+                                    <VamoIcon name="clock" className="w-3 h-3 mr-1" /> Retiro Pendiente: {formatCurrency(pendingWithdrawalBalance)}
+                                </Badge>
+                            )}
+                            <Badge variant="outline" className="text-[8px] font-black uppercase border-white/10 text-zinc-400 py-0.5 self-start">
                                 RETIRABLE: {formatCurrency(withdrawableBalance)}
                             </Badge>
                         </div>
@@ -172,7 +198,7 @@ export default function DriverEarningsPage() {
             </Card>
 
             <WeeklyPoolCard />
-
+            <DriverMissionPanel />
             {/* PERFORMANCE STATS SECTION */}
             <div className="space-y-4">
                 <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] ml-6">Rendimiento</h3>

@@ -7,19 +7,19 @@ import Link from 'next/link';
 interface LinkedDriverPanelProps {
   userData: UserProfile | null;
   mp: MunicipalProfile | null;
+  fleetDrivers?: { id: string; email: string; name?: string; status?: string }[];
 }
 
-export function LinkedDriverPanel({ userData, mp }: LinkedDriverPanelProps) {
+export function LinkedDriverPanel({ userData, mp, fleetDrivers = [] }: LinkedDriverPanelProps) {
   if (!userData && !mp) return null;
 
   const isFleetDriver = userData?.driverSubtype === 'fleet_driver' || mp?.driverSubtype === 'fleet_driver';
-  const isOwner = userData?.isVehicleOwner || (userData?.authorizedDriverIds && userData.authorizedDriverIds.length > 0);
+  const isOwner = userData?.isVehicleOwner || (userData?.authorizedDriverIds && userData.authorizedDriverIds.length > 0) || fleetDrivers.length > 0;
   const ownerRef = userData?.vehicleOwnerId;
-  const authorizedDrivers = userData?.authorizedDriverIds || [];
 
-  const vehicle = userData?.vehicle;
+  const vehicle = userData?.assignedVehicle || userData?.vehicle;
   const plate = vehicle?.plate || userData?.plateNumber || 'No informada';
-  const vehicleDesc = vehicle ? `${vehicle.brand} ${vehicle.model} ${vehicle.year ? `(${vehicle.year})` : ''}` : 'No informado';
+  const vehicleDesc = vehicle ? `${vehicle.make || vehicle.brand || ''} ${vehicle.model || ''} ${vehicle.year ? `(${vehicle.year})` : ''}` : 'No informado';
 
   if (!isFleetDriver && !isOwner) {
     return (
@@ -68,15 +68,18 @@ export function LinkedDriverPanel({ userData, mp }: LinkedDriverPanelProps) {
             <div>
               <p className="text-[10px] uppercase tracking-widest text-zinc-600 font-bold mb-2">Choferes vinculados autorizados</p>
               <div className="grid grid-cols-1 gap-2">
-                {authorizedDrivers.length ? (
-                  authorizedDrivers.map(driverId => (
-                    <div key={driverId} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                {fleetDrivers.length > 0 ? (
+                  fleetDrivers.map(driver => (
+                    <div key={driver.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-3 rounded-xl bg-white/[0.03] border border-white/5">
                       <div>
-                        <p className="text-sm font-bold text-white">{driverId}</p>
-                        <p className="text-[10px] text-zinc-600 font-bold uppercase">Chofer Autorizado</p>
+                        <p className="text-sm font-bold text-white">{driver.name || driver.email}</p>
+                        <p className="text-[10px] text-zinc-500">{driver.id}</p>
+                        <Badge className="mt-1 bg-white/5 text-zinc-400 border-none text-[9px] uppercase font-bold">
+                          Estado: {driver.status ? driver.status.replace(/_/g, ' ') : 'Desconocido'}
+                        </Badge>
                       </div>
-                      <Link href={`/municipal/drivers/${driverId}`}>
-                        <Button variant="ghost" size="sm" className="text-indigo-400 hover:text-indigo-300 text-[10px] font-black uppercase">Ver Perfil</Button>
+                      <Link href={`/municipal/drivers/${driver.id}`}>
+                        <Button variant="ghost" size="sm" className="text-indigo-400 hover:text-indigo-300 text-[10px] font-black uppercase bg-indigo-500/10">Ver Perfil</Button>
                       </Link>
                     </div>
                   ))

@@ -59,6 +59,11 @@ type DriverProfile = {
   criminalRecordExpiry?: any;
   criminalRecordStatus?: string;
   documents?: Record<string, string>;
+  legal?: {
+    driverTermsAccepted?: boolean;
+    driverTermsVersion?: string;
+    driverTermsAcceptedAt?: any;
+  };
 };
 
 function formatCurrency(value: number) {
@@ -109,6 +114,31 @@ export default function AdminDriverDetailPage() {
   }, [firestore, adminProfile, authLoading, driverId]);
 
   const { data: driver, isLoading, error } = useDoc<DriverProfile>(driverRef);
+
+  const [legalDoc, setLegalDoc] = useState<any>(null);
+  const [loadingLegal, setLoadingLegal] = useState(false);
+
+  useEffect(() => {
+    if (!firestore || !driverId || !driver?.legal?.driverTermsAccepted || !driver?.legal?.driverTermsVersion) return;
+    
+    setLoadingLegal(true);
+    const fetchLegal = async () => {
+        try {
+            const { getDoc, doc } = await import('firebase/firestore');
+            const docId = `${driverId}_driver_terms_${driver.legal?.driverTermsVersion}`;
+            const ref = doc(firestore, 'legal_acceptances', docId);
+            const snap = await getDoc(ref);
+            if (snap.exists()) {
+                setLegalDoc(snap.data());
+            }
+        } catch (e) {
+            console.error("Error fetching legal contract:", e);
+        } finally {
+            setLoadingLegal(false);
+        }
+    };
+    fetchLegal();
+  }, [firestore, driverId, driver?.legal?.driverTermsAccepted, driver?.legal?.driverTermsVersion]);
 
   const callCloudFunction = async (functionName: string, data: any, successMessage: string) => {
     if (!firebaseApp || !driverId) {
@@ -426,6 +456,53 @@ export default function AdminDriverDetailPage() {
                             )}
                         </div>
                     </div>
+                </CardContent>
+            </Card>
+
+            <Card className="border-indigo-500/20 bg-indigo-500/5 backdrop-blur-xl">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Contrato Legal del Conductor</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {driver.legal?.driverTermsAccepted ? (
+                        <>
+                            <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                                <span className="text-xs font-bold text-zinc-300">Estado Legal</span>
+                                <Badge variant="outline" className="border-green-500/30 text-green-500 bg-green-500/5 text-[9px]">ACEPTADO</Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div><span className="text-zinc-500 block text-[9px] uppercase font-bold">Versión</span>{driver.legal.driverTermsVersion}</div>
+                                <div><span className="text-zinc-500 block text-[9px] uppercase font-bold">Fecha</span>{driver.legal.driverTermsAcceptedAt ? new Date(driver.legal.driverTermsAcceptedAt.toMillis()).toLocaleString('es-AR') : 'N/A'}</div>
+                            </div>
+                            
+                            {loadingLegal ? (
+                                <p className="text-xs text-zinc-500 animate-pulse">Cargando firma digital...</p>
+                            ) : legalDoc ? (
+                                <div className="mt-4 p-3 bg-black/40 rounded-xl border border-white/5 space-y-2 text-[10px]">
+                                    <p className="font-bold text-green-400 uppercase flex items-center gap-1 mb-2">
+                                        <CheckCircle2 className="h-3 w-3" /> Contrato aceptado y registrado con trazabilidad legal.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div><span className="text-zinc-500 font-bold uppercase block">Firma (Aclaración)</span><span className="text-zinc-300 font-medium">{legalDoc.fullName}</span></div>
+                                        <div><span className="text-zinc-500 font-bold uppercase block">DNI</span><span className="text-zinc-300 font-medium">{legalDoc.dni}</span></div>
+                                        <div><span className="text-zinc-500 font-bold uppercase block">Ciudad Operativa</span><span className="text-zinc-300 font-medium">{legalDoc.cityKey}</span></div>
+                                        <div><span className="text-zinc-500 font-bold uppercase block">Email Asociado</span><span className="text-zinc-300 font-medium">{legalDoc.email}</span></div>
+                                        <div className="col-span-2"><span className="text-zinc-500 font-bold uppercase block">Hash (SHA-256)</span><span className="text-zinc-300 font-mono text-[8px] break-all">{legalDoc.hash}</span></div>
+                                        <div className="col-span-2"><span className="text-zinc-500 font-bold uppercase block">IP de Firma</span><span className="text-zinc-300 font-mono text-[9px]">{legalDoc.ip || 'No registrada'}</span></div>
+                                        <div className="col-span-2"><span className="text-zinc-500 font-bold uppercase block">Dispositivo</span><span className="text-zinc-300 text-[9px] truncate block">{legalDoc.userAgent || 'No registrado'}</span></div>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </>
+                    ) : (
+                        <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20 text-red-500 flex gap-2">
+                            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                                <p className="text-xs font-bold uppercase">CONTRATO NO ACEPTADO</p>
+                                <p className="text-[10px] opacity-80">Este conductor todavía no aceptó el contrato legal obligatorio y no puede operar.</p>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 

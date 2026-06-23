@@ -25,8 +25,6 @@ export default function MunicipalPricingPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [config, setConfig] = useState<PricingConfig | null>(null);
-    const [dynamicConfig, setDynamicConfig] = useState<DynamicPricingConfig | null>(null);
-    const [loadingDynamic, setLoadingDynamic] = useState(true);
 
     useEffect(() => {
         if (!firestore || !cityKey) {
@@ -45,12 +43,6 @@ export default function MunicipalPricingPage() {
                     console.log("[MUNI_PRICING] loaded doc: municipal_pricing/", cityKey);
                     const data = municipalSnap.data() as PricingConfig;
                     setConfig(data);
-                    
-                    if (data.dynamicPricing) {
-                        setDynamicConfig(data.dynamicPricing);
-                    } else {
-                        console.log("[MUNI_PRICING] No dynamicPricing found in municipal doc");
-                    }
                 } else {
                     console.log("[MUNI_PRICING] No municipal doc found, initializing empty");
                     // Force 0 for new municipalities so they have to fill it
@@ -94,22 +86,13 @@ export default function MunicipalPricingPage() {
                 }
             } finally {
                 setLoading(false);
-                setLoadingDynamic(false);
             }
         };
 
         loadPricing();
     }, [firestore, cityKey, toast]);
 
-    const updateDynamicField = (field: keyof DynamicPricingConfig, value: any) => {
-        if (!dynamicConfig) return;
-        setDynamicConfig({
-            ...dynamicConfig,
-            [field]: value,
-            updatedAt: new Date(),
-            updatedBy: profile?.name || user?.email || user?.uid || 'admin'
-        });
-    };
+
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -138,10 +121,8 @@ export default function MunicipalPricingPage() {
             console.log("[MUNI_PRICING] Calling updateMunicipalPricingV1 for:", cityKey);
             const updatePricing = httpsCallable(functions, 'updateMunicipalPricingV1');
             
-            // Merge dynamic pricing config into the main config before saving
             const finalConfig = {
-                ...config,
-                dynamicPricing: dynamicConfig || undefined
+                ...config
             };
 
             const result = await updatePricing({
@@ -372,7 +353,7 @@ export default function MunicipalPricingPage() {
                                     <VamoIcon name="trending-down" className="h-5 w-5" />
                                     <CardTitle className="text-lg">Tarifa Dinámica (VamO SmartPricing)</CardTitle>
                                 </div>
-                                {dynamicConfig?.enabled ? (
+                                {config?.smartPricingEnabled ? (
                                     <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black px-3 py-1 rounded-full border border-emerald-500/30 uppercase tracking-widest animate-pulse">Activada</span>
                                 ) : (
                                     <span className="bg-zinc-500/20 text-zinc-500 text-[10px] font-black px-3 py-1 rounded-full border border-zinc-500/30 uppercase tracking-widest">Desactivada</span>
@@ -381,130 +362,34 @@ export default function MunicipalPricingPage() {
                             <CardDescription>Optimización de demanda mediante descuentos variables</CardDescription>
                         </CardHeader>
                         <CardContent className="p-6">
-                            {loadingDynamic ? (
-                                <Skeleton className="h-20 w-full bg-white/5" />
-                            ) : !dynamicConfig ? (
-                                <div className="text-center py-6 border border-dashed border-white/10 rounded-2xl">
-                                    <p className="text-zinc-500 text-sm italic">No hay configuración de tarifa dinámica para esta ciudad.</p>
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between p-6 bg-white/[0.03] border border-white/5 rounded-3xl">
+                                    <div className="space-y-2">
+                                        <Label className="text-base font-black text-white uppercase tracking-tight">Habilitar SmartPricing</Label>
+                                        <p className="text-xs text-zinc-400 max-w-md">
+                                            Configuración global disponible desde Admin General. Esta municipalidad puede activar o desactivar SmartPricing.
+                                        </p>
+                                    </div>
+                                    <Switch 
+                                        checked={config?.smartPricingEnabled || false} 
+                                        onCheckedChange={(val) => setConfig({ ...config!, smartPricingEnabled: val })}
+                                        className="data-[state=checked]:bg-indigo-500 scale-125"
+                                        disabled={isReadOnly}
+                                    />
                                 </div>
-                            ) : (
-                                 <div className="space-y-8">
-                                    {/* Controles de Edición */}
-                                    {!isReadOnly && (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6 bg-white/[0.03] border border-white/5 rounded-3xl">
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="space-y-0.5">
-                                                        <Label className="text-sm font-black text-white uppercase tracking-tight">Activar Tarifa Dinámica</Label>
-                                                        <p className="text-[10px] text-zinc-500 font-bold uppercase">Habilita descuentos automáticos o manuales</p>
-                                                    </div>
-                                                    <Switch 
-                                                        checked={dynamicConfig.enabled} 
-                                                        onCheckedChange={(val) => updateDynamicField('enabled', val)}
-                                                        className="data-[state=checked]:bg-indigo-500"
-                                                    />
-                                                </div>
-
-                                                <div className={cn("space-y-6 pt-4 transition-all", !dynamicConfig.enabled && "opacity-40 pointer-events-none grayscale")}>
-                                                    <div className="space-y-4">
-                                                        <div className="flex justify-between items-end">
-                                                            <Label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Descuento Manual Actual</Label>
-                                                            <span className="text-2xl font-black text-indigo-400 leading-none">{dynamicConfig.currentDiscountPercent}%</span>
-                                                        </div>
-                                                        <Slider 
-                                                            value={[dynamicConfig.currentDiscountPercent]}
-                                                            min={0}
-                                                            max={30}
-                                                            step={1}
-                                                            onValueChange={([val]) => updateDynamicField('currentDiscountPercent', val)}
-                                                            className="py-4"
-                                                        />
-                                                        <div className="flex justify-between text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">
-                                                            <span>Mínimo: 0%</span>
-                                                            <span>Máximo Sugerido: 30%</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Preview Card */}
-                                            <div className="bg-zinc-950/50 border border-white/5 rounded-2xl p-6 flex flex-col justify-between">
-                                                <div className="space-y-4">
-                                                    <div className="flex items-center gap-2 text-zinc-500">
-                                                        <VamoIcon name="calculator" className="h-4 w-4" />
-                                                        <span className="text-[10px] font-black uppercase tracking-widest">Simulación de Precio</span>
-                                                    </div>
-                                                    
-                                                    <div className="space-y-2">
-                                                        <div className="flex justify-between text-xs font-bold text-zinc-400">
-                                                            <span>Tarifa Municipal (Ejemplo)</span>
-                                                            <span className="text-white">$10.000</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-xs font-bold text-emerald-400">
-                                                            <span>Descuento VamO ({dynamicConfig.enabled ? dynamicConfig.currentDiscountPercent : 0}%)</span>
-                                                            <span>- ${((10000 * (dynamicConfig.enabled ? dynamicConfig.currentDiscountPercent : 0)) / 100).toLocaleString()}</span>
-                                                        </div>
-                                                        <div className="h-px bg-white/5 my-2" />
-                                                        <div className="flex justify-between items-end">
-                                                            <span className="text-xs font-black text-white uppercase italic">Pasajero Paga</span>
-                                                            <span className="text-2xl font-black text-white leading-none">
-                                                                ${(10000 - ((10000 * (dynamicConfig.enabled ? dynamicConfig.currentDiscountPercent : 0)) / 100)).toLocaleString()}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="mt-6 p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex gap-3 items-start">
-                                                    <VamoIcon name="alert-circle" className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                                                    <p className="text-[9px] text-amber-500/70 font-bold leading-tight">
-                                                        Los cambios solo afectan viajes nuevos. Los viajes ya creados mantienen el precio congelado.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Stats Grid (Display only) */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-white/5">
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Modo de Algoritmo</p>
-                                            <p className="text-xl font-black text-white uppercase italic tracking-tighter">{dynamicConfig.algorithmMode}</p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Estado Real</p>
-                                            <p className={cn(
-                                                "text-xl font-black uppercase italic tracking-tighter",
-                                                dynamicConfig.enabled ? "text-emerald-400" : "text-zinc-500"
-                                            )}>
-                                                {dynamicConfig.enabled ? "Activo" : "Pausado"}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Tope de Descuento</p>
-                                            <p className="text-xl font-black text-zinc-400">{dynamicConfig.maxDiscountPercent}%</p>
-                                        </div>
-                                        
-                                        <div className="md:col-span-3 p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex gap-4 items-center">
-                                            <div className="h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
-                                                <VamoIcon name="shield-check" className="h-5 w-5" />
-                                            </div>
-                                            <div>
-                                                <p className="text-xs font-bold text-indigo-200">Regla de Oro VamO</p>
-                                                <p className="text-xs text-indigo-400/80">
-                                                    La tarifa municipal es el máximo oficial. VamO solo aplica descuentos hacia abajo.
-                                                </p>
-                                            </div>
-                                        </div>
-                                        
-                                        {(dynamicConfig.updatedAt || dynamicConfig.updatedBy) && (
-                                            <div className="md:col-span-3 text-[9px] text-zinc-600 font-bold uppercase tracking-widest flex justify-between">
-                                                <span>Última Edición: {dynamicConfig.updatedAt ? new Date(dynamicConfig.updatedAt.toDate ? dynamicConfig.updatedAt.toDate() : dynamicConfig.updatedAt).toLocaleString() : '—'}</span>
-                                                {dynamicConfig.updatedBy && <span>Por: {dynamicConfig.updatedBy}</span>}
-                                            </div>
-                                        )}
+                                
+                                <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex gap-4 items-center">
+                                    <div className="h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                                        <VamoIcon name="shield-check" className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-indigo-200">Regla de Oro VamO</p>
+                                        <p className="text-xs text-indigo-400/80">
+                                            La tarifa municipal es el máximo oficial. VamO solo aplica descuentos hacia abajo basados en la configuración global.
+                                        </p>
                                     </div>
                                 </div>
-                            )}
+                            </div>
                         </CardContent>
                     </Card>
                 </div>

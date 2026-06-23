@@ -23,6 +23,7 @@ const CHECKLIST_LABELS: Record<MunicipalChecklistKey, string> = {
     criminalRecord:         'Antecedentes penales vigentes',
     municipalCanon:         'Canon municipal (arancel)',
     disinfectionReceipt:    'Certificado de Desinfección',
+    vehicleModelYearProof:  'Comprobante de modelo/año del vehículo',
 };
 
 const CHECKLIST_KEYS = Object.keys(CHECKLIST_LABELS) as MunicipalChecklistKey[];
@@ -234,15 +235,6 @@ export default function MunicipalConfigPage() {
                             <Switch 
                                 checked={allowedDriverTypes.particular}
                                 onCheckedChange={(val) => setAllowedDriverTypes(prev => ({ ...prev, particular: val }))}
-                            />
-                        </div>
-                        <div className="flex items-center justify-between bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800">
-                            <div className="space-y-1">
-                                <label className="text-sm font-semibold text-zinc-200 cursor-pointer">Chofer Vinculado</label>
-                            </div>
-                            <Switch 
-                                checked={allowedDriverTypes.fleet_driver}
-                                onCheckedChange={(val) => setAllowedDriverTypes(prev => ({ ...prev, fleet_driver: val }))}
                             />
                         </div>
                     </div>

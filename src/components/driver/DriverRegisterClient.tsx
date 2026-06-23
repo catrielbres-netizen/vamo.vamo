@@ -97,7 +97,7 @@ export default function DriverRegisterClient() {
         } catch (error: any) {
             console.error('Signup Error:', error);
             let description = error.message;
-            if (error.code === 'auth/email-already-in-use') description = 'Este email ya está registrado.';
+            if (error.code === 'auth/email-already-in-use') description = 'Este email ya está registrado en VamO. Iniciá sesión o usá otro correo.';
             toast({ variant: 'destructive', title: 'Error de registro', description });
         } finally {
             setIsSubmitting(false);

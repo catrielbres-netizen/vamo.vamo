@@ -14,6 +14,7 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CITIES } from '@/lib/cityData';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
 import { Suspense } from 'react';
@@ -39,7 +40,7 @@ function CompletePassengerProfileContent() {
     const [phone, setPhone] = useState('');
     const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>('');
     const [photoURL, setPhotoURL] = useState<string | null>(null);
-    const [cityKey, setCityKey] = useState<string>('rawson');
+    const [cityKey, setCityKey] = useState<string>('');
     const [customCity, setCustomCity] = useState('');
     const [femaleDriverOnly, setFemaleDriverOnly] = useState(false);
     const [referralCodeInput, setReferralCodeInput] = useState('');
@@ -215,7 +216,7 @@ function CompletePassengerProfileContent() {
             
             const normalizedPhone = phone.replace(/[\s\-\+()]/g, '');
             const finalCityKey = cityKey === 'other' ? customCity.toLowerCase().replace(/[^a-z0-9]/g, '') : cityKey;
-            const finalCityLabel = cityKey === 'other' ? customCity : (cityKey === 'rawson' ? 'Rawson / Playa Unión' : cityKey);
+            const finalCityLabel = cityKey === 'other' ? customCity : (CITIES[cityKey]?.name || cityKey);
             
             await updateProfile({
                 name,
@@ -400,10 +401,9 @@ function CompletePassengerProfileContent() {
                                 <SelectValue placeholder="Seleccionar Ciudad" />
                             </SelectTrigger>
                             <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                <SelectItem value="rawson">Rawson / Playa Unión</SelectItem>
-                                <SelectItem value="trelew">Trelew</SelectItem>
-                                <SelectItem value="comodoro">Comodoro Rivadavia</SelectItem>
-                                <SelectItem value="parana">Paraná</SelectItem>
+                                {Object.values(CITIES).filter(c => c.status === 'active').map((city) => (
+                                    <SelectItem key={city.key} value={city.key}>{city.name}</SelectItem>
+                                ))}
                                 <SelectItem value="other">Otra localidad...</SelectItem>
                             </SelectContent>
                         </Select>

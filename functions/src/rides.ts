@@ -8,10 +8,11 @@ import * as logger from "firebase-functions/logger";
 import { v4 as uuidv4 } from "uuid";
 import * as geofire from "geofire-common";
 import { getDb, getFunctions } from "./lib/firebaseAdmin";
-import { normalizeCity } from "./lib/city";
+import { normalizeCity, canonicalCityKey } from "./lib/city";
 import { resolvePricingMunicipality } from "./lib/territoryResolver";
 import { canDriverReceiveOffers, canPassengerRequestRide } from "./eligibility";
 import { calculateRidePrice, PricingInput } from "./lib/pricing";
+import { CITY_DEFINITIONS } from "./lib/cityResolver";
 import { getExpressDiscountPercent } from "./lib/passengerProgress";
 import { lockWalletForRide, getOrCreateWallet, addFunds } from "./lib/wallet";
 import { checkPromotionEligibility } from "./promotions";
@@ -339,15 +340,7 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
                         const hasFunds = balance > negativeLimit;
 
                         // [VamO PRO] Dynamic Pricing Preference Filter
-                        const dynamicApplied = (rideData.pricing as any)?.dynamic?.applied === true;
-                        const isProfessional = data.driverSubtype === 'professional';
-                        const acceptsDiscounted = data.driverPreferences?.acceptsDiscountedRides !== false;
-
-                        let satisfiesPreferences = true;
-                        if (dynamicApplied && isProfessional && !acceptsDiscounted) {
-                            satisfiesPreferences = false;
-                            logger.info(`[MATCH_DEBUG] Candidate ${driverId} (PROFESSIONAL) discarded: Ride has dynamic discount and driver does not accept discounted rides.`);
-                        }
+                        const satisfiesPreferences = true;
 
                         if (isEligible && hasFunds && satisfiesPreferences) {
                             geoCandidates.push({ id: driverId, distanceKm, walletBalance: balance });
@@ -783,15 +776,31 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
     // Use pricingMunicipalityKey as the city identifier
     const finalCity = pricingMunicipalityKey;
 
-    const cityKey = normalizeCity(finalCity);
+    const cityKey = canonicalCityKey(finalCity);
     logger.info(`[createRideV1] Resolved cityKey: ${cityKey}`);
-    const citySnap = await db.doc(`cities/${cityKey}`).get();
-    if (!citySnap.exists || !citySnap.data()?.enabled) {
-        logger.error(`[createRideV1] City ${cityKey} is not active or not found.`);
-        throw new HttpsError('failed-precondition', `VamO aún no está disponible en ${finalCity}.`);
+    
+    const staticDef = CITY_DEFINITIONS[cityKey];
+    if (staticDef && staticDef.status === 'draft') {
+        logger.error(`[createRideV1] City ${cityKey} is explicitly marked as draft in code.`);
+        throw new HttpsError('failed-precondition', `Esta ciudad aún no está habilitada para operar en VamO.`);
     }
 
-    const cityConfig = citySnap.data() as CityConfig;
+    const citySnap = await db.doc(`cities/${cityKey}`).get();
+    const cityConfig = citySnap.data() as any;
+
+    if (!citySnap.exists || !cityConfig?.enabled) {
+        logger.error(`[createRideV1] City ${cityKey} is not enabled or not found.`);
+        throw new HttpsError('failed-precondition', `VamO aún no está disponible en ${finalCity}.`);
+    }
+    
+    // NEW RULE: Check passenger access via operationalStatus or passengerAccess config
+    const passengerAccessEnabled = cityConfig.passengerAccess?.enabled;
+    const isOperative = cityConfig.operationalStatus === 'active' || passengerAccessEnabled;
+
+    if (!isOperative) {
+        logger.error(`[createRideV1] City ${cityKey} is not ready for passengers. Status: ${cityConfig.operationalStatus}`);
+        throw new HttpsError('failed-precondition', `VamO se está preparando en ${finalCity}. Todavía no se pueden solicitar viajes.`);
+    }
     const cityPricingConfig = cityConfig.pricing; if (!cityPricingConfig) { logger.error('[createRideV1] cityConfig.pricing missing'); throw new HttpsError('failed-precondition', 'Error de configuraci�n de ciudad.'); }
     
     const pricePerKmFactor = (cityPricingConfig as any).NIGHT_PRICE_PER_100M > 1000 ? 1 : 10;
@@ -800,6 +809,64 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
     if (!pricingConfig) {
         logger.error(`[createRideV1] Pricing config missing for city ${cityKey}`);
         throw new HttpsError('failed-precondition', 'La configuración de tarifas para esta ciudad no está disponible.');
+    }
+
+    // --- DYNAMIC PRICING ALGORITHM (VamO PRO) ---
+    let dynamicConfig: any = undefined;
+    if (pricingConfig.smartPricingEnabled) {
+        const globalSmartPricingSnap = await db.doc('system_config/smart_pricing').get();
+        if (globalSmartPricingSnap.exists) {
+            dynamicConfig = globalSmartPricingSnap.data();
+        }
+    }
+    if (dynamicConfig?.enabled && dynamicConfig?.algorithmMode === 'automatic') {
+        const t0 = Date.now();
+        // Count available drivers in this city
+        const driversQuery = db.collection('drivers')
+            .where('cityKey', '==', pricingMunicipalityKey)
+            .where('status', '==', 'online');
+        
+        // Count active passenger requests in this city
+        const activeStatuses = ['searching_driver', 'driver_assigned', 'in_progress', 'arrived_at_pickup', 'driver_arrived'];
+        const ridesQuery = db.collection('rides')
+            .where('cityKey', '==', pricingMunicipalityKey)
+            .where('status', 'in', activeStatuses);
+
+        const [driversCountSnap, ridesCountSnap] = await Promise.all([
+            driversQuery.count().get(),
+            ridesQuery.count().get()
+        ]);
+
+        const availableDrivers = driversCountSnap.data().count;
+        const activeRides = ridesCountSnap.data().count;
+        
+        const ratio = activeRides / (availableDrivers + 1); // Avoid division by zero
+        
+        // Interpolate discount based on ratio
+        // High Demand (Ratio >= 1.5) -> 0% discount
+        // Low Demand (Ratio <= 0.5) -> maxDiscountPercent
+        const maxDiscount = dynamicConfig.maxDiscountPercent || 30;
+        let calculatedDiscount = 0;
+
+        if (ratio <= 0.5) {
+            calculatedDiscount = maxDiscount;
+        } else if (ratio >= 1.5) {
+            calculatedDiscount = 0;
+        } else {
+            // Linear interpolation between 0.5 and 1.5
+            calculatedDiscount = maxDiscount * (1 - (ratio - 0.5));
+        }
+
+        const finalDiscount = Math.round(calculatedDiscount);
+        
+        logger.info(`[PRICING_ALGORITHM] City: ${pricingMunicipalityKey} | Drivers: ${availableDrivers} | Rides: ${activeRides} | Ratio: ${ratio.toFixed(2)} | Calculated Discount: ${finalDiscount}% (${Date.now() - t0}ms)`);
+        
+        // Override the current discount percent for this specific calculation
+        dynamicConfig = {
+            ...dynamicConfig,
+            currentDiscountPercent: finalDiscount,
+            reasonCodes: ['algorithmic_override', `supply_${availableDrivers}`, `demand_${activeRides}`]
+        };
     }
 
     // --- CENTRALIZED PRICING ENGINE (VamO PRO) ---
@@ -811,7 +878,7 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
         durationMin: durationMin,
         serviceType,
         isNight,
-    }, pricingConfig, (pricingConfig as any).dynamicPricing, pricingMunicipalityKey || undefined);
+    }, pricingConfig, dynamicConfig, pricingMunicipalityKey || undefined);
 
     let total = pricingResult.total;
     let breakdown = pricingResult.breakdown;
@@ -1261,9 +1328,15 @@ export const acceptRideV2 = onCall({ cors: true, region: 'us-central1' }, async 
                 driverVehicleModel: driverSnap.data()?.vehicle?.model || null,
                 driverVehicleYear: driverSnap.data()?.vehicle?.year || null,
                 driverVehicleColor: driverSnap.data()?.vehicle?.color || null,
+                // [VamO PRO] Fleet management fields
+                activeDriverId: driverId,
+                vehicleOwnerId: driverSnap.data()?.vehicleOwnerId || null,
+                settlementOwnerId: driverSnap.data()?.vehicleOwnerId || driverId,
+                vehicleId: driverSnap.data()?.vehicle?.plate || null, // Best proxy for vehicleId right now
                 // [FASE 5] Commission snapshot — frozen at acceptance time
                 driverSubtypeSnapshot: driverSubtypeSnap,
                 commissionRateSnapshot: vamoRateSnap,
+                paymentAgreementSnapshot: driverSnap.data()?.paymentAgreement || null,
                 updatedAt: FieldValue.serverTimestamp()
             });
 
@@ -2676,7 +2749,14 @@ export const acceptScheduledRideV1 = onCall({ cors: true, region: 'us-central1' 
                 driverVehicleModel: driver.vehicle?.model || null,
                 driverVehicleYear: driver.vehicle?.year || null,
                 driverVehicleColor: driver.vehicle?.color || null,
-                driverSubtypeSnapshot: driverSubtypeSnap,
+                // [VamO PRO] Fleet management fields
+                activeDriverId: driverId,
+                vehicleOwnerId: driver.vehicleOwnerId || null,
+                settlementOwnerId: driver.vehicleOwnerId || driverId,
+                vehicleId: driver.vehicle?.plate || null,
+                paymentAgreementSnapshot: (driver as any).paymentAgreement || null,
+                commissionRateSnapshot: 0,
+                driverSubtypeSnapshot: driver.driverSubtype || 'express',
                 driverAssignedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp()
             });

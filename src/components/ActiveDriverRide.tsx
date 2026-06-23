@@ -20,7 +20,7 @@ import { WaitTimerDialog } from './WaitTimerDialog';
 import { cn } from '@/lib/utils';
 import FinishedRideSummary from './FinishedRideSummary';
 import { Sparkles } from 'lucide-react';
-import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
+import { getRideFinancialSnapshot, getDriverDisplayFinancials } from '@/lib/rideFinancials';
 import { ChatContainer } from './Chat/ChatContainer';
 import { SafetyToolkit } from './SafetyToolkit';
 import SharedRideManager from './SharedRideManager';
@@ -100,14 +100,16 @@ export default function ActiveDriverRide({
   }, []);
 
   const pricing = useMemo(() => {
-    // [VamO PRO] Unified Financial Snapshot
-    const financial = getRideFinancialSnapshot(ride);
+    // [VamO PRO] Unified Financial Snapshot (Masked for Driver)
+    const financial = getDriverDisplayFinancials(getRideFinancialSnapshot(ride));
 
     return { 
         total: financial.totalFare, 
         wallet: financial.walletCoveredAmount, 
         cash: financial.cashToCollect,
-        subsidy: financial.vamoSubsidyAmount
+        subsidy: financial.vamoSubsidyAmount,
+        net: financial.driverNetEarnings,
+        commission: financial.commissionAmount
     };
   }, [ride]);
 
@@ -283,8 +285,18 @@ export default function ActiveDriverRide({
 
                 <div className="bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 flex flex-col gap-3 shadow-2xl">
                     <div className="flex justify-between items-center text-xs px-1">
-                        <span className="font-bold text-white/40 uppercase tracking-tight">Tarifa del viaje</span>
+                        <span className="font-bold text-white/40 uppercase tracking-tight">Total del viaje</span>
                         <span className="font-black text-white/80">{formatCurrency(pricing.total)}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs px-1">
+                        <span className="font-bold text-indigo-400 uppercase tracking-tight">Tu ganancia neta estimada</span>
+                        <span className="font-black text-indigo-400">{formatCurrency(pricing.net)}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs px-1">
+                        <span className="font-bold text-rose-400/80 uppercase tracking-tight">Comisión VamO</span>
+                        <span className="font-black text-rose-400/80">-{formatCurrency(pricing.commission)}</span>
                     </div>
 
                     {pricing.wallet > 0 && (
@@ -297,15 +309,7 @@ export default function ActiveDriverRide({
                         </div>
                     )}
 
-                    {pricing.subsidy > 0 && (
-                        <div className="flex justify-between items-center text-xs px-1 text-amber-500">
-                            <div className="flex items-center gap-1.5 font-bold uppercase tracking-tight">
-                                <Sparkles className="w-3 h-3" />
-                                <span>Subsidio VamO (Beneficio)</span>
-                            </div>
-                            <span className="font-black">-{formatCurrency(pricing.subsidy)}</span>
-                        </div>
-                    )}
+
 
                     {waitCost > 0 && (
                         <div className="flex justify-between items-center text-xs px-1 text-orange-400">
@@ -321,9 +325,15 @@ export default function ActiveDriverRide({
 
                     <div className="flex justify-between items-center p-4 rounded-2xl bg-zinc-800 shadow-inner border border-white/5">
                         <div className="flex flex-col">
-                            <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.15em] leading-none mb-1">Cobrás en efectivo</span>
-                            {pricing.wallet > 0 && (
-                                <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-tighter italic">VamO Pay Sincronizado</span>
+                            <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.15em] leading-none mb-1">Total a cobrar al pasajero</span>
+                            {pricing.cash > 0 ? (
+                                <span className="text-[8px] font-bold text-indigo-400 mt-1">
+                                    Cobrar el total. La comisión se descuenta luego en billetera.
+                                </span>
+                            ) : (
+                                <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-tighter mt-1 italic">
+                                    Viaje abonado electrónicamente
+                                </span>
                             )}
                         </div>
                         <span className="text-4xl font-black text-white tracking-tighter leading-none italic">

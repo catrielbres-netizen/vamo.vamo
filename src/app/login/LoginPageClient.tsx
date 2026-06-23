@@ -62,7 +62,7 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                 }
 
                 // [VamO PRO] Registration Status Guard
-                if (profile.registrationStatus !== 'active') {
+                if (profile.registrationStatus !== 'active' && !profile.profileCompleted) {
                     console.warn(`[AUTH_REDIRECT] User ${user.uid} has status ${profile.registrationStatus}. Redirecting to onboarding...`);
                     if (profile.role === 'driver') {
                         router.push('/driver/register');
@@ -173,7 +173,7 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                     router.push('/admin');
                     return;
                 }
-                if (profile.registrationStatus !== 'active') {
+                if (profile.registrationStatus !== 'active' && !profile.profileCompleted) {
                     if (profile.role === 'driver') {
                         router.push('/driver/register');
                     } else {

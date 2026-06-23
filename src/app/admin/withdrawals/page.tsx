@@ -14,7 +14,11 @@ import { WithdrawalRequest, PlatformTransaction } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatCurrency } from '@/lib/utils';
-import { Loader2, Landmark, BadgeDollarSign, Receipt, History } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const PAGE_SIZE = 20;
 
@@ -25,6 +29,14 @@ export default function AdminWithdrawalsPage() {
   const { toast } = useToast();
   
   const [processingId, setProcessingId] = useState<string | null>(null);
+  
+  const [approveDialogData, setApproveDialogData] = useState<WithdrawalRequest | null>(null);
+  const [rejectDialogData, setRejectDialogData] = useState<WithdrawalRequest | null>(null);
+  
+  const [receiptNumber, setReceiptNumber] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [destinationCvu, setDestinationCvu] = useState('');
+  const [adminNote, setAdminNote] = useState('');
   
   // States for Pending
   const [pendingRequests, setPendingRequests] = useState<WithdrawalRequest[]>([]);
@@ -149,7 +161,7 @@ export default function AdminWithdrawalsPage() {
     }
     try {
         const constraints: any[] = [
-            where('status', 'in', ['approved', 'rejected']),
+            where('status', 'in', ['paid', 'approved', 'rejected']),
             orderBy('createdAt', 'desc'),
             limit(PAGE_SIZE)
         ];
@@ -181,10 +193,26 @@ export default function AdminWithdrawalsPage() {
     try {
       const functions = getFunctions(undefined, 'us-central1');
       const processWithdrawal = httpsCallable(functions, 'processWithdrawalByAdminV1');
-      await processWithdrawal({ requestId, action });
-      toast({ title: 'Solicitud Procesada', description: `La solicitud ha sido marcada como ${action === 'approve' ? 'aprobada' : 'rechazada'}.` });
+      await processWithdrawal({ 
+          requestId, 
+          action,
+          transferReceiptNumber: action === 'approve' ? receiptNumber : undefined,
+          paymentMethod: action === 'approve' ? paymentMethod : undefined,
+          destinationAliasOrCvu: action === 'approve' ? destinationCvu : undefined,
+          adminNote: adminNote || undefined
+      });
+      toast({ title: 'Solicitud Procesada', description: `La solicitud ha sido marcada como ${action === 'approve' ? 'pagada' : 'rechazada'}.` });
       
       setPendingRequests(prev => prev.filter(r => r.id !== requestId));
+      setApproveDialogData(null);
+      setRejectDialogData(null);
+      
+      // Reset form
+      setReceiptNumber('');
+      setPaymentMethod('');
+      setDestinationCvu('');
+      setAdminNote('');
+
       if (historyRequests.length > 0) fetchHistory();
       
     } catch(e: any) {
@@ -192,6 +220,19 @@ export default function AdminWithdrawalsPage() {
     } finally {
       setProcessingId(null);
     }
+  };
+
+  const openApproveDialog = (req: WithdrawalRequest) => {
+      setApproveDialogData(req);
+      setDestinationCvu(req.bankInfo?.cbuOrAlias || '');
+      setReceiptNumber('');
+      setPaymentMethod('');
+      setAdminNote('');
+  };
+
+  const openRejectDialog = (req: WithdrawalRequest) => {
+      setRejectDialogData(req);
+      setAdminNote('');
   };
 
   return (
@@ -321,15 +362,15 @@ export default function AdminWithdrawalsPage() {
                             <CardFooter className="p-6 pt-0 flex gap-3">
                                 <Button 
                                     className="flex-1 bg-white text-black font-black uppercase tracking-widest text-[10px] h-12 rounded-2xl hover:bg-zinc-200"
-                                    onClick={() => handleProcessRequest(req.id!, 'approve')}
+                                    onClick={() => openApproveDialog(req)}
                                     disabled={!!processingId}
                                 >
-                                    {processingId === req.id ? <Loader2 className="animate-spin h-4 w-4" /> : 'Aprobar Pago'}
+                                    Aprobar Pago
                                 </Button>
                                 <Button 
                                     variant="outline" 
                                     className="flex-1 border-red-500/20 text-red-500 font-black uppercase tracking-widest text-[10px] h-12 rounded-2xl hover:bg-red-500/10 hover:border-red-500/50"
-                                    onClick={() => handleProcessRequest(req.id!, 'reject')}
+                                    onClick={() => openRejectDialog(req)}
                                     disabled={!!processingId}
                                 >
                                     Rechazar
@@ -371,9 +412,9 @@ export default function AdminWithdrawalsPage() {
                                     <td className="px-6 py-4">
                                         <Badge variant="outline" className={cn(
                                             "rounded-full px-3 py-1 font-black text-[9px] uppercase tracking-widest",
-                                            req.status === 'approved' ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"
+                                            (req.status === 'approved' || req.status === 'paid') ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"
                                         )}>
-                                            {req.status === 'approved' ? 'Pagado' : 'Rechazado'}
+                                            {(req.status === 'approved' || req.status === 'paid') ? 'Pagado' : 'Rechazado'}
                                         </Badge>
                                     </td>
                                     <td className="px-6 py-4 text-[10px] text-zinc-500 font-medium">
@@ -441,6 +482,106 @@ export default function AdminWithdrawalsPage() {
             </Card>
         </TabsContent>
       </Tabs>
+
+      {/* APPROVE DIALOG */}
+      <Dialog open={!!approveDialogData} onOpenChange={(open) => !open && setApproveDialogData(null)}>
+          <DialogContent className="max-w-md bg-zinc-950 border-zinc-900 rounded-[2.5rem] p-8">
+              <DialogHeader>
+                  <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white">Confirmar Pago</DialogTitle>
+                  <DialogDescription className="text-zinc-500">
+                      Cargá los datos de la transferencia para liquidar {approveDialogData && formatCurrency(approveDialogData.amount)}.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Método de Pago</Label>
+                      <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                          <SelectTrigger className="bg-black/40 border-zinc-800 h-12 rounded-2xl">
+                              <SelectValue placeholder="Seleccionar método" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-zinc-900 border-zinc-800">
+                              <SelectItem value="mercado_pago">Mercado Pago</SelectItem>
+                              <SelectItem value="transferencia_bancaria">Transferencia Bancaria</SelectItem>
+                              <SelectItem value="efectivo">Efectivo</SelectItem>
+                              <SelectItem value="otro">Otro</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+                  <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Número de Comprobante / Ref</Label>
+                      <Input 
+                          value={receiptNumber}
+                          onChange={(e) => setReceiptNumber(e.target.value)}
+                          placeholder="Ej: 1234567890"
+                          className="bg-black/40 border-zinc-800 h-12 rounded-2xl"
+                      />
+                  </div>
+                  <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Alias o CVU de Destino</Label>
+                      <Input 
+                          value={destinationCvu}
+                          onChange={(e) => setDestinationCvu(e.target.value)}
+                          placeholder="Alias o CVU"
+                          className="bg-black/40 border-zinc-800 h-12 rounded-2xl"
+                      />
+                  </div>
+                  <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nota Interna (Opcional)</Label>
+                      <Textarea 
+                          value={adminNote}
+                          onChange={(e) => setAdminNote(e.target.value)}
+                          placeholder="Nota para el registro..."
+                          className="bg-black/40 border-zinc-800 rounded-2xl resize-none"
+                      />
+                  </div>
+              </div>
+              <DialogFooter className="mt-6 flex gap-3">
+                  <Button variant="ghost" onClick={() => setApproveDialogData(null)} className="flex-1 rounded-2xl">Cancelar</Button>
+                  <Button 
+                      className="flex-1 rounded-2xl bg-white text-black font-black uppercase tracking-widest"
+                      onClick={() => approveDialogData && handleProcessRequest(approveDialogData.id!, 'approve')}
+                      disabled={!paymentMethod || !receiptNumber || !destinationCvu || !!processingId}
+                  >
+                      {processingId ? <Loader2 className="animate-spin w-4 h-4" /> : 'Confirmar'}
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+
+      {/* REJECT DIALOG */}
+      <Dialog open={!!rejectDialogData} onOpenChange={(open) => !open && setRejectDialogData(null)}>
+          <DialogContent className="max-w-md bg-zinc-950 border-zinc-900 rounded-[2.5rem] p-8">
+              <DialogHeader>
+                  <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-white">Rechazar Solicitud</DialogTitle>
+                  <DialogDescription className="text-zinc-500">
+                      Ingresá el motivo del rechazo. El saldo retenido volverá a estar disponible para el conductor.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Motivo del Rechazo</Label>
+                      <Textarea 
+                          value={adminNote}
+                          onChange={(e) => setAdminNote(e.target.value)}
+                          placeholder="Ej: CBU inválido, cuenta bloqueada..."
+                          className="bg-black/40 border-zinc-800 rounded-2xl resize-none"
+                      />
+                  </div>
+              </div>
+              <DialogFooter className="mt-6 flex gap-3">
+                  <Button variant="ghost" onClick={() => setRejectDialogData(null)} className="flex-1 rounded-2xl">Cancelar</Button>
+                  <Button 
+                      variant="destructive"
+                      className="flex-1 rounded-2xl font-black uppercase tracking-widest"
+                      onClick={() => rejectDialogData && handleProcessRequest(rejectDialogData.id!, 'reject')}
+                      disabled={!adminNote || !!processingId}
+                  >
+                      {processingId ? <Loader2 className="animate-spin w-4 h-4" /> : 'Confirmar Rechazo'}
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

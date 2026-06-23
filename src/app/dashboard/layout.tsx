@@ -6,8 +6,8 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { VamoIcon } from '@/components/VamoIcon';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePathname, useRouter } from 'next/navigation';
+import { PassengerBottomNav } from '@/components/dashboard/PassengerBottomNav';
 import { useUser } from '@/firebase/auth/use-user';
 import { PassengerHeader } from '@/components/PassengerHeader';
 import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
@@ -17,6 +17,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { Ride, UserProfile } from '@/lib/types';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
 import { PassengerDataProvider } from '@/context/PassengerDataProvider';
+import { PassengerWeeklyPoolProvider } from '@/context/PassengerWeeklyPoolProvider';
 import { VISUALLY_LOCKED_STATUSES } from '@/lib/ride-status';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -128,39 +129,23 @@ function PassengerDashboard({ children, profile, user }: { children: React.React
   }
 
 
-  const activeTabValue = pathname.split('/dashboard/')[1] || 'ride';
-  const activeTab = activeTabValue.split('/')[0];
-  const handleTabChange = (value: string) => router.push(`/dashboard/${value}`);
   const userName = profile.name || (user.isAnonymous ? "Invitado" : user.displayName || "Usuario");
   
   return (
-      <div className="container mx-auto max-w-md p-4">
+      <div className="container mx-auto max-w-md p-4 pb-24 relative min-h-screen">
+          {/* Watermark Logo */}
+          <div className="fixed inset-0 z-[-1] flex items-center justify-center pointer-events-none overflow-hidden">
+             <div className="opacity-[0.03] -rotate-12 scale-[2] md:scale-[1.5] mix-blend-screen">
+                 <VamoLogo variant="login" />
+             </div>
+          </div>
+
           <PassengerHeader userName={userName} location={profile?.city || ""} />
           <div className="space-y-4 my-4">
               <PWAInstallPrompt />
               {!isVisuallyLocked && <PassengerLoyaltyCard />}
           </div>
-          {!isVisuallyLocked && (
-              <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-                  <TabsList className="grid w-full grid-cols-5">
-                      <TabsTrigger value="ride" className="gap-2">
-                          <VamoIcon name="car" className="w-4 h-4" /> Inicio
-                      </TabsTrigger>
-                      <TabsTrigger value="history" className="gap-2">
-                          <VamoIcon name="file-text" className="w-4 h-4" /> Viajes
-                      </TabsTrigger>
-                      <TabsTrigger value="rewards" className="gap-2">
-                          <VamoIcon name="gift" className="w-4 h-4" /> Premios
-                      </TabsTrigger>
-                      <TabsTrigger value="wallet" className="gap-2">
-                          <VamoIcon name="wallet" className="w-4 h-4" /> Billetera
-                      </TabsTrigger>
-                      <TabsTrigger value="profile" className="gap-2">
-                          <VamoIcon name="user" className="w-4 h-4" /> Perfil
-                      </TabsTrigger>
-                  </TabsList>
-              </Tabs>
-          )}
+          
           <main className={isVisuallyLocked ? 'mt-6' : ''}>
               {isVisuallyLocked && !pathname.startsWith('/dashboard/ride') ? (
                   <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground animate-pulse">
@@ -169,6 +154,8 @@ function PassengerDashboard({ children, profile, user }: { children: React.React
                   </div>
               ) : children}
           </main>
+
+          {!isVisuallyLocked && <PassengerBottomNav />}
       </div>
   );
 }
@@ -180,22 +167,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <AuthGuard allowedRoles={['passenger', 'admin']} fallbackPath="/login">
       <PassengerDataProvider>
-          <TermsGuard>
-              {profile?.profileCompleted && (profile.role === 'passenger' || profile.role === 'admin') ? (
-                  <EmailVerificationGate>
-                      <PassengerDashboard user={user!} profile={profile}>{children}</PassengerDashboard>
-                  </EmailVerificationGate>
-              ) : (
-                  <div className="container mx-auto max-w-md p-4 space-y-4">
-                       {/* [VamO PRO] Unified loading state to avoid role flashes */}
-                       {pathname?.includes('complete-profile') ? (
-                           <main>{children}</main>
-                       ) : (
-                           <PassengerDashboardSkeleton />
-                       )}
-                  </div>
-              )}
-          </TermsGuard>
+          <PassengerWeeklyPoolProvider>
+              <TermsGuard>
+                  {profile?.profileCompleted && (profile.role === 'passenger' || profile.role === 'admin') ? (
+                      <EmailVerificationGate>
+                          <PassengerDashboard user={user!} profile={profile}>{children}</PassengerDashboard>
+                      </EmailVerificationGate>
+                  ) : (
+                      <div className="container mx-auto max-w-md p-4 space-y-4">
+                           {/* [VamO PRO] Unified loading state to avoid role flashes */}
+                           {pathname?.includes('complete-profile') ? (
+                               <main>{children}</main>
+                           ) : (
+                               <PassengerDashboardSkeleton />
+                           )}
+                      </div>
+                  )}
+              </TermsGuard>
+          </PassengerWeeklyPoolProvider>
       </PassengerDataProvider>
     </AuthGuard>
   );

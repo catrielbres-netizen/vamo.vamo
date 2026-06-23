@@ -24,9 +24,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { type WithId } from '@/firebase/firestore/use-collection';
 import { Timestamp } from 'firebase/firestore';
 import { haversineDistance } from '@/lib/geo';
-import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
-
-
+import { getRideFinancialSnapshot, getDriverDisplayFinancials } from '@/lib/rideFinancials';
 import { formatDistance, formatDuration } from '@/lib/formatters';
 
 const serviceCardStyles: Record<Ride['serviceType'], string> = {
@@ -127,12 +125,20 @@ export default function DriverRideCard({
         </div>
 
         {(() => {
-            const financial = getRideFinancialSnapshot(ride);
+            const financial = getDriverDisplayFinancials(getRideFinancialSnapshot(ride));
             return (
                 <div className="!mt-2 bg-secondary/20 p-3 rounded-lg flex flex-col gap-1 border border-border/40">
                     <div className="flex justify-between items-center text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
-                        <span>Tarifa Total</span>
+                        <span>Total del viaje</span>
                         <span>${new Intl.NumberFormat('es-AR').format(financial.totalFare)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-indigo-400 uppercase tracking-widest font-bold">
+                        <span>Tu ganancia neta estimada</span>
+                        <span>${new Intl.NumberFormat('es-AR').format(financial.driverNetEarnings)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-rose-400/80 uppercase tracking-widest font-bold">
+                        <span>Comisión VamO</span>
+                        <span>-${new Intl.NumberFormat('es-AR').format(financial.commissionAmount)}</span>
                     </div>
                     {financial.walletCoveredAmount > 0 && (
                         <div className="flex justify-between items-center text-[10px] text-emerald-500 uppercase tracking-widest font-black">
@@ -148,7 +154,14 @@ export default function DriverRideCard({
                     )}
                     <div className="h-px bg-border/40 my-1" />
                     <div className="flex justify-between items-end">
-                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">Efectivo a cobrar</span>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black uppercase tracking-widest leading-none">Total a cobrar al pasajero</span>
+                            {financial.cashToCollect > 0 ? (
+                                <span className="text-[8px] font-bold text-indigo-400 mt-1">Cobrar total. Comisión descuenta luego.</span>
+                            ) : (
+                                <span className="text-[8px] font-bold text-indigo-400 mt-1">Viaje abonado electrónicamente</span>
+                            )}
+                        </div>
                         <span className="text-2xl font-black text-primary tracking-tighter leading-none italic">
                             ${new Intl.NumberFormat('es-AR').format(financial.cashToCollect)}
                         </span>

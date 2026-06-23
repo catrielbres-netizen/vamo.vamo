@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 
 export interface ActiveCity {
@@ -8,9 +8,20 @@ export interface ActiveCity {
     province?: string;
     status: string;
     enabled: boolean;
+    visibleInAdmin?: boolean;
+    visibleInMunicipal?: boolean;
+    allowDriverRecruitment?: boolean;
+    allowPassengerTrips?: boolean;
+    allowRealTrips?: boolean;
 }
 
-export function useActiveCities() {
+export type CityContext = 'admin' | 'municipal' | 'driver_recruitment' | 'passenger';
+
+export interface UseActiveCitiesOptions {
+    context?: CityContext;
+}
+
+export function useActiveCities({ context = 'passenger' }: UseActiveCitiesOptions = {}) {
     const db = useFirestore();
     const [cities, setCities] = useState<ActiveCity[]>([]);
     const [loading, setLoading] = useState(true);
@@ -24,12 +35,13 @@ export function useActiveCities() {
 
         const fetchCities = async () => {
             try {
-                // Fetch enabled and active cities
+                // Fetch enabled cities
                 const citiesRef = collection(db, 'cities');
+                
+                // We fetch all enabled cities and then filter by context in client
                 const q = query(
                     citiesRef,
-                    where('enabled', '==', true),
-                    where('status', '==', 'active')
+                    where('enabled', '==', true)
                 );
 
                 const snapshot = await getDocs(q);
@@ -37,10 +49,32 @@ export function useActiveCities() {
                 
                 snapshot.forEach((doc) => {
                     const data = doc.data() as ActiveCity;
-                    activeCities.push({
-                        ...data,
-                        cityKey: doc.id // ensuring cityKey is always present
-                    });
+                    
+                    let isStatusValid = false;
+
+                    if (context === 'admin') {
+                        isStatusValid = data.status === 'active' || (data.status === 'recruiting_drivers' && data.visibleInAdmin === true);
+                    } else if (context === 'municipal') {
+                        isStatusValid = data.status === 'active' || (data.status === 'recruiting_drivers' && data.visibleInMunicipal === true);
+                    } else if (context === 'driver_recruitment') {
+                        isStatusValid = data.status === 'active' || (data.status === 'recruiting_drivers' && data.allowDriverRecruitment === true);
+                    } else if (context === 'passenger') {
+                        isStatusValid = data.status === 'active' && data.allowPassengerTrips !== false && data.allowRealTrips !== false;
+                    }
+
+                    if (isStatusValid) {
+                        let displayName = data.name;
+                        // Append recruiting suffix only for specific contexts
+                        if ((context === 'admin' || context === 'municipal' || context === 'driver_recruitment') && data.status === 'recruiting_drivers') {
+                            displayName = `${data.name} — Reclutamiento`;
+                        }
+
+                        activeCities.push({
+                            ...data,
+                            cityKey: doc.id,
+                            name: displayName
+                        });
+                    }
                 });
 
                 // Sort alphabetically by name
@@ -56,7 +90,7 @@ export function useActiveCities() {
         };
 
         fetchCities();
-    }, [db]);
+    }, [db, context]);
 
     return { cities, loading, error };
 }

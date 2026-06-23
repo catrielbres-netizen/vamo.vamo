@@ -72,6 +72,50 @@ export type MunicipalStatus = "active" | "approved" | "suspended" | "expired" | 
 
 export type CityStatus = "invited" | "onboarding" | "active" | "suspended";
 
+export type CityOperationalStatus = "draft" | "recruiting_drivers" | "ready_for_passengers" | "active" | "paused";
+
+export interface CityDriverRecruitment {
+    enabled: boolean;
+    targetApprovedDrivers: number;
+    registeredDriversCount: number;
+    pendingDriversCount: number;
+    approvedDriversCount: number;
+    rejectedDriversCount: number;
+    enabledDriversCount: number;
+    readyForPassengerMarketing: boolean;
+    estimatedLaunchDate: any | null;
+    readyNotifiedAt: any | null;
+}
+
+export interface CityPassengerAccess {
+    enabled: boolean;
+    marketingEnabled: boolean;
+}
+
+export interface CityConfig {
+    cityKey: string;
+    name: string;
+    province?: string;
+    country?: string;
+    enabled: boolean;
+    operationalStatus: CityOperationalStatus;
+    driverRecruitment?: CityDriverRecruitment;
+    passengerAccess?: CityPassengerAccess;
+}
+
+export interface AdminNotification {
+    id?: string;
+    type: string;
+    cityKey?: string;
+    cityName?: string;
+    approvedDriversCount?: number;
+    targetApprovedDrivers?: number;
+    message: string;
+    status: 'unread' | 'read';
+    createdAt: any;
+    readAt?: any;
+}
+
 export type AuditLogAction =
   | "driver_approved"
   | "driver_rejected"
@@ -142,6 +186,7 @@ export function normalizeDriverDocumentType(type: string): MunicipalChecklistKey
     
     'dniFront': 'dniFront',
     'dniBack': 'dniBack',
+    'vehicleModelYearProof': 'vehicleModelYearProof',
   };
   
   return (map[type] || type) as MunicipalChecklistKey;
@@ -184,7 +229,8 @@ export type MunicipalChecklistKey =
   | 'criminalRecord'
   | 'municipalCanon'
   | 'disinfectionReceipt'
-  | 'passengerCoverageInsurance';
+  | 'passengerCoverageInsurance'
+  | 'vehicleModelYearProof';
 
 export type DocItemStatus = 'pending' | 'submitted' | 'approved' | 'observed';
 export type CanonStatus = 'paid' | 'overdue' | 'pending';
@@ -423,7 +469,9 @@ export interface Ride {
     id?: string;
     passengerId: string;
     driverId?: string | null;
+    vehicleId?: string | null;
     vehicleOwnerId?: string; // [VamO PRO] Financial beneficiary
+    settlementOwnerId?: string; // El UID que asume la deuda/comisión/recaudación del viaje
     activeDriverId?: string; // [VamO PRO] Driver operating the vehicle
 
     status: RideStatus;
@@ -678,6 +726,12 @@ export interface UserProfile {
     country?: string;
     gender?: string;
 
+    legal?: {
+        driverTermsAccepted?: boolean;
+        driverTermsVersion?: string;
+        driverTermsAcceptedAt?: any;
+    };
+
     createdAt: any;
     updatedAt?: any;
 
@@ -763,6 +817,7 @@ export interface UserProfile {
 
     // --- OWNER / AUTHORIZED DRIVER SYSTEM ---
     vehicleOwnerId?: string;       // UID del dueño del vehículo / cuenta principal
+    fleetApprovalStatus?: 'pending' | 'approved' | 'suspended' | 'unlinked'; // Estado de la vinculación
     authorizedDriverIds?: string[]; // UIDs de choferes autorizados por este dueño
     activeDriverId?: string;      // UID del chofer que está operando el vehículo actualmente
     isVehicleOwner?: boolean;     // Indica si el usuario es el dueño legal del vehículo
@@ -866,6 +921,7 @@ export interface UserProfile {
     identityDocuments?: {
         dniFront?: string;
         dniBack?: string;
+        vehicleModelYearProof?: string;
         selfie?: string;
     };
     identityNote?: string;
@@ -1327,7 +1383,10 @@ export interface PricingConfig {
     municipal_percentage: number;     
     ASSISTANCE_FEE: number;
     assistanceEnabled: boolean;
+    smartPricingEnabled?: boolean;
+    /** @deprecated Use global system_config/smart_pricing instead */
     dynamicPricing?: DynamicPricingConfig;
+    sharedRideMaxOriginRadiusMeters?: number; // VamO Compartido V1
     createdAt?: any;
     updatedAt?: any;
 }
