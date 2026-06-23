@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useUser } from '@/firebase';
 import { normalizeCityKey } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -44,6 +45,7 @@ function StatusBadge({ status, rideInfo }: { status: PassengerStatus, rideInfo?:
 export default function MunicipalPassengersPage() {
     const { cityKey, cityName } = useMunicipalContext();
     const { toast } = useToast();
+    const router = useRouter();
 
     const [search, setSearch] = useState('');
     const [passengers, setPassengers] = useState<any[]>([]);

@@ -6,11 +6,16 @@ import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from '
 import { httpsCallable } from 'firebase/functions';
 import { useParams, useRouter } from 'next/navigation';
 import { VamoIcon } from '@/components/VamoIcon';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { cn } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { UserProfile, Ride } from '@/lib/types';
 import Link from 'next/link';
+
+function formatDate(ts: any) {
+    if (!ts) return '—';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
 
 export default function PassengerHistoryPage() {
     const params = useParams();
@@ -109,7 +114,7 @@ export default function PassengerHistoryPage() {
 
     if (!passenger) return null;
 
-    const trustScore = passenger.trustScore ?? 100;
+    const trustScore = (passenger as any).trustScore ?? 100;
     const stats = (passenger as any).passengerStats || { completedRides: 0, totalRides: 0, cancelledRides: 0 };
 
     return (
