@@ -15,6 +15,7 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { DriverOnboardingWizard } from './DriverOnboardingWizard';
 import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
 import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
+import { ForcePasswordLink } from '@/components/auth/ForcePasswordLink';
 
 export default function DriverRegisterClient() {
     const { user, profile, loading } = useUser();
@@ -25,6 +26,7 @@ export default function DriverRegisterClient() {
     console.log("[ONBOARDING_DEBUG] DriverRegisterClient mount - User:", user?.uid, "Logged In:", !!user, "Loading:", loading);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [passwordLinked, setPasswordLinked] = useState(false);
     
     // Auth fields (only used if NOT logged in)
     const [email, setEmail] = useState('');
@@ -47,6 +49,12 @@ export default function DriverRegisterClient() {
         // Profile still loading from Firestore
         if (profile === null && !loading) return <VamoFullScreenLoader label="Cargando perfil..." />;
         if (profile?.profileCompleted) return <VamoFullScreenLoader label="Redirigiendo al panel..." />;
+        
+        const hasPassword = user.providerData.some(p => p.providerId === 'password');
+        if (!hasPassword && !passwordLinked) {
+            return <ForcePasswordLink onComplete={() => setPasswordLinked(true)} />;
+        }
+
         return <DriverOnboardingWizard />;
     }
 
@@ -194,7 +202,12 @@ export default function DriverRegisterClient() {
                                 {isSubmitting ? <VamoIcon name="loader" className="animate-spin h-5 w-5" /> : 'Siguiente Paso'}
                             </Button>
 
-                            {/* Removed Google Auth Button */}
+                            <div className="relative my-6">
+                                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-white/10" /></div>
+                                <div className="relative flex justify-center text-xs uppercase"><span className="bg-zinc-900 px-2 text-zinc-500 font-bold tracking-widest">O BIEN</span></div>
+                            </div>
+
+                            <GoogleAuthButton onSuccess={handleGoogleAuthSuccess} mode="register" />
 
                             <div className="text-center pt-2">
                                 <button 
