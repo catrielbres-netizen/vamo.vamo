@@ -1377,3 +1377,53 @@ export const getPassengerRidesV1 = onCall({ cors: true, region: 'us-central1' },
         throw new HttpsError('internal', 'Error fetching rides');
     }
 });
+
+export const forcePassengerValidationV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'No autorizado.');
+    const db = getDb();
+    const { passengerId } = request.data;
+    if (!passengerId) throw new HttpsError('invalid-argument', 'Missing passengerId');
+    
+    try {
+        const operatorSnap = await db.doc(`users/${request.auth.uid}`).get();
+        const operator = operatorSnap.data() as UserProfile;
+        const validRoles = ['admin', 'superadmin', 'admin_municipal', 'traffic_municipal', 'municipal'];
+        if (!operator || !validRoles.includes(operator.role || '')) {
+            throw new HttpsError('permission-denied', 'No tienes permisos.');
+        }
+
+        await db.collection('users').doc(passengerId).update({
+            identityStatus: 'unverified',
+            identityNote: 'Validación forzada por autoridad municipal.',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        return { success: true };
+    } catch (e: any) {
+        if (e instanceof HttpsError) throw e;
+        logger.error("[forcePassengerValidationV1] Error:", e);
+        throw new HttpsError('internal', 'Error forzando validación.');
+    }
+});
+
+export const getRideAudioTelemetryV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'No autorizado.');
+    const { rideId } = request.data;
+    if (!rideId) throw new HttpsError('invalid-argument', 'Missing rideId');
+    
+    try {
+        const bucket = admin.storage().bucket();
+        const file = bucket.file(`telemetry/audio/${rideId}.webm`);
+        const [exists] = await file.exists();
+        if (exists) {
+            const [url] = await file.getSignedUrl({ action: 'read', expires: Date.now() + 1000 * 60 * 60 });
+            return { url };
+        } else {
+            throw new HttpsError('not-found', 'Audio de telemetría no encontrado para este viaje.');
+        }
+    } catch (e: any) {
+        if (e instanceof HttpsError) throw e;
+        logger.error("[getRideAudioTelemetryV1] Error:", e);
+        throw new HttpsError('internal', 'Error al obtener telemetría de audio.');
+    }
+});
+

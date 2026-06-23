@@ -97,11 +97,28 @@ export default function PassengerHistoryPage() {
         if (!functions || !passenger) return;
         setActionLoading(true);
         try {
+            const forceValidationFn = httpsCallable(functions, 'forcePassengerValidationV1');
+            await forceValidationFn({ passengerId: passenger.uid });
             toast({ title: 'Acción ejecutada', description: 'Se ha enviado la solicitud de validación obligatoria al pasajero.' });
-        } catch (e) {
-            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo forzar la validación.' });
+        } catch (e: any) {
+            console.error("Error forzando validación:", e);
+            toast({ variant: 'destructive', title: 'Error', description: e.message || 'No se pudo forzar la validación.' });
         } finally {
             setActionLoading(false);
+        }
+    };
+
+    const handlePlayAudio = async (rideId: string) => {
+        if (!functions) return;
+        toast({ title: 'Obteniendo audio', description: 'Conectando con almacenamiento seguro...' });
+        try {
+            const getAudioFn = httpsCallable(functions, 'getRideAudioTelemetryV1');
+            const result = await getAudioFn({ rideId });
+            const url = (result.data as any).url;
+            window.open(url, '_blank');
+        } catch (e: any) {
+            console.error("Error obteniendo audio:", e);
+            toast({ variant: 'destructive', title: 'Error', description: e.message || 'No se pudo obtener el audio.' });
         }
     };
 
@@ -282,7 +299,7 @@ export default function PassengerHistoryPage() {
                                             <div className="flex items-center gap-4">
                                                 {/* Audio */}
                                                 <button 
-                                                    onClick={() => toast({ title: 'Audio de Seguridad', description: 'Reproduciendo grabación pre-viaje y viaje completo (Telemetría de Audio)...' })}
+                                                    onClick={() => handlePlayAudio(ride.id)}
                                                     className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition-colors"
                                                 >
                                                     <VamoIcon name="mic" className="w-3 h-3" />
