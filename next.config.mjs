@@ -23,6 +23,11 @@ const nextConfig = {
         destination: '/registro/conductor',
         permanent: true,
       },
+      {
+        source: '/driver/register',
+        destination: '/registro/conductor',
+        permanent: true,
+      },
     ]
   }
 };
