@@ -194,21 +194,7 @@ export default function DriverRegisterClient() {
                                 {isSubmitting ? <VamoIcon name="loader" className="animate-spin h-5 w-5" /> : 'Siguiente Paso'}
                             </Button>
 
-                            <div className="pt-2">
-                                <div className="relative mb-4">
-                                    <div className="absolute inset-0 flex items-center">
-                                        <div className="w-full border-t border-white/5"></div>
-                                    </div>
-                                    <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
-                                        <span className="bg-zinc-900 px-4 text-zinc-600">O bien</span>
-                                    </div>
-                                </div>
-                                <GoogleAuthButton 
-                                    onSuccess={handleGoogleAuthSuccess}
-                                    disabled={isSubmitting}
-                                    mode="register"
-                                />
-                            </div>
+                            {/* Removed Google Auth Button */}
 
                             <div className="text-center pt-2">
                                 <button 
