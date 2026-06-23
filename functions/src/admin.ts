@@ -289,3 +289,98 @@ export const adminForceCloseRideV1 = onCall({ cors: true, region: "us-central1",
         throw new HttpsError("internal", error.message || "Error al forzar cierre de viaje.");
     }
 });
+
+// --- CITY AUDIT DASHBOARD ---
+
+export const adminGetCityMetricsV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'No autorizado');
+    const { cityKey } = request.data;
+    if (!cityKey) throw new HttpsError('invalid-argument', 'Missing cityKey');
+    const db = getDb();
+
+    try {
+        const opSnap = await db.doc(`users/${request.auth.uid}`).get();
+        const op = opSnap.data();
+        if (!op || (op.role !== 'admin' && op.role !== 'superadmin')) throw new HttpsError('permission-denied', 'No tienes permisos');
+
+        const driversCountSnap = await db.collection('users').where('cityKey', '==', cityKey).where('driverStatus', 'in', ['pending_municipal_review', 'active', 'online', 'busy']).count().get();
+        const passengersCountSnap = await db.collection('users').where('cityKey', '==', cityKey).where('passengerStatus', 'in', ['active', 'blocked']).count().get();
+        const ridesCountSnap = await db.collection('rides').where('cityKey', '==', cityKey).count().get();
+
+        // Calculate FAP total
+        const fapSnap = await db.collection('fap_claims').where('cityKey', '==', cityKey).where('status', '==', 'paid').get();
+        let totalFapPaid = 0;
+        fapSnap.docs.forEach(d => totalFapPaid += (d.data().approvedAmount || 0));
+
+        return {
+            totalDrivers: driversCountSnap.data().count,
+            totalPassengers: passengersCountSnap.data().count,
+            totalRides: ridesCountSnap.data().count,
+            totalFapPaid
+        };
+    } catch (error: any) {
+        logger.error("[adminGetCityMetricsV1] Error:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});
+
+export const adminGetCityRidesV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'No autorizado');
+    const { cityKey, filterDateStart, filterDateEnd, filterDriverId, filterPassengerId, filterStatus, limit: queryLimit = 50 } = request.data;
+    if (!cityKey) throw new HttpsError('invalid-argument', 'Missing cityKey');
+    const db = getDb();
+
+    try {
+        const opSnap = await db.doc(`users/${request.auth.uid}`).get();
+        const op = opSnap.data();
+        if (!op || (op.role !== 'admin' && op.role !== 'superadmin')) throw new HttpsError('permission-denied', 'No tienes permisos');
+
+        let q = db.collection('rides').where('cityKey', '==', cityKey);
+        
+        if (filterDriverId) q = q.where('driverId', '==', filterDriverId);
+        if (filterPassengerId) q = q.where('passengerId', '==', filterPassengerId);
+        if (filterStatus && filterStatus !== 'all') q = q.where('status', '==', filterStatus);
+        
+        // Complex index fallback
+        q = q.orderBy('createdAt', 'desc').limit(queryLimit);
+
+        const snap = await q.get();
+        const rides = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        let filteredRides = rides;
+        if (filterDateStart && filterDateEnd) {
+             const start = new Date(filterDateStart).getTime();
+             const end = new Date(filterDateEnd).getTime();
+             filteredRides = rides.filter((r: any) => {
+                 const t = r.createdAt?.toDate ? r.createdAt.toDate().getTime() : r.createdAt;
+                 return t >= start && t <= end;
+             });
+        }
+
+        return { rides: filteredRides };
+    } catch (error: any) {
+        logger.error("[adminGetCityRidesV1] Error:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});
+
+export const adminGetCityFapClaimsV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'No autorizado');
+    const { cityKey, limit: queryLimit = 50 } = request.data;
+    if (!cityKey) throw new HttpsError('invalid-argument', 'Missing cityKey');
+    const db = getDb();
+
+    try {
+        const opSnap = await db.doc(`users/${request.auth.uid}`).get();
+        const op = opSnap.data();
+        if (!op || (op.role !== 'admin' && op.role !== 'superadmin')) throw new HttpsError('permission-denied', 'No tienes permisos');
+
+        let q = db.collection('fap_claims').where('cityKey', '==', cityKey).orderBy('createdAt', 'desc').limit(queryLimit);
+        const snap = await q.get();
+        const claims = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        return { claims };
+    } catch (error: any) {
+        logger.error("[adminGetCityFapClaimsV1] Error:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});

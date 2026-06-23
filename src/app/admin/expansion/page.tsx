@@ -14,13 +14,13 @@ import { cn } from '@/lib/utils';
 import PlaceAutocompleteInput from '@/components/PlaceAutocompleteInput';
 import { CITIES } from '@/lib/cityData';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-
+import { useRouter } from 'next/navigation';
 export default function ExpansionDashboardPage() {
     const firestore = useFirestore();
     const functions = useFunctions();
     const { profile } = useUser();
     const { toast } = useToast();
-    
+    const router = useRouter();
     const [cities, setCities] = useState<City[]>([]);
     const [loading, setLoading] = useState(true);
     const [inviting, setInviting] = useState(false);
@@ -495,6 +495,15 @@ export default function ExpansionDashboardPage() {
                                                             Recalcular
                                                         </Button>
                                                     )}
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        onClick={() => router.push(`/admin/cities/${city.cityKey}`)}
+                                                        className="h-8 text-[10px] font-black uppercase tracking-widest border-emerald-500/30 text-emerald-400 hover:text-emerald-300 transition-all bg-emerald-500/10 hover:bg-emerald-500/20"
+                                                    >
+                                                        <VamoIcon name="bar-chart-2" className="h-3 w-3 mr-1" />
+                                                        Auditar
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </div>
