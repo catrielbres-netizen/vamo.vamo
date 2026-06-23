@@ -42,14 +42,14 @@ const statusMessages: Record<string, {title: string, description: string, icon: 
 export default function DriverRidesPage() {
   const { profile, rides: availableOffers, newRideIds, ready, error } = useDriverData();
 
-  const isPendingReview = (profile as any)?.planBStatus === 'pending_docs' || (profile as any)?.planBStatus === 'pending_approval';
+  const isPendingReview = (profile as any)?.planBStatus === 'pending_docs' || (profile as any)?.planBStatus === 'pending_approval' || profile?.municipalStatus === 'pending_municipal_review';
   const statusKey = isPendingReview ? 'pending_review' : (profile?.approved ? 'approved' : 'unverified');
   const message = statusMessages[statusKey] || statusMessages.unverified;
 
   const isOnline = profile?.driverStatus === 'online';
   const balance = profile?.currentBalance ?? 0;
   // [VamO AUDIT] Allow rendering offers even if balance is low, so driver can see the penalty.
-  const driverIsAvailable = isOnline && profile?.approved;
+  const driverIsAvailable = isOnline && (profile?.approved || profile?.municipalStatus === 'pending_municipal_review');
   
   console.log(`[DRIVER_PAGE] Render. Online: ${isOnline}, Balance: ${balance}, Offers: ${availableOffers.length}`);
 
