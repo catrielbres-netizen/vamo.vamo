@@ -435,3 +435,95 @@ export const adminGetCityFinancialsV1 = onCall({ cors: true, region: 'us-central
         throw new HttpsError('internal', error.message);
     }
 });
+
+// Broadcast Message
+export const adminBroadcastMessageV1 = onCall(async (request) => {
+    const { auth, data } = request;
+    if (!auth) throw new HttpsError('unauthenticated', 'Debe iniciar sesión.');
+    
+    const db = admin.firestore();
+    const userDoc = await db.doc(`users/${auth.uid}`).get();
+    const role = userDoc.data()?.role;
+    if (!['admin', 'superadmin', 'municipal'].includes(role)) {
+        throw new HttpsError('permission-denied', 'No tiene permisos.');
+    }
+
+    const { cityKey, targetRole, channels, title, body } = data;
+    if (!cityKey || !targetRole || !channels || !title || !body) {
+        throw new HttpsError('invalid-argument', 'Missing required parameters');
+    }
+
+    try {
+        let query = db.collection('users').where('role', '==', targetRole);
+        if (cityKey !== 'global') {
+            query = query.where('cityKey', '==', cityKey);
+        }
+
+        const snapshot = await query.get();
+        if (snapshot.empty) {
+            return { success: true, message: 'No users found for this target.', sent: 0 };
+        }
+
+        const batch = db.batch();
+        let enqueuedCount = 0;
+        let pushCount = 0;
+        const tokens: string[] = [];
+
+        snapshot.docs.forEach(doc => {
+            const userData = doc.data();
+
+            // Email
+            if (channels.includes('email') && userData.email) {
+                const mailQueueRef = db.collection('mail_queue').doc();
+                batch.set(mailQueueRef, {
+                    to: userData.email,
+                    template: 'custom_broadcast',
+                    subject: title,
+                    data: { title, body, name: userData.name || 'Usuario' },
+                    status: 'pending',
+                    attempts: 0,
+                    provider: 'resend',
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    dedupeKey: `broadcast_${doc.id}_${Date.now()}`
+                });
+                enqueuedCount++;
+            }
+
+            // Push Notification Tokens
+            if (channels.includes('push') && userData.fcmToken) {
+                tokens.push(userData.fcmToken);
+            }
+        });
+
+        if (enqueuedCount > 0) {
+            await batch.commit();
+        }
+
+        // Send push notifications natively (max 500 per chunk as per Firebase limits)
+        if (tokens.length > 0) {
+            const messaging = admin.messaging();
+            const chunkSize = 500;
+            for (let i = 0; i < tokens.length; i += chunkSize) {
+                const chunk = tokens.slice(i, i + chunkSize);
+                const message = {
+                    notification: { title, body },
+                    tokens: chunk
+                };
+                await messaging.sendEachForMulticast(message).catch(e => logger.error("Push broadcast error:", e));
+                pushCount += chunk.length;
+            }
+        }
+
+        return { 
+            success: true, 
+            message: 'Broadcast sent successfully', 
+            emailsEnqueued: enqueuedCount,
+            pushesSent: pushCount 
+        };
+    } catch (error: any) {
+        logger.error("[adminBroadcastMessageV1] Error:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});
+

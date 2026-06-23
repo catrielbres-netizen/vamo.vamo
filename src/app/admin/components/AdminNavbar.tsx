@@ -24,6 +24,7 @@ const navLinks = [
     { href: '/admin/municipal-settlements', label: 'Liquidaciones', icon: 'landmark' },
     { href: '/admin/simulator', label: 'Simulador Financiero', icon: 'line-chart' },
     { href: '/admin/drivers', label: 'Gestión de Flota', icon: 'users' },
+    { href: '/admin/passengers', label: 'Pasajeros', icon: 'user' },
     { href: '/admin/alerts', label: 'Pánico SOS', icon: 'volume-2' },
     { href: '/admin/claims', label: 'Asistencia Médica', icon: 'heart-pulse' },
     { href: '/admin/expansion', label: 'Expansión Hub', icon: 'trending-up' },
