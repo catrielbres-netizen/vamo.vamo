@@ -75,6 +75,58 @@ function KpiCard({ label, value, icon, color, href }: { label: string; value: st
     return innerContent;
 }
 
+// ─── First Steps Banner ───────────────────────────────────────────────────────
+function FirstStepsBanner() {
+    return (
+        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-[2rem] p-8 mb-8 flex flex-col md:flex-row gap-8 items-center relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-1000">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+            <div className="flex-1 space-y-4 relative z-10">
+                <div className="flex items-center gap-3 mb-2">
+                    <span className="flex h-3 w-3 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+                    </span>
+                    <span className="text-indigo-400 font-bold text-sm tracking-widest uppercase">Primeros Pasos</span>
+                </div>
+                <h3 className="text-3xl font-black italic text-white uppercase tracking-tighter">¡Te damos la bienvenida a VamO Muni!</h3>
+                <p className="text-zinc-400 font-medium max-w-2xl text-lg">Tu panel de control está listo. Para empezar a operar en tu localidad, te sugerimos seguir estos pasos iniciales:</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8 pt-4">
+                    <Link href="/municipal/team" className="block bg-black/40 border border-white/5 p-5 rounded-2xl hover:bg-white/10 hover:border-white/10 transition-all group hover:-translate-y-1">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 group-hover:bg-emerald-500/20 transition-all">
+                                <VamoIcon name="users" className="w-5 h-5" />
+                            </div>
+                            <span className="font-bold text-white text-base">1. Crear Equipo</span>
+                        </div>
+                        <p className="text-sm text-zinc-500 leading-relaxed">Añade a los operadores, auditores o tesoreros para que accedan con sus propias cuentas y permisos.</p>
+                    </Link>
+
+                    <Link href="/municipal/pricing" className="block bg-black/40 border border-white/5 p-5 rounded-2xl hover:bg-white/10 hover:border-white/10 transition-all group hover:-translate-y-1">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-110 group-hover:bg-amber-500/20 transition-all">
+                                <VamoIcon name="calculator" className="w-5 h-5" />
+                            </div>
+                            <span className="font-bold text-white text-base">2. Ajustar Tarifas</span>
+                        </div>
+                        <p className="text-sm text-zinc-500 leading-relaxed">Configura la bajada de bandera, valor de la ficha, tiempo de espera y esquema de comisiones para tu ciudad.</p>
+                    </Link>
+
+                    <Link href="/municipal/settings/config" className="block bg-black/40 border border-white/5 p-5 rounded-2xl hover:bg-white/10 hover:border-white/10 transition-all group hover:-translate-y-1">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 group-hover:bg-blue-500/20 transition-all">
+                                <VamoIcon name="settings" className="w-5 h-5" />
+                            </div>
+                            <span className="font-bold text-white text-base">3. Configuraciones Generales</span>
+                        </div>
+                        <p className="text-sm text-zinc-500 leading-relaxed">Personaliza los parámetros operativos locales, los textos legales, y las opciones de despacho de paradas.</p>
+                    </Link>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 
@@ -88,6 +140,16 @@ export default function MunicipalDashboardPage() {
     const [quickSearch, setQuickSearch] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [searching, setSearching] = useState(false);
+    const [copiedLink, setCopiedLink] = useState('');
+
+    const handleCopy = (type: 'passenger' | 'driver') => {
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.com.ar';
+        const path = type === 'passenger' ? '/pasajero/onboarding' : '/driver/register';
+        const url = `${baseUrl}${path}?city=${cityKey}`;
+        navigator.clipboard.writeText(url);
+        setCopiedLink(type);
+        setTimeout(() => setCopiedLink(''), 2000);
+    };
 
     // Paradas Digitales live states
     const [stationStats, setStationStats] = useState({
@@ -351,7 +413,7 @@ export default function MunicipalDashboardPage() {
                 <KpiCard label="Vencidos"      value={expired}   icon="calendar"       color="red"     href="/municipal/vencimientos" />
                 {/* <KpiCard label="Canon pte."    value={canonPend} icon="receipt"        color="amber"   /> */}
                 <KpiCard 
-                    label={`Participación Municipal (${cityKey === 'rawson' ? '5%' : '2%'})`} 
+                    label={`Participación Municipal`} 
                     value={`$${municipalParticipation.toLocaleString('es-AR')}`} 
                     icon="coins" 
                     color="indigo" 
@@ -359,6 +421,12 @@ export default function MunicipalDashboardPage() {
                 />
                 <KpiCard label="Total express" value={total}     icon="users"          color="zinc"    href="/municipal/drivers?filter=express" />
             </div>
+
+            {total === 0 && (
+                <div className="mt-8">
+                    <FirstStepsBanner />
+                </div>
+            )}
 
             {/* Buscador Rápido */}
             <div className="relative">
@@ -396,6 +464,52 @@ export default function MunicipalDashboardPage() {
                         )}
                     </div>
                 )}
+            </div>
+
+            {/* Enlaces de Registro Municipales */}
+            <div className="space-y-4">
+                <h3 className="text-sm font-black uppercase tracking-widest text-zinc-500">Enlaces Exclusivos de Registro</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-indigo-950/20 border border-indigo-500/20 rounded-3xl p-6 relative overflow-hidden">
+                        <VamoIcon name="user-plus" className="absolute -right-4 -bottom-4 w-24 h-24 text-indigo-500/10" />
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                                <VamoIcon name="user" className="w-5 h-5 text-indigo-400" />
+                            </div>
+                            <button 
+                                onClick={() => handleCopy('passenger')}
+                                className={cn(
+                                    "px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all",
+                                    copiedLink === 'passenger' ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
+                                )}
+                            >
+                                {copiedLink === 'passenger' ? 'Copiado!' : 'Copiar Link'}
+                            </button>
+                        </div>
+                        <h4 className="text-lg font-black text-white italic uppercase">Nuevos Pasajeros</h4>
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1 max-w-[80%]">Enlace preconfigurado para asignar usuarios a {cityName}</p>
+                    </div>
+
+                    <div className="bg-amber-950/20 border border-amber-500/20 rounded-3xl p-6 relative overflow-hidden">
+                        <VamoIcon name="car" className="absolute -right-4 -bottom-4 w-24 h-24 text-amber-500/10" />
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                                <VamoIcon name="car" className="w-5 h-5 text-amber-400" />
+                            </div>
+                            <button 
+                                onClick={() => handleCopy('driver')}
+                                className={cn(
+                                    "px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all",
+                                    copiedLink === 'driver' ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
+                                )}
+                            >
+                                {copiedLink === 'driver' ? 'Copiado!' : 'Copiar Link'}
+                            </button>
+                        </div>
+                        <h4 className="text-lg font-black text-white italic uppercase">Nuevos Conductores</h4>
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1 max-w-[80%]">Enlace preconfigurado para asignar choferes a {cityName}</p>
+                    </div>
+                </div>
             </div>
 
             {/* 🚏 Paradas Digitales Panel */}

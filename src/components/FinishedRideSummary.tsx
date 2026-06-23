@@ -19,7 +19,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import RatingForm from './RatingForm';
 import { cn } from '@/lib/utils';
-import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
+import { getRideFinancialSnapshot, getDriverDisplayFinancials } from '@/lib/rideFinancials';
 import { ExpressReceiptProgress } from './ExpressProgressWidget';
 import { SharedDriverReceiptSummary } from './SharedDriverReceiptSummary';
 import { SharedPassengerReceipt } from './SharedPassengerReceipt';
@@ -385,9 +385,9 @@ export default function FinishedRideSummary({
             </div>
           </div>
         </div>
-
         {(() => {
-          const data = getRideFinancialSnapshot(ride);
+          const baseData = getRideFinancialSnapshot(ride);
+          const data = userRole === 'driver' ? getDriverDisplayFinancials(baseData) : baseData;
           const totalFare = data.totalFare;
           const discountAmount = data.discountAmount;
           const walletCoveredAmount = data.walletCoveredAmount;
@@ -407,23 +407,12 @@ export default function FinishedRideSummary({
                 {/* Tarifa Original (Vista Pasajero) o Valor del Viaje (Vista Conductor) */}
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-zinc-500 font-bold uppercase tracking-widest text-[9px]">
-                    {isDriver ? 'Tarifa reconocida' : 'Tarifa del viaje'}
+                    {isDriver ? 'Total del viaje' : 'Tarifa del viaje'}
                   </span>
-                  <span className={cn("font-bold text-white", !isDriver && (discountAmount > 0 || data.dynamicApplied) ? "line-through opacity-40" : "")}>
-                    {formatCurrency(data.dynamicApplied ? data.municipalBaseFare : originalTotal)}
+                  <span className={cn("font-bold text-white", !isDriver && discountAmount > 0 ? "line-through opacity-40" : "")}>
+                    {formatCurrency(isDriver ? originalTotal : (discountAmount > 0 ? passengerPaysTotal + discountAmount : passengerPaysTotal))}
                   </span>
                 </div>
-
-                {/* Descuento Tarifa Dinámica (Solo Vista Pasajero) */}
-                {!isDriver && data.dynamicApplied && (
-                  <div className="flex justify-between items-center text-xs font-black text-indigo-400">
-                    <div className="flex items-center gap-1.5">
-                      <VamoIcon name="sparkles" className="h-3 w-3" />
-                      <span className="uppercase tracking-tighter text-[9px]">Promoción VamO Smart</span>
-                    </div>
-                    <span>-{formatCurrency(data.dynamicDiscountAmount)}</span>
-                  </div>
-                )}
 
                 {/* Descuento Pasajero (Solo Vista Pasajero) */}
                 {!isDriver && discountAmount > 0 && (
@@ -475,7 +464,7 @@ export default function FinishedRideSummary({
                 {/* Total de la operación */}
                 <div className="flex justify-between items-center font-black text-xl tracking-tighter">
                   <span className="uppercase text-[10px] tracking-widest text-zinc-500">
-                    {isDriver ? 'Neto final conductor' : 'Total a pagar'}
+                    {isDriver ? 'Tu ganancia neta estimada' : 'Total a pagar'}
                   </span>
                   <span className={cn(isDriver ? "text-emerald-400" : "text-primary")}>
                     {formatCurrency(isDriver ? driverNetAmount : passengerPaysTotal)}
@@ -485,7 +474,7 @@ export default function FinishedRideSummary({
                 {isDriver && (
                   <div className="flex justify-between items-center font-bold text-sm tracking-tighter mt-1 opacity-70">
                     <span className="uppercase text-[9px] tracking-widest text-zinc-400">
-                      Pagado por pasajero
+                      Total a cobrar al pasajero
                     </span>
                     <span className="text-zinc-300">
                       {formatCurrency(passengerPaysTotal)}
@@ -502,8 +491,9 @@ export default function FinishedRideSummary({
                     <div className="flex flex-col gap-1 mt-1">
                       <div className="flex justify-between items-center text-md font-black text-white bg-zinc-900 p-4 rounded-2xl border border-white/5 shadow-inner">
                         <div className="flex flex-col">
-                           <span className="uppercase tracking-widest text-[10px] text-zinc-400">Estado del pago</span>
-                           <span className="text-[9px] font-bold mt-1 text-emerald-400">{isDriver ? 'Pendiente cobro en efectivo' : 'Pendiente pago en efectivo'}</span>
+                           <span className="text-[9px] font-bold mt-1 text-emerald-400">
+                               {isDriver ? 'Cobrar el total. Comisión descuenta luego' : 'Pendiente pago en efectivo'}
+                           </span>
                         </div>
                         <span className="text-emerald-400 text-2xl tracking-tighter italic">{formatCurrency(cashToCollect)}</span>
                       </div>

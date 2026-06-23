@@ -235,9 +235,7 @@ export const canDriverReceiveOffers = (
       return { isEligible: false, reason: "Preferís no recibir viajes Express", code: "PREFERENCE_MISMATCH" };
   }
   
-  if (rideMeta?.isDiscountApplied && !prefs.acceptsDiscountedRides) {
-      return { isEligible: false, reason: "Preferís no recibir viajes con descuentos", code: "PREFERENCE_MISMATCH" };
-  }
+
   
   if (rideMeta?.hasPet && !prefs.acceptsPets) {
       return { isEligible: false, reason: "Preferís no recibir mascotas", code: "PREFERENCE_MISMATCH" };

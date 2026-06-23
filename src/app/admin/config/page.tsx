@@ -13,7 +13,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, AlertTriangle, Zap, Thermometer, ShieldAlert, BadgeDollarSign, Landmark, ShieldCheck, MapPin } from 'lucide-react';
 import { VamoIcon } from '@/components/VamoIcon';
 import { safeFixed } from '@/lib/formatters';
-import { SystemConfig, PricingConfig, City, AppModeConfig, FinancialModelConfig } from '@/lib/types';
+import { SystemConfig, PricingConfig, City, AppModeConfig, FinancialModelConfig, DynamicPricingConfig } from '@/lib/types';
+import { cn } from '@/lib/utils';
+import { Slider } from '@/components/ui/slider';
 
 export default function AdminConfigPage() {
     const firestore = useFirestore();
@@ -69,6 +71,16 @@ export default function AdminConfigPage() {
         ASSISTANCE_FEE: 400,
         assistanceEnabled: true
     });
+    const [smartPricing, setSmartPricing] = useState<DynamicPricingConfig>({
+        enabled: false,
+        algorithmMode: 'manual',
+        currentDiscountPercent: 0,
+        maxDiscountPercent: 30,
+        minDiscountPercent: 0,
+        reasonCodes: [],
+        updatedAt: null
+    });
+
 
     useEffect(() => {
         if (!firestore) return;
@@ -83,11 +95,12 @@ export default function AdminConfigPage() {
     const fetchInitialData = async () => {
         if (!firestore) return;
         try {
-            const [sysSnap, citiesSnap, appModeSnap, finModeSnap] = await Promise.all([
+            const [sysSnap, citiesSnap, appModeSnap, finModeSnap, smartSnap] = await Promise.all([
                 getDoc(doc(firestore, 'system_config', 'global')),
                 getDocs(collection(firestore, 'cities')),
                 getDoc(doc(firestore, 'system_config', 'app_mode')),
-                getDoc(doc(firestore, 'system_config', 'financial_model'))
+                getDoc(doc(firestore, 'system_config', 'financial_model')),
+                getDoc(doc(firestore, 'system_config', 'smart_pricing'))
             ]);
 
             if (sysSnap.exists()) {
@@ -98,6 +111,9 @@ export default function AdminConfigPage() {
             }
             if (finModeSnap.exists()) {
                 setFinancialMode(finModeSnap.data() as FinancialModelConfig);
+            }
+            if (smartSnap.exists()) {
+                setSmartPricing(smartSnap.data() as DynamicPricingConfig);
             }
             
             const citiesList: City[] = [];
@@ -149,6 +165,11 @@ export default function AdminConfigPage() {
                 }),
                 setDoc(doc(firestore, 'system_config', 'financial_model'), {
                     ...financialMode,
+                    updatedAt: serverTimestamp(),
+                    updatedBy: profile.id,
+                }),
+                setDoc(doc(firestore, 'system_config', 'smart_pricing'), {
+                    ...smartPricing,
                     updatedAt: serverTimestamp(),
                     updatedBy: profile.id,
                 }),
@@ -462,6 +483,95 @@ export default function AdminConfigPage() {
                                         value={pricingConfig.ASSISTANCE_FEE}
                                         onChange={e => setPricingConfig({...pricingConfig, ASSISTANCE_FEE: Number(e.target.value)})}
                                     />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* SMART PRICING GLOBAL */}
+                    <Card className="bg-indigo-500/5 border-indigo-500/10 rounded-[32px] overflow-hidden backdrop-blur-xl border-t border-indigo-500/10">
+                        <CardHeader className="pb-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <VamoIcon name="trending-down" className="h-5 w-5 text-indigo-400" />
+                                    <CardTitle className="text-xl font-black text-indigo-400 uppercase tracking-tighter">SmartPricing Global</CardTitle>
+                                </div>
+                                {smartPricing.enabled ? (
+                                    <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black px-3 py-1 rounded-full border border-emerald-500/30 uppercase tracking-widest animate-pulse">Activado Globalmente</span>
+                                ) : (
+                                    <span className="bg-zinc-500/20 text-zinc-500 text-[10px] font-black px-3 py-1 rounded-full border border-zinc-500/30 uppercase tracking-widest">Pausado</span>
+                                )}
+                            </div>
+                            <CardDescription className="text-xs text-indigo-500/60">Configuración maestra de Tarifa Dinámica. Cada municipio puede habilitarla en su panel.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="p-6 bg-indigo-500/10 rounded-3xl space-y-6 border border-indigo-500/20">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-sm font-black text-indigo-400 uppercase tracking-tight">Habilitar SmartPricing</Label>
+                                        <p className="text-[10px] text-indigo-400/70 font-bold uppercase">Aplica para ciudades que lo tengan encendido</p>
+                                    </div>
+                                    <Switch 
+                                        checked={smartPricing.enabled} 
+                                        onCheckedChange={v => setSmartPricing({...smartPricing, enabled: v})}
+                                        className="data-[state=checked]:bg-indigo-500"
+                                    />
+                                </div>
+
+                                <div className={cn("space-y-6 transition-all", !smartPricing.enabled && "opacity-40 pointer-events-none grayscale")}>
+                                    <div className="flex justify-between items-center bg-black/40 p-4 rounded-2xl border border-indigo-500/20">
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Modo de Operación</Label>
+                                        </div>
+                                        <div className="flex bg-black/50 p-1 rounded-xl border border-white/10">
+                                            <button
+                                                onClick={() => setSmartPricing({...smartPricing, algorithmMode: 'manual'})}
+                                                className={cn("px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all", smartPricing.algorithmMode !== 'automatic' ? "bg-indigo-500 text-white" : "text-zinc-500 hover:text-white")}
+                                            >
+                                                Manual
+                                            </button>
+                                            <button
+                                                onClick={() => setSmartPricing({...smartPricing, algorithmMode: 'automatic'})}
+                                                className={cn("px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all", smartPricing.algorithmMode === 'automatic' ? "bg-indigo-500 text-white" : "text-zinc-500 hover:text-white")}
+                                            >
+                                                VamO IA
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {smartPricing.algorithmMode === 'automatic' ? (
+                                        <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+                                            <p className="text-xs font-bold text-indigo-300">Algoritmo en Control</p>
+                                            <p className="text-[10px] text-indigo-400/80 mt-1">
+                                                VamO evaluará en tiempo real la oferta y demanda en cada ciudad para calcular el descuento de forma inteligente (hasta un {smartPricing.maxDiscountPercent}%).
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-end">
+                                                <Label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Descuento Global (Fijo)</Label>
+                                                <span className="text-2xl font-black text-indigo-400 leading-none">{smartPricing.currentDiscountPercent}%</span>
+                                            </div>
+                                            <Slider 
+                                                value={[smartPricing.currentDiscountPercent]}
+                                                min={0}
+                                                max={smartPricing.maxDiscountPercent || 30}
+                                                step={1}
+                                                onValueChange={([val]) => setSmartPricing({...smartPricing, currentDiscountPercent: val})}
+                                                className="py-4"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-2 pt-4 border-t border-indigo-500/20">
+                                        <Label className="text-[10px] uppercase font-black tracking-widest text-indigo-300">Límite Máximo de Descuento (%)</Label>
+                                        <Input 
+                                            type="number" 
+                                            className="bg-black/40 border-indigo-500/20 rounded-2xl h-12 font-bold text-white focus:ring-indigo-500/20"
+                                            value={smartPricing.maxDiscountPercent}
+                                            onChange={e => setSmartPricing({...smartPricing, maxDiscountPercent: Number(e.target.value)})}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>

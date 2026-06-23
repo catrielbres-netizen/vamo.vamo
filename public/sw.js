@@ -1,6 +1,6 @@
-// VamO Service Worker — vamo-cache-v7
+// VamO Service Worker — vamo-cache-v8
 // ─────────────────────────────────────────────────────────────────────────────
-// CAMBIO v6 → v7:
+// CAMBIO v7 → v8:
 //   - Actualización de versión para forzar cache busting de los nuevos assets y del loader.
 //   - skipWaiting SOLO ocurre cuando VersionManager envía {type: 'SKIP_WAITING'}.
 //   - El SW permanece en estado "waiting" hasta que el usuario confirma.
@@ -9,7 +9,7 @@
 //
 // NO TOCAR: wallet / refund / settlement / tarifa dinámica / matching / IA.
 
-const CACHE_NAME = 'vamo-cache-v7';
+const CACHE_NAME = 'vamo-cache-v8';
 
 // Assets a pre-cachear (solo los esenciales para offline básico)
 const PRECACHE_ASSETS = [
@@ -19,7 +19,7 @@ const PRECACHE_ASSETS = [
 
 // ── Install: pre-cachear assets y ESPERAR en waiting ──────────────────────
 self.addEventListener('install', (event) => {
-  console.log('[SW] Install event — vamo-cache-v7');
+  console.log('[SW] Install event — vamo-cache-v8');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.allSettled(

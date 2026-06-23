@@ -1,9 +1,11 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { enqueueTransactionalEmailV1 } from "./lib/emails";
 import * as logger from "firebase-functions/logger";
 import { getDb } from "./lib/firebaseAdmin";
 import { UserProfile, RegistrationStatus } from "./types";
 import { normalizePhone } from "./lib/phone";
+import { normalizeCity, canonicalCityKey } from "./lib/city";
 
 /**
  * [VamO SECURITY] completePassengerRegistrationV1
@@ -52,6 +54,17 @@ export const completePassengerRegistrationV1 = onCall({ cors: true, region: "us-
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                     referredByCode: referralCode || null,
+                    emailPreferences: {
+                        transactionalEnabled: true,
+                        operationalEnabled: true,
+                        educationEnabled: true,
+                        weeklySummaryEnabled: true,
+                        highDemandEnabled: true,
+                        marketingEnabled: true
+                    },
+                    emailState: {
+                        sentTemplates: {}
+                    }
                 };
                 transaction.set(userRef, newUser);
                 userCreated = true;
@@ -172,7 +185,8 @@ export const completeDriverRegistrationV1 = onCall({ cors: true, region: "us-cen
 
     const uid = auth.uid;
     const email = auth.token.email || "";
-    const { phone, cityKey, city } = request.data || {};
+    const { phone, cityKey, city, name } = request.data || {};
+    const safeCityKey = canonicalCityKey(cityKey);
     
     logger.info(`[DRIVER_REGISTER_FUNCTION_START] uid=${uid} email=${email}`, { data: request.data });
 
@@ -222,8 +236,8 @@ export const completeDriverRegistrationV1 = onCall({ cors: true, region: "us-cen
                     role: "driver",
                     phone: phone || "",
                     phoneNormalized: normalizedPhone || null,
-                    cityKey: cityKey || "",
-                    city: city || "",
+                    cityKey: safeCityKey || userSnap.data()?.cityKey || "",
+                    city: city || userSnap.data()?.city || "",
                     approved: false,
                     municipalStatus: "pending_municipal_review",
                     driverStatus: "offline",
@@ -232,6 +246,17 @@ export const completeDriverRegistrationV1 = onCall({ cors: true, region: "us-cen
                     onboardingIncomplete: true,
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    emailPreferences: {
+                        transactionalEnabled: true,
+                        operationalEnabled: true,
+                        educationEnabled: true,
+                        weeklySummaryEnabled: true,
+                        highDemandEnabled: true,
+                        marketingEnabled: true
+                    },
+                    emailState: {
+                        sentTemplates: {}
+                    }
                 };
                 transaction.set(userRef, newUser);
                 userCreated = true;
@@ -260,6 +285,29 @@ export const completeDriverRegistrationV1 = onCall({ cors: true, region: "us-cen
 
         const latency = Date.now() - startTime;
         logger.info(`[DRIVER_REGISTER_FUNCTION_SUCCESS] uid=${uid} latency=${latency}ms`);
+
+        // Enviar email transaccional si se creó el usuario
+        if (result.userCreated) {
+            await enqueueTransactionalEmailV1({
+                to: email,
+                template: 'driver_registration_created',
+                subject: 'Tu registro en VamO fue creado',
+                data: {
+                    name: name || "",
+                    cityName: safeCityKey ? safeCityKey.charAt(0).toUpperCase() + safeCityKey.slice(1) : "Tu ciudad"
+                },
+                dedupeKey: `driver_registration_created_${uid}`
+            });
+            // Email secundario (si el template fuera separado, pero decidimos unificarlo, aunque la regla dice que si es separado, usar otro). El usuario dijo "puede ir combinado". Lo voy a mandar como un correo separado también para cumplir con ambas dedupeKeys y ver que llega.
+            await enqueueTransactionalEmailV1({
+                to: email,
+                template: 'driver_pending_documents',
+                subject: 'Acción requerida: completá tu habilitación',
+                data: { name: name || "" },
+                dedupeKey: `driver_pending_documents_${uid}`
+            });
+        }
+
         return { success: true, ...result };
 
     } catch (error: any) {

@@ -133,7 +133,7 @@ function NewTaxiStandForm() {
     const { toast } = useToast();
     const router = useRouter();
 
-    const defaultCoords = { lat: -43.3002, lng: -65.1023 };
+    const defaultCoords = cityCenter ?? { lat: -43.3002, lng: -65.1023 };
 
     const [name, setName] = useState('');
     const [address, setAddress] = useState('');
@@ -145,6 +145,7 @@ function NewTaxiStandForm() {
     const [representativeName, setRepresentativeName] = useState('');
     const [representativePhone, setRepresentativePhone] = useState('');
     const [representativeEmail, setRepresentativeEmail] = useState('');
+    const [hasOperator, setHasOperator] = useState<boolean>(true);
     const [status, setStatus] = useState<'active' | 'pending' | 'suspended'>('active');
     const [saving, setSaving] = useState(false);
 
@@ -264,9 +265,11 @@ function NewTaxiStandForm() {
                 geocodedBy: 'google_places',
                 radiusMeters,
                 status,
-                representativeName,
-                representativePhone,
-                representativeEmail,
+                hasOperator,
+                operatorUid: null,
+                representativeName: hasOperator ? representativeName : '',
+                representativePhone: hasOperator ? representativePhone : '',
+                representativeEmail: hasOperator ? representativeEmail : '',
                 createdByMunicipalUid: user.uid,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
@@ -393,9 +396,42 @@ function NewTaxiStandForm() {
                             </select>
                         </div>
                     </div>
+
+                    <div className="space-y-3 pt-4 border-t border-white/5">
+                        <Label className="text-zinc-400 text-xs font-bold uppercase">Tipo de Parada</Label>
+                        <div className="grid grid-cols-2 gap-4">
+                            <button
+                                type="button"
+                                onClick={() => setHasOperator(true)}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                                    hasOperator
+                                        ? 'border-[#1D7CFF] bg-[#1D7CFF]/10 text-[#1D7CFF]'
+                                        : 'border-white/10 bg-white/[0.02] text-zinc-400 hover:border-white/20'
+                                }`}
+                            >
+                                <VamoIcon name="user-check" className="h-6 w-6 mb-2" />
+                                <span className="text-sm font-bold">Con Operador</span>
+                                <span className="text-[10px] text-center mt-1 opacity-70">Despacho manual y acceso a panel</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setHasOperator(false)}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                                    !hasOperator
+                                        ? 'border-[#1D7CFF] bg-[#1D7CFF]/10 text-[#1D7CFF]'
+                                        : 'border-white/10 bg-white/[0.02] text-zinc-400 hover:border-white/20'
+                                }`}
+                            >
+                                <VamoIcon name="map-pin" className="h-6 w-6 mb-2" />
+                                <span className="text-sm font-bold">Sin Operador</span>
+                                <span className="text-[10px] text-center mt-1 opacity-70">Prioridad geográfica automática</span>
+                            </button>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
 
+            {hasOperator && (
             <Card className="bg-white/[0.02] border-white/5 overflow-hidden backdrop-blur-xl">
                 <CardHeader className="border-b border-white/5 bg-white/[0.01]">
                     <CardTitle className="text-lg text-white">Representante de la Parada</CardTitle>
@@ -438,6 +474,7 @@ function NewTaxiStandForm() {
                     </div>
                 </CardContent>
             </Card>
+            )}
 
             {/* Footer Buttons */}
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">

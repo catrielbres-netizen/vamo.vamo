@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { doc, updateDoc } from 'firebase/firestore';
 import { VamoIcon } from '@/components/VamoIcon';
 import { PassengerSearchingSheet } from "@/components/PassengerSearchingSheet";
+import { PassengerCityLaunchGate } from '@/components/PassengerCityLaunchGate';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -21,7 +22,7 @@ import { RideReceipt } from '@/components/RideReceipt';
 import { useMapsAvailability } from '@/components/MapsProvider';
 import { useMapsLibrary } from '@vis.gl/react-google-maps';
 import { ACTIVE_RIDE_STATES } from '@/lib/ride-status';
-import { resolveCity } from '@/lib/city-resolution';
+import { resolveCity, getCityDefaultLocation } from '@/lib/city-resolution';
 import { getRideFinancialSnapshot } from '@/lib/rideFinancials';
 import PlaceAutocompleteInput from '@/components/PlaceAutocompleteInput';
 import { canPassengerRequestRide } from '@/lib/eligibility';
@@ -482,7 +483,7 @@ function RidePageContent() {
     }
   }, [isExpressUnlocked, expressHasUsesLeft, serviceType]);
 
-  // [COMPARTIDO BETA] Feature flag — solo alpha testers
+  // [COMPARTIDO] Feature flag
   const { isEnabled: isSharedEnabled } = useSharedRideConfig();
 
   // Estimación client-side: factor 0.68 (2 pasajeros), redondeado a $100
@@ -490,6 +491,13 @@ function RidePageContent() {
     if (!estimatedPrice) return null;
     return Math.ceil((estimatedPrice * 0.68) / 100) * 100;
   }, [estimatedPrice]);
+    
+  const sharedFareCalculation = useMemo(() => {
+      if (!estimatedPrice) return null;
+      const baseFare = Math.round((estimatedPrice * 0.60) / 100) * 100;
+      const seatMultiplier = selectedSeats.length >= 2 ? 1.10 : 1.00;
+      return Math.round((baseFare * seatMultiplier) / 100) * 100;
+  }, [estimatedPrice, selectedSeats]);
 
   // Solo mostrar si hay ahorro real vs tarifa normal visible
   const sharedOffersRealSaving = estimatedSharedFare !== null && estimatedSharedFare < (estimatedPrice ?? Infinity);
@@ -515,8 +523,13 @@ function RidePageContent() {
   
   const savingsSimulation = useMemo(() => {
      if (!estimatedPrice) return { benefit: 0, final: 0 };
-     // El precio base para restar billetera es después de Express
-     const priceAfterExpress = Math.max(0, estimatedPrice - (expressDiscountAmount || 0));
+     
+     // Si es compartido, usamos tarifa plana (sin descuento express ni dinámica, usando base del cálculo compartido)
+     const baseCalculationPrice = serviceType === 'shared' && sharedFareCalculation ? sharedFareCalculation : estimatedPrice;
+     
+     // El precio base para restar billetera es después de Express (solo si no es compartido)
+     const appliedExpressDiscount = serviceType === 'shared' ? 0 : (expressDiscountAmount || 0);
+     const priceAfterExpress = Math.max(0, baseCalculationPrice - appliedExpressDiscount);
 
      if (paymentMethod === 'cash') {
          return { benefit: 0, final: priceAfterExpress };
@@ -526,7 +539,7 @@ function RidePageContent() {
      const benefit = Math.min(priceAfterExpress, currentBalance);
      const final = Math.max(0, priceAfterExpress - benefit);
      return { benefit, final };
-  }, [estimatedPrice, expressDiscountAmount, profile?.currentBalance, paymentMethod]);
+  }, [estimatedPrice, expressDiscountAmount, profile?.currentBalance, paymentMethod, serviceType, sharedFareCalculation]);
 
   const [isCancelling, setIsCancelling] = useState(false);
 
@@ -540,6 +553,12 @@ function RidePageContent() {
       setIsCancelling(false);
       setWatchedRideId(null);
       setCompletedRideId(null);
+      setSheetState('collapsed');
+      setOverrideRequestId?.(null);
+
+      if (serviceType === 'shared') {
+          setOverrideGroupId?.(null);
+      }
 
       // [VamO PRO] Proactive Firestore Cleanup to avoid hangs
       if (user && firebaseApp && (profile?.activeRideId || profile?.activeSharedRideId)) {
@@ -552,7 +571,7 @@ function RidePageContent() {
               console.error("[CLEANUP] Failed to clear active ride pointers:", e);
           }
       }
-  }, [user, firestore, profile?.activeRideId]);
+    }, [user, firestore, profile?.activeRideId, (profile as any)?.activeSharedRideId, serviceType, setOverrideRequestId, setOverrideGroupId]);
 
   const handleOpenMapSelector = (field: 'origin' | 'destination') => {
       setMapEditingField(field);
@@ -575,8 +594,12 @@ function RidePageContent() {
         await cancelRideV1({ rideId, reason: 'cancelled_by_passenger' });
         telemetry.trackRideLifecycle(rideId, 'cancelled_by_passenger');
         handleReset();
-      } catch (e) {
+      } catch (e: any) {
           telemetry.trackError('ride_cancel_failed', e, { rideId });
+          // If the ride is already cancelled or not found in backend, force a local reset to unstick the UI
+          if (e.code === 'failed-precondition' || e.code === 'not-found' || e.message?.includes('cancelled') || e.message?.includes('cancelado')) {
+              handleReset();
+          }
       } finally { setIsCancelling(false); }
     } else { 
         telemetry.trackEvent({ type: 'ride_lifecycle', eventName: 'ride_reset_without_id' });
@@ -718,6 +741,7 @@ function RidePageContent() {
   };
 
   return (
+    <PassengerCityLaunchGate cityKey={profile?.cityKey}>
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#0a0a0a] animate-in fade-in duration-1000 fill-mode-both">
       {mapsAvailable && (
         <div 
@@ -726,7 +750,7 @@ function RidePageContent() {
           style={{ display: showRideStatus ? 'none' : 'block' }}
         >
           <Map
-            defaultCenter={{ lat: origin?.lat || -43.3002, lng: origin?.lng || -65.1023 }}
+            defaultCenter={origin ? { lat: origin.lat, lng: origin.lng } : getCityDefaultLocation(profile?.cityKey)}
             defaultZoom={15}
             disableDefaultUI={true}
             gestureHandling="greedy"
@@ -784,6 +808,7 @@ function RidePageContent() {
                             placeholder="Punto de partida" 
                             iconName="map-pin" 
                             iconClassName="text-indigo-400"
+                            cityKey={profile?.cityKey}
                         />
                         <button 
                             onClick={() => handleOpenMapSelector('origin')}
@@ -800,6 +825,7 @@ function RidePageContent() {
                             placeholder="¿A dónde vas?" 
                             iconName="flag" 
                             iconClassName="text-emerald-400"
+                            cityKey={profile?.cityKey}
                         />
                         <button 
                             onClick={() => handleOpenMapSelector('destination')}
@@ -915,7 +941,7 @@ function RidePageContent() {
                          <div className="border-b border-emerald-500/20 pb-3 mb-1">
                              <div className="flex items-center gap-2 mb-2">
                                  <VamoIcon name="users" className="w-5 h-5 text-emerald-400" />
-                                 <h3 className="font-black text-emerald-400 uppercase tracking-widest text-sm">NUEVO: VAMO COMPARTIDO</h3>
+                                 <h3 className="font-black text-emerald-400 uppercase tracking-widest text-sm">VAMO COMPARTIDO</h3>
                              </div>
                              <p className="text-xs text-emerald-100/80 leading-relaxed font-medium">
                                  Compartí el viaje con pasajeros cercanos, <span className="font-bold text-white">pagá menos</span> y ayudá a que el conductor <span className="font-bold text-white">gane más</span>.
@@ -935,22 +961,15 @@ function RidePageContent() {
                                      <span className="text-[10px] text-emerald-100/70 font-bold leading-tight mb-1">
                                        {selectedSeats.length === 1 ? 'Por 1 asiento' : 'Por vos + 1 acompañante'}
                                      </span>
-                                     {estimatedPrice ? (() => {
-                                       // 1 asiento: precio_base × 0.60
-                                       // 2 asientos: precio_base × 0.60 × 1.10 (acompañante +10%)
-                                       const baseFare = Math.round((estimatedPrice * 0.60) / 100) * 100;
-                                       const seatMultiplier = selectedSeats.length >= 2 ? 1.10 : 1.00;
-                                       const sharedFare = Math.round((baseFare * seatMultiplier) / 100) * 100;
-                                       const saving = estimatedPrice - sharedFare;
-                                       return (
-                                         <>
-                                           <span className="text-sm sm:text-base font-black text-white">Pagás ${sharedFare.toLocaleString('es-AR')}</span>
-                                           <span className="text-[10px] font-bold text-emerald-300">Ahorrás ${saving.toLocaleString('es-AR')} vs viaje individual</span>
-                                         </>
-                                       );
-                                     })() : (
-                                         <span className="text-sm sm:text-base font-black text-white">Cargando precio...</span>
-                                     )}
+                                     {estimatedPrice && sharedFareCalculation ? (() => {
+                                         const saving = estimatedPrice - sharedFareCalculation;
+                                         return (
+                                           <>
+                                             <span className="text-sm sm:text-base font-black text-white">Pagás ${sharedFareCalculation.toLocaleString('es-AR')}</span>
+                                             <span className="text-[10px] font-bold text-emerald-300">Ahorrás ${saving.toLocaleString('es-AR')} vs individual</span>
+                                           </>
+                                         );
+                                     })() : null}
                                    </>
                                  ) : (
                                    <span className="text-[11px] font-bold text-emerald-300">Seleccioná tus asientos para ver el precio</span>
@@ -972,34 +991,31 @@ function RidePageContent() {
                  )}
 
                  {/* BLOQUE B: SELECTOR DE PAGO SOBRIO */}
+                 {scheduledAt ? (
+                     <div className="flex flex-col gap-1.5 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl text-center">
+                         <span className="text-[11px] font-black uppercase text-indigo-400">Reserva Programada</span>
+                         <span className="text-[10px] text-indigo-300 font-medium">Las reservas se abonan únicamente en <b className="font-black text-white">Efectivo</b> al finalizar el viaje.</span>
+                     </div>
+                 ) : (
                     <div className="flex gap-1.5 p-1.5 bg-white/5 border border-white/5 rounded-2xl">
                         <button onClick={() => setPaymentMethod('cash')} className={cn("flex-1 py-1.5 rounded-xl text-[11px] font-black transition-all uppercase tracking-tight", paymentMethod === 'cash' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70')}>Efectivo</button>
                         <button onClick={() => setPaymentMethod('wallet')} className={cn("flex-1 py-1.5 rounded-xl text-[11px] font-black transition-all uppercase tracking-tight", paymentMethod === 'wallet' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70')}>Billetera</button>
                         <button onClick={() => setPaymentMethod('automatic')} className={cn("flex-1 py-1.5 rounded-xl text-[11px] font-black transition-all uppercase tracking-tight", paymentMethod === 'automatic' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white/70')}>Mercado Pago</button>
                     </div>
+                 )}
 
                      {/* BLOQUE C: DESGLOSE COMPLETO VamO (ESTÁNDAR UNIFICADO) */}
                      {savingsSimulation && (
                        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-3 shadow-inner">
                           {/* DYNAMIC PRICING BREAKDOWN */}
-                          {dynamicSnapshot?.applied ? (
+                          {serviceType === 'shared' ? (
                              <>
-                                <div className="flex items-center gap-2 mb-1">
-                                   <div className="bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/20 flex items-center gap-1">
-                                       <Sparkles className="w-2.5 h-2.5" />
-                                       <span className="text-[8px] font-black uppercase tracking-widest leading-none">Tarifa Dinámica VamO</span>
-                                   </div>
-                                </div>
-                                <div className="flex justify-between items-center text-xs px-1">
-                                    <span className="font-bold text-white/40 uppercase tracking-tight">Tarifa municipal</span>
-                                    <span className="font-black text-white/60">${dynamicSnapshot.municipalBaseFare}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-xs px-1">
-                                    <div className="flex items-center gap-1.5 font-bold text-indigo-400 uppercase tracking-tight">
-                                        <span>Descuento VamO</span>
-                                    </div>
-                                    <span className="font-black text-indigo-400">-${dynamicSnapshot.appliedDiscountAmount}</span>
-                                </div>
+                                 <div className="flex justify-between items-center text-xs px-1">
+                                     <span className="font-bold text-white/40 uppercase tracking-tight">Tarifa compartida base</span>
+                                     <span className="font-black text-emerald-400">
+                                         ${sharedFareCalculation}
+                                     </span>
+                                 </div>
                              </>
                           ) : (
                              <>
@@ -1112,7 +1128,11 @@ function RidePageContent() {
                       Mueve el mapa para seleccionar el punto exacto de origen o destino.
                   </DialogDescription>
               </DialogHeader>
-              <MapSelector initialLocation={mapEditingField === 'origin' ? origin : destination} onLocationSelect={handleMapSelect} />
+              <MapSelector 
+                  onLocationSelect={handleMapSelect} 
+                  initialLocation={mapEditingField === 'origin' ? origin : destination} 
+                  cityKey={profile?.cityKey}
+              />
           </DialogContent>
       </Dialog>
 
@@ -1439,6 +1459,7 @@ function RidePageContent() {
       </AlertDialog>
 
     </div>
+    </PassengerCityLaunchGate>
 
   );
 }

@@ -19,6 +19,20 @@
                         "queryScope":  "COLLECTION",
                         "fields":  [
                                        {
+                                           "fieldPath":  "driverId",
+                                           "order":  "ASCENDING"
+                                       },
+                                       {
+                                           "fieldPath":  "createdAt",
+                                           "order":  "DESCENDING"
+                                       }
+                                   ]
+                    },
+                    {
+                        "collectionGroup":  "rides",
+                        "queryScope":  "COLLECTION",
+                        "fields":  [
+                                       {
                                            "fieldPath":  "passengerId",
                                            "order":  "ASCENDING"
                                        },
@@ -1143,6 +1157,20 @@
                                        {
                                            "fieldPath":  "status",
                                            "order":  "ASCENDING"
+                                       }
+                                   ]
+                    },
+                    {
+                        "collectionGroup":  "items",
+                        "queryScope":  "COLLECTION",
+                        "fields":  [
+                                       {
+                                           "fieldPath":  "role",
+                                           "order":  "ASCENDING"
+                                       },
+                                       {
+                                           "fieldPath":  "createdAt",
+                                           "order":  "DESCENDING"
                                        }
                                    ]
                     }

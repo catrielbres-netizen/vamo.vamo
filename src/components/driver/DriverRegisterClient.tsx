@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { VamoIcon } from '@/components/VamoIcon';
 import { DriverOnboardingWizard } from './DriverOnboardingWizard';
 import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
+import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
 
 export default function DriverRegisterClient() {
     const { user, profile, loading } = useUser();
@@ -96,8 +97,29 @@ export default function DriverRegisterClient() {
         } catch (error: any) {
             console.error('Signup Error:', error);
             let description = error.message;
-            if (error.code === 'auth/email-already-in-use') description = 'Este email ya está registrado.';
+            if (error.code === 'auth/email-already-in-use') description = 'Este email ya está registrado en VamO. Iniciá sesión o usá otro correo.';
             toast({ variant: 'destructive', title: 'Error de registro', description });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleGoogleAuthSuccess = async (userCredential: any) => {
+        setIsSubmitting(true);
+        try {
+            console.log("[ONBOARDING_DEBUG] Google Auth success. Calling backend for atomic registration...");
+            const { getFunctions, httpsCallable } = await import('firebase/functions');
+            const functions = getFunctions(undefined, 'us-central1');
+            const completeRegistration = httpsCallable(functions, 'completeDriverRegistrationV1');
+
+            await completeRegistration({});
+            console.log("[ONBOARDING_DEBUG] Backend registration success.");
+
+            toast({ title: '¡Cuenta creada con Google!', description: 'Ahora completá tu perfil de conductor.' });
+            // The component will re-render and show the wizard because `user` is now defined
+        } catch (error: any) {
+            console.error('Google Signup Error:', error);
+            toast({ variant: 'destructive', title: 'Error de registro', description: error.message });
         } finally {
             setIsSubmitting(false);
         }
@@ -171,6 +193,8 @@ export default function DriverRegisterClient() {
                             >
                                 {isSubmitting ? <VamoIcon name="loader" className="animate-spin h-5 w-5" /> : 'Siguiente Paso'}
                             </Button>
+
+                            {/* Removed Google Auth Button */}
 
                             <div className="text-center pt-2">
                                 <button 

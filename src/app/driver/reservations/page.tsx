@@ -19,6 +19,7 @@ export default function DriverReservationsPage() {
     const { profile } = useUser();
     const firestore = useFirestore();
     const [reservations, setReservations] = useState<Ride[]>([]);
+    const [myReservations, setMyReservations] = useState<Ride[]>([]);
     const [loading, setLoading] = useState(true);
     const driverCity = profile?.operatingAreaId || profile?.cityKey || '';
 
@@ -27,10 +28,14 @@ export default function DriverReservationsPage() {
 
         console.log("🔍 [RESERVAS] Iniciando escucha. driverCity:", driverCity || "TODAS");
 
-        // Query simple sin filtro de ciudad (evita requerir índice compuesto en Firestore)
-        // El filtro de ciudad se aplica en el cliente
+        if (!driverCity) {
+            setLoading(false);
+            return;
+        }
+
         const q = query(
             collection(firestore, 'rides'),
+            where('cityKey', '==', driverCity),
             where('status', 'in', ['scheduled', 'searching'])
         );
 
@@ -39,7 +44,7 @@ export default function DriverReservationsPage() {
                 let list = snapshot.docs
                     .map(doc => ({ id: doc.id, ...doc.data() } as any))
                     .filter(ride => {
-                        // Filtro de ciudad en el cliente (fuzzy match igual que el contador del layout)
+                        // Filtro de ciudad en el cliente
                         if (driverCity) {
                             const c = (ride.cityKey || '').toLowerCase();
                             const dc = driverCity.toLowerCase();
@@ -50,16 +55,19 @@ export default function DriverReservationsPage() {
                         // Excluir simulaciones
                         if (ride.isSimulation === true) return false;
 
-                        // Si está en 'searching', solo mostrar si estoy interesado
-                        if (ride.status === 'searching' && !ride.interestedDriverIds?.includes(profile?.id || profile?.uid || '')) {
+                        // Si está asignado a otro, no lo muestro
+                        if ((ride.status === 'driver_assigned' || ride.status === 'activating') && ride.driverId !== profile?.uid) {
+                            return false;
+                        }
+
+                        // Si está en 'searching', solo mostrar si estoy interesado o es compartida
+                        if (ride.status === 'searching' && !ride.isSharedRide && !ride.interestedDriverIds?.includes(profile?.id || profile?.uid || '')) {
                             return false;
                         }
 
                         return true;
                     });
                 
-                console.log("🔍 [RESERVAS] Viajes encontrados:", list.length, list.map((r: any) => r.id));
-
                 list.sort((a: any, b: any) => {
                     const timeA = typeof a.scheduledAt?.toMillis === 'function' ? a.scheduledAt.toMillis() : (a.scheduledAt?.seconds ? a.scheduledAt.seconds * 1000 : 0);
                     const timeB = typeof b.scheduledAt?.toMillis === 'function' ? b.scheduledAt.toMillis() : (b.scheduledAt?.seconds ? b.scheduledAt.seconds * 1000 : 0);
@@ -77,8 +85,35 @@ export default function DriverReservationsPage() {
             setLoading(false);
         });
 
-        return () => unsubscribe();
-    }, [driverCity, firestore]);
+        const qMine = query(
+            collection(firestore, 'rides'),
+            where('driverId', '==', profile?.id || profile?.uid || ''),
+            where('status', 'in', ['driver_assigned', 'activating'])
+        );
+
+        const unsubscribeMine = onSnapshot(qMine, (snapshot) => {
+            try {
+                let list = snapshot.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() } as any))
+                    .filter(ride => ride.isScheduled && ride.activationStatus === 'waiting_scheduled_time');
+                
+                list.sort((a: any, b: any) => {
+                    const timeA = typeof a.scheduledAt?.toMillis === 'function' ? a.scheduledAt.toMillis() : (a.scheduledAt?.seconds ? a.scheduledAt.seconds * 1000 : 0);
+                    const timeB = typeof b.scheduledAt?.toMillis === 'function' ? b.scheduledAt.toMillis() : (b.scheduledAt?.seconds ? b.scheduledAt.seconds * 1000 : 0);
+                    return timeA - timeB;
+                });
+                
+                setMyReservations(list);
+            } catch (error) {
+                console.error("❌ [RESERVAS MINE] Error:", error);
+            }
+        });
+
+        return () => {
+            unsubscribe();
+            unsubscribeMine();
+        };
+    }, [driverCity, firestore, profile?.uid, profile?.id]);
 
     // Un conductor puede ver la bolsa si tiene cualquier forma de habilitación activa o si está en Plan B y está aprobado
     const isEligibleDriver = profile?.approved === true || (!featureFlags.vamoParticularModeEnabled && profile?.municipalStatus === 'active');
@@ -105,7 +140,7 @@ export default function DriverReservationsPage() {
                     <div className="w-8 h-8 border-4 border-primary/10 border-t-primary rounded-full animate-spin"></div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground animate-pulse">Cargando bolsa...</p>
                 </div>
-            ) : reservations.length === 0 ? (
+            ) : reservations.length === 0 && myReservations.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-12 bg-card border border-dashed border-border rounded-[2.5rem] text-center">
                     <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
                         <VamoIcon name="calendar" className="w-8 h-8 text-muted-foreground" />
@@ -115,13 +150,35 @@ export default function DriverReservationsPage() {
                 </div>
             ) : (
                 <div className="grid gap-4">
-                    {reservations.map((ride) => (
-                        <ReservationCard 
-                            key={ride.id} 
-                            ride={ride} 
-                            isEligibleDriver={isEligibleDriver} 
-                        />
-                    ))}
+                    {myReservations.length > 0 && (
+                        <div className="mb-4">
+                            <h2 className="text-sm font-bold text-indigo-400 uppercase tracking-widest mb-3">Mis Próximos Viajes</h2>
+                            <div className="grid gap-4">
+                                {myReservations.map((ride) => (
+                                    <ReservationCard 
+                                        key={ride.id} 
+                                        ride={ride} 
+                                        isEligibleDriver={isEligibleDriver} 
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {reservations.length > 0 && (
+                        <div>
+                            <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-3">Bolsa Disponible</h2>
+                            <div className="grid gap-4">
+                                {reservations.map((ride) => (
+                                    <ReservationCard 
+                                        key={ride.id} 
+                                        ride={ride} 
+                                        isEligibleDriver={isEligibleDriver} 
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -151,23 +208,21 @@ function ReservationCard({ ride, isEligibleDriver }: { ride: Ride; isEligibleDri
     const scheduledDate = ride.scheduledAt instanceof Timestamp ? ride.scheduledAt.toDate() : new Date(ride.scheduledAt as any);
     const timeUntil = formatDistanceToNow(scheduledDate, { locale: es, addSuffix: true });
     
-    const isInterested = user?.uid ? ride.interestedDriverIds?.includes(user.uid) : false;
-
-    const handleJoinQueue = async () => {
+    const handleAcceptReservation = async () => {
         if (!user) return;
         try {
             setLoading(true);
-            const functions = getFunctions();
-            const joinQueue = httpsCallable(functions, 'joinScheduledRideInterestV1');
-            await joinQueue({ rideId: ride.id });
+            const functions = getFunctions(undefined, 'us-central1');
+            const acceptReservation = httpsCallable(functions, 'acceptScheduledRideV1');
+            await acceptReservation({ rideId: ride.id });
             toast({
-                title: '¡Anotado exitosamente!',
-                description: 'Estás en la cola de prioridad para este viaje.',
+                title: '¡Reserva Asignada!',
+                description: 'La reserva ya es tuya. ¡No te olvides de estar online 15 mins antes!',
             });
         } catch (error: any) {
             toast({
                 variant: 'destructive',
-                title: 'No se pudo anotar',
+                title: 'No se pudo aceptar la reserva',
                 description: error.message || 'Error al conectar con el servidor.',
             });
         } finally {
@@ -175,8 +230,20 @@ function ReservationCard({ ride, isEligibleDriver }: { ride: Ride; isEligibleDri
         }
     };
 
+    const isMine = ride.driverId === user?.uid || ride.driverId === (user as any)?.id;
+    const isAvailable = ride.status === 'scheduled' || ride.status === 'pending_driver_assignment';
+    const timeDiff = scheduledDate.getTime() - Date.now();
+    const minutesUntil = timeDiff / 60000;
+    const canAccept = minutesUntil <= 15;
+
+    const pickupAddress = (ride as any).pickup?.address || ride.origin?.address || (ride as any).originAddress || "Origen no disponible";
+    const destinationAddress = ride.destination?.address || (ride as any).dropoff?.address || (ride as any).destinationAddress || "Destino no disponible";
+
     return (
-        <Card className="rounded-[2rem] overflow-hidden border-border/50 shadow-sm bg-card/50 backdrop-blur-sm">
+        <Card className={cn(
+            "rounded-[2rem] overflow-hidden shadow-sm backdrop-blur-sm transition-all",
+            isMine ? "bg-indigo-600/10 border-indigo-500/30" : "bg-card/50 border-border/50"
+        )}>
             <CardContent className="p-6 flex flex-col gap-4">
                 <div className="flex justify-between items-start">
                     <div className="flex flex-col">
@@ -198,10 +265,14 @@ function ReservationCard({ ride, isEligibleDriver }: { ride: Ride; isEligibleDri
                         <h3 className="text-xl font-black text-white leading-none">
                             {scheduledDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs
                         </h3>
-                        {ride.status === 'searching' ? (
+                        {ride.status === 'activating' ? (
+                            <p className="text-xs font-black text-amber-400 mt-1 uppercase animate-pulse">Activando viaje...</p>
+                        ) : ride.status === 'searching' ? (
                             <p className="text-xs font-black text-emerald-400 mt-1 uppercase animate-pulse">Buscando conductor...</p>
-                        ) : (
+                        ) : isMine ? (
                             <p className="text-xs font-bold text-indigo-400 mt-1 uppercase tracking-widest">{timeUntil}</p>
+                        ) : (
+                            <p className="text-xs font-bold text-zinc-400 mt-1 uppercase tracking-widest">{timeUntil}</p>
                         )}
                     </div>
                     <div className="text-right">
@@ -213,46 +284,44 @@ function ReservationCard({ ride, isEligibleDriver }: { ride: Ride; isEligibleDri
                 <div className="space-y-3 py-4 border-y border-border/50">
                     <div className="flex gap-3 items-center">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                        <p className="text-xs font-medium text-zinc-300 truncate">{ride.origin.address}</p>
+                        <p className="text-xs font-medium text-zinc-300 truncate">{pickupAddress}</p>
                     </div>
                     <div className="flex gap-3 items-center">
                         <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
-                        <p className="text-xs font-medium text-zinc-300 truncate">{ride.destination.address}</p>
+                        <p className="text-xs font-medium text-zinc-300 truncate">{destinationAddress}</p>
                     </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                        <VamoIcon name="users" className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                            {ride.interestedDriversCount || 0} en cola
-                        </span>
-                    </div>
-                    
+                <div className="flex flex-col gap-2">
+                    {!isMine && !canAccept && (
+                        <p className="text-[10px] text-center font-bold text-amber-500 bg-amber-500/10 py-1.5 px-3 rounded-md">
+                            Disponible para aceptar {Math.ceil(minutesUntil - 15)} min antes
+                        </p>
+                    )}
                     <Button 
-                        onClick={handleJoinQueue}
-                        disabled={isInterested || loading || ride.status !== 'scheduled' || !isEligibleDriver}
-                        variant={isInterested ? "secondary" : "default"}
+                        onClick={handleAcceptReservation}
+                        disabled={!isAvailable || loading || !isEligibleDriver || isMine || (!isMine && !canAccept)}
+                        variant={isMine ? "secondary" : "default"}
                         className={cn(
-                            "h-10 px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-all",
-                            isInterested 
-                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 opacity-100" 
-                                : !isEligibleDriver 
-                                    ? "bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed"
-                                    : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
+                            "h-10 px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-all w-full",
+                            isMine 
+                                ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 opacity-100" 
+                                : !isEligibleDriver || !isAvailable || !canAccept
+                                    ? "bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed hidden"
+                                    : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
                         )}
                     >
                         {loading ? (
                             <VamoIcon name="loader" className="w-4 h-4 animate-spin" />
-                        ) : isInterested ? (
+                        ) : isMine ? (
                             <>
                                 <VamoIcon name="check" className="w-3.5 h-3.5 mr-2" />
-                                Anotado
+                                Asignada a vos
                             </>
                         ) : !isEligibleDriver ? (
                             'Habilitación Req.'
                         ) : (
-                            'Anotarme'
+                            'Aceptar Reserva'
                         )}
                     </Button>
                 </div>

@@ -58,7 +58,8 @@ service firebase.storage {
     match /driver_documents/{userId}/{allPaths=**} {
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow write: if signedIn() && request.auth.uid == userId
-                   && request.resource.contentType.matches('image/.*');
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*|application/pdf');
     }
     
     // 4. PRIVATE: [FASE 4A] Municipal Documents (Hardened O(1))

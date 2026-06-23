@@ -20,6 +20,7 @@ const DOC_LABELS: Record<MunicipalChecklistKey, string> = {
     criminalRecord:         'Antecedentes penales',
     municipalCanon:         'Canon municipal',
     disinfectionReceipt:    'Certificado de Desinfección',
+    vehicleModelYearProof:  'Comprobante de modelo/año del vehículo',
 };
 
 function formatDate(ts: any) {

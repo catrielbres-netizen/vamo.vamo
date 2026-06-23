@@ -23,6 +23,7 @@ export default function WalletPageClient() {
     const { toast } = useToast();
     const { isGrantingBonus } = usePassengerData();
     const [isTopUpLoading, setIsTopUpLoading] = useState(false);
+    const [isWithdrawingGR, setIsWithdrawingGR] = useState(false);
     const [mounted, setMounted] = useState(false);
 
     // Hydration guard: ensures component only renders on client
@@ -84,6 +85,27 @@ export default function WalletPageClient() {
         }
     };
 
+    const handleWithdrawGrossReceipts = async () => {
+        if (!firebaseApp) return;
+        setIsWithdrawingGR(true);
+        try {
+            const functions = getFunctions(firebaseApp, 'us-central1');
+            const withdraw = httpsCallable(functions, 'withdrawGrossReceiptsV1');
+            const res = await withdraw();
+            const data = res.data as any;
+            
+            toast({ 
+                title: 'Retiro Exitoso', 
+                description: `Se han acreditado $${(data.amount || 0).toLocaleString('es-AR')} a tu saldo disponible.` 
+            });
+            refetchWallet();
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Error', description: error.message });
+        } finally {
+            setIsWithdrawingGR(false);
+        }
+    };
+
     if (!mounted || isLoading) {
         return (
             <div className="space-y-8 pb-32 animate-in fade-in duration-700">
@@ -140,10 +162,28 @@ export default function WalletPageClient() {
     const transactions = data?.transactions || [];
     const cashBalance = wallet?.cashBalance ?? 0;
     const promoBalance = wallet?.promoBalance ?? 0;
+    const grossReceiptsBalance = wallet?.grossReceiptsBalance ?? 0;
     const totalBalance = cashBalance + promoBalance + activeCreditsAmount;
     
     // Welcome Bonus Detection
     const hasWelcomeBonus = transactions.some((tx: any) => tx?.type === 'welcome_bonus') && (promoBalance > 0);
+
+    // GR Withdrawal Logic
+    let daysSinceGRWithdrawal = 999;
+    if (wallet?.lastGrossReceiptsWithdrawalAt) {
+        let lastWithdrawalDate: Date;
+        if (typeof wallet.lastGrossReceiptsWithdrawalAt.toDate === 'function') {
+            lastWithdrawalDate = wallet.lastGrossReceiptsWithdrawalAt.toDate();
+        } else if (wallet.lastGrossReceiptsWithdrawalAt.seconds) {
+            lastWithdrawalDate = new Date(wallet.lastGrossReceiptsWithdrawalAt.seconds * 1000);
+        } else {
+            lastWithdrawalDate = new Date(wallet.lastGrossReceiptsWithdrawalAt);
+        }
+        const diffTime = Math.abs(new Date().getTime() - lastWithdrawalDate.getTime());
+        daysSinceGRWithdrawal = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+    const canWithdrawGR = daysSinceGRWithdrawal >= 28;
+    const daysLeftForGR = 28 - daysSinceGRWithdrawal;
 
     return (
         <div className="space-y-8 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -186,6 +226,28 @@ export default function WalletPageClient() {
                                 <p className="font-bold text-xl text-indigo-200">${(wallet?.promoBalance + activeCreditsAmount).toLocaleString('es-AR')}</p>
                             </div>
                         </div>
+
+                        {/* Apartado Ingresos Brutos */}
+                        {grossReceiptsBalance > 0 && (
+                            <div className="mt-4 p-4 rounded-3xl border border-amber-500/20 bg-amber-500/5 flex flex-col sm:flex-row justify-between items-center gap-4">
+                                <div className="text-left">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">Apartado Ingresos Brutos</p>
+                                    <p className="text-xl font-bold text-amber-100">${grossReceiptsBalance.toLocaleString('es-AR')}</p>
+                                    {!canWithdrawGR ? (
+                                        <p className="text-[10px] text-red-400 mt-1 font-bold">Disponible en {daysLeftForGR} día{daysLeftForGR !== 1 ? 's' : ''}</p>
+                                    ) : (
+                                        <p className="text-[10px] text-zinc-400 mt-1">Este monto puede ser transferido a tu saldo principal una vez al mes.</p>
+                                    )}
+                                </div>
+                                <Button
+                                    onClick={handleWithdrawGrossReceipts}
+                                    disabled={isWithdrawingGR || !canWithdrawGR}
+                                    className={`${!canWithdrawGR ? 'bg-zinc-800 text-zinc-500' : 'bg-amber-500 hover:bg-amber-600 text-black'} font-black uppercase text-xs px-6 rounded-2xl h-10`}
+                                >
+                                    {isWithdrawingGR ? 'Retirando...' : 'Retirar Saldo'}
+                                </Button>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>

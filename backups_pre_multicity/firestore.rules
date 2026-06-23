@@ -1,0 +1,792 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isDriver() {
+      return signedIn() && request.auth.token.r != null && request.auth.token.r == 'driver';
+    }
+
+    function isPassenger() {
+      return signedIn() && (
+        request.auth.token.role == 'passenger' ||
+        request.auth.token.r == 'passenger'
+      );
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.r == 'admin' || 
+        request.auth.token.role == 'admin'
+      );
+    }
+
+    function isSuperAdmin() {
+      return signedIn() && (
+        request.auth.token.r == "superadmin" ||
+        request.auth.token.role == "superadmin" ||
+        request.auth.token.superadmin == true
+      );
+    }
+
+    function isGlobalAdmin() {
+      return isAdmin() || isSuperAdmin();
+    }
+
+    match /email_index/{email} {
+      allow read, write: if false; // Cloud Functions only
+    }
+
+    match /phone_index/{phone} {
+      allow read, write: if false; // Cloud Functions only
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (
+        request.auth.uid == userId || 
+        isAdmin() || isSuperAdmin() || 
+        isMunicipalForCity(resource.data.get('cityKey', '')) ||
+        isTrafficForCity(resource.data.get('cityKey', '')) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'station_operator' && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.stationId == resource.data.stationId)
+      );
+      
+      // [VamO PRO SECURITY] Direct client-side creation is BLOCKED. 
+      // Use completePassengerRegistrationV1 or completeDriverRegistrationV1.
+      allow create: if false;
+                    
+      // Owner can update ONLY non-sensitive fields. 
+      // All other mutations (onboarding, status, role) must go through Backend Callables.
+      allow update: if signedIn() && (
+        isAdmin() || isSuperAdmin() || 
+        (isMunicipalForCity(resource.data.get('cityKey', '')) && 
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['approved', 'municipalStatus', 'municipalCode', 'updatedAt']) &&
+         (request.resource.data.approved == false || resource.data.approved == true) &&
+         (request.resource.data.municipalStatus != 'active' || resource.data.municipalStatus == 'active')) ||
+        (request.auth.uid == userId && (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly([
+              'fcmToken', 'updatedAt', 'isOnline', 'lastActiveAt', 
+              'hasSeenTutorial', 'tutorialSeenAt', 
+              'photoURL', 'avatarUrl', 'photoUpdatedAt',
+              'emergencyContacts', 'onboardingCompleted',
+              'termsAccepted', 'termsAcceptedAt',
+              'identityDocuments', 'identityStatus', 'identitySubmittedAt',
+              'driverPreferences', 'uiPreferences'
+            ]) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['identityStatus']) || 
+           request.resource.data.identityStatus in ['unverified', 'pending']) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['driverPreferences']) || (
+            isDriver() && 
+            request.resource.data.driverPreferences.keys().hasOnly(['acceptsExpress', 'acceptsDiscountedRides', 'acceptsPets']) &&
+            request.resource.data.driverPreferences.get('acceptsExpress', true) == resource.data.get('driverPreferences', {}).get('acceptsExpress', true) &&
+            (resource.data.get('driverSubtype', 'professional') != 'express' || request.resource.data.driverPreferences.acceptsDiscountedRides == true)
+          ))
+        ))
+      );
+    }
+
+    match /mp_accounts/{driverId} {
+      allow read: if signedIn() && request.auth.uid == driverId;
+      allow write: if false;
+    }
+
+    match /mp_oauth_states/{stateId} {
+      allow read, write: if false;
+    }
+
+    match /users/{userId}/documents/{docId} {
+      allow read: if signedIn() && (
+        request.auth.uid == userId || 
+        isAdmin() || isSuperAdmin() || 
+        (isMunicipalForCity(resource.data.get('cityKey', '')) && resource.data.category == 'municipal') ||
+        (isTrafficForCity(resource.data.get('cityKey', '')) && resource.data.category in ['municipal', 'traffic'])
+      );
+      allow write: if false;
+    }
+
+    match /traffic_observations/{obsId} {
+      allow read: if signedIn() && (
+        request.auth.uid == resource.data.driverId ||
+        isAdmin() || isSuperAdmin() ||
+        isTrafficForCity(resource.data.get('cityKey', '')) ||
+        isMunicipalForCity(resource.data.get('cityKey', ''))
+      );
+      allow write: if false;
+    }
+
+    match /drivers/{driverId} {
+      allow read: if signedIn();
+      allow write: if isAdmin() || isSuperAdmin() || isMunicipalAdmin();
+    }
+
+    // ── collectionGroup documents ─────────────────────────────────────────────
+    match /{path=**}/documents/{docId} {
+      allow read: if signedIn() && (
+        isAdmin() || isSuperAdmin() || 
+        (isMunicipalForCity(resource.data.get('cityKey', '')) && resource.data.category == 'municipal') ||
+        (isTrafficForCity(resource.data.get('cityKey', '')) && resource.data.category in ['municipal', 'traffic'])
+      );
+    }
+
+    match /public_driver_profiles/{driverId} {
+      allow read: if true;
+      allow write: if isAdmin() || isSuperAdmin() || isMunicipalAdmin();
+    }
+
+    match /benefits/{benefitId} {
+      allow read: if signedIn();
+      allow write: if isAdmin() || isSuperAdmin();
+    }
+
+    match /rides/{rideId} {
+      allow get: if signedIn() && (
+        resource.data.passengerId == request.auth.uid || 
+        request.auth.uid in resource.data.get('passengerIds', []) ||
+        resource.data.driverId == request.auth.uid ||
+        isAdmin() || isSuperAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'station_operator' && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.stationId == resource.data.stationId)
+      );
+
+      // SECURITY: Users can only READ their own rides. Admin can read everything.
+      // SECURITY: Rides must be created only through createRideV1 Cloud Function.
+      // This protects pricing, wallet lock, legalAcceptance and matching integrity.
+      allow read: if signedIn() && (
+        isAdmin() || isSuperAdmin() || 
+        isMunicipalForCity(resource.data.get('cityKey', '')) ||
+        isTrafficForCity(resource.data.get('cityKey', '')) ||
+        resource.data.passengerId == request.auth.uid || 
+        request.auth.uid in resource.data.get('passengerIds', []) ||
+        resource.data.driverId == request.auth.uid ||
+        (isDriver() && resource.data.status in ['scheduled', 'searching'] && resource.data.get('cityKey', '') == request.auth.token.ck) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'station_operator' && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.stationId == resource.data.stationId)
+      );
+
+      // SECURITY: Rides must be created only through createRideV1 Cloud Function.
+      // This protects pricing, wallet lock, legalAcceptance and matching integrity.
+      allow create: if false;
+      
+      // Allow participants to update ONLY safe telemetry/status fields
+      allow update: if signedIn() && (
+        (resource.data.passengerId == request.auth.uid || 
+         request.auth.uid in resource.data.get('passengerIds', []) ||
+         resource.data.driverId == request.auth.uid) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasAny(['etaMinutes', 'recordingStatus', 'updatedAt']) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'status', 'pricing', 'commissionAmount', 'driverId', 'passengerId', 'cityKey', 'serviceType', 'completedRide'
+        ])
+      );
+
+      allow delete: if false; // Only backend updates
+    }
+
+    // ── drivers_locations/{driverId} ──────────────────────────────────────────
+    match /drivers_locations/{driverId} {
+      // SECURITY: Access allowed for owner, admin, or any signed-in user who needs to fetch nearby drivers.
+      allow get: if signedIn();
+      
+      // SECURITY: List restricted to prevent global scraping. 
+      // Passengers only need local slices.
+      allow list: if isAdmin() || isSuperAdmin() || (signedIn() && request.query.limit <= 50);
+
+      // SECURITY: Owner can update their location and telemetry, but NOT sensitive risk/financial fields.
+      allow write: if signedIn() && request.auth.uid == driverId && 
+                    !request.resource.data.diff(resource.data).affectedKeys()
+                    .hasAny(['walletBalance', 'driverRiskLevel', 'driverRiskScore', 'driverSubtype', 'approved', 'isSuspended', 'municipalStatus']);
+    }
+
+    match /platform_transactions/{transactionId} {
+      // Tránsito NO tiene acceso a transacciones de plataforma
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', '')) || (signedIn() && resource.data.driverId == request.auth.uid);
+    }
+
+    match /rideOffers/{offerId} {
+      // SECURITY: Only the assigned driver can read their own offers. Admin has full access.
+      // List is allowed but will naturally be filtered by the underlying where('driverId', '==', uid) in the query.
+      allow read: if isAdmin() || isSuperAdmin() || (signedIn() && resource.data.driverId == request.auth.uid);
+      allow write: if isAdmin() || isSuperAdmin(); // Only backend/admin can create/edit offers from a security standpoint
+    }
+
+    match /rewards/rewards {
+      allow get: if signedIn();
+    }
+
+    match /config/pricing {
+      allow get: if signedIn();
+      allow write: if isAdmin() || isSuperAdmin();
+    }
+
+    match /driver_points/{driverId} {
+      allow read: if signedIn();
+    }
+
+    match /rides/{rideId}/tracking/{pointId} {
+      allow write: if get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid;
+      allow read: if signedIn() && (
+         get(/databases/$(database)/documents/rides/$(rideId)).data.passengerId == request.auth.uid ||
+         request.auth.uid in get(/databases/$(database)/documents/rides/$(rideId)).data.get('passengerIds', []) ||
+         get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid ||
+         isAdmin() || isSuperAdmin()
+      );
+    }
+
+    match /rides/{rideId}/messages/{messageId} {
+      allow read: if signedIn() && (
+         get(/databases/$(database)/documents/rides/$(rideId)).data.passengerId == request.auth.uid ||
+         request.auth.uid in get(/databases/$(database)/documents/rides/$(rideId)).data.get('passengerIds', []) ||
+         get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid ||
+         isAdmin() || isSuperAdmin()
+      );
+      allow list: if signedIn() && (
+         get(/databases/$(database)/documents/rides/$(rideId)).data.passengerId == request.auth.uid ||
+         request.auth.uid in get(/databases/$(database)/documents/rides/$(rideId)).data.get('passengerIds', []) ||
+         get(/databases/$(database)/documents/rides/$(rideId)).data.driverId == request.auth.uid ||
+         isAdmin() || isSuperAdmin()
+      );
+      allow write: if false; // Only via Cloud Functions
+    }
+
+    match /municipal_accounts/{cityKey} {
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(cityKey);
+      allow write: if isAdmin() || isSuperAdmin(); // Only backend or global admin can modify balances directly
+    }
+
+    match /municipal_withdraw_requests/{requestId} {
+      allow create: if isDriver() && request.resource.data.driverId == request.auth.uid;
+      // Tránsito NO puede leer ni actualizar retiros
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', '')) || (signedIn() && resource.data.driverId == request.auth.uid);
+      allow update: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+    }
+
+    match /panic_alerts/{alertId} {
+      // SECURITY: Global admins can see everything. 
+      // Municipal admins and traffic operators can only see alerts from their own city.
+      allow read, list: if isAdmin() || isSuperAdmin() || (signedIn() && (isMunicipalForCity(resource.data.get('cityKey', '')) || isTrafficForCity(resource.data.get('cityKey', ''))));
+      
+      // Updates and creations are strictly handled by safety.ts Cloud Functions to ensure data integrity.
+      allow write: if false; 
+    }
+
+    match /referrals/{referralId} {
+      // Strictly Admin-only for global lists and management. 
+      // Users can only read if they are the referrer to see their own rewards status.
+      allow read: if isAdmin() || isSuperAdmin() || (signedIn() && resource.data.referrerId == request.auth.uid);
+      allow list: if isAdmin() || isSuperAdmin(); // Common users cannot list referrals globally
+      allow write: if isAdmin() || isSuperAdmin();
+    }
+
+    match /user_rewards/{rewardId} {
+      // Strictly Admin-only for global lists.
+      // Users can read/list only their own rewards.
+      allow read: if isAdmin() || isSuperAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isAdmin() || isSuperAdmin() || (signedIn() && request.query.limit <= 50 && request.query.filters.size() >= 1); 
+      allow write: if isAdmin() || isSuperAdmin();
+    }
+
+    // =========================================================================
+    // VamoMuni — Módulo de Conductores Particulares/Express
+    // =========================================================================
+    //
+    // Jerarquía de roles:
+    //   admin           → acceso global de lectura/escritura
+    //   admin_municipal → acceso restringido a su propia ciudad (cityKey)
+    //   driver (express)→ solo puede leer su propio perfil y subir renovaciones
+    //
+    // IMPORTANTE: Las acciones más sensibles (habilitar, suspender, cambiar
+    // municipalStatus) se permiten desde el cliente al rol admin_municipal para
+    // mantener la agilidad del MVP. Se recomienda migrarlas a Cloud Functions
+    // callable DESPUÉS del lanzamiento para auditabilidad adicional.
+    // =========================================================================
+
+    // ── Helpers VamoMuni ─────────────────────────────────────────────────────
+
+    function isMunicipalAdmin() {
+      return signedIn() && request.auth.token.r != null && request.auth.token.r == 'admin_municipal';
+    }
+
+    function isTrafficOperator() {
+      return signedIn() && request.auth.token.r != null && request.auth.token.r == 'traffic_municipal';
+    }
+
+    function isExpressDriver() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.driverSubtype == 'express';
+    }
+
+    // Un usuario municipal de cualquier tipo solo puede actuar sobre documentos de su ciudad.
+    function isMunicipalForCity(docCityKey) {
+      return signedIn() && request.auth.token.ck != null && 
+        request.auth.token.ck == docCityKey &&
+        (request.auth.token.r == 'admin_municipal' || request.auth.token.role == 'admin_municipal');
+    }
+
+    // Cualquier rol municipal autorizado para la ciudad
+    function isMunicipalAdminForCity(docCityKey) {
+      return signedIn() && request.auth.token.ck != null && 
+        request.auth.token.ck == docCityKey &&
+        (
+          (request.auth.token.r != null && request.auth.token.r.matches('.*_municipal$')) ||
+          (request.auth.token.role != null && request.auth.token.role.matches('.*_municipal$'))
+        );
+    }
+
+    // Un traffic_operator solo puede LEER documentos de su ciudad.
+    function isTrafficForCity(docCityKey) {
+      return signedIn() &&
+        (
+          (request.auth.token.ck != null && request.auth.token.ck == docCityKey) ||
+          (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('cityKey', '') == docCityKey
+          )
+        ) &&
+        (
+          request.auth.token.role == 'traffic_municipal' ||
+          request.auth.token.r == 'traffic_municipal' ||
+          request.auth.token.role == 'traffic_admin' ||
+          request.auth.token.r == 'traffic_admin' ||
+          (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+            (
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'traffic_municipal' ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('trafficRole', '') == 'traffic_municipal' ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('municipalRole', '') == 'traffic_municipal' ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'traffic_admin' ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('trafficRole', '') == 'traffic_admin' ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('municipalRole', '') == 'traffic_admin'
+            )
+          )
+        );
+    }
+
+    // Combinado: admin global O municipal de la misma ciudad
+    function isAdminOrMunicipalForCity(docCityKey) {
+      return isGlobalAdmin() || isMunicipalAdminForCity(docCityKey);
+    }
+
+    // Lectura extendida: admin, municipal O tránsito de la ciudad
+    function canViewCityData(docCityKey) {
+      return isGlobalAdmin() || isMunicipalAdminForCity(docCityKey) || isTrafficForCity(docCityKey);
+    }
+
+    // ── municipal_profiles/{driverId} ────────────────────────────────────────
+    //
+    // Creación: solo el conductor express lo crea durante el registro
+    //           (vía runTransaction en /driver/register, junto con users/{uid}).
+    // Lectura:  el propio conductor o el municipal/admin de su ciudad.
+    // Update:   el municipal/admin de la misma ciudad puede todo.
+    //           El conductor NO puede tocar campos protegidos.
+    // Delete:   solo admin global (casos excepcionales).
+    //
+    // NOTA SOBRE list: Firestore Security Rules no tiene acceso a request.query
+    // para filtrar por campo. La seguridad de la LISTA se garantiza por:
+    //   1. El rol admin_municipal (autenticado)
+    //   2. El frontend SIEMPRE hace where('cityKey', '==', cityKey)
+    //   3. El conductor no tiene permiso de list (solo get de su propia doc)
+    //
+    match /municipal_profiles/{driverId} {
+      allow get: if
+        (signedIn() && request.auth.uid == driverId) ||
+        canViewCityData(resource.data.get('cityKey', ''));
+
+      // List: admin, municipal o tránsito de la ciudad
+      allow list: if isAdmin() || isSuperAdmin() || isMunicipalAdmin() || isTrafficOperator();
+
+      // Solo el propio conductor puede crear su perfil.
+      // El registro garantiza que solo se crea una vez (runTransaction).
+      allow create: if
+        signedIn() &&
+        request.auth.uid == driverId &&
+        request.resource.data.municipalStatus == 'pending_municipal_review' &&
+        request.resource.data.municipalCode != null &&
+        request.resource.data.cityKey != null;
+
+      // Conductor express can update his own profile ONLY for renewals.
+      allow update: if 
+        isAdmin() || isSuperAdmin() || 
+        (isMunicipalForCity(resource.data.get('cityKey', '')) && 
+         (request.resource.data.municipalStatus != 'active' || resource.data.municipalStatus == 'active')) ||
+        (signedIn() && request.auth.uid == driverId && 
+         request.resource.data.municipalStatus == 'renewal_under_review' &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['checklist', 'municipalStatus', 'updatedAt', 'lastTrafficRequest']) &&
+         (request.resource.data.checklist.get(['dniFront', 'status'], '') != 'approved' || resource.data.checklist.get(['dniFront', 'status'], '') == 'approved') &&
+         (request.resource.data.checklist.get(['dniBack', 'status'], '') != 'approved' || resource.data.checklist.get(['dniBack', 'status'], '') == 'approved') &&
+         (request.resource.data.checklist.get(['driverLicense', 'status'], '') != 'approved' || resource.data.checklist.get(['driverLicense', 'status'], '') == 'approved') &&
+         (request.resource.data.checklist.get(['vehicleInsurance', 'status'], '') != 'approved' || resource.data.checklist.get(['vehicleInsurance', 'status'], '') == 'approved') &&
+         (request.resource.data.checklist.get(['passengerCoverageInsurance', 'status'], '') != 'approved' || resource.data.checklist.get(['passengerCoverageInsurance', 'status'], '') == 'approved') &&
+         (request.resource.data.checklist.get(['vehicleRegistrationCard', 'status'], '') != 'approved' || resource.data.checklist.get(['vehicleRegistrationCard', 'status'], '') == 'approved') &&
+         (request.resource.data.checklist.get(['criminalRecord', 'status'], '') != 'approved' || resource.data.checklist.get(['criminalRecord', 'status'], '') == 'approved') &&
+         (request.resource.data.checklist.get(['municipalCanon', 'status'], '') != 'approved' || resource.data.checklist.get(['municipalCanon', 'status'], '') == 'approved') &&
+         (request.resource.data.checklist.get(['disinfectionReceipt', 'status'], '') != 'approved' || resource.data.checklist.get(['disinfectionReceipt', 'status'], '') == 'approved'));
+
+      allow delete: if isAdmin() || isSuperAdmin();
+    }
+
+    // ── municipal_doc_submissions/{submissionId} ──────────────────────────────
+    //
+    // Un conductor express puede CREAR una nueva solicitud de renovación.
+    // El admin_municipal puede LEER y ACTUALIZAR (aprobar/rechazar).
+    // Nadie puede borrar (historial permanente).
+    //
+    match /municipal_doc_submissions/{submissionId} {
+      // El propio conductor puede leer sus presentaciones.
+      // El admin_municipal de la misma ciudad puede leer y listar.
+      allow get: if
+        (signedIn() && resource.data.driverId == request.auth.uid) ||
+        isAdminOrMunicipalForCity(resource.data.get('cityKey', ''));
+
+      allow list: if
+        isAdmin() || isSuperAdmin() ||
+        (isMunicipalAdmin() &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.cityKey ==
+         request.query.filters[0].value);
+
+      // El conductor puede crear UNA presentación nueva para su propio UID.
+      // No puede fijar status distinto de 'pending_review'.
+      allow create: if
+        signedIn() &&
+        request.resource.data.driverId == request.auth.uid &&
+        request.resource.data.status == 'pending_review' &&
+        isExpressDriver() &&
+        request.resource.data.storageUrl != null;
+
+      // Solo el admin_municipal/admin puede actualizar (aprobar/rechazar).
+      // El conductor NO puede automodificar el resultado de una revisión.
+      allow update: if isAdminOrMunicipalForCity(resource.data.get('cityKey', '')) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'reviewedAt', 'reviewedBy', 'observation']);
+
+      allow delete: if false; // historial permanente
+    }
+
+    // ── municipal_audit_log/{logId} ───────────────────────────────────────────
+    //
+    // Solo se puede crear (append-only). Solo admin/municipal puede leer.
+    // Nadie puede modificar ni borrar.
+    //
+    match /municipal_audit_log/{logId} {
+      allow get, list: if isAdmin() || isSuperAdmin() || isMunicipalAdmin();
+
+      // Allow create: admin, municipal for their city, or driver for their own renewal log.
+      allow create: if
+        isAdmin() || isSuperAdmin() ||
+        (isMunicipalAdmin() &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.cityKey ==
+         request.resource.data.cityKey) ||
+        (signedIn() && request.auth.uid == request.resource.data.driverId && 
+         request.resource.data.action == 'renewal_document_submitted');
+
+      allow update, delete: if false; // append-only forever
+    }
+
+    // ── municipal_counters/{cityKey} ──────────────────────────────────────────
+    //
+    // El contador de secuencia para generación de municipalCode.
+    // Solo puede escribirlo el propio conductor express durante el registro
+    // (vía runTransaction) o el admin global.
+    // El admin_municipal NO puede tocarlo para evitar manipulación de códigos.
+    //
+    match /municipal_counters/{cityKey} {
+      allow read: if signedIn();
+
+      // SECURITY: Users can only increment during registration (via transaction).
+      // We check that they are not lowering the sequence.
+      allow create, update: if
+        isAdmin() || isSuperAdmin() ||
+        (signedIn() &&
+         request.resource.data.seq > (resource == null ? 0 : request.resource.data.seq));
+
+      allow delete: if false;
+    }
+
+    // ── fap_claims/{claimId} ──────────────────────────────────────────────────
+    match /fap_claims/{claimId} {
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', '')) || (signedIn() && resource.data.passengerId == request.auth.uid);
+      allow write: if false; // Solo vía Cloud Functions
+    }
+
+    // ── ride_recordings/{recordingId} ─────────────────────────────────────────
+    match /ride_recordings/{recordingId} {
+      allow get: if signedIn() && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin() || isSuperAdmin() || 
+        isMunicipalForCity(resource.data.get('cityKey', ''))
+      );
+      allow list: if isAdmin() || isSuperAdmin();
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ── cities/{cityKey} ──────────────────────────────────────────────────────
+    match /cities/{cityKey} {
+      // Municipal admins can read/write their own city config.
+      // Admin can do everything.
+      allow read: if signedIn();
+      allow write: if isAdmin() || isSuperAdmin() || isMunicipalForCity(cityKey);
+
+      match /passenger_weekly_pools/{weekId} {
+        allow get: if signedIn() && isPassenger();
+        allow list: if false;
+        allow write: if false;
+      }
+
+      match /weekly_pools/{weekId} {
+        allow get, list: if signedIn() && isDriver() && (cityKey == request.auth.token.ck || request.auth.token.ck != null);
+        allow create, update, delete: if false;
+      }
+
+      match /passenger_points/{docId} {
+        allow get: if signedIn() && isPassenger() && (resource == null || resource.data.passengerId == request.auth.uid);
+        allow list: if signedIn() && isPassenger() && (
+          (resource != null && resource.data.passengerId == request.auth.uid) ||
+          (request.query.limit != null && request.query.limit <= 100)
+        );
+        allow write: if false;
+      }
+    }
+
+    // ── municipal_pricing/{cityKey} ──────────────────────────────────────────
+    match /municipal_pricing/{cityKey} {
+      allow read: if canViewCityData(cityKey);
+      allow write: if isGlobalAdmin() || isMunicipalAdminForCity(cityKey);
+    }
+
+    // =========================================================================
+    // [FASE 2A] SEGURIDAD ANTIFRAUDE Y AUDITORÍA
+    // =========================================================================
+
+    // 1. Configuración del Sistema y Features: Solo Admin Global puede escribir, todos pueden leer features
+    match /features/{featureId} {
+      allow read: if signedIn();
+      allow write: if isAdmin() || isSuperAdmin();
+    }
+
+    match /system_config/app_mode {
+      allow read: if true;
+      allow write: if isAdmin() || isSuperAdmin();
+    }
+
+    match /system_config/financial_model {
+      allow read: if true;
+      allow write: if isAdmin() || isSuperAdmin();
+    }
+
+    match /system_config/global {
+      allow read, write: if isAdmin() || isSuperAdmin();
+    }
+
+    match /system_config/antifraud {
+      allow read, write: if isAdmin() || isSuperAdmin();
+    }
+
+    // 2. Libro Mayor (Ledger): Solo Backend/Admin/Municipal
+    match /ledger_events/{eventId} {
+      allow create: if false; // Solo vía Cloud Functions
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow update, delete: if false; // Inmutable
+    }
+
+    // 3. Logs de Auditoría: Solo Backend y Admin
+    match /audit_logs/{logId} {
+      allow create: if false; // Solo vía Cloud Functions
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow update, delete: if false; // Inmutable
+    }
+
+    // 4. Alertas de Fraude: Backend crea, Admin gestiona
+    match /fraud_alerts/{alertId} {
+      allow create: if false; // Solo vía Cloud Functions
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow update: if isAdmin() || isSuperAdmin() && 
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'reviewedBy', 'reviewedAt', 'resolutionNotes']);
+      allow delete: if false;
+    }
+
+    // 5. Preparación para Colecciones Futuras (Bloqueadas por defecto)
+    match /passenger_driver_marks/{markId} { 
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow create: if false; // Solo vía Callable createPassengerDriverMarkV1
+      allow update: if isAdmin() || isSuperAdmin() && 
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'reviewedBy', 'reviewedAt']);
+      allow delete: if false;
+    }
+
+    match /ride_tracking/{rideId} {
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow write: if false; // Solo backend
+      match /points/{pointId} {
+        allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+        allow write: if false; // Solo backend
+      }
+    }
+
+    // =========================================================================
+    // ECOSISTEMA FINANCIERO (WALLETS V2)
+    // =========================================================================
+
+    // Billeteras Únicas
+    match /wallets/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin() || isSuperAdmin());
+      allow write: if false; // Solo vía Cloud Functions
+    }
+
+    // Historial de Transacciones (Pasajero/Bonos/Cargas)
+    match /wallet_transactions/{txId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin() || isSuperAdmin());
+      allow write: if false; // Solo vía Cloud Functions
+    }
+
+    // Historial de Movimientos (Conductor/Liquidación)
+    match /wallet_movements/{moveId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin() || isSuperAdmin());
+      allow write: if false; // Solo vía Cloud Functions
+    }
+
+    match /fraud_actions/{actionId} {
+      allow read: if isAdmin() || isSuperAdmin();
+      allow write: if false;
+    }
+
+    match /driver_lifecycle/{logId} { allow read, write: if isAdmin() || isSuperAdmin(); }
+    match /passenger_lifecycle/{logId} { 
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow write: if false; 
+    }
+
+    // =========================================================================
+    // [VamO INTEL] MÉTRICAS, ALERTAS Y FORECASTING
+    // =========================================================================
+    
+    match /city_metrics_hourly/{id} {
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow write: if false;
+    }
+    match /city_metrics_daily/{id} {
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow write: if false;
+    }
+    match /platform_metrics_daily/{id} {
+      allow read: if isAdmin() || isSuperAdmin();
+      allow write: if false;
+    }
+    match /system_alerts/{id} {
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow write: if false;
+    }
+    match /heatmap_demand/{id} {
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow write: if false;
+    }
+    match /demand_patterns/{id} {
+      allow read: if isAdmin() || isSuperAdmin();
+      allow write: if false;
+    }
+    match /city_demand_patterns/{id} {
+      allow read: if isAdmin() || isSuperAdmin() || isMunicipalForCity(resource.data.get('cityKey', ''));
+      allow write: if false;
+    }
+
+    match /system_performance_logs/{id} {
+      allow read: if isAdmin() || isSuperAdmin();
+      allow write: if false;
+    }
+
+    match /telemetry_events/{eventId} {
+      // SECURITY: Authenticated users can log their activity for analytics and support.
+      // Read access is strictly limited to administrators for cost control and privacy.
+      allow create: if signedIn();
+      allow read: if isAdmin() || isSuperAdmin();
+    }
+    
+    match /notifications/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow write: if false;
+      match /items/{itemId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow update: if signedIn() && request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+        allow create, delete: if false;
+      }
+    }
+
+    // =========================================================================
+    // VamO Compartido V1
+    // =========================================================================
+
+    match /shared_ride_requests/{requestId} {
+      allow read: if signedIn() && (
+        resource.data.passengerId == request.auth.uid ||
+        isAdmin() || isSuperAdmin() ||
+        isMunicipalForCity(resource.data.get('cityKey', '')) ||
+        isTrafficForCity(resource.data.get('cityKey', ''))
+      );
+      allow create: if signedIn() && request.resource.data.passengerId == request.auth.uid;
+      allow update: if signedIn() && (
+        (resource.data.passengerId == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+         request.resource.data.status in ['confirmed', 'cancelled']) ||
+        isAdmin() || isSuperAdmin()
+      );
+    }
+
+    match /shared_ride_groups/{groupId} {
+      allow read: if signedIn() && (
+        request.auth.uid in resource.data.get('passengerIds', []) ||
+        resource.data.get('driverId', '') == request.auth.uid ||
+        isAdmin() || isSuperAdmin() ||
+        isMunicipalForCity(resource.data.get('cityKey', '')) ||
+        isTrafficForCity(resource.data.get('cityKey', ''))
+      );
+    }
+
+    // 🚏 Paradas Digitales
+    match /taxi_stands/{standId} {
+      allow read: if signedIn() && (
+        isAdmin() || isSuperAdmin() ||
+        isMunicipalForCity(resource.data.get('cityKey', '')) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'station_operator' && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.stationId == standId)
+      );
+      allow write: if isAdmin() || isSuperAdmin() || (signedIn() && isMunicipalForCity(request.resource.data.get('cityKey', '')));
+    }
+
+    match /station_dispatch_logs/{logId} {
+      allow read: if signedIn() && (
+        isAdmin() || isSuperAdmin() ||
+        isMunicipalForCity(resource.data.get('cityKey', '')) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'station_operator' && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.stationId == resource.data.standId)
+      );
+      allow write: if false; // Only Cloud Functions can append logs
+    }
+
+    // ── Puntos del conductor – sólo su propio documento y ranking top‑30 ────────
+    match /driver_points/{driverId} {
+      // El conductor puede leer su propio documento y los de su ciudad
+      allow get, list: if signedIn() && isDriver() && (request.auth.uid == driverId || resource.data.cityKey == request.auth.token.ck);
+      // No se permite crear, actualizar ni borrar
+      allow create, update, delete: if false;
+    }
+
+    // Default deny for everything else (Best Practice)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

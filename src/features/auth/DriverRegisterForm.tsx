@@ -3,7 +3,7 @@
  */
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAuth, createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -11,17 +11,38 @@ import { useFirestore } from '@/firebase';
 import { AuthInput } from './AuthInput';
 import { Button } from '@/components/ui/button';
 import { VamoIcon } from '@/components/VamoIcon';
+import { useSearchParams } from 'next/navigation';
+import { useActiveCities } from '@/hooks/useActiveCities';
+import { CityHubAutocomplete } from '@/components/shared/CityHubAutocomplete';
+import { canonicalCityKey } from '@/lib/cityUtils';
 
 export function DriverRegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const firestore = useFirestore();
+  const { cities, loading: citiesLoading } = useActiveCities({ context: 'driver_recruitment' });
+
+  const queryCity = searchParams.get('city');
+  const initialCity = queryCity || 'rawson';
+
   const [email, setEmail] = useState('');
   const [confirmEmail, setConfirmEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [cityKey, setCityKey] = useState<'rawson' | 'trelew' | 'comodoro'>('rawson');
+  const [cityKey, setCityKey] = useState(initialCity);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Update cityKey if query param or cities list changes and it's valid
+  useEffect(() => {
+      if (queryCity && cities.length > 0) {
+          const canonicalQuery = canonicalCityKey(queryCity);
+          const isValidCity = cities.some(c => c.cityKey === canonicalQuery);
+          if (isValidCity) {
+              setCityKey(canonicalQuery);
+          }
+      }
+  }, [queryCity, cities]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +58,13 @@ export function DriverRegisterForm() {
     }
     if (password.length < 6) {
         setError("La contraseña debe tener al menos 6 caracteres.");
+        return;
+    }
+    
+    const canonicalKey = canonicalCityKey(cityKey);
+    const isValidCity = cities.some(c => c.cityKey === canonicalKey);
+    if (!isValidCity) {
+        setError("Seleccioná una ciudad válida del listado.");
         return;
     }
 
@@ -65,8 +93,8 @@ export function DriverRegisterForm() {
 
       try {
         await completeRegistration({
-            cityKey: cityKey,
-            city: cityKey.charAt(0).toUpperCase() + cityKey.slice(1)
+            cityKey: canonicalKey,
+            city: canonicalKey.charAt(0).toUpperCase() + canonicalKey.slice(1) // Will be properly formatted in backend if needed
         });
         console.log("[DRIVER_REGISTER_BACKEND_SYNC_OK] Backend sync successful.");
       } catch (backendErr: any) {
@@ -151,16 +179,14 @@ export function DriverRegisterForm() {
 
         <div className="space-y-2">
             <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">Ciudad Operativa</label>
-            <select 
+            <CityHubAutocomplete 
                 value={cityKey} 
-                onChange={(e: any) => setCityKey(e.target.value)}
-                className="w-full h-12 bg-white/[0.03] border border-white/10 rounded-2xl px-4 text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-                <option value="rawson" className="bg-zinc-900">Rawson / Playa Unión</option>
-                <option value="trelew" className="bg-zinc-900">Trelew</option>
-                <option value="comodoro" className="bg-zinc-900">Comodoro Rivadavia</option>
-                <option value="parana" className="bg-zinc-900">Paraná</option>
-            </select>
+                onChange={(key) => setCityKey(canonicalCityKey(key))}
+                disabled={!!queryCity || citiesLoading}
+            />
+            {!!queryCity && (
+                <p className="text-[10px] text-indigo-400 italic ml-1">Ciudad asignada por enlace municipal.</p>
+            )}
         </div>
       </div>
 

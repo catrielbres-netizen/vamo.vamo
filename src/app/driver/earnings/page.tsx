@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { useState, useEffect, useMemo } from 'react';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useDriverData } from '@/context/DriverRealtimeProvider';
 import { useDriverTransactions } from '@/hooks/useDriverTransactions'; 
 import { useDriverStats } from '@/hooks/useDriverStats';
@@ -13,7 +14,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Loader2 } from 'lucide-react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -21,6 +23,7 @@ import { PaymentForm } from './PaymentForm';
 import { WithdrawalForm } from './WithdrawalForm';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WeeklyPoolCard } from '@/components/WeeklyPoolCard';
+import { DriverMissionPanel } from '@/components/DriverMissionPanel';
 import { safeFixed } from '@/lib/formatters';
 
 function formatCurrency(value: number) {
@@ -50,6 +53,44 @@ export default function DriverEarningsPage() {
     const [isWithdrawalDialogOpen, setIsWithdrawalDialogOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [selectedTx, setSelectedTx] = useState<any | null>(null);
+    const [isWithdrawingGross, setIsWithdrawingGross] = useState(false);
+    const [pendingWithdrawalBalance, setPendingWithdrawalBalance] = useState(0);
+    const firestore = useFirestore();
+
+    useEffect(() => {
+        if (!firestore || !profile?.id) return;
+        const q = query(
+            collection(firestore, 'withdrawal_requests'),
+            where('driverId', '==', profile.id),
+            where('status', '==', 'pending')
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            let total = 0;
+            snap.forEach(doc => {
+                total += (doc.data().amount || 0);
+            });
+            setPendingWithdrawalBalance(total);
+        });
+        return () => unsub();
+    }, [firestore, profile?.id]);
+
+    const handleGrossReceiptsWithdrawal = async () => {
+        setIsWithdrawingGross(true);
+        try {
+            const functions = getFunctions(undefined, 'us-central1');
+            const withdrawGrossReceiptsV1 = httpsCallable(functions, 'withdrawGrossReceiptsV1');
+            const res: any = await withdrawGrossReceiptsV1();
+            if (res.data?.status === 'SUCCESS') {
+                toast({ title: 'Retiro Exitoso', description: `Se han acreditado ${formatCurrency(res.data.amountWithdrawn)} a tu saldo disponible.` });
+            } else {
+                toast({ variant: 'destructive', title: 'Error', description: 'No se pudo retirar el fondo.' });
+            }
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Error', description: error.message || 'No se pudo retirar el fondo.' });
+        } finally {
+            setIsWithdrawingGross(false);
+        }
+    };
 
     useEffect(() => {
         const mpStatus = searchParams.get('mp_status');
@@ -76,7 +117,7 @@ export default function DriverEarningsPage() {
     
     const balance = profile?.currentBalance ?? 0;
     const nonWithdrawable = profile?.nonWithdrawableBalance ?? 0;
-    const withdrawableBalance = Math.max(0, balance - nonWithdrawable);
+    const withdrawableBalance = Math.max(0, balance - nonWithdrawable - pendingWithdrawalBalance);
 
     if (isTransactionsLoading || statsLoading) {
         return (
@@ -103,8 +144,13 @@ export default function DriverEarningsPage() {
                         <p className={cn("text-5xl font-black tracking-tighter drop-shadow-sm", balance >= 0 ? "text-white" : "text-destructive")}>
                             {formatCurrency(balance)}
                         </p>
-                        <div className="flex items-center gap-2 mt-3">
-                            <Badge variant="outline" className="text-[8px] font-black uppercase border-white/10 text-zinc-400 py-0.5">
+                        <div className="flex flex-col gap-2 mt-3">
+                            {pendingWithdrawalBalance > 0 && (
+                                <Badge variant="outline" className="text-[10px] font-black uppercase border-amber-500/20 text-amber-500 py-1 px-3 self-start bg-amber-500/10">
+                                    <VamoIcon name="clock" className="w-3 h-3 mr-1" /> Retiro Pendiente: {formatCurrency(pendingWithdrawalBalance)}
+                                </Badge>
+                            )}
+                            <Badge variant="outline" className="text-[8px] font-black uppercase border-white/10 text-zinc-400 py-0.5 self-start">
                                 RETIRABLE: {formatCurrency(withdrawableBalance)}
                             </Badge>
                         </div>
@@ -125,11 +171,34 @@ export default function DriverEarningsPage() {
                             <VamoIcon name="credit-card" className="mr-1 w-3 h-3" /> Cargar
                         </Button>
                     </div>
+                    
+                    {wallet?.grossReceiptsBalance !== undefined ? (
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-1">Fondo de Ingresos Brutos</p>
+                            <div className="flex justify-between items-center">
+                                <p className="text-2xl font-black text-amber-500 tracking-tighter">
+                                    {formatCurrency(wallet.grossReceiptsBalance)}
+                                </p>
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="text-amber-500 border-amber-500/30 hover:bg-amber-500/20 text-[10px] uppercase font-black tracking-widest h-9" 
+                                    onClick={handleGrossReceiptsWithdrawal}
+                                    disabled={isWithdrawingGross || wallet.grossReceiptsBalance <= 0}
+                                >
+                                    {isWithdrawingGross ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Reclamar'}
+                                </Button>
+                            </div>
+                            <p className="text-[9px] font-bold text-amber-500/60 mt-2 uppercase tracking-widest">
+                                Acumulado de retenciones mensuales.
+                            </p>
+                        </div>
+                    ) : null}
                 </CardContent>
             </Card>
 
             <WeeklyPoolCard />
-
+            <DriverMissionPanel />
             {/* PERFORMANCE STATS SECTION */}
             <div className="space-y-4">
                 <h3 className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] ml-6">Rendimiento</h3>

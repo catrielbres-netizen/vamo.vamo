@@ -10,7 +10,8 @@ import {
     Timestamp,
     QueryConstraint
 } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, useFunctions } from '@/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { isDriverReadyForReview } from '@/lib/eligibility';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { VamoIcon } from '@/components/VamoIcon';
@@ -443,6 +444,16 @@ export default function AdminDashboardPage() {
                 </>
             )}
 
+            {/* ── ADMIN TOOLS ────────────────────── */}
+            {(profile?.role === 'admin' || profile?.role === 'superadmin') && (
+                <div className="mt-4 rounded-2xl border border-dashed border-rose-500/20 bg-rose-500/[0.03] p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-rose-500/60 mb-3">🛠 Admin Tools — Retention Testing</p>
+                    <div className="flex flex-col gap-2">
+                        <RetentionTestButton />
+                    </div>
+                </div>
+            )}
+
             {/* ── DEV TOOLS — solo visible en desarrollo ────────────────────── */}
             {isDev && (
                 <div className="mt-4 rounded-2xl border border-dashed border-indigo-500/20 bg-indigo-500/[0.03] p-4">
@@ -529,4 +540,100 @@ function KPICard({ title, value, icon, color, description, alert, link }: any) {
     }
 
     return cardContent;
+}
+
+function RetentionTestButton() {
+    const [busy, setBusy] = useState(false);
+    const [result, setResult] = useState<any>(null);
+    const [visualBusy, setVisualBusy] = useState(false);
+    const [template, setTemplate] = useState('passenger_inactive_reminder');
+    const functions = useFunctions();
+
+    const handleTest = async () => {
+        if (!confirm("⚠️ ¿Estás seguro de ejecutar la prueba de retención?\n\nEsto evaluará usuarios inactivos y creará un máximo global de 5 correos en mail_queue (redirigidos a test mode si está activo).")) return;
+        
+        setBusy(true);
+        setResult(null);
+        try {
+            if (!functions) throw new Error("Functions not initialized");
+            const testRetentionEmailsV1 = httpsCallable(functions, 'testRetentionEmailsV1');
+            const res = await testRetentionEmailsV1();
+            setResult(res.data);
+        } catch (e: any) {
+            setResult({ error: e.message || 'Error desconocido', ...e.details });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const handleVisualTest = async () => {
+        setVisualBusy(true);
+        setResult(null);
+        try {
+            if (!functions) throw new Error("Functions not initialized");
+            const sendVisualTestEmailV1 = httpsCallable(functions, 'sendVisualTestEmailV1');
+            const res = await sendVisualTestEmailV1({ template });
+            setResult(res.data);
+        } catch (e: any) {
+            setResult({ error: e.message || 'Error desconocido', ...e.details });
+        } finally {
+            setVisualBusy(false);
+        }
+    };
+
+    const templates = [
+        "passenger_inactive_reminder",
+        "driver_inactive_reminder",
+        "passenger_how_to_use_vamo",
+        "driver_how_to_operate_vamo",
+        "passenger_shared_rides_intro",
+        "passenger_vamo_pay_intro",
+        "driver_wallet_intro"
+    ];
+
+    return (
+        <div className="space-y-4">
+            {/* Logic Test */}
+            <div className="space-y-2">
+                <button
+                    disabled={busy}
+                    onClick={handleTest}
+                    className="flex items-center gap-2 px-4 py-2 text-xs font-black bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/20 rounded-xl transition-all disabled:opacity-50"
+                >
+                    <VamoIcon name="mail" className="h-3.5 w-3.5" />
+                    {busy ? 'Procesando prueba cron...' : 'Probar emails de retención (Lógica real, Max 5)'}
+                </button>
+                <p className="text-[10px] text-zinc-500">Evalúa inactividad y encola según reglas. Ignora cooldown de 15/30 días si se fuerza, pero respeta prefs.</p>
+            </div>
+
+            {/* Visual Test */}
+            <div className="space-y-2 pt-2 border-t border-zinc-800/50">
+                <div className="flex flex-wrap items-center gap-2">
+                    <select
+                        value={template}
+                        onChange={(e) => setTemplate(e.target.value)}
+                        className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-2 outline-none focus:border-zinc-700"
+                    >
+                        {templates.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <button
+                        disabled={visualBusy}
+                        onClick={handleVisualTest}
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-black bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/20 rounded-xl transition-all disabled:opacity-50"
+                    >
+                        <VamoIcon name="mail" className="h-3.5 w-3.5" />
+                        {visualBusy ? 'Enviando...' : 'Enviar email visual de prueba'}
+                    </button>
+                </div>
+                <p className="text-[10px] text-zinc-500">Inyecta directo un email de prueba con datos simulados (ignora lógica de usuarios).</p>
+            </div>
+
+            {/* Result Log */}
+            {result && (
+                <div className="text-xs p-3 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono whitespace-pre-wrap mt-4">
+                    {JSON.stringify(result, null, 2)}
+                </div>
+            )}
+        </div>
+    );
 }

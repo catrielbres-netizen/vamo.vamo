@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 
 /**
  * Route: /r/[code]
@@ -10,6 +10,7 @@ import { useRouter, useParams } from 'next/navigation';
 export default function ReferralPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const code = params?.code as string;
 
   useEffect(() => {
@@ -19,9 +20,16 @@ export default function ReferralPage() {
       localStorage.setItem('referralCode', code.toUpperCase().trim());
       // Also keep vamo_captured_referral for backward compatibility if needed by other components
       localStorage.setItem('vamo_captured_referral', code.toUpperCase().trim());
+      
+      // Capture explicit city overrides if provided
+      const explicitCity = searchParams.get('cityKey') || searchParams.get('registrationCityKey') || searchParams.get('city');
+      if (explicitCity) {
+        console.log('🔗 [REFERRAL] Captured explicit cityKey:', explicitCity);
+        localStorage.setItem('vamo_explicit_city_key', explicitCity.toLowerCase().trim());
+      }
     }
     router.replace('/login');
-  }, [code, router]);
+  }, [code, router, searchParams]);
 
   return (
     <div className="min-h-screen bg-[#121212] flex items-center justify-center">

@@ -59,38 +59,74 @@ export default function RideHistoryPage() {
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-1000 fill-mode-both">
-            <Card className="bg-zinc-950 border-white/5 rounded-[2rem] overflow-hidden shadow-2xl">
-                <CardHeader className="bg-zinc-900/20 border-b border-white/5 p-6">
-                    <CardTitle className="text-xl font-black italic uppercase tracking-tighter">Historial de Viajes</CardTitle>
-                    <CardDescription className="text-zinc-500 font-medium">Aquí podés ver los detalles de tus viajes completados.</CardDescription>
-                </CardHeader>
-                <CardContent className="p-2">
-                    {!sortedRides || sortedRides.length === 0 ? (
-                        <div className="text-center py-12 space-y-3">
-                            <VamoIcon name="file-text" className="mx-auto h-12 w-12 text-zinc-800" />
-                            <p className="text-xs font-black uppercase text-zinc-600 tracking-widest">No has completado ningún viaje todavía.</p>
+        <div className="space-y-6 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-1000 fill-mode-both px-1">
+            <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 via-orange-600 to-amber-500 rounded-[2.5rem] blur opacity-25 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+                <Card className="relative bg-zinc-950 border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none" />
+                    
+                    <CardHeader className="bg-gradient-to-b from-white/[0.02] to-transparent border-b border-white/5 p-8 relative z-10">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="bg-amber-500/10 p-2.5 rounded-2xl border border-amber-500/20">
+                                <VamoIcon name="clock" className="w-6 h-6 text-amber-500" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-3xl font-black italic uppercase tracking-tighter text-white">Mi Actividad</CardTitle>
+                                <CardDescription className="text-zinc-500 font-medium text-xs">Todos los viajes que completaste en VamO.</CardDescription>
+                            </div>
                         </div>
-                    ) : (
-                        <ul className="space-y-1">
-                            {sortedRides.map(ride => (
-                                <li key={ride.id} className="group">
-                                    <Link href={`/dashboard/history/${ride.id}`} className="p-4 flex justify-between items-center hover:bg-white/[0.02] rounded-2xl transition-all">
-                                        <div className="space-y-1">
-                                            <p className="text-sm font-black text-white group-hover:text-indigo-400 transition-colors">Viaje a {ride.destination.address.split(',')[0]}</p>
-                                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">{formatTimestamp(ride.completedAt)}</p>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="font-black italic text-white">{formatCurrency(ride.completedRide?.totalFare)}</span>
-                                            <VamoIcon name="chevron-right" className="h-4 w-4 text-zinc-700 group-hover:text-white transition-colors" />
-                                        </div>
-                                    </Link>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </CardContent>
-            </Card>
+                    </CardHeader>
+
+                    <CardContent className="p-4 relative z-10">
+                        {!sortedRides || sortedRides.length === 0 ? (
+                            <div className="text-center py-16 space-y-4">
+                                <div className="bg-white/5 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-2 border border-white/10">
+                                    <VamoIcon name="inbox" className="h-8 w-8 text-zinc-600" />
+                                </div>
+                                <p className="text-xs font-black uppercase text-zinc-500 tracking-[0.2em]">No tenés viajes completados.</p>
+                                <p className="text-[10px] text-zinc-600 font-medium">Tus próximos viajes van a aparecer acá.</p>
+                            </div>
+                        ) : (
+                            <ul className="space-y-3">
+                                {sortedRides.map(ride => (
+                                    <li key={ride.id} className="group">
+                                        <Link href={`/dashboard/history/${ride.id}`} className="block p-5 bg-zinc-900/60 hover:bg-zinc-800/80 rounded-3xl border border-white/5 hover:border-amber-500/30 transition-all active:scale-[0.98]">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="space-y-1 pr-4">
+                                                    <p className="text-sm font-black text-white group-hover:text-amber-400 transition-colors line-clamp-1">
+                                                        Destino: {ride.destination.address.split(',')[0]}
+                                                    </p>
+                                                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{formatTimestamp(ride.completedAt)}</p>
+                                                </div>
+                                                <div className="bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20 shrink-0">
+                                                    <span className="font-black italic text-amber-400">{formatCurrency(ride.completedRide?.totalFare)}</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
+                                                <div className="flex items-center gap-4">
+                                                    {ride.completedRide?.pointsAwarded ? (
+                                                        <div className="flex items-center gap-1.5 bg-yellow-500/10 px-2 py-1 rounded-lg border border-yellow-500/20">
+                                                            <VamoIcon name="star" className="w-3 h-3 fill-yellow-500 text-yellow-500" />
+                                                            <span className="text-[10px] font-black text-yellow-500">+{ride.completedRide.pointsAwarded} pts</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] text-zinc-600 font-medium italic">Sin puntos</span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-1 text-zinc-500 group-hover:text-amber-400 transition-colors">
+                                                    <span className="text-[9px] font-black uppercase tracking-widest">Ver Recibo</span>
+                                                    <VamoIcon name="chevron-right" className="h-3 w-3" />
+                                                </div>
+                                            </div>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }

@@ -118,6 +118,23 @@
     line-height: 1.6;
   }
 
+  body::after {
+    content: '';
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100vw;
+    height: 100vh;
+    background-image: url('/branding/icon-512.png');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: min(80vw, 400px);
+    opacity: 0.03; /* Subtle watermark */
+    pointer-events: none;
+    z-index: 0;
+  }
+
   h1, h2, h3, h4, .font-display {
     font-family: var(--font-display), var(--font-inter), sans-serif;
   }

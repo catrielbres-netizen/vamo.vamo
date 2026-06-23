@@ -2,6 +2,7 @@
  * Shared utility for robust city resolution in the frontend.
  * Prioritizes structured data, then reverse geocoding, then coordinate-based fallback.
  */
+import { CITIES, DEFAULT_CENTER } from './cityData';
 
 export interface CityResolutionResult {
     city: string;
@@ -30,6 +31,25 @@ export function extractCityFromComponents(components?: google.maps.GeocoderAddre
 export function resolveCityFromCoords(lat: number, lng: number): string {
     // Trelew is west of -65.20, Rawson is east
     return lng < -65.20 ? "Trelew" : "Rawson";
+}
+
+/**
+ * Returns the default map coordinates for a given cityKey.
+ * Useful for centering maps when there is no origin selected.
+ */
+export function getCityDefaultLocation(cityKey?: string): { lat: number, lng: number } {
+    if (cityKey && CITIES[cityKey]) {
+        return CITIES[cityKey].center;
+    }
+    
+    // Fallbacks for legacy/unconfigured keys just in case
+    switch (cityKey?.toLowerCase()) {
+        case 'mercedes':
+            return { lat: -34.6515, lng: -59.4307 };
+        case 'rawson':
+        default:
+            return DEFAULT_CENTER;
+    }
 }
 
 /**

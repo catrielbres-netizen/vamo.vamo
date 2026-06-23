@@ -69,8 +69,8 @@ export default function TrafficDashboard() {
 
     useEffect(() => {
         if (profile) {
-            // Non-admins must use their profile's cityKey, admins default to 'rawson'
-            setSelectedCityKey(profile.cityKey || 'rawson');
+            // Non-admins must use their profile's cityKey
+            setSelectedCityKey(profile.cityKey || '');
         }
     }, [profile]);
 

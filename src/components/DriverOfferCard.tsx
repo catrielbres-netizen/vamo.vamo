@@ -12,7 +12,7 @@ import { Timestamp } from 'firebase/firestore';
 import { haversineDistance } from '@/lib/geo';
 import { cn } from '@/lib/utils';
 import { Sparkles, Zap, TrendingDown } from 'lucide-react';
-import { getRideFinancialSnapshot, type RideFinancialSnapshot } from '@/lib/rideFinancials';
+import { getRideFinancialSnapshot, getDriverDisplayFinancials, type RideFinancialSnapshot } from '@/lib/rideFinancials';
 import { formatDistance } from '@/lib/formatters';
 import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
 import Logger from '@/lib/telemetry/logger';
@@ -68,64 +68,6 @@ function DynamicPricingBadge({ serviceType }: { serviceType?: string }) {
 }
 
 /**
- * DynamicPricingBreakdown — Desglose de tarifa dinámica.
- * Solo se renderiza cuando dynamicApplied === true.
- */
-function DynamicPricingBreakdown({
-    municipalBaseFare,
-    dynamicDiscountAmount,
-    dynamicDiscountPercent,
-    finalFare,
-    serviceType,
-}: {
-    municipalBaseFare: number;
-    dynamicDiscountAmount: number;
-    dynamicDiscountPercent: number;
-    finalFare: number;
-    serviceType?: string;
-}) {
-    const isExpress = serviceType === 'express';
-    const infoText = isExpress
-        ? 'Viaje Express con Tarifa Dinámica activa.'
-        : 'Este viaje usa Tarifa Dinámica. Aceptarlo suma beneficios para el Pozo Semanal.';
-
-    return (
-        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex flex-col gap-2.5">
-            {/* Tarifa oficial */}
-            <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-white/50 uppercase tracking-tight">Tarifa oficial</span>
-                <span className="font-black text-white/60 line-through">{formatCurrency(municipalBaseFare)}</span>
-            </div>
-
-            {/* Descuento VamO */}
-            <div className="flex justify-between items-center text-xs">
-                <div className="flex items-center gap-1.5">
-                    <TrendingDown className="w-3 h-3 text-emerald-400" />
-                    <span className="font-bold text-emerald-400 uppercase tracking-tight">
-                        Descuento VamO ({dynamicDiscountPercent}%)
-                    </span>
-                </div>
-                <span className="font-black text-emerald-400">-{formatCurrency(dynamicDiscountAmount)}</span>
-            </div>
-
-            {/* Separador */}
-            <div className="h-px bg-emerald-500/10" />
-
-            {/* Total final */}
-            <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Total al pasajero</span>
-                <span className="text-xl font-black text-emerald-300 tracking-tighter">{formatCurrency(finalFare)}</span>
-            </div>
-
-            {/* Texto informativo */}
-            <p className="text-[9px] font-bold text-emerald-400/60 uppercase tracking-tight leading-snug mt-0.5">
-                {infoText}
-            </p>
-        </div>
-    );
-}
-
-/**
  * PaymentBreakdownPanel — Single source of truth for driver payment display.
  * Consumes financial snapshot strictly with no silent fallbacks.
  */
@@ -134,43 +76,36 @@ function PaymentBreakdownPanel({
     serviceType,
     className 
 }: { 
-    snapshot: RideFinancialSnapshot;
+    snapshot: any; // RideFinancialSnapshot
     serviceType?: string;
     className?: string;
 }) {
-    const { totalFare, walletCoveredAmount, cashToCollect, vamoSubsidyAmount,
+    const { totalFare, walletCoveredAmount, cashToCollect, vamoSubsidyAmount, driverNetEarnings, commissionAmount,
             dynamicApplied, municipalBaseFare, dynamicDiscountAmount } = snapshot;
     const hasWallet = walletCoveredAmount > 0;
     const hasSubsidy = vamoSubsidyAmount > 0;
-
-    // Descuento porcentual: si municipalBaseFare > 0 lo calculamos del snapshot
-    const dynamicDiscountPercent = municipalBaseFare > 0
-        ? Math.round((dynamicDiscountAmount / municipalBaseFare) * 100)
-        : 0;
 
     return (
         <div className={cn("flex flex-col gap-3", className)}>
             {/* Badge dinámico — solo si aplica */}
             {dynamicApplied && <DynamicPricingBadge serviceType={serviceType} />}
 
-            {/* Desglose dinámico — solo si aplica */}
-            {dynamicApplied && (
-                <DynamicPricingBreakdown
-                    municipalBaseFare={municipalBaseFare}
-                    dynamicDiscountAmount={dynamicDiscountAmount}
-                    dynamicDiscountPercent={dynamicDiscountPercent}
-                    finalFare={totalFare}
-                    serviceType={serviceType}
-                />
-            )}
-
             {/* Panel de pago estándar */}
             <div className={cn("rounded-3xl border border-white/10 bg-white/5 p-5 flex flex-col gap-3 shadow-inner")}>
                 <div className="flex justify-between items-center text-xs px-1">
-                    <span className="font-bold text-white/40 uppercase tracking-tight">Tarifa del viaje</span>
+                    <span className="font-bold text-white/40 uppercase tracking-tight">Total del viaje</span>
                     <span className="font-black text-white/80">{formatCurrency(totalFare)}</span>
                 </div>
 
+                <div className="flex justify-between items-center text-xs px-1">
+                    <span className="font-bold text-indigo-400 uppercase tracking-tight">Tu ganancia neta estimada</span>
+                    <span className="font-black text-indigo-400">{formatCurrency(driverNetEarnings)}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs px-1">
+                    <span className="font-bold text-rose-400/80 uppercase tracking-tight">Comisión VamO</span>
+                    <span className="font-black text-rose-400/80">-{formatCurrency(commissionAmount)}</span>
+                </div>
                 {hasWallet && (
                    <div className="flex justify-between items-center text-xs px-1">
                        <div className="flex items-center gap-1.5 font-bold text-emerald-400/80 uppercase tracking-tight">
@@ -181,23 +116,19 @@ function PaymentBreakdownPanel({
                    </div>
                 )}
 
-                {hasSubsidy && (
-                    <div className="flex justify-between items-center text-xs px-1">
-                        <div className="flex items-center gap-1.5 font-bold text-indigo-400/80 uppercase tracking-tight">
-                            <Sparkles className="w-3 h-3" />
-                            <span>Descuento VamO</span>
-                        </div>
-                        <span className="font-black text-indigo-400">-{formatCurrency(vamoSubsidyAmount)}</span>
-                    </div>
-                )}
-
                 <div className="h-px bg-white/5 my-1" />
 
                 <div className="flex justify-between items-center p-4 rounded-2xl border border-white/10 bg-zinc-900/50 shadow-inner">
                     <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-white/50 uppercase tracking-widest leading-none">Cobrás en efectivo</span>
-                        {(hasWallet || hasSubsidy) && (
-                            <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-tighter mt-1 italic">Diferencia acreditada en Wallet</span>
+                        <span className="text-[10px] font-black text-white/50 uppercase tracking-widest leading-none">Total a cobrar al pasajero</span>
+                        {cashToCollect > 0 ? (
+                            <span className="text-[8px] font-bold text-indigo-400 mt-1">
+                                Cobrar el total. La comisión se descuenta luego en billetera.
+                            </span>
+                        ) : (
+                            <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-tighter mt-1 italic">
+                                Viaje abonado electrónicamente
+                            </span>
                         )}
                     </div>
                     <span className="text-4xl font-black text-white tracking-tighter leading-none italic">
@@ -347,7 +278,7 @@ export default function DriverOfferCard({ offer, isNew }: { offer: EnrichedRideO
   }, []);
 
   // [VamO PRO] Unified Financial Snapshot
-  const financial = useMemo(() => getRideFinancialSnapshot(offer), [offer]);
+  const financial = useMemo(() => getDriverDisplayFinancials(getRideFinancialSnapshot(offer)), [offer]);
 
   // ACKNOWLEDGE OFFER DELIVERY
   useEffect(() => {

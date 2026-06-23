@@ -10,6 +10,8 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AIGuard } from '@/components/ai/AIGuard';
 import { GlobalFooter } from '@/components/GlobalFooter';
 
+import { PwaInstallGate } from '@/components/PwaInstallGate';
+
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const archivo = Archivo({ subsets: ['latin'], variable: '--font-archivo', weight: ['400', '600', '800', '900'] });
@@ -48,14 +50,16 @@ export default function RootLayout({
         )}
       >
         <ClientProviders>
-          <ErrorBoundary>
-            <div className="relative flex min-h-screen flex-col">
-              <VersionManager />
-              <main className="flex-1">{children}</main>
-              <GlobalFooter />
-              <AIGuard />
-            </div>
-          </ErrorBoundary>
+          <PwaInstallGate>
+            <ErrorBoundary>
+              <div className="relative flex min-h-screen flex-col">
+                <VersionManager />
+                <main className="flex-1">{children}</main>
+                <GlobalFooter />
+                <AIGuard />
+              </div>
+            </ErrorBoundary>
+          </PwaInstallGate>
         </ClientProviders>
         <Toaster />
       </body>

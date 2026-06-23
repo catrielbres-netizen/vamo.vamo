@@ -14,6 +14,7 @@ import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdminAlertsCenter } from '@/components/admin/AdminAlertsCenter';
 import { featureFlags } from '@/config/features';
+import { useActiveCities } from '@/hooks/useActiveCities';
 
 const navLinks = [
     { href: '/admin/dashboard', label: 'Dashboard', icon: 'layout' },
@@ -23,6 +24,7 @@ const navLinks = [
     { href: '/admin/municipal-settlements', label: 'Liquidaciones', icon: 'landmark' },
     { href: '/admin/simulator', label: 'Simulador Financiero', icon: 'line-chart' },
     { href: '/admin/drivers', label: 'Gestión de Flota', icon: 'users' },
+    { href: '/admin/passengers', label: 'Pasajeros', icon: 'user' },
     { href: '/admin/alerts', label: 'Pánico SOS', icon: 'volume-2' },
     { href: '/admin/claims', label: 'Asistencia Médica', icon: 'heart-pulse' },
     { href: '/admin/expansion', label: 'Expansión Hub', icon: 'trending-up' },
@@ -35,6 +37,7 @@ export function AdminNavbar() {
   const auth = useAuth()
   const router = useRouter()
   const { cityKey, setCityOverride } = useMunicipalContext();
+  const { cities, loading: citiesLoading } = useActiveCities({ context: 'admin' });
 
   const handleLogout = async () => {
     if (auth) {
@@ -62,15 +65,13 @@ export function AdminNavbar() {
             <VamoIcon name="map-pin" className="h-3.5 w-3.5 text-zinc-500" />
             <Select value={cityKey || "global"} onValueChange={handleCityChange}>
                 <SelectTrigger className="w-[140px] h-8 bg-transparent border-none text-[11px] font-black uppercase tracking-widest text-white focus:ring-0 p-0">
-                    <SelectValue placeholder="CIUDAD" />
+                    <SelectValue placeholder={citiesLoading ? "CARGANDO..." : "CIUDAD"} />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-950 border-white/10 text-white">
                     <SelectItem value="global" className="text-primary font-black">🌎 Todo VamO</SelectItem>
-                    <SelectItem value="rawson">Rawson</SelectItem>
-                    <SelectItem value="trelew">Trelew</SelectItem>
-                    <SelectItem value="madryn">Madryn</SelectItem>
-                    <SelectItem value="cordoba">Córdoba</SelectItem>
-                    <SelectItem value="parana">Paraná</SelectItem>
+                    {cities.map(city => (
+                        <SelectItem key={city.cityKey} value={city.cityKey}>{city.name}</SelectItem>
+                    ))}
                 </SelectContent>
             </Select>
         </div>

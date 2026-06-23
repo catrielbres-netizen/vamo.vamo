@@ -1,0 +1,395 @@
+[
+  {
+    "id": "nV0LXpW7VCqOA7QDVG1D",
+    "isSharedRide": true,
+    "sharedGroupId": "xz0OmE0a5xi2nzle0lbT",
+    "cityKey": "rawson",
+    "orderedStopsPreview": [],
+    "totalEstimatedPrice": 16956,
+    "status": "searching",
+    "origin": {
+      "address": "Gregorio Mayo 155",
+      "lat": -43.3000316,
+      "lng": -65.10204200000001,
+      "city": "Rawson"
+    },
+    "destination": {
+      "address": "John Thomas 213",
+      "lat": -43.3316683,
+      "lng": -65.0566317,
+      "city": "Rawson"
+    },
+    "lastMatchingFailureReason": "NO_DRIVERS_NEARBY",
+    "searchRadiusKmUsed": 2.5,
+    "matchingAttempts": 1,
+    "updatedAt": {
+      "_seconds": 1780765199,
+      "_nanoseconds": 396000000
+    }
+  },
+  {
+    "id": "shared_ZsFk7tzYyDzUGzVteSP1",
+    "rideType": "shared",
+    "isSharedRide": true,
+    "serviceType": "shared",
+    "sharedGroupId": "ZsFk7tzYyDzUGzVteSP1",
+    "sharedRequestIds": [
+      "Gyr6OLfHGFOpJKHj240a",
+      "2bQOQGnIye85oKKzduug"
+    ],
+    "passengerIds": [
+      "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+      "eMhDWqwmQMgoKMskjzTd2StwQaI3"
+    ],
+    "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+    "sharedPassengerCount": 2,
+    "pickupStops": [
+      {
+        "address": "Gregorio Mayo 155",
+        "lat": -43.3000316,
+        "lng": -65.10204200000001,
+        "city": "Rawson"
+      },
+      {
+        "address": "RP1 186",
+        "lat": -43.2990179,
+        "lng": -65.1005651,
+        "city": "Rawson"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Av. Tte. Coronel Murga 377",
+        "lat": -43.2936193,
+        "lng": -65.0893689,
+        "city": "Rawson"
+      },
+      {
+        "address": "Goicochea Juan 275",
+        "lat": -43.291631,
+        "lng": -65.08793299999999,
+        "city": "Rawson"
+      }
+    ],
+    "paymentMethod": "cash",
+    "totalFare": 5358,
+    "cashExpected": 5358,
+    "sharedFarePerPassenger": 2622,
+    "individualFareReference": 4370,
+    "driverBenefitAmount": 988,
+    "driverBenefitPercent": 0.22608695652173913,
+    "cityKey": "rawson",
+    "origin": {
+      "address": "Gregorio Mayo 155",
+      "lat": -43.3000316,
+      "lng": -65.10204200000001,
+      "city": "Rawson"
+    },
+    "destination": {
+      "address": "Goicochea Juan 275",
+      "lat": -43.291631,
+      "lng": -65.08793299999999,
+      "city": "Rawson"
+    },
+    "passengerName": "VamO Compartido",
+    "sharedPricingSnapshot": {
+      "farePerPassenger": 2622,
+      "totalFare": 5358,
+      "benefitAmount": 988,
+      "benefitPercent": 0.22608695652173913
+    },
+    "routeCompatibilitySnapshot": null,
+    "blockedBenefits": [
+      "social",
+      "retired",
+      "disability",
+      "express",
+      "promo",
+      "coupon"
+    ],
+    "appliedBenefitType": "shared_fare_only",
+    "socialBenefitDiscountAmount": 0,
+    "expressDiscountAmount": 0,
+    "promoDiscountAmount": 0,
+    "couponDiscountAmount": 0,
+    "benefitDiscountAmount": 0,
+    "createdAt": {
+      "_seconds": 1780965004,
+      "_nanoseconds": 116000000
+    },
+    "pricing": {
+      "estimatedTotal": 5358,
+      "originalTotal": 5358,
+      "expressDiscountAmount": 0,
+      "creditCoveredAmount": 0,
+      "creditsApplied": false,
+      "serviceType": "shared",
+      "driverReceivesTotal": 5358,
+      "passengerPaysTotal": 5358,
+      "walletCoveredAmount": 0,
+      "cashToCollect": 5358,
+      "paymentMethodSnapshot": "cash",
+      "compensationAmount": 0,
+      "socialBenefitDiscountAmount": 0,
+      "promoDiscountAmount": 0,
+      "couponDiscountAmount": 0,
+      "benefitDiscountAmount": 0,
+      "appliedBenefitType": "shared_fare_only",
+      "blockedBenefits": [
+        "social",
+        "retired",
+        "disability",
+        "express",
+        "promo",
+        "coupon"
+      ],
+      "estimated": {
+        "total": 5358,
+        "breakdown": {
+          "baseFare": 2622,
+          "distanceFare": 0,
+          "timeFare": 0,
+          "waitingFare": 0,
+          "subtotal": 5358,
+          "serviceMultiplier": 1,
+          "urgentCharge": 0,
+          "assistanceFee": 0,
+          "minimumFareApplied": false,
+          "total": 5358,
+          "expressDiscountAmount": 0,
+          "expressDiscountPercent": 0
+        },
+        "configSnapshot": {},
+        "calculatedAt": {
+          "_seconds": 1780965004,
+          "_nanoseconds": 116000000
+        }
+      }
+    },
+    "lastOfferCreatedAt": {
+      "_seconds": 1780965004,
+      "_nanoseconds": 295000000
+    },
+    "notifiedDrivers": [
+      "VNhou0ag4wXXPr6IXa3foO6SI8B3"
+    ],
+    "currentOfferedDriverId": "VNhou0ag4wXXPr6IXa3foO6SI8B3",
+    "matchingExpiresAt": {
+      "_seconds": 1780965064,
+      "_nanoseconds": 260000000
+    },
+    "searchRadiusKmUsed": 2.5,
+    "matchingAttempts": 1,
+    "passengerTrustSnapshot": {
+      "score": 80,
+      "level": "high",
+      "flags": [
+        "NEW_ACCOUNT"
+      ],
+      "updatedAt": {
+        "_seconds": 1780965004,
+        "_nanoseconds": 957000000
+      }
+    },
+    "driverVehicleBrand": "Ford",
+    "driverVehicleModel": "Ka",
+    "commissionRateSnapshot": 0.18,
+    "driverVehiclePhoto": "https://firebasestorage.googleapis.com/v0/b/studio-6697160840-7c67f.firebasestorage.app/o/drivers%2FVNhou0ag4wXXPr6IXa3foO6SI8B3%2Fvehicle%2Ffront.jpg?alt=media&token=021f5bdb-2392-4983-9fd8-aeee2cb4e9a9",
+    "driverVehicleColor": "Blanco",
+    "driverPlate": "AD628CD",
+    "driverId": "VNhou0ag4wXXPr6IXa3foO6SI8B3",
+    "driverSubtypeSnapshot": "particular",
+    "driverVehicle": "Ford Ka (Blanco)",
+    "driverVehicleYear": 2019,
+    "driverPhotoUrl": "https://firebasestorage.googleapis.com/v0/b/studio-6697160840-7c67f.firebasestorage.app/o/drivers%2FVNhou0ag4wXXPr6IXa3foO6SI8B3%2Fprofile%2Fprofile.jpg?alt=media&token=def82529-5d5b-4527-8a49-28046aaa6dcf",
+    "driverName": "Cesar eduardo Bres",
+    "driverRating": 5,
+    "currentStopType": "pickup",
+    "currentStopIndex": 0,
+    "currentStopPassengerId": "eMhDWqwmQMgoKMskjzTd2StwQaI3",
+    "currentStopStatus": "completed",
+    "sharedPassengers": [
+      {
+        "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+        "passengerName": "VamO Pasajero Compartido Test 1",
+        "pickupAddress": "Gregorio Mayo 155",
+        "dropoffAddress": "Av. Tte. Coronel Murga 377",
+        "individualQuotedFare": 4370,
+        "sharedFare": 2622,
+        "savingsAmount": 1748,
+        "status": "waiting_pickup"
+      },
+      {
+        "passengerId": "eMhDWqwmQMgoKMskjzTd2StwQaI3",
+        "passengerName": "maria",
+        "pickupAddress": "RP1 186",
+        "dropoffAddress": "Goicochea Juan 275",
+        "individualQuotedFare": 4560,
+        "sharedFare": 2736,
+        "savingsAmount": 1824,
+        "status": "picked_up"
+      }
+    ],
+    "status": "in_progress",
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "2bQOQGnIye85oKKzduug",
+        "location": {
+          "address": "RP1 186",
+          "lat": -43.2990179,
+          "lng": -65.1005651,
+          "city": "Rawson"
+        },
+        "passengerId": "eMhDWqwmQMgoKMskjzTd2StwQaI3",
+        "passengerName": "maria",
+        "status": "completed",
+        "order": 1,
+        "updatedAt": {
+          "_seconds": 1780965066,
+          "_nanoseconds": 559000000
+        },
+        "arrivedAt": {
+          "_seconds": 1780965024,
+          "_nanoseconds": 116000000
+        },
+        "completedAt": {
+          "_seconds": 1780965066,
+          "_nanoseconds": 559000000
+        }
+      },
+      {
+        "type": "pickup",
+        "requestId": "Gyr6OLfHGFOpJKHj240a",
+        "location": {
+          "address": "Gregorio Mayo 155",
+          "lat": -43.3000316,
+          "lng": -65.10204200000001,
+          "city": "Rawson"
+        },
+        "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+        "passengerName": "VamO Pasajero Compartido Test 1",
+        "status": "pending",
+        "order": 2
+      },
+      {
+        "type": "dropoff",
+        "requestId": "Gyr6OLfHGFOpJKHj240a",
+        "location": {
+          "address": "Av. Tte. Coronel Murga 377",
+          "lat": -43.2936193,
+          "lng": -65.0893689,
+          "city": "Rawson"
+        },
+        "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+        "passengerName": "VamO Pasajero Compartido Test 1",
+        "status": "pending",
+        "order": 3
+      },
+      {
+        "type": "dropoff",
+        "requestId": "2bQOQGnIye85oKKzduug",
+        "location": {
+          "address": "Goicochea Juan 275",
+          "lat": -43.291631,
+          "lng": -65.08793299999999,
+          "city": "Rawson"
+        },
+        "passengerId": "eMhDWqwmQMgoKMskjzTd2StwQaI3",
+        "passengerName": "maria",
+        "status": "pending",
+        "order": 4
+      }
+    ],
+    "routeUpdatedAt": {
+      "_seconds": 1780965066,
+      "_nanoseconds": 570000000
+    },
+    "routePlan": [
+      {
+        "type": "pickup",
+        "requestId": "2bQOQGnIye85oKKzduug",
+        "location": {
+          "address": "RP1 186",
+          "lat": -43.2990179,
+          "lng": -65.1005651,
+          "city": "Rawson"
+        },
+        "passengerId": "eMhDWqwmQMgoKMskjzTd2StwQaI3",
+        "passengerName": "maria",
+        "status": "completed",
+        "order": 1,
+        "updatedAt": {
+          "_seconds": 1780965066,
+          "_nanoseconds": 559000000
+        },
+        "arrivedAt": {
+          "_seconds": 1780965024,
+          "_nanoseconds": 116000000
+        },
+        "completedAt": {
+          "_seconds": 1780965066,
+          "_nanoseconds": 559000000
+        }
+      },
+      {
+        "type": "pickup",
+        "requestId": "Gyr6OLfHGFOpJKHj240a",
+        "location": {
+          "address": "Gregorio Mayo 155",
+          "lat": -43.3000316,
+          "lng": -65.10204200000001,
+          "city": "Rawson"
+        },
+        "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+        "passengerName": "VamO Pasajero Compartido Test 1",
+        "status": "pending",
+        "order": 2
+      },
+      {
+        "type": "dropoff",
+        "requestId": "Gyr6OLfHGFOpJKHj240a",
+        "location": {
+          "address": "Av. Tte. Coronel Murga 377",
+          "lat": -43.2936193,
+          "lng": -65.0893689,
+          "city": "Rawson"
+        },
+        "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+        "passengerName": "VamO Pasajero Compartido Test 1",
+        "status": "pending",
+        "order": 3
+      },
+      {
+        "type": "dropoff",
+        "requestId": "2bQOQGnIye85oKKzduug",
+        "location": {
+          "address": "Goicochea Juan 275",
+          "lat": -43.291631,
+          "lng": -65.08793299999999,
+          "city": "Rawson"
+        },
+        "passengerId": "eMhDWqwmQMgoKMskjzTd2StwQaI3",
+        "passengerName": "maria",
+        "status": "pending",
+        "order": 4
+      }
+    ],
+    "etaMinutes": 10,
+    "watchdogFlag": "long_running_active_ride",
+    "needsAdminReview": true,
+    "requiresAdminReview": true,
+    "watchdogFlaggedAt": {
+      "_seconds": 1781006824,
+      "_nanoseconds": 678000000
+    },
+    "watchdogLastCheckAt": {
+      "_seconds": 1781006824,
+      "_nanoseconds": 678000000
+    },
+    "updatedAt": {
+      "_seconds": 1781006824,
+      "_nanoseconds": 678000000
+    }
+  }
+]

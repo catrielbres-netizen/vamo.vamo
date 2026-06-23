@@ -38,6 +38,9 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useMunicipalContext } from "@/hooks/useMunicipalContext";
 import { Badge } from "@/components/ui/badge";
+import { LinkedDriverPanel } from "@/components/municipal/LinkedDriverPanel";
+import { CITIES } from "@/lib/cityData";
+import { CheckCircle2, AlertCircle } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CHECKLIST_LABELS: Record<MunicipalChecklistKey, string> = {
@@ -50,6 +53,7 @@ const CHECKLIST_LABELS: Record<MunicipalChecklistKey, string> = {
   criminalRecord: "Antecedentes penales vigentes",
   municipalCanon: "Canon municipal",
   disinfectionReceipt: "Certificado de Desinfección",
+  vehicleModelYearProof: "Comprobante de modelo/año del vehículo",
 };
 const CHECKLIST_KEYS = Object.keys(CHECKLIST_LABELS) as MunicipalChecklistKey[];
 
@@ -160,8 +164,14 @@ export default function MunicipalDriverDetailPage() {
 
   const [mp, setMp] = useState<MunicipalProfile | null>(null);
   const [userData, setUserData] = useState<UserProfile | null>(null);
+  const [fleetDrivers, setFleetDrivers] = useState<{ id: string; email: string; name?: string; status?: string }[]>([]);
+  const [docSubmissions, setDocSubmissions] = useState<Record<string, { storageUrl: string; uploadedAt: string }>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [cityConfig, setCityConfig] = useState<any>(null);
+
+  const [legalDoc, setLegalDoc] = useState<any>(null);
+  const [loadingLegal, setLoadingLegal] = useState(false);
 
   // Inline edit states
   const [licDate, setLicDate] = useState("");
@@ -177,7 +187,19 @@ export default function MunicipalDriverDetailPage() {
   const [availableStands, setAvailableStands] = useState<{ id: string; name: string }[]>([]);
   const [selectedStandId, setSelectedStandId] = useState("");
 
-  const targetCityKey = mp?.cityKey || userData?.cityKey;
+  const targetCityKey = mp?.cityKey || userData?.cityKey || userData?.operatingAreaId || '';
+
+  // Fetch city config
+  useEffect(() => {
+    if (!firestore || !targetCityKey) return;
+    const cityRef = doc(firestore, 'cities', targetCityKey);
+    const unsub = onSnapshot(cityRef, snap => {
+        if (snap.exists()) {
+            setCityConfig(snap.data().config || {});
+        }
+    });
+    return () => unsub();
+  }, [firestore, targetCityKey]);
 
   // Fetch available stands for the driver's cityKey
   useEffect(() => {
@@ -213,6 +235,27 @@ export default function MunicipalDriverDetailPage() {
       setSelectedStandId("");
     }
   }, [userData, mp]);
+
+  useEffect(() => {
+    if (!firestore || !driverId || !userData?.legal?.driverTermsAccepted || !userData?.legal?.driverTermsVersion) return;
+    
+    setLoadingLegal(true);
+    const fetchLegal = async () => {
+        try {
+            const docId = `${driverId}_driver_terms_${userData.legal?.driverTermsVersion}`;
+            const ref = doc(firestore, 'legal_acceptances', docId);
+            const snap = await getDoc(ref);
+            if (snap.exists()) {
+                setLegalDoc(snap.data());
+            }
+        } catch (e) {
+            console.error("Error fetching legal contract:", e);
+        } finally {
+            setLoadingLegal(false);
+        }
+    };
+    fetchLegal();
+  }, [firestore, driverId, userData?.legal?.driverTermsAccepted, userData?.legal?.driverTermsVersion]);
 
   useEffect(() => {
     if (!firestore || !driverId) return;
@@ -269,6 +312,65 @@ export default function MunicipalDriverDetailPage() {
       unsubUser();
     };
   }, [firestore, driverId, user, profile, agentCityKey]);
+
+  useEffect(() => {
+    if (!firestore || !driverId) return;
+    const fetchSubmissions = async () => {
+      try {
+        const q = query(
+          collection(firestore, 'municipal_doc_submissions'),
+          where('driverId', '==', driverId)
+        );
+        const snap = await getDocs(q);
+        const latestDocs: Record<string, any> = {};
+        
+        snap.docs.forEach(doc => {
+          const data = doc.data();
+          const currentLatest = latestDocs[data.docType];
+          if (!currentLatest || (data.uploadedAt?.toMillis() > currentLatest.uploadedAt?.toMillis())) {
+            latestDocs[data.docType] = data;
+          }
+        });
+
+        const mapped: Record<string, { storageUrl: string; uploadedAt: string }> = {};
+        for (const [docType, data] of Object.entries(latestDocs)) {
+          if (data.storageUrl) {
+            mapped[docType] = {
+              storageUrl: data.storageUrl,
+              uploadedAt: data.uploadedAt?.toDate()?.toISOString() || ""
+            };
+          }
+        }
+        setDocSubmissions(mapped);
+      } catch (err) {
+        console.error("Error fetching doc submissions:", err);
+      }
+    };
+    fetchSubmissions();
+  }, [firestore, driverId]);
+
+  useEffect(() => {
+    if (!firestore || !userData) return;
+    const isOwner = userData.isVehicleOwner || (userData.authorizedDriverIds && userData.authorizedDriverIds.length > 0);
+    if (!isOwner) return;
+
+    const fetchFleetDrivers = async () => {
+      try {
+        const q = query(collection(firestore, 'users'), where('vehicleOwnerId', '==', userData.uid));
+        const snap = await getDocs(q);
+        const drivers = snap.docs.map(doc => ({
+          id: doc.id,
+          email: doc.data().email,
+          name: doc.data().name,
+          status: doc.data().municipalStatus
+        }));
+        setFleetDrivers(drivers);
+      } catch (err) {
+        console.error("[MUNI_DETAIL_FLEET_DRIVERS]", err);
+      }
+    };
+    fetchFleetDrivers();
+  }, [firestore, userData]);
 
   // Security: only same city
   if (targetCityKey && agentCityKey && targetCityKey !== agentCityKey) {
@@ -532,9 +634,16 @@ export default function MunicipalDriverDetailPage() {
     }
   };
 
-  // ── Regla de habilitación ─────────────────────────────────────────────────
+  const isFleetDriver = userData?.driverSubtype === 'fleet_driver' || mp?.driverSubtype === 'fleet_driver';
+  const applicableChecklistKeys = isFleetDriver 
+    ? ['dniFront', 'dniBack', 'driverLicense', 'criminalRecord'] as MunicipalChecklistKey[]
+    : CHECKLIST_KEYS.filter(k => {
+        if (!cityConfig || !cityConfig.municipalRequirements) return true;
+        return cityConfig.municipalRequirements[k] !== false;
+      });
+
   const checklistOk = mp
-    ? CHECKLIST_KEYS.every((k) => mp.checklist?.[k]?.status === "approved")
+    ? applicableChecklistKeys.every((k) => mp.checklist?.[k]?.status === "approved")
     : false;
   const canonOk =
     mp?.canonStatus === "paid" &&
@@ -545,10 +654,8 @@ export default function MunicipalDriverDetailPage() {
   const itvOk = !!mp?.itvExpiry && !isExpired(mp.itvExpiry);
   const canEnable =
     checklistOk &&
-    canonOk &&
+    (isFleetDriver || (canonOk && insuranceOk && itvOk)) &&
     licenseOk &&
-    insuranceOk &&
-    itvOk &&
     mp?.municipalStatus !== "active" &&
     mp?.municipalStatus !== "rejected_by_municipality";
 
@@ -740,97 +847,50 @@ export default function MunicipalDriverDetailPage() {
             </div>
           </div>
           {/* ── INSPECCIÓN DE VEHÍCULO ───────────────────────────────────── */}
-          {/* ── INSPECCIÓN DE VEHÍCULO ───────────────────────────────────── */}
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
-            <div className="px-5 py-3 border-b border-white/5">
-              <p className="text-xs font-black uppercase tracking-widest text-zinc-500">
-                Inspección Visual de Vehículo
-              </p>
+          {isFleetDriver ? (
+            <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden p-5 text-center">
+              <VamoIcon name="car" className="w-8 h-8 mx-auto text-zinc-600 mb-2" />
+              <p className="text-sm font-bold text-zinc-400">La documentación del vehículo corresponde al titular y no al chofer.</p>
+              <p className="text-xs text-zinc-500 mt-1">Revisar en el perfil del titular.</p>
             </div>
-            <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                { label: 'Frente', url: userData?.vehicleFrontPhotoURL || mp?.vehiclePhotos?.front },
-                { label: 'Trasera', url: (userData as any)?.vehicleBackPhotoURL || mp?.vehiclePhotos?.back },
-                { label: 'Interior', url: (userData as any)?.vehicleInteriorPhotoURL || mp?.vehiclePhotos?.interior }
-              ].map((photo, i) => (
-                <div key={i} className="space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">{photo.label}</p>
-                  {photo.url ? (
-                    <div className="relative group aspect-video rounded-xl overflow-hidden border border-white/5 bg-black">
-                      <img src={photo.url} alt={photo.label} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                      <a 
-                        href={photo.url} target="_blank" rel="noreferrer"
-                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                      >
-                        <VamoIcon name="maximize" className="w-6 h-6 text-white" />
-                      </a>
-                    </div>
-                  ) : (
-                    <div className="aspect-video rounded-xl border border-dashed border-white/5 bg-white/[0.01] flex items-center justify-center">
-                      <p className="text-[10px] text-zinc-700 font-bold uppercase">No disponible</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ── ESTRUCTURA DE LA CUENTA (TITULAR/CHOFER) ─────────────────── */}
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
-            <div className="px-5 py-3 border-b border-white/5 flex justify-between items-center">
-              <p className="text-xs font-black uppercase tracking-widest text-zinc-500">
-                Estructura de la Cuenta
-              </p>
-              {userData?.isVehicleOwner ? (
-                <Badge className="bg-indigo-500/20 text-indigo-400 border-none text-[10px] uppercase font-black">Titular / Flota</Badge>
-              ) : userData?.vehicleOwnerId ? (
-                <Badge className="bg-amber-500/20 text-amber-400 border-none text-[10px] uppercase font-black">Chofer Autorizado</Badge>
-              ) : (
-                <Badge className="bg-zinc-800 text-zinc-500 border-none text-[10px] uppercase font-black">Independiente</Badge>
-              )}
-            </div>
-            <div className="p-5 space-y-4">
-              {userData?.isVehicleOwner ? (
-                <div className="space-y-4">
-                  <p className="text-xs text-zinc-400">Este usuario es titular de un vehículo y puede autorizar choferes.</p>
-                  <div className="grid grid-cols-1 gap-2">
-                    {userData.authorizedDriverIds?.length ? (
-                      userData.authorizedDriverIds.map(driverId => (
-                        <div key={driverId} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-500">UID</div>
-                            <div>
-                              <p className="text-sm font-bold text-white">{driverId}</p>
-                              <p className="text-[10px] text-zinc-600 font-bold uppercase">Chofer Autorizado</p>
-                            </div>
-                          </div>
-                          <Link href={`/municipal/drivers/${driverId}`}>
-                            <Button variant="ghost" size="sm" className="text-indigo-400 hover:text-indigo-300 text-[10px] font-black uppercase">Ver Perfil</Button>
-                          </Link>
-                        </div>
-                      ))
+          ) : (
+            <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
+              <div className="px-5 py-3 border-b border-white/5">
+                <p className="text-xs font-black uppercase tracking-widest text-zinc-500">
+                  Inspección Visual de Vehículo
+                </p>
+              </div>
+              <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { label: 'Frente', url: userData?.vehicleFrontPhotoURL || mp?.vehiclePhotos?.front },
+                  { label: 'Trasera', url: (userData as any)?.vehicleBackPhotoURL || mp?.vehiclePhotos?.back },
+                  { label: 'Interior', url: (userData as any)?.vehicleInteriorPhotoURL || mp?.vehiclePhotos?.interior }
+                ].map((photo, i) => (
+                  <div key={i} className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">{photo.label}</p>
+                    {photo.url ? (
+                      <div className="relative group aspect-video rounded-xl overflow-hidden border border-white/5 bg-black">
+                        <img src={photo.url} alt={photo.label} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                        <a 
+                          href={photo.url} target="_blank" rel="noreferrer"
+                          className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                        >
+                          <VamoIcon name="maximize" className="w-6 h-6 text-white" />
+                        </a>
+                      </div>
                     ) : (
-                      <div className="text-center py-4 border border-dashed border-white/10 rounded-xl text-zinc-600 text-xs italic">
-                        No hay choferes autorizados cargados.
+                      <div className="aspect-video rounded-xl border border-dashed border-white/5 bg-white/[0.01] flex items-center justify-center">
+                        <p className="text-[10px] text-zinc-700 font-bold uppercase">No disponible</p>
                       </div>
                     )}
                   </div>
-                </div>
-              ) : userData?.vehicleOwnerId ? (
-                <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/70 mb-1">Dueño de Cuenta (Titular)</p>
-                    <p className="text-sm font-bold text-white">{userData.vehicleOwnerId}</p>
-                  </div>
-                  <Link href={`/municipal/drivers/${userData.vehicleOwnerId}`}>
-                    <Button variant="ghost" size="sm" className="text-amber-400 hover:text-amber-300 text-[10px] font-black uppercase">Ver Titular</Button>
-                  </Link>
-                </div>
-              ) : (
-                <p className="text-xs text-zinc-500 italic text-center py-2">Este conductor opera su propio vehículo (Titular e Independiente).</p>
-              )}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* ── ESTRUCTURA DE LA CUENTA (TITULAR/CHOFER) ─────────────────── */}
+          <LinkedDriverPanel userData={userData} mp={mp} fleetDrivers={fleetDrivers} />
 
           {/* ── PARADA DIGITAL ASIGNADA ───────────────────────────────────── */}
           <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden backdrop-blur-xl">
@@ -909,56 +969,117 @@ export default function MunicipalDriverDetailPage() {
                 )}
               >
                 {
-                  CHECKLIST_KEYS.filter(
+                  applicableChecklistKeys.filter(
                     (k) => mp.checklist?.[k]?.status === "approved",
                   ).length
                 }
-                /{CHECKLIST_KEYS.length} aprobados
+                /{applicableChecklistKeys.length} aprobados
               </span>
             </div>
             <div className="divide-y divide-white/5">
-              {CHECKLIST_KEYS.map((key) => {
+              {applicableChecklistKeys.map((key) => {
                 const item = mp.checklist?.[key];
                 const status = (item?.status ?? "pending") as DocItemStatus;
+                const fallbackUrl = docSubmissions[key]?.storageUrl;
+                const finalStorageUrl = item?.storageUrl || fallbackUrl;
+                const submittedAt = item?.submittedAt?.toDate?.()?.toISOString() || docSubmissions[key]?.uploadedAt;
+
                 return (
                   <div key={key} className="px-5 py-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <VamoIcon
-                          name={
-                            status === "approved"
-                              ? "check-circle"
-                              : status === "observed"
-                                ? "alert-triangle"
-                                : status === "submitted"
-                                  ? "clock"
-                                  : "file"
-                          }
-                          className={cn(
-                            "h-4 w-4",
-                            status === "approved"
-                              ? "text-emerald-400"
-                              : status === "observed"
-                                ? "text-orange-400"
-                                : "text-zinc-500",
-                          )}
-                        />
-                        <span className="text-sm font-medium text-zinc-300">
-                          {CHECKLIST_LABELS[key]}
-                        </span>
-                        {item?.storageUrl && status === "submitted" && (
-                          <a
-                            href={item.storageUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="ml-2 text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-md hover:bg-indigo-500/20 transition-colors flex items-center gap-1"
-                          >
-                            <VamoIcon
-                              name="external-link"
-                              className="w-3 h-3"
-                            />{" "}
-                            Ver adjunto
-                          </a>
+                    <div className="flex items-start justify-between">
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <VamoIcon
+                            name={
+                              status === "approved"
+                                ? "check-circle"
+                                : status === "observed"
+                                  ? "alert-triangle"
+                                  : status === "submitted"
+                                    ? "clock"
+                                    : "file"
+                            }
+                            className={cn(
+                              "h-4 w-4",
+                              status === "approved"
+                                ? "text-emerald-400"
+                                : status === "observed"
+                                  ? "text-orange-400"
+                                  : "text-zinc-500",
+                            )}
+                          />
+                          <span className="text-sm font-medium text-zinc-300">
+                            {CHECKLIST_LABELS[key]}
+                          </span>
+                        </div>
+
+                        {/* Current/Vigente */}
+                        {item?.currentStorageUrl && (
+                          <div className="ml-6 flex flex-col gap-0.5">
+                            <a
+                              href={item.currentStorageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md hover:bg-emerald-500/20 transition-colors w-fit flex items-center gap-1"
+                            >
+                              <VamoIcon name="external-link" className="w-3 h-3" />
+                              Ver vigente
+                            </a>
+                            {item.expiresAt && (
+                              <span className="text-[10px] text-zinc-400 italic">
+                                Vence: {formatDate(item.expiresAt)}
+                              </span>
+                            )}
+                            {item.approvedAt && (
+                              <span className="text-[10px] text-zinc-500 italic">
+                                Aprobado: {formatDate(item.approvedAt)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Fallback old storageUrl if currentStorageUrl not populated yet */}
+                        {item?.storageUrl && !item?.currentStorageUrl && !item?.pendingStorageUrl && (
+                          <div className="ml-6 flex flex-col gap-0.5">
+                            <a
+                              href={item.storageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-md hover:bg-indigo-500/20 transition-colors w-fit flex items-center gap-1"
+                            >
+                              <VamoIcon name="external-link" className="w-3 h-3" />
+                              Ver documento
+                            </a>
+                            {submittedAt && (
+                              <span className="text-[10px] text-zinc-500 italic">
+                                Presentado: {new Date(submittedAt).toLocaleDateString("es-AR")}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Pending/Nueva presentación */}
+                        {(item?.pendingStorageUrl || fallbackUrl) && (!item?.storageUrl || item?.pendingStorageUrl) && (
+                          <div className="ml-6 mt-1 flex flex-col gap-0.5">
+                            <a
+                              href={item?.pendingStorageUrl || fallbackUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-blue-400 font-bold bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-md hover:bg-blue-500/20 transition-colors w-fit flex items-center gap-1"
+                            >
+                              <VamoIcon name="external-link" className="w-3 h-3" />
+                              Ver nueva presentación
+                            </a>
+                            <span className="text-[10px] text-zinc-500 italic">
+                              Pendiente de revisión
+                            </span>
+                          </div>
+                        )}
+
+                        {!finalStorageUrl && !item?.currentStorageUrl && !item?.pendingStorageUrl && (
+                          <p className="text-[10px] text-zinc-500 ml-6 italic">
+                            Sin archivo presentado
+                          </p>
                         )}
                       </div>
                       <DocStatusBadge status={status} />
@@ -969,41 +1090,54 @@ export default function MunicipalDriverDetailPage() {
                       </p>
                     )}
                     {/* Acciones */}
-                    {isOperator && status !== "approved" && (
-                      <div className="flex gap-2 flex-wrap">
-                        <ApproveItemButton
-                          keyId={key}
-                          disabled={busy}
-                          needsExpiry={[
-                            "driverLicense",
-                            "vehicleInsurance",
-                            "criminalRecord",
-                          ].includes(key)}
-                          onConfirm={(expiry) =>
-                            handleChecklistItem(
-                              key,
-                              "approved",
-                              undefined,
-                              expiry,
-                            )
-                          }
-                        />
-                        <ObserveItemButton
-                          disabled={busy}
-                          onObserve={(obs) =>
-                            handleChecklistItem(key, "observed", obs)
-                          }
-                        />
+                    {isOperator && (
+                      <div className="flex gap-2 flex-wrap items-center mt-2">
+                        {status !== "approved" && !finalStorageUrl && !item?.currentStorageUrl && !item?.pendingStorageUrl && (
+                          <span className="text-[10px] text-orange-400/80 italic mr-2">⚠️ Requiere ver archivo para aprobar</span>
+                        )}
+                        
+                        {/* Aprobar boton disponible si no está aprobado O si hay uno pendiente */}
+                        {(status !== "approved" || item?.pendingStorageUrl) && (
+                          <ApproveItemButton
+                            keyId={key}
+                            disabled={busy || (!finalStorageUrl && !item?.pendingStorageUrl)}
+                            needsExpiry={[
+                              "driverLicense",
+                              "vehicleInsurance",
+                              "criminalRecord",
+                            ].includes(key)}
+                            onConfirm={(expiry) =>
+                              handleChecklistItem(
+                                key,
+                                "approved",
+                                undefined,
+                                expiry,
+                              )
+                            }
+                          />
+                        )}
+
+                        {/* Observar boton si no está aprobado O si hay pendiente */}
+                        {(status !== "approved" || item?.pendingStorageUrl) && (
+                          <ObserveItemButton
+                            disabled={busy}
+                            onObserve={(obs) =>
+                              handleChecklistItem(key, "observed", obs)
+                            }
+                          />
+                        )}
+
+                        {/* Revertir si está aprobado y NO hay pendiente */}
+                        {status === "approved" && !item?.pendingStorageUrl && (
+                          <button
+                            disabled={busy}
+                            onClick={() => handleChecklistItem(key, "observed")}
+                            className="text-[10px] text-zinc-600 hover:text-orange-400 underline transition-colors"
+                          >
+                            Revertir a observado
+                          </button>
+                        )}
                       </div>
-                    )}
-                    {status === "approved" && (
-                      <button
-                        disabled={busy}
-                        onClick={() => handleChecklistItem(key, "observed")}
-                        className="text-[10px] text-zinc-600 hover:text-orange-400 underline transition-colors"
-                      >
-                        Revertir a observado
-                      </button>
                     )}
                   </div>
                 );
@@ -1011,11 +1145,14 @@ export default function MunicipalDriverDetailPage() {
             </div>
           </div>
 
-          {/* ── VENCIMIENTOS ─────────────────────────────────────────────── */}
+          {/* ── VENCIMIENTOS MANUALES ─────────────────────────────────────────────── */}
           <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
             <div className="px-5 py-3 border-b border-white/5">
               <p className="text-xs font-black uppercase tracking-widest text-zinc-500">
-                Vencimientos
+                Vencimientos (Edición Excepcional)
+              </p>
+              <p className="text-[10px] text-zinc-600 mt-1">
+                Utilizá esta sección solo para corregir fechas manualmente. El flujo regular solicita el vencimiento al aprobar cada documento arriba.
               </p>
             </div>
             <div className="divide-y divide-white/5">
@@ -1065,50 +1202,52 @@ export default function MunicipalDriverDetailPage() {
                 </div>
               </div>
               {/* Seguro */}
-              <div className="px-5 py-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-zinc-300">
-                    Seguro del vehículo
-                  </p>
-                  <span
-                    className={cn(
-                      "text-xs font-bold",
-                      mp.insuranceExpiry
-                        ? isExpired(mp.insuranceExpiry)
-                          ? "text-red-400"
-                          : "text-emerald-400"
-                        : "text-zinc-600",
-                    )}
-                  >
-                    {mp.insuranceExpiry
-                      ? formatDate(mp.insuranceExpiry) +
-                        (isExpired(mp.insuranceExpiry) ? " — VENCIDO" : "")
-                      : "Sin cargar"}
-                  </span>
+              {!isFleetDriver && (
+                <div className="px-5 py-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-zinc-300">
+                      Seguro del vehículo
+                    </p>
+                    <span
+                      className={cn(
+                        "text-xs font-bold",
+                        mp.insuranceExpiry
+                          ? isExpired(mp.insuranceExpiry)
+                            ? "text-red-400"
+                            : "text-emerald-400"
+                          : "text-zinc-600",
+                      )}
+                    >
+                      {mp.insuranceExpiry
+                        ? formatDate(mp.insuranceExpiry) +
+                          (isExpired(mp.insuranceExpiry) ? " — VENCIDO" : "")
+                        : "Sin cargar"}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      type="date"
+                      value={insDate}
+                      onChange={(e) => setInsDate(e.target.value)}
+                      className="h-8 text-xs bg-white/[0.03] border-white/10 text-white w-40"
+                    />
+                    <Button
+                      size="sm"
+                      disabled={busy || !insDate}
+                      onClick={() =>
+                        handleSetExpiry(
+                          "insuranceExpiry",
+                          insDate,
+                          "insurance_expiry_set",
+                        )
+                      }
+                      className="h-8 text-[10px] font-black uppercase tracking-widest bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/20"
+                    >
+                      Guardar
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2 items-center">
-                  <Input
-                    type="date"
-                    value={insDate}
-                    onChange={(e) => setInsDate(e.target.value)}
-                    className="h-8 text-xs bg-white/[0.03] border-white/10 text-white w-40"
-                  />
-                  <Button
-                    size="sm"
-                    disabled={busy || !insDate}
-                    onClick={() =>
-                      handleSetExpiry(
-                        "insuranceExpiry",
-                        insDate,
-                        "insurance_expiry_set",
-                      )
-                    }
-                    className="h-8 text-[10px] font-black uppercase tracking-widest bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/20"
-                  >
-                    Guardar
-                  </Button>
-                </div>
-              </div>
+              )}
               {/* Antecedentes */}
               <div className="px-5 py-4 space-y-2">
                 <div className="flex items-center justify-between">
@@ -1157,55 +1296,106 @@ export default function MunicipalDriverDetailPage() {
                 </div>
               </div>
               {/* ITV */}
-              <div className="px-5 py-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-zinc-300">
-                    ITV / VTV del vehículo
-                  </p>
-                  <span
-                    className={cn(
-                      "text-xs font-bold",
-                      mp.itvExpiry
-                        ? isExpired(mp.itvExpiry)
-                          ? "text-red-400"
-                          : "text-emerald-400"
-                        : "text-zinc-600",
-                    )}
-                  >
-                    {mp.itvExpiry
-                      ? formatDate(mp.itvExpiry) +
-                        (isExpired(mp.itvExpiry) ? " — VENCIDO" : "")
-                      : "Sin cargar"}
-                  </span>
+              {!isFleetDriver && (
+                <div className="px-5 py-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-zinc-300">
+                      ITV / VTV del vehículo
+                    </p>
+                    <span
+                      className={cn(
+                        "text-xs font-bold",
+                        mp.itvExpiry
+                          ? isExpired(mp.itvExpiry)
+                            ? "text-red-400"
+                            : "text-emerald-400"
+                          : "text-zinc-600",
+                      )}
+                    >
+                      {mp.itvExpiry
+                        ? formatDate(mp.itvExpiry) +
+                          (isExpired(mp.itvExpiry) ? " — VENCIDO" : "")
+                        : "Sin cargar"}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      type="date"
+                      value={itvDate}
+                      onChange={(e) => setItvDate(e.target.value)}
+                      className="h-8 text-xs bg-white/[0.03] border-white/10 text-white w-40"
+                    />
+                    <Button
+                      size="sm"
+                      disabled={busy || !itvDate}
+                      onClick={() =>
+                        handleSetExpiry(
+                          "itvExpiry" as any,
+                          itvDate,
+                          "itv_expiry_set" as any,
+                        )
+                      }
+                      className="h-8 text-[10px] font-black uppercase tracking-widest bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/20"
+                    >
+                      Guardar
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2 items-center">
-                  <Input
-                    type="date"
-                    value={itvDate}
-                    onChange={(e) => setItvDate(e.target.value)}
-                    className="h-8 text-xs bg-white/[0.03] border-white/10 text-white w-40"
-                  />
-                  <Button
-                    size="sm"
-                    disabled={busy || !itvDate}
-                    onClick={() =>
-                      handleSetExpiry(
-                        "itvExpiry" as any,
-                        itvDate,
-                        "itv_expiry_set" as any,
-                      )
-                    }
-                    className="h-8 text-[10px] font-black uppercase tracking-widest bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/20"
-                  >
-                    Guardar
-                  </Button>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
           {/* ── CANON ────────────────────────────────────────────────────── */}
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3">
+          
+          <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-5 space-y-3">
+              <p className="text-xs font-black uppercase tracking-widest text-indigo-400">
+                Contrato Legal del Conductor
+              </p>
+              <div className="space-y-4 mt-2">
+                    {userData?.legal?.driverTermsAccepted ? (
+                        <>
+                            <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                                <span className="text-xs font-bold text-zinc-300">Estado Legal</span>
+                                <Badge variant="outline" className="border-green-500/30 text-green-500 bg-green-500/5 text-[9px]">ACEPTADO</Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div><span className="text-zinc-500 block text-[9px] uppercase font-bold">Versión</span>{userData.legal.driverTermsVersion}</div>
+                                <div><span className="text-zinc-500 block text-[9px] uppercase font-bold">Fecha</span>{userData.legal.driverTermsAcceptedAt ? new Date(userData.legal.driverTermsAcceptedAt.toMillis ? userData.legal.driverTermsAcceptedAt.toMillis() : userData.legal.driverTermsAcceptedAt).toLocaleString('es-AR') : 'N/A'}</div>
+                            </div>
+                            
+                            {loadingLegal ? (
+                                <p className="text-xs text-zinc-500 animate-pulse">Cargando firma digital...</p>
+                            ) : legalDoc ? (
+                                <div className="mt-4 p-3 bg-black/40 rounded-xl border border-white/5 space-y-2 text-[10px]">
+                                    <p className="font-bold text-green-400 uppercase flex items-center gap-1 mb-2">
+                                        <CheckCircle2 className="h-3 w-3" /> Contrato registrado (Trazabilidad)
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div><span className="text-zinc-500 font-bold uppercase block">Firma (Aclaración)</span><span className="text-zinc-300 font-medium">{legalDoc.fullName}</span></div>
+                                        <div><span className="text-zinc-500 font-bold uppercase block">DNI</span><span className="text-zinc-300 font-medium">{legalDoc.dni}</span></div>
+                                        <div><span className="text-zinc-500 font-bold uppercase block">Ciudad Operativa</span><span className="text-zinc-300 font-medium">{legalDoc.cityKey}</span></div>
+                                        <div><span className="text-zinc-500 font-bold uppercase block">Email Asociado</span><span className="text-zinc-300 font-medium">{legalDoc.email}</span></div>
+                                        <div className="col-span-2"><span className="text-zinc-500 font-bold uppercase block">Hash (SHA-256)</span><span className="text-zinc-300 font-mono text-[8px] break-all">{legalDoc.hash}</span></div>
+                                        <div className="col-span-2"><span className="text-zinc-500 font-bold uppercase block">IP de Firma</span><span className="text-zinc-300 font-mono text-[9px]">{legalDoc.ip || 'No registrada'}</span></div>
+                                        <div className="col-span-2"><span className="text-zinc-500 font-bold uppercase block">Dispositivo</span><span className="text-zinc-300 text-[9px] truncate block">{legalDoc.userAgent || 'No registrado'}</span></div>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </>
+                    ) : (
+                        <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20 text-red-500 flex gap-2">
+                            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                                <p className="text-xs font-bold uppercase">CONTRATO NO ACEPTADO</p>
+                                <p className="text-[10px] opacity-80">Este conductor todavía no aceptó el contrato legal obligatorio y no puede operar.</p>
+                            </div>
+                        </div>
+                    )}
+              </div>
+          </div>
+
+          {!isFleetDriver && (
+            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-black uppercase tracking-widest text-zinc-500">
                 Canon Municipal
@@ -1291,10 +1481,10 @@ export default function MunicipalDriverDetailPage() {
                 onClick={() => handleCanon(false)}
                 className="h-8 text-[10px] font-black uppercase tracking-widest bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20"
               >
-                Marcar vencido/impago
               </Button>
             </div>
           </div>
+          )}
 
           {/* ── OBSERVACIÓN ──────────────────────────────────────────────── */}
           {isOperator && (
@@ -1352,21 +1542,21 @@ export default function MunicipalDriverDetailPage() {
                       <li>
                         · Checklist:{" "}
                         {
-                          CHECKLIST_KEYS.filter(
+                          applicableChecklistKeys.filter(
                             (k) => mp.checklist?.[k]?.status !== "approved",
                           ).length
                         }{" "}
                         ítems sin aprobar
                       </li>
                     )}
-                    {!canonOk && <li>· Canon municipal no pagado</li>}
+                    {!isFleetDriver && !canonOk && <li>· Canon municipal no pagado</li>}
                     {!licenseOk && (
                       <li>· Vencimiento de licencia no cargado o vencido</li>
                     )}
-                    {!insuranceOk && (
+                    {!isFleetDriver && !insuranceOk && (
                       <li>· Vencimiento de seguro no cargado o vencido</li>
                     )}
-                    {!itvOk && (
+                    {!isFleetDriver && !itvOk && (
                       <li>· Vencimiento de ITV/VTV no cargado o vencido</li>
                     )}
                   </ul>

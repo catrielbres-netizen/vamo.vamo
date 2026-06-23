@@ -50,13 +50,20 @@ export interface MunicipalLedgerEntry {
 
 export type RideStatus =
     | "scheduled"
+    | "pending_driver_assignment"
     | "searching"
     | "driver_assigned"
+    | "confirmed"
+    | "activating"
     | "driver_arrived"
     | "in_progress"
     | "paused"
     | "completed"
-    | "cancelled";
+    | "cancelled"
+    | "cancelled_by_passenger"
+    | "cancelled_by_driver"
+    | "expired"
+    | "failed_no_driver";
 
 export type VerificationStatus = "unverified" | "pending_review" | "approved" | "rejected";
 export type DocumentStatus = "valid" | "expired" | "pending_review" | "rejected";
@@ -90,7 +97,7 @@ export function buildMunicipalCode(cityKey: string, sequence: number): string {
 
 export type DriverStatus = "offline" | "inactive" | "online" | "in_ride";
 export type DriverLevel = "bronce" | "plata" | "oro";
-export type DriverSubtype = 'professional' | 'express';
+export type DriverSubtype = 'professional' | 'express' | 'taxi' | 'remis' | 'fleet_driver' | 'particular';
 
 export type MunicipalExpressStatus = 
   | 'pending_municipal_review'
@@ -114,7 +121,8 @@ export type MunicipalChecklistKey =
   | 'criminalRecord'
   | 'municipalCanon'
   | 'disinfectionReceipt'
-  | 'passengerCoverageInsurance';
+  | 'passengerCoverageInsurance'
+  | 'vehicleModelYearProof';
 
 export type DocItemStatus = 'pending' | 'submitted' | 'approved' | 'observed';
 export type CanonStatus = 'paid' | 'overdue' | 'pending';
@@ -324,6 +332,7 @@ export interface CompletedRide {
     taxiAssociationAmount?: number;
     remisAssociationAmount?: number;
     totalAssociationsAmount?: number;
+    grossReceiptsAmount?: number;
 }
 
 export interface RideChatMessage {
@@ -351,8 +360,11 @@ export interface Ride {
     id?: string;
     passengerId: string;
     driverId?: string | null;
-    vehicleOwnerId?: string;
-    activeDriverId?: string;
+    vehicleId?: string | null;
+    vehicleOwnerId?: string; // [VamO PRO] Financial beneficiary
+    settlementOwnerId?: string; // El UID que asume la deuda/comisión/recaudación del viaje
+    activeDriverId?: string; // [VamO PRO] Driver operating the vehicle
+
     status: RideStatus;
     serviceType: ServiceType;
     city?: string;
@@ -366,6 +378,7 @@ export interface Ride {
     isEscalated?: boolean;
     failureAlertSent?: boolean;
     activatedAt?: FirestoreTimestamp | null;
+    activationStatus?: string | null;
     interestedDriverIds?: string[];
     interestedDriversCount?: number;
     lastInterestAt?: FirestoreTimestamp | FirestoreFieldValue | null;
@@ -568,7 +581,7 @@ export interface Ride {
     stationId?: string | null;
     stationName?: string | null;
     stationDistanceMeters?: number | null;
-    stationDispatchStatus?: 'pending_assignment' | 'assigned_to_driver' | 'pending_reassignment' | 'accepted_by_driver' | 'released_to_general_matching' | null;
+    stationDispatchStatus?: 'pending_assignment' | 'assigned_to_driver' | 'pending_reassignment' | 'accepted_by_driver' | 'released_to_general_matching' | 'station_priority' | null;
     stationDispatchExpiresAt?: FirestoreTimestamp | null;
     stationAssignedDriverId?: string | null;
     stationReleasedToGeneralMatching?: boolean;
@@ -580,6 +593,21 @@ export interface DriverStats {
     ridesCompleted: number;
     acceptanceRate: number;
     cancellationRate: number;
+}
+
+export interface EmailPreferences {
+    transactionalEnabled: boolean;
+    operationalEnabled: boolean;
+    educationEnabled: boolean;
+    weeklySummaryEnabled: boolean;
+    highDemandEnabled: boolean;
+    marketingEnabled: boolean;
+}
+
+export interface EmailState {
+    sentTemplates: Record<string, string>; // templateName -> ISO timestamp
+    lastInactiveReminderAt?: any; // Firestore Timestamp
+    lastDriverInactiveReminderAt?: any; // Firestore Timestamp
 }
 
 export interface UserProfile {
@@ -608,7 +636,15 @@ export interface UserProfile {
     onboardingIncomplete?: boolean;
     createdAt: any;
     updatedAt?: any;
+    emailPreferences?: EmailPreferences;
+    emailState?: EmailState;
+    legal?: {
+        driverTermsAccepted?: boolean;
+        driverTermsVersion?: string;
+        driverTermsAcceptedAt?: any;
+    };
     isSuspended?: boolean;
+    lastActiveAt?: any;
     averageRating?: number | null;
     ratingCount?: number;
     activeRideId?: string | null;
@@ -661,12 +697,14 @@ export interface UserProfile {
         weeklySubsidySpent?: number;
         currentLevel?: 'none' | 'unlocked_10' | 'unlocked_15';
         expressUsesThisWeek?: number;
-    };
-    vehicleOwnerId?: string;       
-    authorizedDriverIds?: string[]; 
-    activeDriverId?: string;      
-    isVehicleOwner?: boolean;     
-    totalEarnings?: number;       
+    };    // --- OWNER / AUTHORIZED DRIVER SYSTEM ---
+    vehicleOwnerId?: string;       // UID del dueño del vehículo / cuenta principal
+    fleetApprovalStatus?: 'pending' | 'approved' | 'suspended' | 'unlinked'; // Estado de la vinculación
+    authorizedDriverIds?: string[]; // UIDs de choferes autorizados por este dueño
+    activeDriverId?: string;      // UID del chofer que está operando el vehículo actualmente
+    isVehicleOwner?: boolean;     // Indica si el usuario es el dueño legal del vehículo
+    
+    // --- FINANCIAL CONTEXT ---   totalEarnings?: number;       
     settlementAccount?: string;   
     driverPreferences?: {
         acceptsExpress: boolean;
@@ -760,6 +798,7 @@ export interface UserProfile {
     identityDocuments?: {
         dniFront?: string;
         dniBack?: string;
+        vehicleModelYearProof?: string;
         selfie?: string;
     };
     identityNote?: string;
@@ -963,6 +1002,8 @@ export interface Wallet {
     lockedPromo: number;
     lockedRideId?: string | null;
     lockedAt?: FirestoreTimestamp | FirestoreFieldValue | null;
+    grossReceiptsBalance?: number;
+    lastGrossReceiptsWithdrawalAt?: FirestoreTimestamp | FirestoreFieldValue | null;
     updatedAt: FirestoreTimestamp | FirestoreFieldValue;
 }
 
@@ -977,7 +1018,9 @@ export type WalletTransactionType =
     | 'fap_compensation'
     | 'ride_earning'
     | 'cash_collected'
-    | 'adjustment';
+    | 'adjustment'
+    | 'gross_receipts_withheld'
+    | 'gross_receipts_withdrawal';
 
 export interface WalletTransaction {
     id: string;
@@ -1146,6 +1189,8 @@ export interface PricingConfig {
     municipal_percentage: number;
     ASSISTANCE_FEE: number;
     assistanceEnabled: boolean;
+    smartPricingEnabled?: boolean;
+    /** @deprecated Use global system_config/smart_pricing instead */
     dynamicPricing?: DynamicPricingConfig;
     sharedRideMaxOriginRadiusMeters?: number; // VamO Compartido V1
     nightSurchargeEnabled?: boolean;

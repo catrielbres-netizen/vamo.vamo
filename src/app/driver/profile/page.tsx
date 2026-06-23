@@ -158,7 +158,7 @@ export default function DriverProfilePage() {
 
     setIsUploading(true);
     try {
-      const uploadResult = await uploadBytes(storageRef, file);
+      const uploadResult = await uploadBytes(storageRef, file, { contentType: file.type });
       const downloadURL = await getDownloadURL(uploadResult.ref);
 
       const userDocRef = doc(firestore, 'users', user.uid);
@@ -185,7 +185,7 @@ export default function DriverProfilePage() {
 
     setIsUploadingDoc(docId);
     try {
-        const uploadResult = await uploadBytes(storageRef, file);
+        const uploadResult = await uploadBytes(storageRef, file, { contentType: file.type });
         const downloadURL = await getDownloadURL(uploadResult.ref);
 
         const userDocRef = doc(firestore, 'users', user.uid);
@@ -326,189 +326,153 @@ export default function DriverProfilePage() {
           <TabsTrigger value="theme" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Diseño</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="space-y-4 animate-in fade-in duration-300">
+        <TabsContent value="general" className="space-y-6 animate-in fade-in duration-300">
           {/* [VamO PRO] Digital Credential / QR Control */}
-          <Card className="rounded-3xl border-indigo-500/20 bg-gradient-to-br from-zinc-900 to-indigo-900/10 shadow-xl overflow-hidden mb-6">
-                <CardContent className="p-6">
-                    <div className="flex flex-col items-center gap-4 text-center">
-                        <div className="relative p-4 bg-white rounded-3xl shadow-2xl overflow-hidden">
-                            <LazyQRCode
-                                value={`${typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.online'}/verify/driver/${user?.uid}`}
-                                size={180}
-                                level="H"
-                                marginSize={2}
-                            />
-                            {activeSuspension && (
-                                <div className="absolute inset-0 bg-red-600/80 rounded-3xl flex flex-col items-center justify-center text-white p-4 text-center select-none backdrop-blur-[2px]">
-                                    <VamoIcon name="shield-off" className="w-12 h-12 text-white animate-bounce" />
-                                    <span className="text-[10px] font-black uppercase tracking-wider mt-2">Operación Bloqueada</span>
-                                    <span className="text-[8px] opacity-90 mt-1 font-semibold leading-tight">Esta credencial no está habilitada para operar</span>
+          <div className="relative rounded-[2rem] border border-white/10 bg-[#0B0F19] shadow-2xl overflow-hidden p-8 flex flex-col items-center gap-6">
+              <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/10 to-transparent pointer-events-none" />
+              
+              <div className="relative z-10 p-4 bg-white rounded-3xl shadow-xl">
+                  <LazyQRCode
+                      value={`${typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.com.ar'}/verify/driver/${user?.uid}`}
+                      size={160}
+                      level="H"
+                      marginSize={1}
+                  />
+                  {activeSuspension && (
+                      <div className="absolute inset-0 bg-red-600/90 rounded-3xl flex flex-col items-center justify-center text-white p-4 text-center select-none backdrop-blur-sm">
+                          <VamoIcon name="shield-off" className="w-10 h-10 text-white animate-pulse" />
+                          <span className="text-[10px] font-black uppercase tracking-widest mt-2">Bloqueada</span>
+                      </div>
+                  )}
+              </div>
+              
+              <div className="text-center z-10">
+                  <h3 className="text-xl font-black text-white italic uppercase tracking-tighter flex items-center justify-center gap-2 mb-1">
+                      <QrCode className="w-5 h-5 text-indigo-400" /> CREDENCIAL DIGITAL
+                  </h3>
+                  <p className="text-[10px] font-bold text-indigo-400/80 uppercase tracking-widest">
+                      Válida para Control de Tránsito
+                  </p>
+              </div>
+              
+              <Button 
+                  variant="outline" 
+                  className="w-full h-12 rounded-xl border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 hover:text-white text-[11px] font-black uppercase tracking-widest transition-all z-10"
+                  onClick={() => window.open(`/verify/driver/${user?.uid}`, '_blank')}
+              >
+                  Previsualizar Credencial Pública
+              </Button>
+          </div>
+
+          {missingPhotos && (
+            <div className="flex items-center gap-3 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-500 shadow-lg shadow-amber-500/5">
+                <ShieldAlert className="w-5 h-5 shrink-0" />
+                <p className="text-xs font-bold">Faltan fotos obligatorias</p>
+            </div>
+          )}
+
+          <div className="rounded-[2rem] border border-white/5 bg-[#12141D] shadow-2xl overflow-hidden">
+                <div className="relative p-8 flex flex-col items-center gap-5 bg-gradient-to-b from-white/[0.02] to-transparent">
+                    <div className="relative">
+                        <Avatar className="h-28 w-28 border-2 border-white/10 shadow-2xl bg-zinc-900">
+                            <AvatarImage src={profile.photoURL || undefined} alt={profile.name} className="object-cover" />
+                            <AvatarFallback className="text-4xl font-bold text-white bg-zinc-800">
+                                {profile.name?.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                        </Avatar>
+                        <Button
+                            size="icon"
+                            className="absolute bottom-0 right-0 rounded-full h-10 w-10 bg-indigo-600 hover:bg-indigo-500 shadow-xl border-[3px] border-[#12141D] transition-transform hover:scale-105"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploading}
+                        >
+                            {isUploading ? <VamoIcon name="loader" className="animate-spin h-4 w-4 text-white" /> : <VamoIcon name="pencil" className="h-4 w-4 text-white" />}
+                        </Button>
+                        <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" accept="image/png, image/jpeg" />
+                    </div>
+                    
+                    <div className="text-center space-y-2">
+                        <div className="flex items-center justify-center gap-2">
+                            <h2 className="text-2xl font-black text-white tracking-tight">{profile.name} {profile.surname}</h2>
+                            {profile.municipalStatus === 'active' && (
+                                <div className="bg-indigo-500 p-1 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.4)]">
+                                    <VamoIcon name="shield-check" className="w-3.5 h-3.5 text-white" />
                                 </div>
                             )}
                         </div>
-                        <div>
-                            <h3 className="text-xl font-black text-white italic uppercase tracking-tighter flex items-center justify-center gap-2">
-                                <QrCode className="w-5 h-5 text-indigo-400" /> Credencial Digital
-                            </h3>
-                            <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-1">Válida para Control de Tránsito</p>
-                        </div>
-                        <div className="w-full pt-2">
-                            <Button 
-                                variant="outline" 
-                                className="w-full h-10 rounded-xl border-indigo-500/20 bg-indigo-500/5 text-indigo-400 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500/10"
-                                onClick={() => window.open(`/verify/driver/${user?.uid}`, '_blank')}
-                            >
-                                Previsualizar Credencial Pública
-                            </Button>
+                        <div className="flex items-center justify-center gap-2">
+                            <div className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider", 
+                                verificationStatusKey === 'approved' ? "bg-emerald-500/20 text-emerald-400" : 
+                                verificationStatusKey === 'unverified' ? "bg-red-500/20 text-red-400" : 
+                                "bg-amber-500/20 text-amber-400"
+                            )}>
+                                {verificationInfo.text}
+                            </div>
+                            <div className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/5 text-zinc-400">
+                                NIVEL {levelKey}
+                            </div>
                         </div>
                     </div>
-                </CardContent>
-          </Card>
-
-          {missingPhotos && (
-            <Card className="border-amber-500/30 bg-amber-500/10 mb-4">
-              <CardHeader className="py-3 px-4">
-                <CardTitle className="text-amber-500 text-sm flex gap-2 items-center">
-                  <ShieldAlert className="w-4 h-4" /> Faltan fotos obligatorias
-                </CardTitle>
-              </CardHeader>
-            </Card>
-          )}
-
-          <Card className="rounded-3xl border-zinc-800 bg-zinc-900/40 shadow-xl overflow-hidden">
-                <CardContent className="p-0">
-                    <div className="bg-gradient-to-b from-indigo-500/20 to-transparent p-8 flex flex-col items-center gap-4">
-                        <div className="relative">
-                            <Avatar className="h-28 w-28 border-4 border-zinc-900 shadow-2xl shadow-indigo-500/20 font-bold">
-                                <AvatarImage src={profile.photoURL || undefined} alt={profile.name} className="object-cover" />
-                                <AvatarFallback className="text-4xl font-bold text-indigo-400 bg-indigo-500/10">
-                                    {profile.name?.charAt(0).toUpperCase()}
-                                </AvatarFallback>
-                            </Avatar>
-                            <Button
-                                size="icon"
-                                className="absolute bottom-0 right-0 rounded-full h-10 w-10 bg-indigo-600 hover:bg-indigo-700 shadow-xl border-2 border-zinc-900"
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isUploading}
-                            >
-                                {isUploading ? <VamoIcon name="loader" className="animate-spin h-5 w-5" /> : <VamoIcon name="pencil" className="h-5 w-5" />}
-                            </Button>
-                            <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" accept="image/png, image/jpeg" />
+                </div>
+                
+                <div className="p-6 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-[#1A1D27] p-5 rounded-2xl border border-white/5 text-center flex flex-col items-center justify-center transition-all hover:bg-[#1f222e]">
+                            <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">Puntos VamO</p>
+                            <p className="text-2xl font-black text-white">{profile.vamoPoints || 0}</p>
+                            <p className="text-[8px] font-bold text-zinc-600 uppercase tracking-wider mt-1">Acumulados</p>
                         </div>
-                        <div className="text-center">
-                            <div className="flex items-center justify-center gap-2 mb-1">
-                                <h2 className="text-2xl font-black text-white">{profile.name}</h2>
-                                {profile.municipalStatus === 'active' && (
-                                    <div className="bg-indigo-500 p-1 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)] border border-white/20 animate-pulse">
-                                        <VamoIcon name="shield-check" className="w-4 h-4 text-white" />
-                                    </div>
+                        <div className="bg-[#1A1D27] p-5 rounded-2xl border border-white/5 text-center flex flex-col items-center justify-center transition-all hover:bg-[#1f222e]">
+                            <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">Calificación</p>
+                            <p className="text-2xl font-black text-indigo-400">{averageRating}</p>
+                            <p className="text-[8px] font-bold text-zinc-600 uppercase tracking-wider mt-1">Promedio</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3 pt-2">
+                        <div className="flex items-center gap-4 p-4 bg-[#1A1D27] rounded-2xl border border-white/5">
+                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-zinc-400 shrink-0">
+                                <VamoIcon name="mail" className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">Email de contacto</p>
+                                <p className="text-sm font-bold text-zinc-200 truncate">{profile.email}</p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-4 p-4 bg-[#1A1D27] rounded-2xl border border-white/5">
+                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-zinc-400 shrink-0">
+                                <VamoIcon name="phone" className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">Teléfono / WhatsApp</p>
+                                <p className="text-sm font-bold text-zinc-200 truncate">{profile.phone || 'No especificado'}</p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-4 p-4 bg-[#1A1D27] rounded-2xl border border-white/5">
+                            <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-zinc-400 shrink-0 overflow-hidden">
+                                {profile.vehicleImage || profile.assignedVehicle?.vehiclePhotoUrl ? (
+                                    <img src={profile.vehicleImage || profile.assignedVehicle?.vehiclePhotoUrl} alt="Vehículo" className="w-full h-full object-cover" />
+                                ) : (
+                                    <VamoIcon name="car" className="w-5 h-5" />
                                 )}
                             </div>
-                            <div className="flex items-center justify-center gap-2">
-                                <Badge variant={verificationInfo.variant} className="uppercase font-black text-[9px] px-2">{verificationInfo.text}</Badge>
-                                <Badge className={cn("uppercase font-black text-[9px] px-2", levelBadgeStyle)}>Nivel {levelKey}</Badge>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">Vehículo Registrado</p>
+                                <p className="text-sm font-black text-white uppercase italic tracking-tight">
+                                    {profile.assignedVehicle?.make || profile.vehicle?.brand || profile.vehicleBrand || 'Sin registrar'} {profile.assignedVehicle?.model || profile.vehicle?.model || profile.vehicleModel || ''}
+                                </p>
+                                <p className="text-[10px] font-bold text-zinc-400 mt-0.5">
+                                    {profile.assignedVehicle?.color || profile.vehicle?.color || profile.vehicleColor || 'Color N/A'} • {profile.assignedVehicle?.year || profile.vehicle?.year || profile.carModelYear || 'Año N/A'}
+                                </p>
                             </div>
                         </div>
                     </div>
-                    
-                    <div className="p-6 space-y-6 bg-zinc-900/20">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-zinc-950/50 p-4 rounded-2xl border border-white/5 text-center group transition-all hover:bg-zinc-950">
-                                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1 group-hover:text-primary transition-colors">Puntos VamO</p>
-                                <p className="text-xl font-black text-white">{profile.vamoPoints || 0}</p>
-                                <p className="text-[8px] font-bold text-zinc-600 uppercase mt-1">Acumulados</p>
-                            </div>
-                            <div className="bg-zinc-950/50 p-4 rounded-2xl border border-white/5 text-center group transition-all hover:bg-zinc-950">
-                                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1 group-hover:text-primary transition-colors">Calificación</p>
-                                <p className="text-xl font-black text-primary">{averageRating}</p>
-                                <p className="text-[8px] font-bold text-zinc-600 uppercase mt-1">Promedio</p>
-                            </div>
-                        </div>
+                </div>
+          </div>
 
-                        <div className="space-y-4">
-                            <ProfileInfoCard 
-                                icon={<VamoIcon name="mail" className="w-4 h-4" />} 
-                                label="Email de contacto" 
-                                value={profile.email} 
-                            />
-                            <ProfileInfoCard 
-                                icon={<VamoIcon name="phone" className="w-4 h-4" />} 
-                                label="Teléfono / WhatsApp" 
-                                value={profile.phone} 
-                            />
-                            <div className="grid grid-cols-1 gap-4 pt-2">
-                                <div className="bg-zinc-950/40 p-5 rounded-[1.5rem] border border-white/5 flex items-center justify-between group">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center text-zinc-500 group-hover:text-indigo-400 transition-colors">
-                                            <VamoIcon name="car" className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Vehículo Registrado</p>
-                                            <p className="text-sm font-black text-white uppercase italic tracking-tighter">
-                                                {profile.vehicle?.brand || profile.vehicleBrand || ''} {profile.vehicle?.model || profile.vehicleModel || 'N/A'}
-                                            </p>
-                                            <p className="text-[10px] font-bold text-zinc-500 mt-0.5">
-                                                {profile.vehicle?.color || profile.vehicleColor || 'Color no especificado'} • {profile.vehicle?.year || profile.carModelYear || ''}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div className="bg-zinc-950/40 p-5 rounded-[1.5rem] border border-white/5 flex items-center justify-between group">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center text-zinc-500 group-hover:text-emerald-400 transition-colors">
-                                            <VamoIcon name="credit-card" className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Patente / Placa</p>
-                                            <p className="text-xl font-black text-white tracking-[0.1em] uppercase font-mono">
-                                                {profile.vehicle?.plate || profile.plateNumber || '--- ---'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[8px] font-black">OFICIAL</Badge>
-                                </div>
-
-                                <div className="bg-zinc-950/40 p-5 rounded-[1.5rem] border border-white/5 flex items-center justify-between group">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center text-zinc-500 group-hover:text-indigo-400 transition-colors">
-                                            <VamoIcon name="percent" className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Tarifa Dinámica</p>
-                                            <p className="text-sm font-black text-white">Aceptar descuentos</p>
-                                            <p className="text-[10px] text-zinc-500 mt-0.5">
-                                                {profile.driverSubtype === 'express' 
-                                                    ? 'Obligatorio para conductores Express' 
-                                                    : 'Recibí más viajes con tarifa variable'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Switch 
-                                        checked={profile.driverSubtype === 'express' || !!profile.driverPreferences?.acceptsDiscountedRides}
-                                        disabled={profile.driverSubtype === 'express' || isSavingPreferences}
-                                        onCheckedChange={(val) => handlePreferenceToggle('acceptsDiscountedRides', val)}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-          <Card className="border-zinc-800 bg-background/50">
-              <CardHeader className="py-4">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                      <VamoIcon name="bell" className="text-primary h-5 w-5" />
-                      Notificaciones en vivo
-                  </CardTitle>
-              </CardHeader>
-              <CardContent className="pb-4">
-                  <NotificationToggle />
-              </CardContent>
-          </Card>
-
-          <Button variant="ghost" className="w-full text-zinc-500 font-bold" onClick={handleLogout}>
+          <Button variant="ghost" className="w-full text-zinc-500 hover:text-white font-bold h-12 mt-4" onClick={handleLogout}>
               Cerrar Sesión Activa
           </Button>
         </TabsContent>
@@ -598,6 +562,17 @@ export default function DriverProfilePage() {
                                       Aún no se han solicitado documentos.
                                   </p>
                               )}
+                          </div>
+                          
+                          <div className="pt-4 mt-2 border-t border-white/5">
+                              <p className="text-center text-xs text-muted-foreground mb-2">¿Problemas al subir las fotos?</p>
+                              <Button 
+                                  variant="outline" 
+                                  className="w-full h-12 rounded-xl text-xs font-bold border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/10"
+                                  onClick={() => window.location.href = `mailto:documentos@vamoapp.com.ar?subject=Documentos%20Conductor%20-%20${profile.name}%20(${user.uid})&body=Hola%20equipo%20de%20VamO,%0A%0AAdjunto%20los%20documentos%20solicitados%20porque%20tuve%20problemas%20para%20subirlos%20desde%20la%20app.%0A%0AGracias.`}
+                              >
+                                  <VamoIcon name="mail" className="w-4 h-4 mr-2" /> Enviar por Email
+                              </Button>
                           </div>
                       </div>
                   )}

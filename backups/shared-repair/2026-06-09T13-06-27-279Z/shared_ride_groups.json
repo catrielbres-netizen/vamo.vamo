@@ -1,0 +1,2008 @@
+[
+  {
+    "id": "Adxrd2D9UelzrpIs2jFM",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 3400,
+    "sharedFarePerPassenger": 3400,
+    "estimatedSharedTotal": 3400,
+    "estimatedDriverTotal": 3400,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Alejandro Maiz 14, U9103 Rawson, Chubut, Argentina",
+        "lat": -43.2996088,
+        "lng": -65.1058017,
+        "city": "Rawson"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+        "lat": -43.3039741,
+        "lng": -65.0973815,
+        "city": "Rawson"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "vcmsVpK5jHNDHPpcbnat",
+        "location": {
+          "address": "Alejandro Maiz 14, U9103 Rawson, Chubut, Argentina",
+          "lat": -43.2996088,
+          "lng": -65.1058017,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "vcmsVpK5jHNDHPpcbnat",
+        "location": {
+          "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+          "lat": -43.3039741,
+          "lng": -65.0973815,
+          "city": "Rawson"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778990074,
+      "_nanoseconds": 826000000
+    },
+    "creatorPassengerId": "test_shared_a",
+    "createdByPassengerId": "test_shared_a",
+    "createdAt": {
+      "_seconds": 1778989594,
+      "_nanoseconds": 957000000
+    },
+    "isPubliclyJoinable": false,
+    "passengers": [
+      {
+        "passengerId": "test_shared_a",
+        "passengerName": "Shared Test A",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1778989594,
+          "_nanoseconds": 826000000
+        },
+        "status": "joined",
+        "pickupAddress": "Alejandro Maiz 14, U9103 Rawson, Chubut, Argentina",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      },
+      {
+        "passengerId": "test_shared_b",
+        "passengerName": "Pasajero B",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1778989596,
+          "_nanoseconds": 461000000
+        },
+        "status": "joined",
+        "pickupAddress": "Alejandro Maiz 14, U9103 Rawson, Chubut, Argentina",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      }
+    ],
+    "hasMinimumPassengers": true,
+    "driverSearchStartsAt": {
+      "_seconds": 1778989601,
+      "_nanoseconds": 461000000
+    },
+    "minPassengersToLaunch": 2,
+    "passengerIds": [
+      "test_shared_a",
+      "test_shared_b"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778989601,
+      "_nanoseconds": 461000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "vcmsVpK5jHNDHPpcbnat",
+      "req_b_1778989594954"
+    ],
+    "confirmationExpiresAt": {
+      "_seconds": 1778989601,
+      "_nanoseconds": 461000000
+    },
+    "finalRideId": "shared_Adxrd2D9UelzrpIs2jFM",
+    "dispatchStartedAt": {
+      "_seconds": 1778992563,
+      "_nanoseconds": 208000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "status": "ready_for_driver",
+    "updatedAt": {
+      "_seconds": 1778992563,
+      "_nanoseconds": 208000000
+    }
+  },
+  {
+    "id": "G0M0bQJxWW63rZ3C3P9r",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 10350,
+    "sharedFarePerPassenger": 10350,
+    "estimatedSharedTotal": 10350,
+    "estimatedDriverTotal": 10350,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "lat": -43.3256013,
+        "lng": -65.0501015,
+        "city": "Playa Union"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+        "lat": -43.3039741,
+        "lng": -65.0973815,
+        "city": "Rawson"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "ecV2aKpmxyBewPu5GKzW",
+        "location": {
+          "address": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+          "lat": -43.3256013,
+          "lng": -65.0501015,
+          "city": "Playa Union"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "ecV2aKpmxyBewPu5GKzW",
+        "location": {
+          "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+          "lat": -43.3039741,
+          "lng": -65.0973815,
+          "city": "Rawson"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778988554,
+      "_nanoseconds": 984000000
+    },
+    "creatorPassengerId": "test_shared_a",
+    "createdByPassengerId": "test_shared_a",
+    "createdAt": {
+      "_seconds": 1778988075,
+      "_nanoseconds": 6000000
+    },
+    "isPubliclyJoinable": false,
+    "passengers": [
+      {
+        "passengerId": "test_shared_a",
+        "passengerName": "Shared Test A",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1778988074,
+          "_nanoseconds": 984000000
+        },
+        "status": "joined",
+        "pickupAddress": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      },
+      {
+        "passengerId": "test_shared_b",
+        "passengerName": "Pasajero B",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1778989159,
+          "_nanoseconds": 470000000
+        },
+        "status": "joined",
+        "pickupAddress": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      }
+    ],
+    "hasMinimumPassengers": true,
+    "driverSearchStartsAt": {
+      "_seconds": 1778989164,
+      "_nanoseconds": 470000000
+    },
+    "minPassengersToLaunch": 2,
+    "passengerIds": [
+      "test_shared_a",
+      "test_shared_b"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778989164,
+      "_nanoseconds": 470000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "ecV2aKpmxyBewPu5GKzW",
+      "req_b_1778989158107"
+    ],
+    "confirmationExpiresAt": {
+      "_seconds": 1778989164,
+      "_nanoseconds": 470000000
+    },
+    "finalRideId": "shared_G0M0bQJxWW63rZ3C3P9r",
+    "dispatchStartedAt": {
+      "_seconds": 1778992562,
+      "_nanoseconds": 877000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "status": "ready_for_driver",
+    "updatedAt": {
+      "_seconds": 1778992562,
+      "_nanoseconds": 877000000
+    }
+  },
+  {
+    "id": "Gpf7oDnPOuPewYcAFxwl",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 10550,
+    "estimatedDriverTotal": 10550,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Gregorio Mayo 210",
+        "lat": -43.3004396,
+        "lng": -65.1008387,
+        "city": "Rawson"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Cacique Nahuelpan 810",
+        "lat": -43.31617840000001,
+        "lng": -65.0470771,
+        "city": "Rawson"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "84zJEHyysCKvQ1muoncZ",
+        "location": {
+          "address": "Gregorio Mayo 210",
+          "lat": -43.3004396,
+          "lng": -65.1008387,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "84zJEHyysCKvQ1muoncZ",
+        "location": {
+          "address": "Cacique Nahuelpan 810",
+          "lat": -43.31617840000001,
+          "lng": -65.0470771,
+          "city": "Rawson"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778994558,
+      "_nanoseconds": 596000000
+    },
+    "creatorPassengerId": "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+    "createdByPassengerId": "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+    "createdAt": {
+      "_seconds": 1778994078,
+      "_nanoseconds": 608000000
+    },
+    "isPubliclyJoinable": false,
+    "passengers": [
+      {
+        "passengerId": "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+        "passengerName": "cesar",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1778994078,
+          "_nanoseconds": 596000000
+        },
+        "status": "joined",
+        "pickupAddress": "Gregorio Mayo 210",
+        "dropoffAddress": "Cacique Nahuelpan 810"
+      },
+      {
+        "passengerId": "qLtGStKw00fr7DuEW2A4FwigzJQ2",
+        "passengerName": "marcelo",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1778994098,
+          "_nanoseconds": 681000000
+        },
+        "status": "joined",
+        "pickupAddress": "Perito Moreno 456",
+        "dropoffAddress": "Calle Tte. Cnel. de Roa 1751"
+      }
+    ],
+    "hasMinimumPassengers": true,
+    "sharedFarePerPassenger": 7200,
+    "driverSearchStartsAt": {
+      "_seconds": 1778994158,
+      "_nanoseconds": 681000000
+    },
+    "minPassengersToLaunch": 2,
+    "passengerIds": [
+      "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+      "qLtGStKw00fr7DuEW2A4FwigzJQ2"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778994158,
+      "_nanoseconds": 681000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "84zJEHyysCKvQ1muoncZ",
+      "84ooexhQlYB40tSoOgQ0"
+    ],
+    "estimatedSharedTotal": 14400,
+    "driverSearchTriggeredAt": {
+      "_seconds": 1778994157,
+      "_nanoseconds": 953000000
+    },
+    "status": "ready_for_driver",
+    "finalRideId": "shared_Gpf7oDnPOuPewYcAFxwl",
+    "dispatchStartedAt": {
+      "_seconds": 1778994158,
+      "_nanoseconds": 119000000
+    },
+    "launchReason": "manual_launch",
+    "updatedAt": {
+      "_seconds": 1778994158,
+      "_nanoseconds": 119000000
+    }
+  },
+  {
+    "id": "K3OEzSKc7pEwVWeZPkIg",
+    "cityKey": "parana",
+    "requestIds": [
+      "c04OOI64w15sUbcPxoH2",
+      "5bffdJPAZk0RNTpAOFI8"
+    ],
+    "passengerIds": [
+      "test_pax_parana_1",
+      "test_pax_parana_2"
+    ],
+    "passengers": [
+      {
+        "passengerId": "test_pax_parana_1",
+        "passengerName": "Pax Paraná 1",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1778953689,
+          "_nanoseconds": 534000000
+        },
+        "status": "joined",
+        "pickupAddress": "Centro Paraná",
+        "dropoffAddress": "Puerto Paraná"
+      },
+      {
+        "passengerId": "test_pax_parana_2",
+        "passengerName": "Pax Paraná 2",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1778953689,
+          "_nanoseconds": 534000000
+        },
+        "status": "joined",
+        "pickupAddress": "Cerca de Centro",
+        "dropoffAddress": "Puerto Paraná Sur"
+      }
+    ],
+    "occupiedSeats": 2,
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 3000,
+    "sharedFarePerPassenger": 2100,
+    "estimatedSharedTotal": 4200,
+    "estimatedDriverTotal": 3800,
+    "driverBenefitAmount": 800,
+    "pickupStops": [
+      {
+        "lat": -31.7333,
+        "lng": -60.5297,
+        "address": "Centro Paraná"
+      },
+      {
+        "lat": -31.734,
+        "lng": -60.53,
+        "address": "Cerca de Centro"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "lat": -31.74,
+        "lng": -60.51,
+        "address": "Puerto Paraná"
+      },
+      {
+        "lat": -31.741,
+        "lng": -60.511,
+        "address": "Puerto Paraná Sur"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "c04OOI64w15sUbcPxoH2",
+        "location": {
+          "lat": -31.7333,
+          "lng": -60.5297,
+          "address": "Centro Paraná"
+        }
+      },
+      {
+        "type": "pickup",
+        "requestId": "5bffdJPAZk0RNTpAOFI8",
+        "location": {
+          "lat": -31.734,
+          "lng": -60.53,
+          "address": "Cerca de Centro"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "c04OOI64w15sUbcPxoH2",
+        "location": {
+          "lat": -31.74,
+          "lng": -60.51,
+          "address": "Puerto Paraná"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "5bffdJPAZk0RNTpAOFI8",
+        "location": {
+          "lat": -31.741,
+          "lng": -60.511,
+          "address": "Puerto Paraná Sur"
+        }
+      }
+    ],
+    "createdAt": {
+      "_seconds": 1778953690,
+      "_nanoseconds": 421000000
+    },
+    "driverId": "test_driver_parana_1",
+    "status": "driver_assigned",
+    "updatedAt": {
+      "_seconds": 1778953691,
+      "_nanoseconds": 745000000
+    },
+    "finalRideId": "9GdYk8Rl8jb6Ux6rCQqv"
+  },
+  {
+    "id": "M2wc0UysoxIgqokClwIi",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 8700,
+    "estimatedDriverTotal": 8700,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Gregorio Mayo 155",
+        "lat": -43.3000316,
+        "lng": -65.10204200000001,
+        "city": "Rawson"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Cacique Nahuelpan 844",
+        "lat": -43.316409,
+        "lng": -65.047395,
+        "city": "Rawson"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "AksoiuAuliU8ajtYGvfP",
+        "location": {
+          "address": "Gregorio Mayo 155",
+          "lat": -43.3000316,
+          "lng": -65.10204200000001,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "AksoiuAuliU8ajtYGvfP",
+        "location": {
+          "address": "Cacique Nahuelpan 844",
+          "lat": -43.316409,
+          "lng": -65.047395,
+          "city": "Rawson"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778943752,
+      "_nanoseconds": 627000000
+    },
+    "creatorPassengerId": "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+    "createdAt": {
+      "_seconds": 1778943272,
+      "_nanoseconds": 649000000
+    },
+    "isPubliclyJoinable": false,
+    "sharedFarePerPassenger": 6000,
+    "driverSearchStartsAt": {
+      "_seconds": 1778943446,
+      "_nanoseconds": 167000000
+    },
+    "minPassengersToLaunch": 2,
+    "hasMinimumPassengers": true,
+    "passengerIds": [
+      "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+      "qLtGStKw00fr7DuEW2A4FwigzJQ2"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778943446,
+      "_nanoseconds": 167000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "AksoiuAuliU8ajtYGvfP",
+      "8R94KsoVyKr48QU7bc1E"
+    ],
+    "estimatedSharedTotal": 12000,
+    "finalRideId": "shared_M2wc0UysoxIgqokClwIi",
+    "dispatchStartedAt": {
+      "_seconds": 1778991601,
+      "_nanoseconds": 417000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "status": "ready_for_driver",
+    "updatedAt": {
+      "_seconds": 1778991601,
+      "_nanoseconds": 417000000
+    }
+  },
+  {
+    "id": "QYDMC5Vk0Wz3eUDcyObo",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 10550,
+    "estimatedDriverTotal": 10550,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Av. Sarmiento 456",
+        "lat": -43.30004,
+        "lng": -65.1006218,
+        "city": "Rawson"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Soberania Nacional 277",
+        "lat": -43.3179545,
+        "lng": -65.04817899999999,
+        "city": "Playa Union"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "Cs9rNHKhdLPXkBm7F2Ge",
+        "location": {
+          "address": "Av. Sarmiento 456",
+          "lat": -43.30004,
+          "lng": -65.1006218,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "Cs9rNHKhdLPXkBm7F2Ge",
+        "location": {
+          "address": "Soberania Nacional 277",
+          "lat": -43.3179545,
+          "lng": -65.04817899999999,
+          "city": "Playa Union"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778990662,
+      "_nanoseconds": 443000000
+    },
+    "creatorPassengerId": "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+    "createdByPassengerId": "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+    "createdAt": {
+      "_seconds": 1778990182,
+      "_nanoseconds": 461000000
+    },
+    "isPubliclyJoinable": false,
+    "passengers": [
+      {
+        "passengerId": "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+        "passengerName": "cesar",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1778990182,
+          "_nanoseconds": 443000000
+        },
+        "status": "joined",
+        "pickupAddress": "Av. Sarmiento 456",
+        "dropoffAddress": "Soberania Nacional 277"
+      },
+      {
+        "passengerId": "qLtGStKw00fr7DuEW2A4FwigzJQ2",
+        "passengerName": "marcelo",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1778990268,
+          "_nanoseconds": 39000000
+        },
+        "status": "joined",
+        "pickupAddress": "Gregorio Mayo 155",
+        "dropoffAddress": "Jorge Newbery 571"
+      }
+    ],
+    "hasMinimumPassengers": true,
+    "sharedFarePerPassenger": 7200,
+    "driverSearchStartsAt": {
+      "_seconds": 1778990328,
+      "_nanoseconds": 39000000
+    },
+    "minPassengersToLaunch": 2,
+    "passengerIds": [
+      "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+      "qLtGStKw00fr7DuEW2A4FwigzJQ2"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778990328,
+      "_nanoseconds": 39000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "Cs9rNHKhdLPXkBm7F2Ge",
+      "svLP79Zhq6w0e3mBxDry"
+    ],
+    "estimatedSharedTotal": 14400,
+    "driverSearchTriggeredAt": {
+      "_seconds": 1778990330,
+      "_nanoseconds": 642000000
+    },
+    "status": "ready_for_driver",
+    "finalRideId": "shared_QYDMC5Vk0Wz3eUDcyObo",
+    "dispatchStartedAt": {
+      "_seconds": 1778990330,
+      "_nanoseconds": 782000000
+    },
+    "launchReason": "manual_launch",
+    "updatedAt": {
+      "_seconds": 1778990330,
+      "_nanoseconds": 782000000
+    }
+  },
+  {
+    "id": "TPfeLvd8YTu0tzXoGGpO",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 25800,
+    "estimatedDriverTotal": 25800,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Gregorio Mayo 155",
+        "lat": -43.3000316,
+        "lng": -65.10204200000001,
+        "city": "Rawson"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Cangallo 1569",
+        "lat": -43.2782662,
+        "lng": -65.29975,
+        "city": "Trelew"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "1rPgBFkYEZP5cII29L9U",
+        "location": {
+          "address": "Gregorio Mayo 155",
+          "lat": -43.3000316,
+          "lng": -65.10204200000001,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "1rPgBFkYEZP5cII29L9U",
+        "location": {
+          "address": "Cangallo 1569",
+          "lat": -43.2782662,
+          "lng": -65.29975,
+          "city": "Trelew"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778944085,
+      "_nanoseconds": 516000000
+    },
+    "creatorPassengerId": "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+    "createdAt": {
+      "_seconds": 1778943605,
+      "_nanoseconds": 546000000
+    },
+    "isPubliclyJoinable": false,
+    "sharedFarePerPassenger": 17600,
+    "driverSearchStartsAt": {
+      "_seconds": 1778943747,
+      "_nanoseconds": 189000000
+    },
+    "minPassengersToLaunch": 2,
+    "hasMinimumPassengers": true,
+    "passengerIds": [
+      "8rWJKMMONDbOBm5fYeNHf2bxoUb2",
+      "qLtGStKw00fr7DuEW2A4FwigzJQ2"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778943747,
+      "_nanoseconds": 189000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "1rPgBFkYEZP5cII29L9U",
+      "DjZvU4oW7PgBPCNwxjRG"
+    ],
+    "estimatedSharedTotal": 35200,
+    "finalRideId": "shared_TPfeLvd8YTu0tzXoGGpO",
+    "dispatchStartedAt": {
+      "_seconds": 1778991602,
+      "_nanoseconds": 41000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "status": "ready_for_driver",
+    "updatedAt": {
+      "_seconds": 1778991602,
+      "_nanoseconds": 41000000
+    }
+  },
+  {
+    "id": "UQyZOo9lfIeHV277ztnO",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 9310,
+    "estimatedDriverTotal": 9310,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "expiresAt": {
+      "_seconds": 1780926111,
+      "_nanoseconds": 866000000
+    },
+    "creatorPassengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+    "createdByPassengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+    "createdAt": {
+      "_seconds": 1780925631,
+      "_nanoseconds": 895000000
+    },
+    "hasMinimumPassengers": true,
+    "minPassengersToLaunch": 2,
+    "sharedFarePerPassenger": 5121,
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "dGbgDt5CsNliUrIOl4HP",
+        "location": {
+          "address": "Los Maiténes 225",
+          "lat": -43.3057585,
+          "lng": -65.0552258,
+          "city": "Playa Union"
+        }
+      },
+      {
+        "type": "pickup",
+        "requestId": "ZkiHWrZ4F6u3kncwnIGJ",
+        "location": {
+          "address": "Amancay 120",
+          "lat": -43.3050518,
+          "lng": -65.0529061,
+          "city": "Playa Union"
+        }
+      },
+      {
+        "type": "pickup",
+        "requestId": "VNr3dyWrsU9Uz3ZKAKkG",
+        "location": {
+          "address": "Las Lengas 359",
+          "lat": -43.3022185,
+          "lng": -65.0542064,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "dGbgDt5CsNliUrIOl4HP",
+        "location": {
+          "address": "Gregorio Mayo 155",
+          "lat": -43.3000316,
+          "lng": -65.10204200000001,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "ZkiHWrZ4F6u3kncwnIGJ",
+        "location": {
+          "address": "Perito Moreno 166",
+          "lat": -43.2970948,
+          "lng": -65.09773679999999,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "VNr3dyWrsU9Uz3ZKAKkG",
+        "location": {
+          "address": "Avenida 9 de Julio y Salta",
+          "lat": -43.2909481,
+          "lng": -65.1120115,
+          "city": "Rawson"
+        }
+      }
+    ],
+    "passengers": [
+      {
+        "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+        "passengerName": "VamO Pasajero Compartido Test 1",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1780925631,
+          "_nanoseconds": 866000000
+        },
+        "status": "joined",
+        "pickupAddress": "Los Maiténes 225",
+        "dropoffAddress": "Gregorio Mayo 155"
+      },
+      {
+        "passengerId": "eMhDWqwmQMgoKMskjzTd2StwQaI3",
+        "passengerName": "maria",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1780925654,
+          "_nanoseconds": 699000000
+        },
+        "status": "joined",
+        "pickupAddress": "Amancay 120",
+        "dropoffAddress": "Perito Moreno 166"
+      },
+      {
+        "passengerId": "qgKot462IpPER2l9uzB0uzJsqWP2",
+        "passengerName": "VamO Pasajero Compartido Test 2",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1780925788,
+          "_nanoseconds": 881000000
+        },
+        "status": "joined",
+        "pickupAddress": "Las Lengas 359",
+        "dropoffAddress": "Avenida 9 de Julio y Salta"
+      }
+    ],
+    "pickupStops": [
+      {
+        "address": "Los Maiténes 225",
+        "lat": -43.3057585,
+        "lng": -65.0552258,
+        "city": "Playa Union"
+      },
+      {
+        "address": "Amancay 120",
+        "lat": -43.3050518,
+        "lng": -65.0529061,
+        "city": "Playa Union"
+      },
+      {
+        "address": "Las Lengas 359",
+        "lat": -43.3022185,
+        "lng": -65.0542064,
+        "city": "Rawson"
+      }
+    ],
+    "driverBenefitAmount": 6993,
+    "dropoffStops": [
+      {
+        "address": "Gregorio Mayo 155",
+        "lat": -43.3000316,
+        "lng": -65.10204200000001,
+        "city": "Rawson"
+      },
+      {
+        "address": "Perito Moreno 166",
+        "lat": -43.2970948,
+        "lng": -65.09773679999999,
+        "city": "Rawson"
+      },
+      {
+        "address": "Avenida 9 de Julio y Salta",
+        "lat": -43.2909481,
+        "lng": -65.1120115,
+        "city": "Rawson"
+      }
+    ],
+    "passengerIds": [
+      "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+      "eMhDWqwmQMgoKMskjzTd2StwQaI3",
+      "qgKot462IpPER2l9uzB0uzJsqWP2"
+    ],
+    "occupiedSeats": 3,
+    "requestIds": [
+      "dGbgDt5CsNliUrIOl4HP",
+      "ZkiHWrZ4F6u3kncwnIGJ",
+      "VNr3dyWrsU9Uz3ZKAKkG"
+    ],
+    "driverBenefitPercent": 0.7511278195488722,
+    "estimatedSharedTotal": 16303,
+    "isPubliclyJoinable": false,
+    "finalRideId": "shared_UQyZOo9lfIeHV277ztnO",
+    "dispatchStartedAt": {
+      "_seconds": 1780926124,
+      "_nanoseconds": 27000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "driverId": "VNhou0ag4wXXPr6IXa3foO6SI8B3",
+    "assignedDriverId": "VNhou0ag4wXXPr6IXa3foO6SI8B3",
+    "status": "driver_assigned",
+    "updatedAt": {
+      "_seconds": 1780926449,
+      "_nanoseconds": 505000000
+    }
+  },
+  {
+    "id": "UR7CoG8AycBe3VxRBm4D",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 10350,
+    "sharedFarePerPassenger": 10350,
+    "estimatedSharedTotal": 10350,
+    "estimatedDriverTotal": 10350,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "lat": -43.3256013,
+        "lng": -65.0501015,
+        "city": "Playa Union"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+        "lat": -43.3039741,
+        "lng": -65.0973815,
+        "city": "Rawson"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "ChHuLwyh96EWJNeyIDus",
+        "location": {
+          "address": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+          "lat": -43.3256013,
+          "lng": -65.0501015,
+          "city": "Playa Union"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "ChHuLwyh96EWJNeyIDus",
+        "location": {
+          "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+          "lat": -43.3039741,
+          "lng": -65.0973815,
+          "city": "Rawson"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778984805,
+      "_nanoseconds": 593000000
+    },
+    "creatorPassengerId": "test_shared_a",
+    "createdByPassengerId": "test_shared_a",
+    "createdAt": {
+      "_seconds": 1778984325,
+      "_nanoseconds": 620000000
+    },
+    "isPubliclyJoinable": false,
+    "passengers": [
+      {
+        "passengerId": "test_shared_a",
+        "passengerName": "Shared Test A",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1778984325,
+          "_nanoseconds": 593000000
+        },
+        "status": "joined",
+        "pickupAddress": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      },
+      {
+        "passengerId": "test_shared_b",
+        "passengerName": "Pasajero B",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1778984925,
+          "_nanoseconds": 178000000
+        },
+        "status": "joined",
+        "pickupAddress": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      }
+    ],
+    "hasMinimumPassengers": true,
+    "driverSearchStartsAt": {
+      "_seconds": 1778984930,
+      "_nanoseconds": 179000000
+    },
+    "minPassengersToLaunch": 2,
+    "passengerIds": [
+      "test_shared_a",
+      "test_shared_b"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778984930,
+      "_nanoseconds": 179000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "ChHuLwyh96EWJNeyIDus",
+      "req_b_1778984923554"
+    ],
+    "confirmationExpiresAt": {
+      "_seconds": 1778984930,
+      "_nanoseconds": 179000000
+    },
+    "finalRideId": "shared_UR7CoG8AycBe3VxRBm4D",
+    "dispatchStartedAt": {
+      "_seconds": 1778992561,
+      "_nanoseconds": 792000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "status": "ready_for_driver",
+    "updatedAt": {
+      "_seconds": 1778992561,
+      "_nanoseconds": 792000000
+    }
+  },
+  {
+    "id": "VyRgLm7g701bG8qJIKKJ",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 10350,
+    "sharedFarePerPassenger": 10350,
+    "estimatedSharedTotal": 10350,
+    "estimatedDriverTotal": 10350,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "lat": -43.3256013,
+        "lng": -65.0501015,
+        "city": "Playa Union"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+        "lat": -43.3039741,
+        "lng": -65.0973815,
+        "city": "Rawson"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "2lbY5VV77YjMDiEEx8ft",
+        "location": {
+          "address": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+          "lat": -43.3256013,
+          "lng": -65.0501015,
+          "city": "Playa Union"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "2lbY5VV77YjMDiEEx8ft",
+        "location": {
+          "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+          "lat": -43.3039741,
+          "lng": -65.0973815,
+          "city": "Rawson"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778990423,
+      "_nanoseconds": 549000000
+    },
+    "creatorPassengerId": "test_shared_a",
+    "createdByPassengerId": "test_shared_a",
+    "createdAt": {
+      "_seconds": 1778989943,
+      "_nanoseconds": 569000000
+    },
+    "isPubliclyJoinable": false,
+    "passengers": [
+      {
+        "passengerId": "test_shared_a",
+        "passengerName": "Shared Test A",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1778989943,
+          "_nanoseconds": 549000000
+        },
+        "status": "joined",
+        "pickupAddress": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      },
+      {
+        "passengerId": "test_shared_b",
+        "passengerName": "Pasajero B",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1778989944,
+          "_nanoseconds": 936000000
+        },
+        "status": "joined",
+        "pickupAddress": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      }
+    ],
+    "hasMinimumPassengers": true,
+    "driverSearchStartsAt": {
+      "_seconds": 1778989949,
+      "_nanoseconds": 936000000
+    },
+    "minPassengersToLaunch": 2,
+    "passengerIds": [
+      "test_shared_a",
+      "test_shared_b"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778989949,
+      "_nanoseconds": 936000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "2lbY5VV77YjMDiEEx8ft",
+      "req_b_1778989943505"
+    ],
+    "confirmationExpiresAt": {
+      "_seconds": 1778989949,
+      "_nanoseconds": 936000000
+    },
+    "finalRideId": "shared_VyRgLm7g701bG8qJIKKJ",
+    "dispatchStartedAt": {
+      "_seconds": 1778992563,
+      "_nanoseconds": 528000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "status": "ready_for_driver",
+    "updatedAt": {
+      "_seconds": 1778992563,
+      "_nanoseconds": 528000000
+    }
+  },
+  {
+    "id": "YNzFv1hHsZ2FyHBDf8sP",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 2800,
+    "sharedFarePerPassenger": 2800,
+    "estimatedSharedTotal": 2800,
+    "estimatedDriverTotal": 2800,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Gregorio Mayo 155",
+        "lat": -43.3000316,
+        "lng": -65.10204200000001,
+        "city": "Rawson"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+        "lat": -43.3039741,
+        "lng": -65.0973815,
+        "city": "Rawson"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "1EPEKzsiympNKch83uM0",
+        "location": {
+          "address": "Gregorio Mayo 155",
+          "lat": -43.3000316,
+          "lng": -65.10204200000001,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "1EPEKzsiympNKch83uM0",
+        "location": {
+          "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+          "lat": -43.3039741,
+          "lng": -65.0973815,
+          "city": "Rawson"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778988098,
+      "_nanoseconds": 611000000
+    },
+    "creatorPassengerId": "test_shared_a",
+    "createdByPassengerId": "test_shared_a",
+    "createdAt": {
+      "_seconds": 1778987618,
+      "_nanoseconds": 646000000
+    },
+    "isPubliclyJoinable": false,
+    "passengers": [
+      {
+        "passengerId": "test_shared_a",
+        "passengerName": "Shared Test A",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1778987618,
+          "_nanoseconds": 611000000
+        },
+        "status": "joined",
+        "pickupAddress": "Gregorio Mayo 155",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      },
+      {
+        "passengerId": "test_shared_b",
+        "passengerName": "Pasajero B",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1778987839,
+          "_nanoseconds": 965000000
+        },
+        "status": "joined",
+        "pickupAddress": "Gregorio Mayo 155",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      }
+    ],
+    "hasMinimumPassengers": true,
+    "driverSearchStartsAt": {
+      "_seconds": 1778987844,
+      "_nanoseconds": 965000000
+    },
+    "minPassengersToLaunch": 2,
+    "passengerIds": [
+      "test_shared_a",
+      "test_shared_b"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778987844,
+      "_nanoseconds": 965000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "1EPEKzsiympNKch83uM0",
+      "req_b_1778987838514"
+    ],
+    "confirmationExpiresAt": {
+      "_seconds": 1778987844,
+      "_nanoseconds": 965000000
+    },
+    "finalRideId": "shared_YNzFv1hHsZ2FyHBDf8sP",
+    "dispatchStartedAt": {
+      "_seconds": 1778992562,
+      "_nanoseconds": 608000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "status": "ready_for_driver",
+    "updatedAt": {
+      "_seconds": 1778992562,
+      "_nanoseconds": 608000000
+    }
+  },
+  {
+    "id": "Z1wNossHOzDc3qMf5bdp",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 10350,
+    "sharedFarePerPassenger": 10350,
+    "estimatedSharedTotal": 10350,
+    "estimatedDriverTotal": 10350,
+    "driverBenefitAmount": 0,
+    "driverBenefitPercent": 0,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "pickupStops": [
+      {
+        "address": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "lat": -43.3256013,
+        "lng": -65.0501015,
+        "city": "Playa Union"
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+        "lat": -43.3039741,
+        "lng": -65.0973815,
+        "city": "Rawson"
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "M23d0U0XUeida7vfVUAJ",
+        "location": {
+          "address": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+          "lat": -43.3256013,
+          "lng": -65.0501015,
+          "city": "Playa Union"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "M23d0U0XUeida7vfVUAJ",
+        "location": {
+          "address": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina",
+          "lat": -43.3039741,
+          "lng": -65.0973815,
+          "city": "Rawson"
+        }
+      }
+    ],
+    "expiresAt": {
+      "_seconds": 1778986265,
+      "_nanoseconds": 925000000
+    },
+    "creatorPassengerId": "test_shared_a",
+    "createdByPassengerId": "test_shared_a",
+    "createdAt": {
+      "_seconds": 1778985785,
+      "_nanoseconds": 947000000
+    },
+    "isPubliclyJoinable": false,
+    "passengers": [
+      {
+        "passengerId": "test_shared_a",
+        "passengerName": "Shared Test A",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1778985785,
+          "_nanoseconds": 925000000
+        },
+        "status": "joined",
+        "pickupAddress": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      },
+      {
+        "passengerId": "test_shared_b",
+        "passengerName": "Pasajero B",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1778986856,
+          "_nanoseconds": 431000000
+        },
+        "status": "joined",
+        "pickupAddress": "Av. Guillermo Rawson, U9120 Playa Union, Chubut, Argentina",
+        "dropoffAddress": "Gregorio Mayo 599-659, U9103 Rawson, Chubut, Argentina"
+      }
+    ],
+    "hasMinimumPassengers": true,
+    "driverSearchStartsAt": {
+      "_seconds": 1778986861,
+      "_nanoseconds": 431000000
+    },
+    "minPassengersToLaunch": 2,
+    "passengerIds": [
+      "test_shared_a",
+      "test_shared_b"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1778986861,
+      "_nanoseconds": 431000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "M23d0U0XUeida7vfVUAJ",
+      "req_b_1778986855076"
+    ],
+    "confirmationExpiresAt": {
+      "_seconds": 1778986861,
+      "_nanoseconds": 431000000
+    },
+    "finalRideId": "shared_Z1wNossHOzDc3qMf5bdp",
+    "dispatchStartedAt": {
+      "_seconds": 1778992562,
+      "_nanoseconds": 236000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "status": "ready_for_driver",
+    "updatedAt": {
+      "_seconds": 1778992562,
+      "_nanoseconds": 236000000
+    }
+  },
+  {
+    "id": "ZsFk7tzYyDzUGzVteSP1",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 4370,
+    "estimatedDriverTotal": 4370,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "expiresAt": {
+      "_seconds": 1780964958,
+      "_nanoseconds": 146000000
+    },
+    "creatorPassengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+    "createdByPassengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+    "createdAt": {
+      "_seconds": 1780964478,
+      "_nanoseconds": 160000000
+    },
+    "passengers": [
+      {
+        "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+        "passengerName": "VamO Pasajero Compartido Test 1",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1780964478,
+          "_nanoseconds": 146000000
+        },
+        "status": "joined",
+        "pickupAddress": "Gregorio Mayo 155",
+        "dropoffAddress": "Av. Tte. Coronel Murga 377"
+      },
+      {
+        "passengerId": "eMhDWqwmQMgoKMskjzTd2StwQaI3",
+        "passengerName": "maria",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1780964495,
+          "_nanoseconds": 842000000
+        },
+        "status": "joined",
+        "pickupAddress": "RP1 186",
+        "dropoffAddress": "Goicochea Juan 275"
+      }
+    ],
+    "hasMinimumPassengers": true,
+    "driverBenefitAmount": 988,
+    "dropoffStops": [
+      {
+        "address": "Av. Tte. Coronel Murga 377",
+        "lat": -43.2936193,
+        "lng": -65.0893689,
+        "city": "Rawson"
+      },
+      {
+        "address": "Goicochea Juan 275",
+        "lat": -43.291631,
+        "lng": -65.08793299999999,
+        "city": "Rawson"
+      }
+    ],
+    "sharedFarePerPassenger": 2622,
+    "minPassengersToLaunch": 2,
+    "pickupStops": [
+      {
+        "address": "Gregorio Mayo 155",
+        "lat": -43.3000316,
+        "lng": -65.10204200000001,
+        "city": "Rawson"
+      },
+      {
+        "address": "RP1 186",
+        "lat": -43.2990179,
+        "lng": -65.1005651,
+        "city": "Rawson"
+      }
+    ],
+    "passengerIds": [
+      "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+      "eMhDWqwmQMgoKMskjzTd2StwQaI3"
+    ],
+    "occupiedSeats": 2,
+    "requestIds": [
+      "Gyr6OLfHGFOpJKHj240a",
+      "2bQOQGnIye85oKKzduug"
+    ],
+    "driverBenefitPercent": 0.22608695652173913,
+    "estimatedSharedTotal": 5358,
+    "isPubliclyJoinable": false,
+    "finalRideId": "shared_ZsFk7tzYyDzUGzVteSP1",
+    "dispatchStartedAt": {
+      "_seconds": 1780965004,
+      "_nanoseconds": 116000000
+    },
+    "launchReason": "watchdog_ttl_expired",
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "2bQOQGnIye85oKKzduug",
+        "location": {
+          "address": "RP1 186",
+          "lat": -43.2990179,
+          "lng": -65.1005651,
+          "city": "Rawson"
+        },
+        "passengerId": "eMhDWqwmQMgoKMskjzTd2StwQaI3",
+        "passengerName": "maria",
+        "status": "pending",
+        "order": 1
+      },
+      {
+        "type": "pickup",
+        "requestId": "Gyr6OLfHGFOpJKHj240a",
+        "location": {
+          "address": "Gregorio Mayo 155",
+          "lat": -43.3000316,
+          "lng": -65.10204200000001,
+          "city": "Rawson"
+        },
+        "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+        "passengerName": "VamO Pasajero Compartido Test 1",
+        "status": "pending",
+        "order": 2
+      },
+      {
+        "type": "dropoff",
+        "requestId": "Gyr6OLfHGFOpJKHj240a",
+        "location": {
+          "address": "Av. Tte. Coronel Murga 377",
+          "lat": -43.2936193,
+          "lng": -65.0893689,
+          "city": "Rawson"
+        },
+        "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+        "passengerName": "VamO Pasajero Compartido Test 1",
+        "status": "pending",
+        "order": 3
+      },
+      {
+        "type": "dropoff",
+        "requestId": "2bQOQGnIye85oKKzduug",
+        "location": {
+          "address": "Goicochea Juan 275",
+          "lat": -43.291631,
+          "lng": -65.08793299999999,
+          "city": "Rawson"
+        },
+        "passengerId": "eMhDWqwmQMgoKMskjzTd2StwQaI3",
+        "passengerName": "maria",
+        "status": "pending",
+        "order": 4
+      }
+    ],
+    "driverId": "VNhou0ag4wXXPr6IXa3foO6SI8B3",
+    "assignedDriverId": "VNhou0ag4wXXPr6IXa3foO6SI8B3",
+    "status": "driver_assigned",
+    "updatedAt": {
+      "_seconds": 1780965012,
+      "_nanoseconds": 706000000
+    }
+  },
+  {
+    "id": "l0SMX3IvSy8ukaUiZsV1",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 5000,
+    "estimatedDriverTotal": 5000,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "expiresAt": {
+      "_seconds": 1780713295,
+      "_nanoseconds": 139000000
+    },
+    "isPubliclyJoinable": true,
+    "creatorPassengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+    "createdByPassengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+    "createdAt": {
+      "_seconds": 1780712815,
+      "_nanoseconds": 444000000
+    },
+    "passengers": [
+      {
+        "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+        "passengerName": "VamO Pasajero Compartido Test 1",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1780712815,
+          "_nanoseconds": 139000000
+        },
+        "status": "joined",
+        "pickupAddress": "Origen Base",
+        "dropoffAddress": "Destino Base"
+      },
+      {
+        "passengerId": "qgKot462IpPER2l9uzB0uzJsqWP2",
+        "passengerName": "VamO Pasajero Compartido Test 2",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1780714871,
+          "_nanoseconds": 285000000
+        },
+        "status": "joined",
+        "pickupAddress": "Gregorio Mayo 155",
+        "dropoffAddress": "Los Sauces 171"
+      }
+    ],
+    "hasMinimumPassengers": true,
+    "driverBenefitAmount": 2182,
+    "dropoffStops": [
+      {
+        "address": "Los Sauces 171",
+        "lat": -43.3045416,
+        "lng": -65.0525821,
+        "city": "Rawson"
+      }
+    ],
+    "sharedFarePerPassenger": 7182,
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "wRXT4IhJfBb23wGTjwwx",
+        "location": {
+          "address": "Gregorio Mayo 155",
+          "lat": -43.3000316,
+          "lng": -65.10204200000001,
+          "city": "Rawson"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "wRXT4IhJfBb23wGTjwwx",
+        "location": {
+          "address": "Los Sauces 171",
+          "lat": -43.3045416,
+          "lng": -65.0525821,
+          "city": "Rawson"
+        }
+      }
+    ],
+    "pickupStops": [
+      {
+        "address": "Gregorio Mayo 155",
+        "lat": -43.3000316,
+        "lng": -65.10204200000001,
+        "city": "Rawson"
+      }
+    ],
+    "passengerIds": [
+      "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+      "qgKot462IpPER2l9uzB0uzJsqWP2"
+    ],
+    "occupiedSeats": 2,
+    "requestIds": [
+      "Uvd6ZeJi4aJSCfCxfnaD",
+      "wRXT4IhJfBb23wGTjwwx"
+    ],
+    "driverBenefitPercent": 0.4364,
+    "estimatedSharedTotal": 7182,
+    "status": "ready_for_driver",
+    "lastDispatchError": "5 NOT_FOUND: No document to update: projects/studio-6697160840-7c67f/databases/(default)/documents/shared_ride_requests/Uvd6ZeJi4aJSCfCxfnaD",
+    "updatedAt": {
+      "_seconds": 1780714871,
+      "_nanoseconds": 570000000
+    }
+  },
+  {
+    "id": "sim_group_1_1780604067884",
+    "cityKey": "MENDIOLAZA",
+    "status": "ready_for_driver",
+    "occupiedSeats": 2,
+    "maxSeats": 4,
+    "passengerIds": [
+      "sim_pax_shared_1a",
+      "sim_pax_shared_1b"
+    ],
+    "isTestSimulation": true,
+    "finalRideId": "sim_ride_shared_1_1780604067884"
+  },
+  {
+    "id": "test_group_1778985897890",
+    "cityKey": "rawson",
+    "requestIds": [
+      "reqA_1778985897890",
+      "reqB_1778985897890"
+    ],
+    "passengerIds": [
+      "test_shared_a",
+      "test_shared_b"
+    ],
+    "passengers": [
+      {
+        "passengerId": "test_shared_a",
+        "passengerName": "A",
+        "roleInGroup": "creator",
+        "status": "joined",
+        "pickupAddress": "Plaza",
+        "dropoffAddress": "Terminal"
+      },
+      {
+        "passengerId": "test_shared_b",
+        "passengerName": "B",
+        "roleInGroup": "joined",
+        "status": "joined",
+        "pickupAddress": "Plaza",
+        "dropoffAddress": "Terminal"
+      }
+    ],
+    "occupiedSeats": 2,
+    "hasMinimumPassengers": true,
+    "estimatedIndividualFare": 1000,
+    "sharedFarePerPassenger": 700,
+    "estimatedSharedTotal": 1400,
+    "driverBenefitAmount": 1400,
+    "driverBenefitPercent": 1.4,
+    "pickupStops": [
+      {
+        "address": "Plaza Rawson",
+        "lat": -43.3,
+        "lng": -65.1
+      }
+    ],
+    "dropoffStops": [
+      {
+        "address": "Terminal Rawson",
+        "lat": -43.31,
+        "lng": -65.11
+      }
+    ],
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "reqA_1778985897890",
+        "location": {
+          "address": "Plaza Rawson",
+          "lat": -43.3,
+          "lng": -65.1
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "reqA_1778985897890",
+        "location": {
+          "address": "Terminal Rawson",
+          "lat": -43.31,
+          "lng": -65.11
+        }
+      }
+    ],
+    "createdAt": {
+      "_seconds": 1778985898,
+      "_nanoseconds": 876000000
+    },
+    "driverSearchStartsAt": {
+      "_seconds": 1778985924,
+      "_nanoseconds": 586000000
+    },
+    "closingExpiresAt": {
+      "_seconds": 1778985924,
+      "_nanoseconds": 586000000
+    },
+    "confirmationExpiresAt": {
+      "_seconds": 1778985924,
+      "_nanoseconds": 586000000
+    },
+    "lastDispatchError": "Cannot read properties of undefined (reading 'address')",
+    "isPubliclyJoinable": false,
+    "finalRideId": "shared_test_group_1778985897890",
+    "dispatchStartedAt": {
+      "_seconds": 1778986113,
+      "_nanoseconds": 374000000
+    },
+    "launchReason": "test_manual_fix",
+    "status": "ready_for_driver",
+    "updatedAt": {
+      "_seconds": 1778986113,
+      "_nanoseconds": 374000000
+    }
+  },
+  {
+    "id": "yje1GCzGkC5lXwcb7ERY",
+    "cityKey": "rawson",
+    "maxSeats": 4,
+    "paymentMethod": "cash",
+    "estimatedIndividualFare": 5000,
+    "estimatedDriverTotal": 5000,
+    "passengerSavingAmount": 0,
+    "passengerSavingPercent": 0,
+    "expiresAt": {
+      "_seconds": 1780713169,
+      "_nanoseconds": 396000000
+    },
+    "creatorPassengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+    "createdByPassengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+    "createdAt": {
+      "_seconds": 1780712689,
+      "_nanoseconds": 709000000
+    },
+    "isPubliclyJoinable": false,
+    "passengers": [
+      {
+        "passengerId": "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+        "passengerName": "VamO Pasajero Compartido Test 1",
+        "roleInGroup": "creator",
+        "joinedAt": {
+          "_seconds": 1780712689,
+          "_nanoseconds": 396000000
+        },
+        "status": "joined",
+        "pickupAddress": "Origen Base",
+        "dropoffAddress": "Destino Base"
+      },
+      {
+        "passengerId": "qgKot462IpPER2l9uzB0uzJsqWP2",
+        "passengerName": "VamO Pasajero Compartido Test 2",
+        "roleInGroup": "joined",
+        "joinedAt": {
+          "_seconds": 1780712691,
+          "_nanoseconds": 975000000
+        },
+        "status": "joined",
+        "pickupAddress": "Origen Base",
+        "dropoffAddress": "Destino Base"
+      }
+    ],
+    "hasMinimumPassengers": true,
+    "driverBenefitAmount": 1600,
+    "dropoffStops": [
+      {
+        "lat": -43.305,
+        "lng": -65.098,
+        "address": "Destino Base"
+      },
+      {
+        "lat": -43.305,
+        "lng": -65.098,
+        "address": "Destino Base"
+      }
+    ],
+    "launchReason": "min_passengers_reached",
+    "sharedFarePerPassenger": 3000,
+    "orderedStops": [
+      {
+        "type": "pickup",
+        "requestId": "fwwicdWX3KB6Hje4pFR0",
+        "location": {
+          "lat": -43.3002,
+          "lng": -65.1023,
+          "address": "Origen Base"
+        }
+      },
+      {
+        "type": "pickup",
+        "requestId": "ccz97Ydcvmgmf826YwDW",
+        "location": {
+          "lat": -43.3002,
+          "lng": -65.1023,
+          "address": "Origen Base"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "fwwicdWX3KB6Hje4pFR0",
+        "location": {
+          "lat": -43.305,
+          "lng": -65.098,
+          "address": "Destino Base"
+        }
+      },
+      {
+        "type": "dropoff",
+        "requestId": "ccz97Ydcvmgmf826YwDW",
+        "location": {
+          "lat": -43.305,
+          "lng": -65.098,
+          "address": "Destino Base"
+        }
+      }
+    ],
+    "driverSearchStartsAt": {
+      "_seconds": 1780712751,
+      "_nanoseconds": 975000000
+    },
+    "minPassengersToLaunch": 2,
+    "pickupStops": [
+      {
+        "lat": -43.3002,
+        "lng": -65.1023,
+        "address": "Origen Base"
+      },
+      {
+        "lat": -43.3002,
+        "lng": -65.1023,
+        "address": "Origen Base"
+      }
+    ],
+    "passengerIds": [
+      "HYakOQJ8WqeauOHtn8VdcYlaSlK2",
+      "qgKot462IpPER2l9uzB0uzJsqWP2"
+    ],
+    "closingExpiresAt": {
+      "_seconds": 1780712751,
+      "_nanoseconds": 975000000
+    },
+    "occupiedSeats": 2,
+    "requestIds": [
+      "fwwicdWX3KB6Hje4pFR0",
+      "ccz97Ydcvmgmf826YwDW"
+    ],
+    "confirmationExpiresAt": {
+      "_seconds": 1780712736,
+      "_nanoseconds": 975000000
+    },
+    "driverBenefitPercent": 0.32,
+    "estimatedSharedTotal": 6600,
+    "driverSearchBlockedForBeta": true,
+    "driverSearchBlockedReason": "shared_beta_driver_search_disabled",
+    "driverSearchBlockedAt": {
+      "_seconds": 1780712806,
+      "_nanoseconds": 411000000
+    },
+    "status": "ready_for_driver",
+    "lastDispatchError": "5 NOT_FOUND: No document to update: projects/studio-6697160840-7c67f/databases/(default)/documents/shared_ride_requests/fwwicdWX3KB6Hje4pFR0",
+    "updatedAt": {
+      "_seconds": 1780712814,
+      "_nanoseconds": 780000000
+    }
+  }
+]

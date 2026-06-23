@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { isDriverReadyForReview } from '@/lib/eligibility';
 import { useMunicipalContext } from '@/hooks/useMunicipalContext';
+import { BroadcastDialog } from '@/components/admin/BroadcastDialog';
 
 const PAGE_SIZE = 15;
 
@@ -201,8 +202,11 @@ export default function AdminDriversPage() {
                 <h1 className="text-3xl font-black">Conductores</h1>
                 <p className="text-muted-foreground">Gestión de flota, aprobación y balances.</p>
             </div>
-            <div className="text-right text-[10px] font-black uppercase tracking-widest text-zinc-600">
-                {drivers.length} cargados {hasMore ? '(más disponibles)' : '(total)'}
+            <div className="flex flex-col items-end gap-2">
+                <BroadcastDialog targetRole="driver" cityKey={activeCityKey || 'global'} />
+                <div className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
+                    {drivers.length} cargados {hasMore ? '(más disponibles)' : '(total)'}
+                </div>
             </div>
         </div>
 

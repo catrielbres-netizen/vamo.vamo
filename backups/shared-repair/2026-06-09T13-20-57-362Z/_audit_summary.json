@@ -1,0 +1,152 @@
+{
+  "timestamp": "2026-06-09T13-20-57-362Z",
+  "dryRun": true,
+  "issueCount": 24,
+  "repairCount": 23,
+  "issues": [
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_groups",
+      "docId": "sim_group_1_1780604067884",
+      "problem": "requestIds.length=0 ≠ passengerIds.length=2 — arrays inconsistentes"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "1EPEKzsiympNKch83uM0",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "2bQOQGnIye85oKKzduug",
+      "problem": "Request activo (status=picked_up) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "2lbY5VV77YjMDiEEx8ft",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "5bffdJPAZk0RNTpAOFI8",
+      "problem": "Request activo (status=confirmed) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "84ooexhQlYB40tSoOgQ0",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "84zJEHyysCKvQ1muoncZ",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "ChHuLwyh96EWJNeyIDus",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "Cs9rNHKhdLPXkBm7F2Ge",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "Gyr6OLfHGFOpJKHj240a",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "M23d0U0XUeida7vfVUAJ",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "c04OOI64w15sUbcPxoH2",
+      "problem": "Request activo (status=confirmed) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "ccz97Ydcvmgmf826YwDW",
+      "problem": "Request activo (status=confirmed) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "ecV2aKpmxyBewPu5GKzW",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "reqA_1778985897890",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "reqB_1778985897890",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "req_b_1778984923554",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "req_b_1778986855076",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "req_b_1778987838514",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "req_b_1778989158107",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "req_b_1778989594954",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "req_b_1778989943505",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "svLP79Zhq6w0e3mBxDry",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    },
+    {
+      "severity": "HIGH",
+      "collection": "shared_ride_requests",
+      "docId": "vcmsVpK5jHNDHPpcbnat",
+      "problem": "Request activo (status=assigned) pero su grupo está en 'cancelled'"
+    }
+  ]
+}

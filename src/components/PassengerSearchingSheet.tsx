@@ -125,16 +125,17 @@ export const PassengerSearchingSheet: React.FC<PassengerSearchingSheetProps> = (
       </div>
 
       {/* Cancel Flow with Dialog */}
+      <button
+        type="button"
+        onClick={() => setIsConfirmOpen(true)}
+        disabled={isCancelling}
+        className="w-full max-w-[340px] h-12 mb-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-[0.98] border border-white/5 hover:bg-zinc-800 bg-zinc-900 text-zinc-400 flex items-center justify-center gap-2 shadow-sm"
+      >
+        {isCancelling && <VamoIcon name="loader" className="animate-spin h-3 w-3" />}
+        Cancelar
+      </button>
+
       <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-        <DialogTrigger asChild>
-          <button
-            disabled={isCancelling}
-            className="w-full max-w-[340px] h-12 mb-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-[0.98] border border-white/5 hover:bg-zinc-800 bg-zinc-900 text-zinc-400 flex items-center justify-center gap-2 shadow-sm"
-          >
-            {isCancelling && <VamoIcon name="loader" className="animate-spin h-3 w-3" />}
-            Cancelar
-          </button>
-        </DialogTrigger>
         <DialogContent className="rounded-[2.5rem] max-w-[90vw] sm:max-w-[400px] border-zinc-800 bg-zinc-950 text-white p-8">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black uppercase text-center">¿Cancelar?</DialogTitle>

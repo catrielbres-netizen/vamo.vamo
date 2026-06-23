@@ -4,9 +4,11 @@ import { useUser } from '@/firebase';
 import { normalizeCityKey } from '@/lib/types';
 import { useMemo } from 'react';
 import { CITIES, GLOBAL_CENTER } from '@/lib/cityData';
+import { useActiveCities } from '@/hooks/useActiveCities';
 
 export function useMunicipalContext() {
-    const { profile, loading } = useUser();
+    const { profile, loading: profileLoading } = useUser();
+    const { cities, loading: citiesLoading } = useActiveCities({ context: 'municipal' });
 
     const cityKey = useMemo(() => {
         if (!profile) return null;
@@ -16,7 +18,8 @@ export function useMunicipalContext() {
         const isAdminType = profile.role === 'admin' || profile.role === 'superadmin';
 
         if (isAdminType && savedCityKey) {
-            return normalizeCityKey(savedCityKey);
+            // Do not normalize, savedCityKey comes exactly from the active cities selector
+            return savedCityKey;
         }
 
         // Default for SuperAdmin/Admin if no city selected
@@ -25,7 +28,10 @@ export function useMunicipalContext() {
         }
 
         // Standard municipal role fallback
-        const rawCity = profile.cityKey || profile.city;
+        if (profile.cityKey) {
+            return profile.cityKey; // Already an exact key
+        }
+        const rawCity = profile.city;
         return rawCity ? normalizeCityKey(rawCity) : null;
     }, [profile]);
 
@@ -42,8 +48,14 @@ export function useMunicipalContext() {
 
     const cityName = useMemo(() => {
         if (!cityKey) return 'Portal Municipal';
+        
+        // Dynamic lookup from Firestore
+        const activeCity = cities.find(c => c.cityKey === cityKey);
+        if (activeCity) return activeCity.name;
+
+        // Fallback
         return CITIES[cityKey]?.name || profile?.city || 'Portal Municipal';
-    }, [cityKey, profile?.city]);
+    }, [cityKey, cities, profile?.city]);
 
     const cityCenter = useMemo(() => {
         if (!cityKey) return GLOBAL_CENTER;
@@ -61,6 +73,8 @@ export function useMunicipalContext() {
     const isTreasury    = profile?.role === 'treasury_municipal' || isMuniAdmin;
     const isTraffic     = profile?.role === 'traffic_municipal' || isMuniAdmin;
     const isAuditor     = profile?.role === 'auditor_municipal' || isMuniAdmin || isOperator || isTreasury || isTraffic;
+
+    const loading = profileLoading || citiesLoading;
 
     return {
         cityKey,

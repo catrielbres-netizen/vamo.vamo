@@ -14,6 +14,8 @@ import { DailyEarningsWidget } from '@/components/DailyEarningsWidget';
 import { WeeklyPoolCard } from '@/components/WeeklyPoolCard';
 import { DriverMissionPanel } from '@/components/DriverMissionPanel';
 import { NotificationToggle } from '@/components/NotificationToggle';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 const statusMessages: Record<string, {title: string, description: string, icon: string}> = {
     unverified: {
         title: 'Perfil Incompleto',
@@ -40,14 +42,14 @@ const statusMessages: Record<string, {title: string, description: string, icon: 
 export default function DriverRidesPage() {
   const { profile, rides: availableOffers, newRideIds, ready, error } = useDriverData();
 
-  const isPendingReview = (profile as any)?.planBStatus === 'pending_docs' || (profile as any)?.planBStatus === 'pending_approval';
+  const isPendingReview = (profile as any)?.planBStatus === 'pending_docs' || (profile as any)?.planBStatus === 'pending_approval' || profile?.municipalStatus === 'pending_municipal_review';
   const statusKey = isPendingReview ? 'pending_review' : (profile?.approved ? 'approved' : 'unverified');
   const message = statusMessages[statusKey] || statusMessages.unverified;
 
   const isOnline = profile?.driverStatus === 'online';
   const balance = profile?.currentBalance ?? 0;
   // [VamO AUDIT] Allow rendering offers even if balance is low, so driver can see the penalty.
-  const driverIsAvailable = isOnline && profile?.approved;
+  const driverIsAvailable = isOnline && (profile?.approved || profile?.municipalStatus === 'pending_municipal_review');
   
   console.log(`[DRIVER_PAGE] Render. Online: ${isOnline}, Balance: ${balance}, Offers: ${availableOffers.length}`);
 
@@ -67,7 +69,10 @@ export default function DriverRidesPage() {
             <Alert variant="destructive" className="rounded-2xl">
                 <VamoIcon name={message.icon} className="h-4 w-4" />
                 <AlertTitle>{message.title}</AlertTitle>
-                <AlertDescription>{message.description}</AlertDescription>
+                <AlertDescription className="mb-4">{message.description}</AlertDescription>
+                <Button variant="outline" size="sm" className="w-full bg-red-950 hover:bg-red-900 border-red-500/50 text-white font-bold" asChild>
+                    <Link href="/driver/profile">Ir a Mi Perfil</Link>
+                </Button>
             </Alert>
         )}
 
@@ -107,11 +112,7 @@ export default function DriverRidesPage() {
           </>
         ) : null}
         
-        <div className="space-y-4">
-            <WeeklyPoolCard />
-            <DriverMissionPanel />
-            {driverIsAvailable && <DailyEarningsWidget />}
-        </div>
+        {/* Widgets movidos a sus respectivas secciones (Billetera/Misiones) para limpiar la pantalla de Inicio */}
 
         {profile?.approved && (
             <div className="pt-10 pb-20">

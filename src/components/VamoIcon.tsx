@@ -101,6 +101,11 @@ import {
   FileWarning,
   PartyPopper,
   BadgeCheck,
+  UserPlus,
+  PauseCircle,
+  Pause,
+  UserX,
+  Menu,
 } from "lucide-react";
 
 // The single source of truth for all available icons
@@ -108,6 +113,7 @@ const icons = {
   "alert-circle": AlertCircle,
   "alert-triangle": AlertTriangle,
   "layout-dashboard": LayoutDashboard,
+  "menu": Menu,
   user: User,
   users: Users,
   car: Car,
@@ -204,6 +210,11 @@ const icons = {
   "file-warning": FileWarning,
   "party-popper": PartyPopper,
   "badge-check": BadgeCheck,
+  "user-plus": UserPlus,
+  "pause-circle": PauseCircle,
+  "id-card": CreditCard,
+  "pause": Pause,
+  "user-x": UserX,
 };
 
 // Aliases to map incorrect/alternative names to the correct key in the `icons` object.

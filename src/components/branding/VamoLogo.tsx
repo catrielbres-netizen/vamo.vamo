@@ -45,7 +45,7 @@ export function VamoLogo({
         placeholder="empty"
         quality={95}
         sizes="(max-width: 640px) 240px, (max-width: 1024px) 280px, 320px"
-        className="h-auto w-full object-contain"
+        className="h-auto w-full object-contain invert brightness-0 dark:invert-0 dark:brightness-100"
       />
     </div>
   );

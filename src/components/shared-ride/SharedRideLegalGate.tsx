@@ -26,9 +26,8 @@ export function SharedRideLegalGate({ isOpen, onClose, onConfirm }: SharedRideLe
                         <div className="flex flex-col">
                             <DialogTitle className="text-xl font-black uppercase italic tracking-tight flex items-center gap-2">
                                 VamO Compartido
-                                <span className="px-1.5 py-0.5 rounded-md bg-white/10 border border-white/10 text-[8px] font-black uppercase tracking-tighter text-white/60">Beta</span>
                             </DialogTitle>
-                            <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-[0.2em] mt-0.5">Servicio de Prueba</p>
+                            <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-[0.2em] mt-0.5">Servicio Oficial</p>
                         </div>
                     </div>
                     <DialogDescription className="text-zinc-400 text-[13px] leading-relaxed mt-2">
@@ -40,10 +39,10 @@ export function SharedRideLegalGate({ isOpen, onClose, onConfirm }: SharedRideLe
                     <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2">
                         <div className="flex items-center gap-2">
                             <AlertTriangle className="w-4 h-4 text-amber-500" />
-                            <p className="text-[11px] font-black text-amber-500 uppercase tracking-wider">Términos de la Beta</p>
+                            <p className="text-[11px] font-black text-amber-500 uppercase tracking-wider">Términos de Uso</p>
                         </div>
-                        <p className="text-[12px] text-zinc-300 leading-snug">
-                            • <span className="text-white font-bold">VamO Compartido está en Beta</span> y puede demorar más de lo habitual debido a desvíos y esperas.<br />
+                        <p className="text-xs text-white/70 leading-relaxed font-medium">
+                            • <span className="text-white font-bold">VamO Compartido</span> puede demorar más de lo habitual debido a desvíos y esperas.<br />
                             • Si necesitás llegar a un horario puntual, te recomendamos <span className="text-white font-bold">pedir un viaje normal</span>.<br />
                             • El precio final del viaje compartido <span className="text-white font-bold">depende de la conformación final del grupo</span>.<br />
                             • <span className="text-amber-200 font-bold">Fase de Simulación</span>: En esta etapa de prueba <span className="text-amber-200 font-bold">NO se creará un viaje ni un grupo real</span> en la base de datos.

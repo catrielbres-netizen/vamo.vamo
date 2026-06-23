@@ -375,7 +375,7 @@ export function SharedRideFormingScreen({
                 
                 {request.status === 'forming' && (
                     <p className="text-center text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
-                        Beta VamO • Máximo tiempo de espera: 8 min • Solo Efectivo
+                        VamO Compartido • Máximo tiempo de espera: 8 min • Solo Efectivo
                     </p>
                 )}
             </div>

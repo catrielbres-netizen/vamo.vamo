@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useUser } from '@/firebase';
 import { normalizeCityKey } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -44,6 +45,7 @@ function StatusBadge({ status, rideInfo }: { status: PassengerStatus, rideInfo?:
 export default function MunicipalPassengersPage() {
     const { cityKey, cityName } = useMunicipalContext();
     const { toast } = useToast();
+    const router = useRouter();
 
     const [search, setSearch] = useState('');
     const [passengers, setPassengers] = useState<any[]>([]);
@@ -292,7 +294,7 @@ export default function MunicipalPassengersPage() {
                                         <td className="px-5 py-3 text-right">
                                             <button 
                                                 className="text-xs font-bold text-indigo-400 hover:text-indigo-300 px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
-                                                onClick={() => toast({ title: 'Detalle de pasajero', description: 'Próximamente disponible.' })}
+                                                onClick={() => router.push(`/municipal/passengers/${p.uid}`)}
                                             >
                                                 Ver historial →
                                             </button>

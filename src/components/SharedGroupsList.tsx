@@ -214,7 +214,7 @@ export function SharedGroupsList({ groups, onJoin, onCreateNew, onRefresh, isJoi
 
             <div className="px-4 py-3 bg-amber-900/10 border border-amber-900/20 rounded-xl">
                 <p className="text-[10px] text-amber-500/80 leading-relaxed">
-                    <span className="font-bold">Aviso Beta:</span> Al unirte a un viaje compartido, aceptas posibles desvíos y esperas de hasta 12 minutos para que otros pasajeros se sumen.
+                    <span className="font-bold">Aviso Importante:</span> Al unirte a un viaje compartido, aceptas posibles desvíos y esperas de hasta 12 minutos para que otros pasajeros se sumen.
                 </p>
             </div>
         </div>

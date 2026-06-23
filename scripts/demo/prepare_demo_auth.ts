@@ -24,9 +24,9 @@ import * as fs from 'fs';
 dotenv.config({ path: '.env.local' });
 
 const BASE_URL        = (process.env.VAMO_BASE_URL        || 'http://localhost:3002').replace(/\/$/, '');
-const PASSENGER_EMAIL = process.env.DEMO_PASSENGER_EMAIL  || 'demo_passenger@vamo.com';
+const PASSENGER_EMAIL = process.env.DEMO_PASSENGER_EMAIL  || 'demo.passenger@vamo.test';
 const PASSENGER_PASS  = process.env.DEMO_PASSENGER_PASS   || 'vamo2024pass';
-const DRIVER_EMAIL    = process.env.DEMO_DRIVER_EMAIL     || 'demo_driver@vamo.com';
+const DRIVER_EMAIL    = process.env.DEMO_DRIVER_EMAIL     || 'demo.driver@vamo.test';
 const DRIVER_PASS     = process.env.DEMO_DRIVER_PASS      || 'vamo2024pass';
 const SESSION_DIR     = '.demo-sessions';
 

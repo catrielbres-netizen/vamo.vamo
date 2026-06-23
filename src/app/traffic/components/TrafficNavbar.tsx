@@ -10,6 +10,7 @@ import { signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { VamoLogo } from '@/components/branding/VamoLogo';
 import { useMunicipalContext } from '@/hooks/useMunicipalContext';
+import { CITIES } from '@/lib/cityData';
 
 const navLinks = [
     { href: '/traffic',           label: 'Inicio',       icon: 'layout-dashboard' },
@@ -53,12 +54,14 @@ export function TrafficNavbar() {
                 <div className="mr-4 flex items-center gap-2">
                     <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Jurisdicción:</span>
                     <select
-                        value={cityKey || 'rawson'}
+                        value={cityKey || ''}
                         onChange={(e) => setCityOverride(e.target.value)}
                         className="bg-zinc-900 border border-white/5 rounded-lg text-xs font-bold uppercase tracking-wider text-zinc-300 py-1 px-2.5 focus:outline-none"
                     >
-                        <option value="rawson">Rawson</option>
-                        <option value="trelew">Trelew</option>
+                        <option value="">-- Seleccionar --</option>
+                        {Object.values(CITIES).map((city) => (
+                            <option key={city.key} value={city.key}>{city.name}</option>
+                        ))}
                     </select>
                 </div>
             )}

@@ -11,9 +11,10 @@ import { onSchedule, ScheduledEvent } from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
 import { canDriverTakeRide } from "./eligibility";
 import { UserProfile, Ride, DriverLevel, ServiceType, RideStatus, CompletedRide, PricingConfig, WithdrawalRequest, WithId, RideOffer, DriverPoints, PricingSnapshot } from "./types";
+import { incrementPassengerPoints } from "./passengerWeeklyPool";
 import { getDb } from "./lib/firebaseAdmin";
 import { calculateRidePrice } from "./lib/pricing";
-import { normalizeCityKey, normalizeCity } from "./lib/city";
+import { normalizeCityKey, normalizeCity, canonicalCityKey } from "./lib/city";
 import { getArgentinaDateStr } from "./lib/date";
 import { City, CityStatus, ExpansionIncentive } from "./types";
 import { updateChubutExpansionProgressV1 } from "./expansionIncentives";
@@ -348,7 +349,8 @@ export function calculateSettlement(
     trackingPoints: admin.firestore.DocumentData[], 
     pricing: PricingConfig,
     expansionRates?: ExpansionIncentive['currentRates'],
-    passengerData?: UserProfile
+    passengerData?: UserProfile,
+    cityConfig?: any
 ) {
     // 1. Prioritize pricing snapshot tariffMode if available
     let isNight = false;
@@ -460,20 +462,29 @@ export function calculateSettlement(
 
     const cityKey = rideData.cityKey || 'rawson';
 
-    // New Commission Model: 10% total (6% VamO, 2% Muni, 1% Taxi, 1% Remis)
-    const totalCommissionRate = 0.10;
+    // Dynamic Commission Model based on Municipal Config
+    const vamoRate = (cityConfig?.commissions?.vamoPercentage !== undefined ? cityConfig.commissions.vamoPercentage : 6) / 100;
+    const muniRate = (cityConfig?.commissions?.municipalPercentage || 0) / 100;
+    const taxiRate = (cityConfig?.commissions?.taxiUnionPercentage || 0) / 100;
+    const remisRate = (cityConfig?.commissions?.remisUnionPercentage || 0) / 100;
+    const grossReceiptsTaxRate = (cityConfig?.grossReceiptsTaxRate || 0) / 100;
+    
+    const totalCommissionRate = vamoRate + muniRate + taxiRate + remisRate;
 
     // Driver calculations use totalFare (Single Source of Truth for Gross Fare)
     const driverFareRef = totalFare;
     
     const commissionAmount = Math.round(driverFareRef * totalCommissionRate);
-    const vamoAmount = Math.round(driverFareRef * 0.06);
-    const municipalAmount = Math.round(driverFareRef * 0.02);
-    const taxiAssociationAmount = Math.round(driverFareRef * 0.01);
-    const remisAssociationAmount = Math.round(driverFareRef * 0.01);
+    const vamoAmount = Math.round(driverFareRef * vamoRate);
+    const municipalAmount = Math.round(driverFareRef * muniRate);
+    const taxiAssociationAmount = Math.round(driverFareRef * taxiRate);
+    const remisAssociationAmount = Math.round(driverFareRef * remisRate);
     const totalAssociationsAmount = taxiAssociationAmount + remisAssociationAmount;
     
     const driverNetAmount  = driverFareRef - commissionAmount;
+    
+    // Ingresos Brutos se calcula sobre el totalFare
+    const grossReceiptsAmount = Math.round(driverFareRef * grossReceiptsTaxRate);
 
     const creditCoveredAmount = Math.max(0, rideData.pricing?.creditCoveredAmount || 0);
     
@@ -543,6 +554,8 @@ export function calculateSettlement(
         passengerPays: passengerPaysTotal,
         driverGrossAmount: driverFareRef,
         platformCommissionAmount: vamoAmount,
+        municipalShareAmount: municipalAmount,
+        grossReceiptsAmount,
         netVamoRevenue: vamoAmount - platformSubsidyAmount,
     };
 
@@ -761,13 +774,29 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
         const driverSubtype = after.driverSubtypeSnapshot || 'express';
         const totalFare = after.pricing?.estimatedTotal || 0;
         
-        // New Commission Model
-        const totalCommissionRate = 0.10;
+        // Fetch City Config for exact rates if available
+        let cityConfig: any = null;
+        try {
+            const cSnap = await db.collection('cities').doc(after.cityKey || 'rawson').get();
+            if (cSnap.exists) cityConfig = cSnap.data()?.config;
+        } catch (e) {
+            logger.warn(`Could not fetch cityConfig for simulation ${rideId}`, e);
+        }
+
+        // Dynamic Commission Model
+        const vamoRate = 0.06;
+        const muniRate = (cityConfig?.commissions?.municipalPercentage || 0) / 100;
+        const taxiRate = (cityConfig?.commissions?.taxiUnionPercentage || 0) / 100;
+        const remisRate = (cityConfig?.commissions?.remisUnionPercentage || 0) / 100;
+        
+        const totalCommissionRate = vamoRate + muniRate + taxiRate + remisRate;
         const commissionAmount = Math.round(totalFare * totalCommissionRate);
-        const vamoAmount = Math.round(totalFare * 0.06);
-        const municipalAmount = Math.round(totalFare * 0.02);
-        const taxiAssociationAmount = Math.round(totalFare * 0.01);
-        const remisAssociationAmount = Math.round(totalFare * 0.01);
+
+        const vamoAmount = Math.round(totalFare * vamoRate);
+        const municipalAmount = Math.round(totalFare * muniRate);
+        const taxiAssociationAmount = Math.round(totalFare * taxiRate);
+        const remisAssociationAmount = Math.round(totalFare * remisRate);
+        
         const totalAssociationsAmount = taxiAssociationAmount + remisAssociationAmount;
         const driverEarnings = totalFare - commissionAmount;
 
@@ -914,6 +943,18 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             const pointsSnap = await tx.get(pointsRef);
             const passengerSnap = await tx.get(passengerRef);
             const citySnap = await tx.get(cityRef);
+
+            if (!driverSnap.exists || !rideSnap.exists || !passengerSnap.exists) {
+                const missing = [];
+                if (!driverSnap.exists) missing.push('driver');
+                if (!rideSnap.exists) missing.push('ride');
+                if (!passengerSnap.exists) missing.push('passenger');
+                logger.error(`[SETTLEMENT CRITICAL] Docs missing: ${missing.join(', ')} for ride ${rideId}`);
+                throw new Error(`Critical docs missing: ${missing.join(', ')}`);
+            }
+
+            const rideData = rideSnap.data() as Ride;
+            const settlementOwnerId = rideData.settlementOwnerId || driverId;
             
             // [WALLET_READS] Pre-fetch all financial docs to comply with READ-BEFORE-WRITE rule
             const walletRef = db.doc(`wallets/${passengerId}`);
@@ -926,21 +967,9 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 tx.get(passengerWalletRef),
                 tx.get(consumeRef),
                 tx.get(releaseRef),
-                tx.get(db.doc(`wallets/${driverId}`)),
+                tx.get(db.doc(`wallets/${settlementOwnerId}`)),
                 tx.get(lockRef)
             ]);
-
-
-            if (!driverSnap.exists || !rideSnap.exists || !passengerSnap.exists) {
-                const missing = [];
-                if (!driverSnap.exists) missing.push('driver');
-                if (!rideSnap.exists) missing.push('ride');
-                if (!passengerSnap.exists) missing.push('passenger');
-                logger.error(`[SETTLEMENT CRITICAL] Docs missing: ${missing.join(', ')} for ride ${rideId}`);
-                throw new Error(`Critical docs missing: ${missing.join(', ')}`);
-            }
-
-            const rideData = rideSnap.data() as Ride;
             
             // 1. Validar que el viaje no haya sido ya liquidado
             if (rideData.settledAt || rideData.completedRide) {
@@ -964,7 +993,8 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             const passengerData = passengerSnap.data() as UserProfile;
             logger.log(`[SETTLEMENT CALC] Calculating for driver: ${driverData.name}, Subtype: ${driverData.driverSubtype}`);
 
-            const settlementData = calculateSettlement(rideData, driverData, trackingPoints, pricingConfig, expansionRates, passengerData);
+            const cityDocData = citySnap.exists ? citySnap.data() : null;
+            const settlementData = calculateSettlement(rideData, driverData, trackingPoints, pricingConfig, expansionRates, passengerData, cityDocData?.config);
             const { commissionAmount } = settlementData;
             
             logger.log(`[SETTLEMENT VALUES] commission: ${commissionAmount}`);
@@ -1000,6 +1030,26 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 });
             }
 
+            // 3. Gross Receipts Withheld
+            const grossReceiptsAmount = settlementData.grossReceiptsAmount || 0;
+            if (grossReceiptsAmount > 0) {
+                // Deduct from regular balance (negative adjustment)
+                driverMovements.push({
+                    amount: -grossReceiptsAmount,
+                    type: 'adjustment' as const,
+                    rideId: `gr_${rideId}`,
+                    note: `Retención Ingresos Brutos viaje ${rideId}`
+                });
+                
+                // Add to gross receipts balance (positive)
+                driverMovements.push({
+                    amount: grossReceiptsAmount,
+                    type: 'gross_receipts_withheld' as const,
+                    rideId: rideId,
+                    note: `Apartado Ingresos Brutos viaje ${rideId}`
+                });
+            }
+
             // [WALLET_DEFERRED] Movements will be applied after mission check to maintain read-before-write integrity.
 
             // Passenger Reward Logic
@@ -1027,15 +1077,15 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 rideUpdate.weeklyPoolWeekId = weekId;
             }
 
-            // [FASE 5] finalDebit = VamO commission (Version B)
+            // [FASE 1] finalDebit = VamO commission + gross receipts
             const isSharedChild = (after as any).isSharedChildRide === true;
             const finalDebit = isSharedChild ? 0 : commissionAmount;
-            logger.log(`[FINANCIAL] Debiting driver ${driverId}: commissionAmount=${commissionAmount} = finalDebit=${finalDebit}`);
+            logger.log(`[FINANCIAL] Debiting owner ${settlementOwnerId} (Driver: ${driverId}): commissionAmount=${commissionAmount} = finalDebit=${finalDebit}`);
 
             // --- DRIVER STATS & BALANCE LOGIC (VamO PRO v7.0) ---
             
             const walletCredit = (settlementData.walletCoveredAmount || 0) + (settlementData as any).vamoExpressCoverageAmount;
-            const netBalanceChange = isSharedChild ? 0 : (walletCredit - finalDebit);
+            const netBalanceChange = isSharedChild ? 0 : (walletCredit - finalDebit - (settlementData.grossReceiptsAmount || 0));
 
             // Determine if we need to reset daily/weekly/monthly stats
             const isNewDay = driverData.dailyStats?.lastResetDate !== todayStr;
@@ -1080,15 +1130,12 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 };
                 logger.info(`[POOL_UPDATE] Prepared to create city pool ${cityKey}/${weekId}`);
             } else {
-                const poolData = poolSnap.data() as any;
-                const newCompleted = (poolData.completedTripsTotal || 0) + 1;
-                const newAmount = Math.min(20000 + newCompleted * 100, 600000);
                 poolDataToUpdate = {
-                    completedTripsTotal: newCompleted,
-                    currentAmount: newAmount,
+                    completedTripsTotal: FieldValue.increment(1),
+                    currentAmount: FieldValue.increment(100),
                     updatedAt: FieldValue.serverTimestamp(),
                 };
-                logger.info(`[POOL_UPDATE] Prepared to update city pool ${cityKey}/${weekId} completed=${newCompleted}`);
+                logger.info(`[POOL_UPDATE] Prepared to atomically update city pool ${cityKey}/${weekId}`);
             }
 
             // [VamO PRO] Stats & Missions Logic
@@ -1141,7 +1188,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                         rideId: `${mId}_${todayStr}`,
                         note: `Bono misión diaria (${currentRides} viajes)`
                     });
-                    logger.info(`[MISSION] Driver ${driverId} added bonus ${mId}: $${reward} to batch`);
+                    logger.info(`[MISSION] Driver ${driverId} added bonus ${mId}: $${reward} to batch (to settlementOwner ${settlementOwnerId})`);
                 }
             }
 
@@ -1160,8 +1207,14 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             // [WALLET_EXEC] Batch all driver movements (earnings, cash recovery, missions)
             // THIS CONTAINS THE FINAL READS (idempotency checks for movements)
             if (!isSharedChild) {
-                await addWalletMovements(driverId, driverMovements, cityKey, tx, { 
-                    userSnap: driverSnap,
+                // If settlementOwnerId != driverId, we must pass a userSnap that belongs to the settlementOwnerId 
+                // Wait, addWalletMovements might require the userSnap of the owner to create the wallet if it doesn't exist.
+                // We'll pass driverWalletSnap which belongs to settlementOwnerId.
+                const settlementOwnerRef = db.collection('users').doc(settlementOwnerId);
+                const settlementOwnerSnap = (settlementOwnerId === driverId) ? driverSnap : await tx.get(settlementOwnerRef);
+                
+                await addWalletMovements(settlementOwnerId, driverMovements, cityKey, tx, { 
+                    userSnap: settlementOwnerSnap,
                     walletSnap: driverWalletSnap 
                 });
             } else {
@@ -1187,6 +1240,43 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 });
             }
 
+            // 3. Create Fleet Financial Ledger if applicable
+            const agreement = (rideData as any).paymentAgreementSnapshot || (driverData as any).paymentAgreement;
+            if (driverData.driverSubtype === 'fleet_driver' && agreement && agreement.mode === 'percentage') {
+                logger.log(`[FLEET_LEDGER] Generating informative ledger for ride ${rideId}`);
+                const ledgerRef = db.collection('fleet_financial_ledger').doc(rideId);
+                const grossFare = settlementData.totalFare || 0;
+                const platformFeeAmount = commissionAmount || 0;
+                const platformFeePercent = (rideData as any).commissionRateSnapshot || 0;
+                const municipalFeeAmount = settlementData.grossReceiptsAmount || 0;
+                const associationFeeAmount = 0; // Not applicable yet
+                const netAfterFees = grossFare - platformFeeAmount - municipalFeeAmount - associationFeeAmount;
+                const driverPct = agreement.driverSharePercent || 0;
+                const ownerPct = agreement.ownerSharePercent || 0;
+                
+                tx.set(ledgerRef, {
+                    rideId,
+                    driverId,
+                    vehicleOwnerId: driverData.vehicleOwnerId || settlementOwnerId,
+                    settlementOwnerId,
+                    vehicleId: (rideData as any).vehicleId || driverData.vehicle?.plate || null,
+                    grossFare,
+                    platformFeePercent,
+                    platformFeeAmount,
+                    municipalFeeAmount,
+                    associationFeeAmount,
+                    netAfterFees,
+                    driverSharePercent: driverPct,
+                    ownerSharePercent: ownerPct,
+                    driverInformativeAmount: netAfterFees * (driverPct / 100),
+                    ownerInformativeAmount: netAfterFees * (ownerPct / 100),
+                    appliesTo: "net_after_platform_and_municipal_fees",
+                    currency: agreement.currency || 'ARS',
+                    type: 'informative_fleet_split',
+                    createdAt: now
+                });
+            }
+
             // --- WEEKLY & MONTHLY STATS (FINANCIAL_STATS v7.1) ---
             if (isNewWeek) {
                 driverUpdate['financialStats.weeklyEarnings'] = earningsForThisRide;
@@ -1206,6 +1296,14 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                 driverUpdate['financialStats.monthlyRidesCount'] = FieldValue.increment(1);
             }
             driverUpdate['financialStats.totalHistoricalEarnings'] = FieldValue.increment(earningsForThisRide);
+
+            // [VamO PRO] Update Passenger Weekly Pool
+            if (rideData.passengerId && !rideData.isSharedRide) {
+                const pName = rideData.passengerName || "Pasajero";
+                incrementPassengerPoints(rideData.passengerId, pName, cityKey).catch(e => {
+                    logger.error(`[PASSENGER_POOL_ERROR] Failed to increment passenger points for ride ${rideId}:`, e);
+                });
+            }
 
             // Update driver_points for Weekly Pool (with Dynamic Pricing counters)
             const dynamicTripIncrement = getDynamicTripIncrement(rideData);
@@ -1250,10 +1348,7 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             // --- PASSENGER BALANCE DEDUCTION (UNTOUCHED) ---
             if (!isSharedChild && walletCredit > 0) {
                 logger.log(`[FINANCIAL] Deducting $${walletCredit} from passenger ${passengerId} (VamO Pay)`);
-                // REMOVED REDUNDANT DEDUCTION: currentBalance decrement removed to avoid double charge (P0 fix).
-                // Real deduction is handled by consumeLockedWallet on the wallets collection.
-
-
+                
                 const creditTxRef = db.collection('platform_transactions').doc();
                 tx.set(creditTxRef, {
                     driverId, rideId, amount: walletCredit, type: 'wallet_credit',
@@ -1267,11 +1362,45 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
                     userId: passengerId,
                     rideId,
                     amount: -walletCredit,
-                    type: 'wallet_payment',
-                    note: `Pago VamO Pay viaje ${rideId}`,
+                    type: 'ride_payment',
+                    note: `Pago de viaje con billetera ${rideId}`,
+                    cityKey, createdAt: now, systemVersion: 'v7_audit_fix'
+                });
+            }
+
+            // --- INTERNAL LEDGER RECORD ---
+            if (!isSharedChild && settlementData.driverGrossAmount && settlementData.driverGrossAmount > 0) {
+                const ledgerTxRef = db.collection('ledger_events').doc();
+                const totalGross = settlementData.driverGrossAmount;
+                const vamoA = settlementData.vamoAmount || 0;
+                const muniA = settlementData.municipalAmount || 0;
+                const taxiA = settlementData.taxiAssociationAmount || 0;
+                const remisA = settlementData.remisAssociationAmount || 0;
+                const grossR = settlementData.grossReceiptsAmount || 0;
+                
+                tx.set(ledgerTxRef, {
+                    rideId,
+                    driverId, // Operational driver
+                    settlementOwnerId, // Financial owner
                     cityKey,
-                    createdAt: now,
-                    systemVersion: 'v7_audit_fix'
+                    timestamp: now,
+                    type: 'ride_settlement',
+                    amounts: {
+                        grossFare: totalGross,
+                        vamoCommission: vamoA,
+                        municipalCommission: muniA,
+                        taxiUnionCommission: taxiA,
+                        remisUnionCommission: remisA,
+                        grossReceiptsWithheld: grossR,
+                        driverNet: settlementData.driverNetAmount || 0
+                    },
+                    percentages: {
+                        vamo: vamoA / totalGross,
+                        muni: muniA / totalGross,
+                        taxi: taxiA / totalGross,
+                        remis: remisA / totalGross,
+                        grossReceipts: grossR / totalGross
+                    }
                 });
             }
 
@@ -2271,6 +2400,8 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
     }
 
     const { rideId, reason } = request.data;
+    logger.info(`[CANCEL_RIDE_START] User ${uid} attempting to cancel ride ${rideId} with reason ${reason}`);
+
     if (!rideId) {
         throw new HttpsError("invalid-argument", "Se requiere el ID del viaje.");
     }
@@ -2350,16 +2481,7 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
             }
         }
 
-        // [VamO PRO] Unified Financial & Policy Handler (All reads before writes)
-        await handleRideCancellationFinancials({
-            rideId,
-            reason: reason || 'CANCELLED_BY_USER',
-            actor: cancelledByRole,
-            tx: transaction,
-            rideData
-        });
-
-        transaction.update(rideRef, {
+        const rideUpdate: any = {
             status: 'cancelled',
             cancelledBy: cancelledByRole,
             cancelReason: reason || 'Sin motivo especificado',
@@ -2370,7 +2492,25 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
                 cancelFeeReason,
                 cancelFeeCharged: false,
             } : {})
+        };
+
+        const userUpdate: any = {
+            activeRideId: FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp()
+        };
+
+        // [VamO PRO] Unified Financial & Policy Handler (All reads before writes)
+        await handleRideCancellationFinancials({
+            rideId,
+            reason: reason || 'CANCELLED_BY_USER',
+            actor: cancelledByRole,
+            tx: transaction,
+            rideData,
+            rideUpdate,
+            userUpdate
         });
+
+        transaction.update(rideRef, rideUpdate);
 
         // [CRITICAL FIX] Clear activeRideId for passengers
         if (rideData.isSharedRide && rideData.sharedGroupId) {
@@ -2391,19 +2531,19 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
             }
         } else if (rideData.passengerId) {
             // Normal ride: Clear single passenger
-            transaction.update(db.doc(`users/${rideData.passengerId}`), {
-                activeRideId: FieldValue.delete(),
-                updatedAt: FieldValue.serverTimestamp()
-            });
+            transaction.update(db.doc(`users/${rideData.passengerId}`), userUpdate);
         }
         
         // Also clear driver if assigned
         if (rideData.driverId) {
-            transaction.update(db.doc(`drivers/${rideData.driverId}`), {
+            transaction.update(db.doc(`users/${rideData.driverId}`), {
                 activeRideId: FieldValue.delete(),
                 updatedAt: FieldValue.serverTimestamp()
             });
         }
+    }).catch((error) => {
+        logger.error(`[CANCEL_RIDE_ERROR] Failed to cancel ride ${rideId}:`, error);
+        throw new HttpsError("internal", "Error interno al cancelar el viaje.", error.message);
     });
 
     return { success: true };
@@ -3028,10 +3168,22 @@ export const requestWithdrawalV1 = onCall({ cors: true, region: 'us-central1' },
     // [STAGE 2A] Read balance from unified wallet
     const walletSnap = await db.doc(`wallets/${uid}`).get();
     const walletData = walletSnap.exists ? (walletSnap.data() as any) : { cashBalance: 0 };
-    const withdrawableBalance = (walletData.cashBalance || 0) - (driverData.nonWithdrawableBalance || 0);
+    
+    // [STAGE 2B] Consultar retiros pendientes
+    const pendingSnap = await db.collection('withdrawal_requests')
+        .where('driverId', '==', uid)
+        .where('status', '==', 'pending')
+        .get();
+    
+    let pendingWithdrawalBalance = 0;
+    pendingSnap.forEach(doc => {
+        pendingWithdrawalBalance += (doc.data().amount || 0);
+    });
+
+    const withdrawableBalance = (walletData.cashBalance || 0) - (driverData.nonWithdrawableBalance || 0) - pendingWithdrawalBalance;
 
     if (amount > withdrawableBalance) {
-        throw new HttpsError("failed-precondition", "El monto solicitado excede tu saldo retirable.");
+        throw new HttpsError("failed-precondition", `El monto solicitado excede tu saldo retirable disponible. Tenés saldo pendiente de retiro.`);
     }
 
     const requestRef = db.collection('withdrawal_requests').doc();
@@ -3054,10 +3206,16 @@ export const requestWithdrawalV1 = onCall({ cors: true, region: 'us-central1' },
 export const processWithdrawalByAdminV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
     const db = getDb();
     const adminUid = await assertAdmin(request);
-    const { requestId, action } = request.data;
+    const { requestId, action, transferReceiptNumber, paymentMethod, destinationAliasOrCvu, adminNote } = request.data;
 
     if (!requestId || !['approve', 'reject'].includes(action)) {
         throw new HttpsError("invalid-argument", "Falta requestId o la acción es inválida.");
+    }
+
+    if (action === 'approve') {
+        if (!transferReceiptNumber || !paymentMethod || !destinationAliasOrCvu) {
+            throw new HttpsError("invalid-argument", "Para aprobar, se requiere comprobante, método de pago y alias destino.");
+        }
     }
 
     const requestRef = db.doc(`withdrawal_requests/${requestId}`);
@@ -3072,13 +3230,23 @@ export const processWithdrawalByAdminV1 = onCall({ cors: true, region: 'us-centr
             throw new HttpsError("failed-precondition", `Esta solicitud ya fue procesada (estado: ${requestData.status}).`);
         }
 
-        const finalStatus = action === 'approve' ? 'approved' : 'rejected';
+        const finalStatus = action === 'approve' ? 'paid' : 'rejected';
 
-        tx.update(requestRef, {
+        const updateData: any = {
             status: finalStatus,
             processedAt: FieldValue.serverTimestamp(),
             processedBy: adminUid,
-        });
+        };
+
+        if (action === 'approve') {
+            updateData.transferReceiptNumber = transferReceiptNumber;
+            updateData.paymentMethod = paymentMethod;
+            updateData.destinationAliasOrCvu = destinationAliasOrCvu;
+        }
+        
+        if (adminNote) {
+            updateData.adminNote = adminNote;
+        }
 
         if (action === 'approve') {
             const driverRef = db.doc(`users/${requestData.driverId}`);
@@ -3116,7 +3284,10 @@ export const processWithdrawalByAdminV1 = onCall({ cors: true, region: 'us-centr
                 type: 'debit_withdrawal',
                 source: 'admin',
                 referenceId: requestId,
-                note: 'Retiro de saldo aprobado por admin.',
+                note: adminNote || 'Retiro de saldo aprobado por admin.',
+                paymentMethod,
+                transferReceiptNumber,
+                destinationAliasOrCvu,
                 previousBalance,
                 newBalance,
                 cityKey: requestData.cityKey,
@@ -3124,6 +3295,7 @@ export const processWithdrawalByAdminV1 = onCall({ cors: true, region: 'us-centr
                 systemVersion: 'v1_withdrawal',
             });
         }
+        tx.update(requestRef, updateData);
     });
 });
 
@@ -3138,17 +3310,11 @@ export const onUserUpdateV1 = onDocumentWritten("users/{uid}", async (event) => 
         return;
     }
 
-    // Si no tiene city, no podemos hacer mucho
-    if (!after.city) {
-        return;
-    }
-
-    const expectedCityKey = normalizeCityKey(after.city);
-
-    // Evitar loops infinitos: solo actualizar si el cityKey no coincide con el city
-    if (after.cityKey !== expectedCityKey) {
+    // Solo actualizar si NO tiene cityKey pero SÍ tiene city
+    if (!after.cityKey && after.city) {
+        const expectedCityKey = canonicalCityKey(after.city);
         const db = getDb();
-        logger.info(`onUserUpdateV1: Normalizando cityKey para ${event.params.uid}. city: '${after.city}', nuevo cityKey: '${expectedCityKey}'`);
+        logger.info(`onUserUpdateV1: Asignando cityKey para ${event.params.uid}. city: '${after.city}', nuevo cityKey: '${expectedCityKey}'`);
 
         await db.doc(`users/${event.params.uid}`).update({
             cityKey: expectedCityKey,
@@ -3255,7 +3421,25 @@ export const updateProfileV1 = onCall({ cors: true, region: "us-central1" }, asy
             if (displayName) updates.displayName = displayName;
             if (gender) updates.gender = gender;
             if (photoURL) updates.photoURL = photoURL;
-            if (dni) updates.dni = dni;
+            if (dni) {
+                const normalizedDni = String(dni).replace(/\D/g, '');
+                const dniIndexRef = db.collection("dni_index").doc(normalizedDni);
+                const dniSnap = await transaction.get(dniIndexRef);
+
+                if (dniSnap.exists && dniSnap.data()?.uid !== auth.uid) {
+                    logger.warn(`[PASSENGER_AUTH_AUDIT][DNI_DUPLICATE_BLOCKED] uid=${auth.uid} dni=${normalizedDni}`);
+                    throw new HttpsError("already-exists", "Este DNI ya está registrado en VamO.");
+                }
+
+                transaction.set(dniIndexRef, {
+                    uid: auth.uid,
+                    email: userData.emailLower || userData.email || auth.token.email?.toLowerCase() || "",
+                    createdAt: FieldValue.serverTimestamp(),
+                    source: "updateProfileV1"
+                }, { merge: true });
+
+                updates.dni = dni;
+            }
 
             if (phone) {
                 const normalizedPhone = normalizePhone(phone);
@@ -3264,14 +3448,14 @@ export const updateProfileV1 = onCall({ cors: true, region: "us-central1" }, asy
 
                 if (phoneSnap.exists && phoneSnap.data()?.uid !== auth.uid) {
                     logger.warn(`[PASSENGER_AUTH_AUDIT][PHONE_DUPLICATE_BLOCKED] uid=${auth.uid} phone=${normalizedPhone}`);
-                    throw new HttpsError("already-exists", "Este número de teléfono ya está registrado con otra cuenta.");
+                    throw new HttpsError("already-exists", "Este número de teléfono ya está registrado en VamO.");
                 }
 
                 transaction.set(phoneIndexRef, {
                     uid: auth.uid,
-                    emailLower: userData.emailLower || auth.token.email?.toLowerCase() || "",
-                    role: userData.role || "passenger",
-                    createdAt: FieldValue.serverTimestamp()
+                    email: userData.emailLower || userData.email || auth.token.email?.toLowerCase() || "",
+                    createdAt: FieldValue.serverTimestamp(),
+                    source: "updateProfileV1"
                 }, { merge: true });
 
                 updates.phone = phone;
@@ -3291,7 +3475,10 @@ export const updateProfileV1 = onCall({ cors: true, region: "us-central1" }, asy
             if (cityKey) {
                 const normalizedKey = normalizeCityKey(cityKey);
                 updates.cityKey = normalizedKey;
-                updates.city = city || (normalizedKey === 'rawson' ? 'Rawson' : (normalizedKey === 'trelew' ? 'Trelew' : city));
+                const derivedCity = city || cityLabel || (normalizedKey === 'rawson' ? 'Rawson' : (normalizedKey === 'trelew' ? 'Trelew' : (normalizedKey.charAt(0).toUpperCase() + normalizedKey.slice(1))));
+                if (derivedCity) {
+                    updates.city = derivedCity;
+                }
             } else if (city) {
                 updates.city = city;
             }

@@ -186,7 +186,7 @@ export default function DriverHistoryPage() {
                                         >
                                             <div className="flex justify-between items-start">
                                                 <div className="flex-1 pr-2">
-                                                    <p className="font-semibold text-sm line-clamp-1">Viaje a {ride.destination.address}</p>
+                                                    <p className="font-semibold text-sm line-clamp-1">Viaje a {ride.destination?.address || (ride as any).destinationAddress || "Destino no disponible"}</p>
                                                     <p className="text-[10px] text-muted-foreground mt-0.5">{formatTimestamp(ride.completedAt)}</p>
                                                 </div>
                                                 <div className="text-right flex items-center gap-2">

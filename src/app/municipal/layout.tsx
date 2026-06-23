@@ -53,6 +53,7 @@ export default function MunicipalLayout({ children }: { children: React.ReactNod
     }
   }, [user, profile, loading, isAuthorized, isPublicPage, router, pathname, mounted]);
 
+  // Early return for disabled municipal mode
   if (!appModeLoading && !appMode.municipalEnabled) {
     return (
       <div className="min-h-screen bg-[#050912] text-white flex items-center justify-center p-6 font-sans">
@@ -73,41 +74,64 @@ export default function MunicipalLayout({ children }: { children: React.ReactNod
     );
   }
 
-  if (!mounted || pathname === '/municipal') {
-    return <VamoFullScreenLoader label="Cargando sistema municipal..." />;
-  }
-
+  // If public page (login, register), render without sidebar
   if (isPublicPage) {
+    if (!mounted || pathname === '/municipal') {
+      return <VamoFullScreenLoader label="Cargando sistema municipal..." />;
+    }
     return <>{children}</>;
   }
 
-  // 1. Loading state
   const isResolvingSession = loading || (!!user && !profile);
-  if (isResolvingSession) {
-    return <VamoFullScreenLoader label="Verificando acceso municipal..." />;
-  }
 
-  if (!isPublicPage && (!user || !isAuthorized)) {
-    return <VamoFullScreenLoader label="Redirigiendo..." />;
-  }
-
-  // Render authorized content
+  // Layout structure is returned unconditionally for authorized routes
+  // This ensures the sidebar NEVER unmounts during navigation or session resolution
   return (
-    <div className="flex min-h-screen w-full bg-[#050912] selection:bg-[#1D7CFF] selection:text-white">
+    <div className="flex h-screen w-full bg-[#050912] selection:bg-[#1D7CFF] selection:text-white overflow-hidden">
       {/* Sidebar Navigation */}
-      <aside className="w-72 bg-[#0A111F] border-r border-white/5 flex flex-col hidden lg:flex shrink-0">
+      <aside className="w-72 h-full bg-[#0A111F] border-r border-white/5 flex flex-col hidden lg:flex shrink-0">
          <MunicipalNavbar />
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative overflow-hidden">
+      <div className="flex-1 flex flex-col relative h-full overflow-hidden">
         <GlobalPanicListener />
         <main className="flex-1 p-8 lg:p-12 overflow-y-auto">
-          <React.Suspense fallback={<VamoFullScreenLoader label="Cargando interfaz..." />}>
-            <DemoWrapper>
-              {children}
-            </DemoWrapper>
-          </React.Suspense>
+          {(!mounted || pathname === '/municipal') ? (
+            <div className="flex h-full w-full items-center justify-center min-h-[50vh]">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-400 rounded-full animate-spin" />
+                <p className="text-zinc-500 text-sm font-black uppercase tracking-widest animate-pulse">Cargando...</p>
+              </div>
+            </div>
+          ) : isResolvingSession ? (
+            <div className="flex h-full w-full items-center justify-center min-h-[50vh]">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-400 rounded-full animate-spin" />
+                <p className="text-zinc-500 text-sm font-black uppercase tracking-widest animate-pulse">Verificando acceso...</p>
+              </div>
+            </div>
+          ) : (!user || !isAuthorized) ? (
+            <div className="flex h-full w-full items-center justify-center min-h-[50vh]">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-400 rounded-full animate-spin" />
+                <p className="text-zinc-500 text-sm font-black uppercase tracking-widest animate-pulse">Redirigiendo...</p>
+              </div>
+            </div>
+          ) : (
+            <React.Suspense fallback={
+              <div className="flex h-full w-full items-center justify-center min-h-[50vh]">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-indigo-400 rounded-full animate-spin" />
+                  <p className="text-zinc-500 text-sm font-black uppercase tracking-widest animate-pulse">Cargando sección...</p>
+                </div>
+              </div>
+            }>
+              <DemoWrapper>
+                {children}
+              </DemoWrapper>
+            </React.Suspense>
+          )}
         </main>
       </div>
     </div>

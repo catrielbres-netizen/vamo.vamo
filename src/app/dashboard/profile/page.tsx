@@ -240,53 +240,78 @@ export default function ProfilePage() {
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="w-full grid grid-cols-3 sm:grid-cols-7 h-auto sm:h-14 bg-zinc-900/50 rounded-2xl p-1 gap-1 mb-6">
-          <TabsTrigger value="general" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Datos</TabsTrigger>
-          <TabsTrigger value="pro" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">VamO PRO</TabsTrigger>
-          <TabsTrigger value="pagos" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0 relative">
+        <TabsList className="w-full flex h-auto sm:h-14 bg-zinc-900/50 rounded-2xl p-1 gap-1 mb-6 overflow-x-auto custom-scrollbar">
+          <TabsTrigger value="general" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 px-3 sm:py-0 whitespace-nowrap flex-1">Perfil</TabsTrigger>
+          <TabsTrigger value="pro" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 px-3 sm:py-0 whitespace-nowrap flex-1">PRO</TabsTrigger>
+          <TabsTrigger value="pagos" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 px-3 sm:py-0 relative whitespace-nowrap flex-1">
             Pagos
             {!profile?.mpLinked && featureFlags.mercadoPagoRequiredEnabled && (
               <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
             )}
           </TabsTrigger>
-          <TabsTrigger value="identity" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Identidad</TabsTrigger>
-          <TabsTrigger value="referral" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Referidos</TabsTrigger>
-          <TabsTrigger value="security" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Emergencia</TabsTrigger>
-          <TabsTrigger value="theme" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 sm:py-0">Personalizar</TabsTrigger>
+          <TabsTrigger value="identity" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 px-3 sm:py-0 whitespace-nowrap flex-1">ID</TabsTrigger>
+          <TabsTrigger value="referral" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 px-3 sm:py-0 whitespace-nowrap flex-1">Refs</TabsTrigger>
+          <TabsTrigger value="security" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 px-3 sm:py-0 whitespace-nowrap flex-1">SOS</TabsTrigger>
+          <TabsTrigger value="theme" className="rounded-xl font-bold text-[10px] sm:text-xs py-2 px-3 sm:py-0 whitespace-nowrap flex-1">Diseño</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="space-y-4 animate-in fade-in duration-300">
-            <Card className="rounded-3xl border-zinc-800 bg-zinc-900/40 shadow-xl overflow-hidden">
-                <CardContent className="p-0">
-                    <div className="bg-gradient-to-b from-indigo-500/20 to-transparent p-8 flex flex-col items-center gap-4">
-                        <div className="relative">
-                            <Avatar className="h-28 w-28 border-4 border-zinc-900 shadow-2xl shadow-indigo-500/20">
-                                <AvatarImage src={profile.photoURL || undefined} alt={profile.name} className="object-cover" />
-                                <AvatarFallback className="text-4xl font-bold text-indigo-400 bg-indigo-500/10">
-                                    {profile.name?.charAt(0).toUpperCase()}
-                                </AvatarFallback>
-                            </Avatar>
-                            <Button
-                                size="icon"
-                                className="absolute bottom-0 right-0 rounded-full h-10 w-10 bg-indigo-600 hover:bg-indigo-700 shadow-xl border-2 border-zinc-900"
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isUploading}
-                            >
-                                {isUploading ? <VamoIcon name="loader" className="animate-spin h-5 w-5" /> : <VamoIcon name="pencil" className="h-4 w-4" />}
-                            </Button>
-                            <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" accept="image/png, image/jpeg" />
+        <TabsContent value="general" className="space-y-6 animate-in fade-in duration-300">
+            <div className="rounded-[2rem] border border-white/5 bg-[#12141D] shadow-2xl overflow-hidden">
+                <div className="relative p-8 flex flex-col items-center gap-5 bg-gradient-to-b from-white/[0.02] to-transparent">
+                    <div className="relative">
+                        <Avatar className="h-28 w-28 border-2 border-white/10 shadow-2xl bg-zinc-900">
+                            <AvatarImage src={profile.photoURL || undefined} alt={profile.name} className="object-cover" />
+                            <AvatarFallback className="text-4xl font-bold text-white bg-zinc-800">
+                                {profile.name?.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                        </Avatar>
+                        <Button
+                            size="icon"
+                            className="absolute bottom-0 right-0 rounded-full h-10 w-10 bg-indigo-600 hover:bg-indigo-500 shadow-xl border-[3px] border-[#12141D] transition-transform hover:scale-105"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploading}
+                        >
+                            {isUploading ? <VamoIcon name="loader" className="animate-spin h-4 w-4 text-white" /> : <VamoIcon name="pencil" className="h-4 w-4 text-white" />}
+                        </Button>
+                        <input type="file" ref={fileInputRef} onChange={handlePhotoUpload} className="hidden" accept="image/png, image/jpeg" />
+                    </div>
+                    
+                    <div className="text-center space-y-2">
+                        <div className="flex items-center justify-center gap-2">
+                            <h2 className="text-2xl font-black text-white tracking-tight">{profile.name} {profile.surname || ''}</h2>
                         </div>
-                        <div className="text-center">
-                            <h2 className="text-2xl font-black text-white">{profile.name}</h2>
-                            <p className="text-sm font-bold text-indigo-400 mt-1 uppercase tracking-widest">Pasajero VamO</p>
+                        <div className="flex items-center justify-center gap-2">
+                            <div className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-400">
+                                Pasajero VamO
+                            </div>
                         </div>
                     </div>
-                    <div className="p-6 space-y-5 bg-zinc-900/20">
-                        <ProfileInfoRow icon={<VamoIcon name="mail" />} label="Correo Electrónico" value={profile.email} />
-                        <ProfileInfoRow icon={<VamoIcon name="phone" />} label="Whatsapp / Teléfono" value={profile.phone} />
+                </div>
+                
+                <div className="p-6 space-y-4">
+                    <div className="space-y-3 pt-2">
+                        <div className="flex items-center gap-4 p-4 bg-[#1A1D27] rounded-2xl border border-white/5">
+                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-zinc-400 shrink-0">
+                                <VamoIcon name="mail" className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">Correo Electrónico</p>
+                                <p className="text-sm font-bold text-zinc-200 truncate">{profile.email}</p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-4 p-4 bg-[#1A1D27] rounded-2xl border border-white/5">
+                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-zinc-400 shrink-0">
+                                <VamoIcon name="phone" className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">WhatsApp / Teléfono</p>
+                                <p className="text-sm font-bold text-zinc-200 truncate">{profile.phone || 'No especificado'}</p>
+                            </div>
+                        </div>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
 
             <div className="flex flex-col gap-3">
                 <Button 
@@ -307,8 +332,8 @@ export default function ProfilePage() {
                     <VamoIcon name="help-circle" className="mr-2 h-4 w-4" /> Ver tutorial de nuevo
                 </Button>
 
-                <Button variant="destructive" className="w-full h-14 rounded-2xl font-black uppercase tracking-widest" onClick={handleLogout}>
-                    Cerrar Sesión
+                <Button variant="ghost" className="w-full text-zinc-500 hover:text-white font-bold h-12" onClick={handleLogout}>
+                    Cerrar Sesión Activa
                 </Button>
             </div>
         </TabsContent>
@@ -462,24 +487,36 @@ export default function ProfilePage() {
                             )}
 
                             {profile.identityStatus !== 'pending' && (
-                                <Button 
-                                    className="w-full h-14 rounded-2xl font-black uppercase tracking-widest"
-                                    disabled={!profile.identityDocuments?.dniFront || !profile.identityDocuments?.dniBack || !profile.identityDocuments?.selfie}
-                                    onClick={async () => {
-                                        try {
-                                            const userRef = doc(firestore!, 'users', user.uid);
-                                            await updateDoc(userRef, { 
-                                                identityStatus: 'pending',
-                                                identitySubmittedAt: new Date()
-                                            });
-                                            toast({ title: "Solicitud enviada", description: "Revisaremos tu documentación en breve." });
-                                        } catch (e) {
-                                            toast({ variant: 'destructive', title: "Error", description: "No se pudo enviar la solicitud." });
-                                        }
-                                    }}
-                                >
-                                    Enviar para Revisión
-                                </Button>
+                                <>
+                                    <Button 
+                                        className="w-full h-14 rounded-2xl font-black uppercase tracking-widest"
+                                        disabled={!profile.identityDocuments?.dniFront || !profile.identityDocuments?.dniBack || !profile.identityDocuments?.selfie}
+                                        onClick={async () => {
+                                            try {
+                                                const userRef = doc(firestore!, 'users', user.uid);
+                                                await updateDoc(userRef, { 
+                                                    identityStatus: 'pending',
+                                                    identitySubmittedAt: new Date()
+                                                });
+                                                toast({ title: "Solicitud enviada", description: "Revisaremos tu documentación en breve." });
+                                            } catch (e) {
+                                                toast({ variant: 'destructive', title: "Error", description: "No se pudo enviar la solicitud." });
+                                            }
+                                        }}
+                                    >
+                                        Enviar para Revisión
+                                    </Button>
+                                    <div className="text-center mt-6 pt-2 border-t border-white/5">
+                                        <p className="text-xs text-muted-foreground mb-2">¿Tenés problemas para subir las fotos?</p>
+                                        <Button 
+                                            variant="outline" 
+                                            className="w-full h-12 rounded-xl text-xs font-bold border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/10"
+                                            onClick={() => window.location.href = `mailto:documentos@vamoapp.com.ar?subject=Documentos%20Pasajero%20-%20${profile.name}%20(${user.uid})&body=Hola%20equipo%20de%20VamO,%0A%0AAdjunto%20mis%20documentos%20porque%20tuve%20problemas%20para%20subirlos%20desde%20la%20app.%0A%0AGracias.`}
+                                        >
+                                            <VamoIcon name="mail" className="w-4 h-4 mr-2" /> Enviar por Email
+                                        </Button>
+                                    </div>
+                                </>
                             )}
                         </div>
                     )}

@@ -53,6 +53,34 @@ const CITY_DEFINITIONS: Record<
       maxLng: -60.30,
     },
   },
+  bariloche: {
+    nameMap: ["bariloche", "san carlos de bariloche", "san-carlos-de-bariloche"],
+    bbox: {
+      minLat: -41.25,
+      maxLat: -41.05,
+      minLng: -71.45,
+      maxLng: -71.15,
+    },
+  },
+  rio_gallegos: {
+    nameMap: ["rio_gallegos", "rio-gallegos", "rio gallegos", "río gallegos", "gallegos"],
+    bbox: {
+      minLat: -51.80,
+      maxLat: -51.40,
+      minLng: -69.50,
+      maxLng: -68.90,
+    },
+  },
+
+  "villa-la-angostura": {
+    nameMap: ["villa la angostura", "angostura", "villa-la-angostura"],
+    bbox: {
+      minLat: -40.85,
+      maxLat: -40.70,
+      minLng: -71.75,
+      maxLng: -71.50,
+    },
+  },
   // Add more municipalities here as needed
 };
 
