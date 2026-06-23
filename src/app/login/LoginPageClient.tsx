@@ -92,17 +92,18 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
     const handleSignIn = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         
-        // Inline Validation
-        const newErrors: {email?: string, password?: string} = {};
-        if (!email) newErrors.email = 'El email es obligatorio.';
-        if (!password) newErrors.password = 'La contraseña es obligatoria.';
-        
-        if (Object.keys(newErrors).length > 0) {
-            setErrors(newErrors);
+        if (!email || !password) {
+            setErrors({
+                email: !email ? 'El email es obligatorio.' : undefined,
+                password: !password ? 'La contraseña es obligatoria.' : undefined
+            });
             return;
         }
 
-        if (!auth || !firestore) return;
+        if (!auth || !firestore) {
+            toast({ variant: 'destructive', title: 'Inicializando', description: 'El sistema se está conectando, intentá en un segundo...' });
+            return;
+        }
         
         setIsSubmitting(true);
         setErrors({});
@@ -222,8 +223,8 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
         }
     };
 
-    if (isInitializing || isSubmitting) {
-        return <VamoFullScreenLoader label={isSubmitting ? "Autenticando..." : "Cargando..."} />;
+    if (isSubmitting) {
+        return <VamoFullScreenLoader label="Autenticando..." />;
     }
 
     return (
