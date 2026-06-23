@@ -10,6 +10,7 @@ import { formatCurrency, cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { UserProfile, Ride } from '@/lib/types';
 import Link from 'next/link';
+import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 
 function formatDate(ts: any) {
     if (!ts) return '—';
@@ -22,6 +23,7 @@ export default function PassengerHistoryPage() {
     const router = useRouter();
     const { firestore, functions } = useFirebase();
     const { toast } = useToast();
+    const { cityKey } = useMunicipalContext();
     
     const passengerId = params?.id as string;
     
@@ -31,7 +33,7 @@ export default function PassengerHistoryPage() {
     const [actionLoading, setActionLoading] = useState(false);
 
     useEffect(() => {
-        if (!firestore || !passengerId) return;
+        if (!firestore || !passengerId || !cityKey) return;
 
         const loadData = async () => {
             setLoading(true);
@@ -48,7 +50,7 @@ export default function PassengerHistoryPage() {
 
                 // 2. Fetch Ride History
                 const ridesRef = collection(firestore, 'rides');
-                const simpleQ = query(ridesRef, where('passengerId', '==', passengerId), limit(100));
+                const simpleQ = query(ridesRef, where('passengerId', '==', passengerId), where('cityKey', '==', cityKey), limit(100));
                 try {
                     const simpleSnap = await getDocs(simpleQ);
                     const simpleRides = simpleSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Ride);
