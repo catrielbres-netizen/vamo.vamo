@@ -292,7 +292,7 @@ export default function MunicipalPassengersPage() {
                                         <td className="px-5 py-3 text-right">
                                             <button 
                                                 className="text-xs font-bold text-indigo-400 hover:text-indigo-300 px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
-                                                onClick={() => toast({ title: 'Detalle de pasajero', description: 'Próximamente disponible.' })}
+                                                onClick={() => router.push(`/municipal/passengers/${p.uid}`)}
                                             >
                                                 Ver historial →
                                             </button>
