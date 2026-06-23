@@ -300,13 +300,15 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                                 {isSubmitting ? <VamoIcon name="loader" className="animate-spin" /> : 'INICIAR SESIÓN'}
                             </Button>
 
-                            <div className="pt-2">
-                                <GoogleAuthButton 
-                                    onSuccess={handleGoogleAuthSuccess}
-                                    disabled={isSubmitting}
-                                    mode="login"
-                                />
-                            </div>
+                            {fixedRole !== 'driver' && (
+                                <div className="pt-2">
+                                    <GoogleAuthButton 
+                                        onSuccess={handleGoogleAuthSuccess}
+                                        disabled={isSubmitting}
+                                        mode="login"
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         <div className="relative">

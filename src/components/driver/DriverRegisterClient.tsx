@@ -14,7 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 import { VamoIcon } from '@/components/VamoIcon';
 import { DriverOnboardingWizard } from './DriverOnboardingWizard';
 import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
-import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
 import { ForcePasswordLink } from '@/components/auth/ForcePasswordLink';
 
 export default function DriverRegisterClient() {
@@ -112,26 +111,7 @@ export default function DriverRegisterClient() {
         }
     };
 
-    const handleGoogleAuthSuccess = async (userCredential: any) => {
-        setIsSubmitting(true);
-        try {
-            console.log("[ONBOARDING_DEBUG] Google Auth success. Calling backend for atomic registration...");
-            const { getFunctions, httpsCallable } = await import('firebase/functions');
-            const functions = getFunctions(undefined, 'us-central1');
-            const completeRegistration = httpsCallable(functions, 'completeDriverRegistrationV1');
 
-            await completeRegistration({});
-            console.log("[ONBOARDING_DEBUG] Backend registration success.");
-
-            toast({ title: '¡Cuenta creada con Google!', description: 'Ahora completá tu perfil de conductor.' });
-            // The component will re-render and show the wizard because `user` is now defined
-        } catch (error: any) {
-            console.error('Google Signup Error:', error);
-            toast({ variant: 'destructive', title: 'Error de registro', description: error.message });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
 
     return (
         <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 py-12">
@@ -202,22 +182,11 @@ export default function DriverRegisterClient() {
                                 {isSubmitting ? <VamoIcon name="loader" className="animate-spin h-5 w-5" /> : 'Siguiente Paso'}
                             </Button>
 
-                            <div className="relative my-6">
-                                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-white/10" /></div>
-                                <div className="relative flex justify-center text-xs uppercase"><span className="bg-zinc-900 px-2 text-zinc-500 font-bold tracking-widest">O BIEN</span></div>
-                            </div>
-
-                            <GoogleAuthButton onSuccess={handleGoogleAuthSuccess} mode="register" />
-
-                            <div className="text-center pt-2">
-                                <button 
-                                    type="button" 
-                                    onClick={() => router.push('/login')}
-                                    className="text-xs text-zinc-500 hover:text-white transition-colors uppercase font-bold tracking-widest"
-                                >
-                                    ¿Ya tenés cuenta? Iniciar Sesión
-                                </button>
-                            </div>
+                            <div className="pt-4 text-center">
+                            <button type="button" onClick={() => router.push('/login?role=driver')} className="text-zinc-400 hover:text-white text-sm font-bold uppercase tracking-widest transition-colors">
+                                ¿Ya tenés cuenta? <span className="text-indigo-400">Iniciá sesión</span>
+                            </button>
+                        </div>
                         </form>
                     </CardContent>
                 </Card>
