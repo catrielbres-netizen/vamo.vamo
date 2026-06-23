@@ -20,14 +20,44 @@ const nextConfig = {
     return [
       {
         source: '/drivers',
-        destination: '/registro/conductor',
+        destination: '/driver/register',
         permanent: true,
       },
       {
-        source: '/driver/register',
-        destination: '/registro/conductor',
+        source: '/registro/conductor',
+        destination: '/driver/register',
         permanent: true,
       },
+      {
+        source: '/registro/pasajero',
+        destination: '/pasajero/register',
+        permanent: true,
+      },
+      {
+        source: '/register',
+        destination: '/pasajero/register',
+        permanent: true,
+      },
+      {
+        source: '/registro',
+        destination: '/pasajero/register',
+        permanent: true,
+      },
+      {
+        source: '/pasajero',
+        destination: '/pasajero/register',
+        permanent: true,
+      },
+      {
+        source: '/loginconductor',
+        destination: '/login',
+        permanent: true,
+      },
+      {
+        source: '/driver/login',
+        destination: '/login',
+        permanent: true,
+      }
     ]
   }
 };
