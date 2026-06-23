@@ -15,6 +15,15 @@ const nextConfig = {
   experimental: {
     workerThreads: false,
     cpus: 1
+  },
+  async redirects() {
+    return [
+      {
+        source: '/drivers',
+        destination: '/registro/conductor',
+        permanent: true,
+      },
+    ]
   }
 };
 
