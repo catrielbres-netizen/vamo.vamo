@@ -156,7 +156,7 @@ export function PassengerLoginForm() {
             <Button 
             type="button"
             variant="ghost"
-            onClick={() => router.push('/registro/pasajero')}
+            onClick={() => router.push('/pasajero/register')}
             disabled={visualState === 'validating'}
             className="w-full h-12 text-zinc-500 hover:text-white font-bold rounded-2xl"
             >

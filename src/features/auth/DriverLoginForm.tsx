@@ -141,7 +141,7 @@ export function DriverLoginForm() {
         <Button 
           type="button"
           variant="outline"
-          onClick={() => router.push('/registro/conductor')}
+          onClick={() => router.push('/driver/register')}
           className="w-full h-12 border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl"
         >
           CREAR CUENTA CONDUCTOR

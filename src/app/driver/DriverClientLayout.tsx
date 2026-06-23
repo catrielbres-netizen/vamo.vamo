@@ -108,19 +108,16 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   // Paths that don't require AuthGuard
-  const isPublicPath = pathname === '/driver' || pathname === '/driver/' || 
-                       pathname?.includes('/driver/register') || 
-                       pathname?.includes('/driver/login') ||
-                       pathname?.includes('/driver/complete-profile') || 
-                       pathname?.includes('/registro/conductor');
+  const isPublicRoute = pathname?.includes('/driver/register') || 
+                        pathname?.includes('/login');
 
-  if (isPublicPath) {
+  if (isPublicRoute) {
     return <>{children}</>;
   }
 
   return (
     <DriverErrorBoundary>
-      <AuthGuard allowedRoles={['driver', 'admin']} fallbackPath="/driver/login">
+      <AuthGuard allowedRoles={['driver', 'admin']} fallbackPath="/login">
         <DriverRealtimeProvider>
           <WeeklyPoolProvider>
             <GlobalOfferOverlay />
