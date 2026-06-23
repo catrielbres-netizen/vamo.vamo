@@ -35,6 +35,10 @@ export default function CityAuditDashboard() {
     const [claims, setClaims] = useState<any[]>([]);
     const [loadingClaims, setLoadingClaims] = useState(false);
 
+    // Financials state
+    const [financials, setFinancials] = useState<any>(null);
+    const [loadingFinancials, setLoadingFinancials] = useState(false);
+
     useEffect(() => {
         if (!functions || !cityKey || !profile || profile.role !== 'admin') return;
 
@@ -53,7 +57,22 @@ export default function CityAuditDashboard() {
         loadMetrics();
         loadRides();
         loadClaims();
+        loadFinancials();
     }, [functions, cityKey, profile]);
+
+    const loadFinancials = async () => {
+        if (!functions) return;
+        setLoadingFinancials(true);
+        try {
+            const getFinancialsFn = httpsCallable(functions, 'adminGetCityFinancialsV1');
+            const res = await getFinancialsFn({ cityKey });
+            setFinancials(res.data);
+        } catch (error: any) {
+            toast({ title: 'Error cargando finanzas', description: error.message, variant: 'destructive' });
+        } finally {
+            setLoadingFinancials(false);
+        }
+    };
 
     const loadRides = async () => {
         if (!functions) return;
@@ -134,9 +153,10 @@ export default function CityAuditDashboard() {
 
             {/* Tabs */}
             <Tabs defaultValue="rides" className="w-full">
-                <TabsList className="grid w-full max-w-md grid-cols-2 bg-black/40 border border-white/5">
+                <TabsList className="grid w-full max-w-2xl grid-cols-3 bg-black/40 border border-white/5">
                     <TabsTrigger value="rides">Historial de Viajes</TabsTrigger>
                     <TabsTrigger value="claims">Auditoría F.A.P.</TabsTrigger>
+                    <TabsTrigger value="finances">Finanzas y Comisiones</TabsTrigger>
                 </TabsList>
 
                 {/* Rides Tab */}
@@ -262,6 +282,100 @@ export default function CityAuditDashboard() {
                             </tbody>
                         </table>
                     </div>
+                </TabsContent>
+
+                {/* Finances Tab */}
+                <TabsContent value="finances" className="space-y-4 mt-6">
+                    {loadingFinancials ? (
+                        <div className="flex justify-center p-8"><div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"/></div>
+                    ) : financials ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Panel de Comisiones */}
+                            <Card className="bg-white/[0.02] border-white/5 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-6 opacity-5">
+                                    <VamoIcon name="briefcase" className="w-24 h-24 text-white" />
+                                </div>
+                                <CardHeader>
+                                    <CardTitle className="text-xl font-black text-white">Comisiones Generadas</CardTitle>
+                                    <p className="text-zinc-500 text-sm">Ingresos brutos retenidos por VamO en esta ciudad.</p>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Comisión VamO (Total Histórico)</p>
+                                        <p className="text-4xl font-black text-white tracking-tighter">{formatCurrency(financials.totalPlatformCommission)}</p>
+                                    </div>
+                                    <div className="pt-4 border-t border-white/5">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Participación Municipal (Si aplica)</p>
+                                        <p className="text-xl font-black text-indigo-400 tracking-tighter">{formatCurrency(financials.totalMunicipalCommission)}</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Panel del Pozo Semanal */}
+                            <Card className="bg-indigo-500/10 border-indigo-500/20 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-6 opacity-5">
+                                    <VamoIcon name="gift" className="w-24 h-24 text-indigo-400" />
+                                </div>
+                                <CardHeader>
+                                    <CardTitle className="text-xl font-black text-indigo-400">Pozo Semanal Actual</CardTitle>
+                                    <p className="text-indigo-300/60 text-sm">Fondos acumulados para repartir esta semana.</p>
+                                </CardHeader>
+                                <CardContent>
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400/60">Monto del Pozo</p>
+                                        <p className="text-4xl font-black text-indigo-400 tracking-tighter">{formatCurrency(financials.weeklyPoolAmount)}</p>
+                                    </div>
+                                    <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30">
+                                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                                        <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">Acumulando...</span>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Vamo Pay vs Cash */}
+                            <Card className="bg-white/[0.02] border-white/5 md:col-span-2">
+                                <CardHeader>
+                                    <CardTitle className="text-xl font-black text-white">Métodos de Pago (Viajes Completados)</CardTitle>
+                                    <p className="text-zinc-500 text-sm">Distribución de volumen de dinero transaccionado en la plataforma.</p>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                                                <span className="text-sm font-bold text-white uppercase tracking-widest">VamO Pay / Billetera</span>
+                                            </div>
+                                            <p className="text-3xl font-black text-emerald-400 tracking-tighter pl-5">{formatCurrency(financials.totalVamoPay)}</p>
+                                            <p className="text-[10px] text-zinc-500 font-bold uppercase pl-5">{financials.vamoPayRidesCount} viajes procesados</p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-3 h-3 rounded-full bg-amber-500" />
+                                                <span className="text-sm font-bold text-white uppercase tracking-widest">Efectivo / Transferencia Directa</span>
+                                            </div>
+                                            <p className="text-3xl font-black text-amber-400 tracking-tighter pl-5">{formatCurrency(financials.totalCash)}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Barra de Proporción */}
+                                    {financials.totalVamoPay + financials.totalCash > 0 && (
+                                        <div className="mt-6 h-4 w-full bg-white/5 rounded-full overflow-hidden flex">
+                                            <div 
+                                                className="h-full bg-emerald-500" 
+                                                style={{ width: `${(financials.totalVamoPay / (financials.totalVamoPay + financials.totalCash)) * 100}%` }}
+                                            />
+                                            <div 
+                                                className="h-full bg-amber-500" 
+                                                style={{ width: `${(financials.totalCash / (financials.totalVamoPay + financials.totalCash)) * 100}%` }}
+                                            />
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-zinc-500">No hay datos financieros disponibles.</div>
+                    )}
                 </TabsContent>
             </Tabs>
         </div>

@@ -384,3 +384,54 @@ export const adminGetCityFapClaimsV1 = onCall({ cors: true, region: 'us-central1
         throw new HttpsError('internal', error.message);
     }
 });
+
+export const adminGetCityFinancialsV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'No autorizado');
+    const { cityKey } = request.data;
+    if (!cityKey) throw new HttpsError('invalid-argument', 'Missing cityKey');
+    const db = getDb();
+
+    try {
+        const opSnap = await db.doc(`users/${request.auth.uid}`).get();
+        const op = opSnap.data();
+        if (!op || (op.role !== 'admin' && op.role !== 'superadmin')) throw new HttpsError('permission-denied', 'No tienes permisos');
+
+        // 1. Get City Data (for total commissions and weekly pool)
+        const citySnap = await db.doc(`cities/${cityKey}`).get();
+        const cityData = citySnap.data() || {};
+        
+        const totalPlatformCommission = cityData.stats?.totalPlatformCommission || 0;
+        const totalMunicipalCommission = cityData.stats?.totalMunicipalCommission || 0;
+        const weeklyPoolAmount = cityData.rewardsConfig?.weeklyPoolAmount || 0;
+
+        // 2. Aggregate VamO Pay vs Cash directly from Rides
+        const vamoPayAggr = await db.collection('rides')
+            .where('cityKey', '==', cityKey)
+            .where('status', '==', 'completed')
+            .aggregate({
+                totalVamoPay: admin.firestore.AggregateField.sum('walletCoveredAmount'),
+                totalCash: admin.firestore.AggregateField.sum('cashAmount')
+            }).get();
+
+        const vamoPayData = vamoPayAggr.data();
+
+        // 3. Count rides by payment method
+        const vamoPayRidesCount = await db.collection('rides')
+            .where('cityKey', '==', cityKey)
+            .where('status', '==', 'completed')
+            .where('paymentMethod', '==', 'wallet')
+            .count().get();
+
+        return {
+            totalPlatformCommission,
+            totalMunicipalCommission,
+            weeklyPoolAmount,
+            totalVamoPay: vamoPayData.totalVamoPay || 0,
+            totalCash: vamoPayData.totalCash || 0,
+            vamoPayRidesCount: vamoPayRidesCount.data().count
+        };
+    } catch (error: any) {
+        logger.error("[adminGetCityFinancialsV1] Error:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});
