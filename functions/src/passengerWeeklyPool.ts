@@ -134,12 +134,12 @@ export const distributePassengerWeeklyPoolV1 = onSchedule({
 
         // 1. Calcular poolTotal
         const poolTotal = Math.min(
-            passengerWeeklyPoolConfig.initialPoolAmount + (poolData.completedValidRides || 0) * passengerWeeklyPoolConfig.contributionPerCompletedTrip,
+            passengerWeeklyPoolConfig.initialPoolAmount + (poolData?.completedValidRides || 0) * passengerWeeklyPoolConfig.contributionPerCompletedTrip,
             passengerWeeklyPoolConfig.maxDisplayedGoal
         );
 
         // 2. Determinar rankings y multiplicadores
-        const passengersWithMultipliers = [];
+        const passengersWithMultipliers: any[] = [];
         let currentRank = 1;
         let lastTrips = -1;
         let tiedRank = 1;

@@ -72,7 +72,7 @@ export default function PassengerHistoryPage() {
         };
 
         loadData();
-    }, [firestore, passengerId]);
+    }, [firestore, passengerId, cityKey, functions]);
 
     // Derived Metrics
     const driverRepetition = useMemo(() => {

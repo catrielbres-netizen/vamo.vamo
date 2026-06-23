@@ -1351,3 +1351,29 @@ export const submitMunicipalDriverDocumentV1 = onCall({ cors: true, region: 'us-
         throw new HttpsError('failed-precondition', error.message);
     }
 });
+
+export const getPassengerRidesV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'No autorizado.');
+    const db = getDb();
+    const { passengerId } = request.data;
+    if (!passengerId) throw new HttpsError('invalid-argument', 'Missing passengerId');
+    const operatorUid = request.auth.uid;
+    try {
+        const operatorSnap = await db.doc("users/").get();
+        const operator = operatorSnap.data() as UserProfile;
+        const validRoles = ['admin', 'superadmin', 'admin_municipal', 'traffic_municipal', 'municipal'];
+        if (!operator || !validRoles.includes(operator.role || '')) throw new HttpsError('permission-denied', 'No tienes permisos.');
+        let query = db.collection('rides').where('passengerId', '==', passengerId);
+        if (operator.role !== 'admin' && operator.role !== 'superadmin') {
+            if (!operator.cityKey) throw new HttpsError('permission-denied', 'Operador sin ciudad.');
+            query = query.where('cityKey', '==', operator.cityKey);
+        }
+        query = query.orderBy('createdAt', 'desc').limit(100);
+        const snap = await query.get();
+        const rides = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        return { rides };
+    } catch (error) {
+        logger.error("[getPassengerRidesV1] Error:", error);
+        throw new HttpsError('internal', 'Error fetching rides');
+    }
+});
