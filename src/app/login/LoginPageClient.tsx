@@ -237,7 +237,7 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                 <Card className="w-full bg-zinc-900 border-white/5 shadow-2xl rounded-[2.5rem]">
                     <CardHeader className="text-center pb-6">
                         <CardTitle className="text-2xl font-black text-white uppercase tracking-tight">
-                            {fixedRole === 'driver' ? 'Panel Conductor' : 'Acceso Pasajero'}
+                            {fixedRole === 'driver' ? 'ACCESO CONDUCTOR' : 'ACCESO PASAJERO'}
                         </CardTitle>
                         <CardDescription className="text-zinc-500 font-medium">Ingresá tus datos para continuar</CardDescription>
                     </CardHeader>
@@ -329,7 +329,7 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                                 CREAR CUENTA NUEVA
                             </Button>
                             
-                            {fixedRole === 'passenger' && (
+                            {fixedRole !== 'driver' && (
                                 <div className="text-center">
                                     <button 
                                         type="button"
