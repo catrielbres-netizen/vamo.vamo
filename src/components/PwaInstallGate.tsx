@@ -22,9 +22,10 @@ export function PwaInstallGate({ children }: { children: React.ReactNode }) {
   const [isBypassed, setIsBypassed] = useState(false);
 
   // Determine if the current route is protected
-  const isPassenger = pathname === '/login' || pathname === '/register' || pathname.startsWith('/dashboard/ride') || pathname.startsWith('/pasajero');
-  const isDriver = pathname.startsWith('/driver');
-  const shouldProtect = isPassenger || isDriver;
+  const isAuthRoute = pathname === '/login' || pathname === '/register' || pathname.startsWith('/driver/register') || pathname.startsWith('/driver/complete-profile') || pathname.startsWith('/pasajero/register');
+  const isPassenger = pathname.startsWith('/dashboard/ride') || pathname.startsWith('/pasajero') && !isAuthRoute;
+  const isDriver = pathname.startsWith('/driver') && !isAuthRoute;
+  const shouldProtect = (isPassenger || isDriver) && !isAuthRoute;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
