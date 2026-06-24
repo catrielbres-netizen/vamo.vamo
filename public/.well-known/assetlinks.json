@@ -1,1 +1,8 @@
-[]
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.vamo.conductor",
+    "sha256_cert_fingerprints": ["D9:E8:01:31:7E:43:6E:DB:E8:F1:F9:9F:5E:41:0F:69:98:02:04:47:0A:E3:EC:D9:61:CE:02:B4:73:3A:78:AA"]
+  }
+}]
