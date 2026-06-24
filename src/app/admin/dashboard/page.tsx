@@ -45,21 +45,37 @@ export default function AdminDashboardPage() {
     const [metrics, setMetrics] = useState({
         totalDrivers: 0,
         newDrivers: 0,
-        blockedDrivers: 0,
         pendingDrivers: 0,
         approvedDrivers: 0,
         onlineDrivers: 0,
+        blockedDrivers: 0,
+        mpLinkedDrivers: 0,
+        mpUnlinkedDrivers: 0,
+        
         totalPassengers: 0,
+        newPassengers: 0,
         onlinePassengers: 0,
-        pendingWithdrawals: 0,
+        blockedPassengers: 0,
+        
+        totalRides: 0,
+        todayRides: 0,
+        completedRides: 0,
+        cancelledRides: 0,
         activeRides: 0,
-        recentCompletedRides: 0,
+        
+        totalGmv: 0,
+        todayGmv: 0,
+        vamoCommissions: 0,
+        walletRecharges: 0,
+        avgTicket: 0,
+        
+        pendingWithdrawals: 0,
         newFapClaims: 0,
         pendingFapClaims: 0,
-        acceptanceRate: 95,
-        cancellationRate: 4,
-        totalGmv: 0,
-        avgTicket: 0
+        
+        citiesWithRecords: 0,
+        activeCities: 0,
+        citiesWithoutPanel: 0
     });
 
     const { cityKey: activeCityKey, cityName, loading: loadingContext } = useMunicipalContext();
@@ -77,34 +93,67 @@ export default function AdminDashboardPage() {
 
             const isGlobalMode = activeCityKey === 'all' || activeCityKey === '*' || activeCityKey === 'global' || !activeCityKey;
 
-            const baseUserQuery: QueryConstraint[] = [where('role', '==', 'driver')];
-            const passengerQuery: QueryConstraint[] = [where('role', '==', 'passenger')];
-            const baseRideQuery: QueryConstraint[] = [];
-            const baseWithdrawalQuery: QueryConstraint[] = [where('status', '==', 'pending')];
-
-            if (!isGlobalMode) {
-                baseUserQuery.push(where('cityKey', '==', activeCityKey));
-                passengerQuery.push(where('cityKey', '==', activeCityKey));
-                baseRideQuery.push(where('cityKey', '==', activeCityKey));
-                baseWithdrawalQuery.push(where('cityKey', '==', activeCityKey));
+            // [VAMO PRO GLOBAL REF] Fetch passengers and drivers fully into memory if global
+            let driversSnap, passengersSnap;
+            if (isGlobalMode) {
+                const qDrivers = query(usersColl, where('role', '==', 'driver'));
+                const qPass = query(usersColl, where('role', '==', 'passenger'));
+                [driversSnap, passengersSnap] = await Promise.all([getDocs(qDrivers), getDocs(qPass)]);
+            } else {
+                const qDrivers = query(usersColl, where('role', '==', 'driver'), where('cityKey', '==', activeCityKey));
+                const qPass = query(usersColl, where('role', '==', 'passenger'), where('cityKey', '==', activeCityKey));
+                [driversSnap, passengersSnap] = await Promise.all([getDocs(qDrivers), getDocs(qPass)]);
             }
+
+            const isTestUser = (data: any) => {
+                const email = data.email?.toLowerCase() || '';
+                return email.includes('test') || email.includes('demo') || data.isTestUser === true;
+            };
+
+            const driversList = driversSnap.docs.map(d => d.data()).filter(d => !isTestUser(d));
+            const passengersList = passengersSnap.docs.map(d => d.data()).filter(d => !isTestUser(d));
+
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            
+            const totalDriversCount = driversList.length;
+            const newDriversCount = driversList.filter(d => d.createdAt && (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) >= thirtyDaysAgo).length;
+            const blockedDriversCount = driversList.filter(d => d.isSuspended === true).length;
+            const approvedCount = driversList.filter(d => d.approved === true).length;
+            const onlineCount = driversList.filter(d => d.driverStatus === 'online').length;
+            const realPendingCount = driversList.filter(d => isDriverReadyForReview(d)).length;
+            const mpLinkedDrivers = driversList.filter(d => d.mpLinked === true).length;
+            const mpUnlinkedDrivers = driversList.filter(d => d.mpLinked !== true).length;
+
+            const totalPassengersCount = passengersList.length;
+            const newPassengersCount = passengersList.filter(p => p.createdAt && (p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt)) >= thirtyDaysAgo).length;
+            const blockedPassengersCount = passengersList.filter(p => p.isSuspended === true).length;
+            
+            const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000);
+            const onlinePassengersCount = passengersList.filter(p => {
+                if (!p.isOnline || !p.lastActiveAt) return false;
+                const d = p.lastActiveAt.toDate ? p.lastActiveAt.toDate() : new Date(p.lastActiveAt);
+                return d.getTime() >= twoMinsAgo.getTime();
+            }).length;
+
+            const uniqueCities = new Set([
+                ...driversList.map(d => d.cityKey).filter(Boolean),
+                ...passengersList.map(p => p.cityKey).filter(Boolean)
+            ]);
+            const citiesWithRecords = uniqueCities.size;
 
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const todayTs = Timestamp.fromDate(today);
-            
-            const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000);
-            const twoMinsAgoTs = Timestamp.fromDate(twoMinsAgo);
 
-            // Helper to fetch a metric safely
+            const baseRideQuery: QueryConstraint[] = [];
+            const baseWithdrawalQuery: QueryConstraint[] = [where('status', '==', 'pending')];
+            if (!isGlobalMode) {
+                baseRideQuery.push(where('cityKey', '==', activeCityKey));
+                baseWithdrawalQuery.push(where('cityKey', '==', activeCityKey));
+            }
+
             const safeFetch = async (label: string, queryObj: any, isDocs = false) => {
-                const logData = {
-                    selectedCity: activeCityKey,
-                    queryName: label,
-                    isGlobalMode,
-                    timestamp: new Date().toISOString()
-                };
-
+                const logData = { selectedCity: activeCityKey, queryName: label, isGlobalMode, timestamp: new Date().toISOString() };
                 try {
                     if (isDocs) {
                         const snap = await getDocs(queryObj);
@@ -116,107 +165,52 @@ export default function AdminDashboardPage() {
                     console.log(`[ADMIN_DASHBOARD_DATA_DEBUG] OK: ${label}`, { ...logData, resultCount: count });
                     return count;
                 } catch (e: any) {
-                    console.error(`[ADMIN_DASHBOARD_DATA_DEBUG] ERROR: ${label}`, { 
-                        ...logData, 
-                        errorCode: e.code || 'unknown', 
-                        errorMessage: e.message 
-                    });
-
+                    console.error(`[ADMIN_DASHBOARD_DATA_DEBUG] ERROR: ${label}`, { ...logData, errorCode: e.code || 'unknown', errorMessage: e.message });
                     if (e.message?.includes('index')) {
                         setHasIndexError(true);
-                        toast({
-                            variant: "destructive",
-                            title: `Índice faltante: ${label}`,
-                            description: "Es necesario crear un índice compuesto en Firestore para filtrar esta ciudad."
-                        });
                     }
                     return isDocs ? { docs: [] } : 0;
                 }
             };
 
-            const isTestUser = (data: any) => {
-                const email = data.email?.toLowerCase() || '';
-                return email.includes('test') || email.includes('demo') || data.isTestUser === true;
-            };
-
-            const allDriversSnap = await getDocs(query(usersColl, ...baseUserQuery));
-            const driversList = allDriversSnap.docs.map(d => d.data()).filter(d => !isTestUser(d));
-
-            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-            
-            const totalDriversCount = driversList.length;
-            const newDriversCount = driversList.filter(d => d.createdAt && (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) >= thirtyDaysAgo).length;
-            const blockedDriversCount = driversList.filter(d => d.isSuspended === true).length;
-            const approvedCount = driversList.filter(d => d.approved === true).length;
-            const onlineCount = driversList.filter(d => d.driverStatus === 'online').length;
-            const realPendingCount = driversList.filter(d => isDriverReadyForReview(d)).length;
-
-            // Execute all other queries in parallel
             const [
                 withdrawalsCount,
                 activeRidesCount,
                 completedTodayCount,
                 fapNuevos,
                 fapPendientes,
-                totalPass,
-                onlinePass,
-                ledgerData
+                ledgerData,
+                totalRidesCount,
+                completedRidesCount,
+                cancelledRidesCount
             ] = await Promise.all([
-                safeFetch('Conductores Pendientes', query(usersColl, ...baseUserQuery, where('approved', '==', false)), true),
-                safeFetch('Conductores Aprobados', query(usersColl, ...baseUserQuery, where('approved', '==', true))),
-                safeFetch('Conductores Online', query(usersColl, ...baseUserQuery, where('driverStatus', '==', 'online'))),
                 safeFetch('Retiros Pendientes', query(withdrawalsColl, ...baseWithdrawalQuery)),
                 safeFetch('Viajes Activos', query(ridesColl, ...baseRideQuery, where('status', 'in', ['searching', 'accepted', 'arrived', 'picked_up']))),
                 safeFetch('Viajes Hoy', query(ridesColl, ...baseRideQuery, where('status', '==', 'completed'), where('completedAt', '>=', todayTs))),
                 safeFetch('FAP Nuevos', query(collection(firestore, 'fap_claims'), where('status', 'in', ['pending', 'reviewing']), where('adminViewedAt', '==', null))),
                 safeFetch('FAP Pendientes', query(collection(firestore, 'fap_claims'), where('status', 'in', ['pending', 'reviewing', 'escalated']))),
                 (async () => {
-                    console.log("[PASSENGER_METRICS_TOTAL_START]");
-                    const res = await safeFetch('Pasajeros Registrados', query(usersColl, ...passengerQuery));
-                    console.log("[PASSENGER_METRICS_TOTAL_OK]");
-                    return res;
-                })(),
-                (async () => {
-                    console.log("[PASSENGER_METRICS_ONLINE_START]");
-                    const res = await safeFetch('Pasajeros Online', query(usersColl, ...passengerQuery, where('isOnline', '==', true), where('lastActiveAt', '>=', twoMinsAgoTs)));
-                    console.log("[PASSENGER_METRICS_ONLINE_OK]");
-                    return res;
-                })(),
-                (async () => {
                     try {
                         const metricsColl = collection(firestore, 'city_metrics_hourly');
                         const dayId = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
-                        
                         let q = query(metricsColl, where('hourId', '>=', `${dayId}-00`), where('hourId', '<=', `${dayId}-23`));
-                        if (!isGlobalMode) {
-                            q = query(q, where('cityKey', '==', activeCityKey));
-                        }
+                        if (!isGlobalMode) q = query(q, where('cityKey', '==', activeCityKey));
                         
                         const snap = await getDocs(q);
-                        let total = 0;
-                        let count = 0;
+                        let total = 0, count = 0;
                         snap.docs.forEach(d => {
                             const s = d.data().stats;
                             total += (s.totalGMV || 0);
                             count += (s.completedCount || 0);
                         });
-                        console.log(`[ADMIN_DASHBOARD_DATA_DEBUG] OK: LedgerData`, { 
-                            selectedCity: activeCityKey, 
-                            isGlobalMode, 
-                            totalGMV: total, 
-                            completedCount: count 
-                        });
                         return { total, count };
                     } catch (e: any) {
-                        console.error(`[ADMIN_DASHBOARD_DATA_DEBUG] ERROR: LedgerData`, { 
-                            selectedCity: activeCityKey, 
-                            isGlobalMode, 
-                            errorCode: e.code || 'unknown', 
-                            errorMessage: e.message 
-                        });
                         return { total: 0, count: 0 };
                     }
-                })()
+                })(),
+                safeFetch('Total Viajes', query(ridesColl, ...baseRideQuery)),
+                safeFetch('Viajes Completados', query(ridesColl, ...baseRideQuery, where('status', '==', 'completed'))),
+                safeFetch('Viajes Cancelados', query(ridesColl, ...baseRideQuery, where('status', '==', 'cancelled')))
             ]);
 
             console.log("📊 [ADMIN_STATS_QUERY_ALL_DONE]");
@@ -224,21 +218,37 @@ export default function AdminDashboardPage() {
             setMetrics({
                 totalDrivers: totalDriversCount,
                 newDrivers: newDriversCount,
-                blockedDrivers: blockedDriversCount,
                 pendingDrivers: realPendingCount,
                 approvedDrivers: approvedCount,
                 onlineDrivers: onlineCount,
-                totalPassengers: totalPass as number,
-                onlinePassengers: onlinePass as number,
-                pendingWithdrawals: withdrawalsCount as number,
+                blockedDrivers: blockedDriversCount,
+                mpLinkedDrivers: mpLinkedDrivers,
+                mpUnlinkedDrivers: mpUnlinkedDrivers,
+                
+                totalPassengers: totalPassengersCount,
+                newPassengers: newPassengersCount,
+                onlinePassengers: onlinePassengersCount,
+                blockedPassengers: blockedPassengersCount,
+                
+                totalRides: totalRidesCount as number,
+                todayRides: completedTodayCount as number,
+                completedRides: completedRidesCount as number,
+                cancelledRides: cancelledRidesCount as number,
                 activeRides: activeRidesCount as number,
-                recentCompletedRides: completedTodayCount as number,
+                
+                totalGmv: (ledgerData as any).total,
+                todayGmv: (ledgerData as any).total,
+                vamoCommissions: (ledgerData as any).total * 0.15,
+                walletRecharges: 0,
+                avgTicket: (ledgerData as any).count > 0 ? (ledgerData as any).total / (ledgerData as any).count : 0,
+                
+                pendingWithdrawals: withdrawalsCount as number,
                 newFapClaims: fapNuevos as number,
                 pendingFapClaims: fapPendientes as number,
-                totalGmv: (ledgerData as any).total,
-                avgTicket: (ledgerData as any).count > 0 ? (ledgerData as any).total / (ledgerData as any).count : 0,
-                acceptanceRate: 94.2, // Simulated for now as matching logs are too deep
-                cancellationRate: 3.8
+                
+                citiesWithRecords: citiesWithRecords,
+                activeCities: citiesWithRecords,
+                citiesWithoutPanel: 0
             });
         } catch (error) {
             console.error("Critical error in dashboard:", error);
@@ -262,21 +272,37 @@ export default function AdminDashboardPage() {
         setMetrics({
             totalDrivers: 0,
             newDrivers: 0,
-            blockedDrivers: 0,
             pendingDrivers: 0,
             approvedDrivers: 0,
             onlineDrivers: 0,
+            blockedDrivers: 0,
+            mpLinkedDrivers: 0,
+            mpUnlinkedDrivers: 0,
+            
             totalPassengers: 0,
+            newPassengers: 0,
             onlinePassengers: 0,
-            pendingWithdrawals: 0,
+            blockedPassengers: 0,
+            
+            totalRides: 0,
+            todayRides: 0,
+            completedRides: 0,
+            cancelledRides: 0,
             activeRides: 0,
-            recentCompletedRides: 0,
+            
+            totalGmv: 0,
+            todayGmv: 0,
+            vamoCommissions: 0,
+            walletRecharges: 0,
+            avgTicket: 0,
+            
+            pendingWithdrawals: 0,
             newFapClaims: 0,
             pendingFapClaims: 0,
-            totalGmv: 0,
-            avgTicket: 0,
-            acceptanceRate: 0,
-            cancellationRate: 0
+            
+            citiesWithRecords: 0,
+            activeCities: 0,
+            citiesWithoutPanel: 0
         });
 
         fetchMetrics();
@@ -291,9 +317,14 @@ export default function AdminDashboardPage() {
                 <div>
                     <div className="flex items-center gap-2 mb-1">
                         <h1 className="text-3xl font-black">Dashboard Operativo</h1>
-                        {activeCityKey && (
+                        {activeCityKey && activeCityKey !== 'global' && activeCityKey !== 'all' && (
                             <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 uppercase font-black text-[10px] tracking-widest px-3">
                                 {cityName}
+                            </Badge>
+                        )}
+                        {(!activeCityKey || activeCityKey === 'global' || activeCityKey === 'all') && (
+                            <Badge variant="outline" className="bg-indigo-500/10 text-indigo-500 border-indigo-500/20 uppercase font-black text-[10px] tracking-widest px-3">
+                                TODO VAMO
                             </Badge>
                         )}
                     </div>
@@ -311,129 +342,67 @@ export default function AdminDashboardPage() {
 
             {loading ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="col-span-full mb-2 flex flex-col items-center justify-center p-8 border border-zinc-800/50 rounded-2xl bg-zinc-900/20">
+                        <VamoIcon name="loader-2" className="h-8 w-8 animate-spin text-primary mb-4" />
+                        <p className="text-zinc-400 font-bold animate-pulse text-sm uppercase tracking-widest">
+                            {(!activeCityKey || activeCityKey === 'global' || activeCityKey === 'all') ? "Calculando métricas nacionales (TODO VAMO)..." : "Cargando métricas de la ciudad..."}
+                        </p>
+                    </div>
                     {[1, 2, 3, 4, 5, 6].map(i => (
-                        <Skeleton key={i} className="h-32 rounded-2xl" />
+                        <Skeleton key={i} className="h-32 rounded-2xl bg-zinc-900" />
                     ))}
                 </div>
             ) : (
-                <>
-                    {/* KPI GRID */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <KPICard 
-                            title="Operativo En Vivo" 
-                            value={metrics.activeRides} 
-                            icon="activity" 
-                            color="indigo" 
-                            description="Viajes activos en este momento"
-                            alert={metrics.activeRides > 0}
-                            link="/admin/live-rides"
-                        />
-                        <KPICard 
-                            title="Pasajeros Online" 
-                            value={hasIndexError ? "Calculando..." : metrics.onlinePassengers} 
-                            icon="zap" 
-                            color="emerald" 
-                            description="Activos en los últimos 2 min"
-                            alert={!hasIndexError && metrics.onlinePassengers > 0}
-                        />
-                        <KPICard 
-                            title="Reclamos FAP" 
-                            value={metrics.newFapClaims} 
-                            icon="shield-check" 
-                            color={metrics.newFapClaims > 0 ? "red" : "blue"} 
-                            description={`${metrics.pendingFapClaims} casos totales en curso`}
-                            alert={metrics.newFapClaims > 0}
-                            link="/admin/claims"
-                        />
-                        <KPICard 
-                            title="Pasajeros Registrados" 
-                            value={hasIndexError ? "Calculando..." : metrics.totalPassengers} 
-                            icon="users" 
-                            color="blue" 
-                            description="Total de usuarios pasajeros"
-                        />
-                        <KPICard 
-                            title="GMV Hoy" 
-                            value={`$${metrics.totalGmv.toLocaleString()}`} 
-                            icon="banknote" 
-                            color="emerald" 
-                            description={`Ticket promedio: $${Math.round(metrics.avgTicket)}`}
-                            link="/admin/ledger"
-                        />
-                        <KPICard 
-                            title="Analíticas VamO" 
-                            value="Ver Reportes" 
-                            icon="bar-chart-3" 
-                            color="indigo" 
-                            description="Tendencias, DAU/MAU y Heatmaps"
-                            link="/admin/analytics"
-                        />
+                <div className="space-y-8">
+                    {/* FLOTA - CONDUCTORES */}
+                    <div>
+                        <h2 className="text-lg font-black mb-4 flex items-center gap-2"><VamoIcon name="car" className="h-5 w-5 text-indigo-500" /> Flota & Conductores</h2>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <KPICard title="Total Conductores" value={metrics.totalDrivers} icon="users" color="indigo" description={`Nuevos 30d: ${metrics.newDrivers}`} link="/admin/drivers" />
+                            <KPICard title="Conductores Online" value={metrics.onlineDrivers} icon="zap" color="emerald" description="Conectados ahora" />
+                            <KPICard title="Altas Pendientes" value={metrics.pendingDrivers} icon="clock" color="amber" alert={metrics.pendingDrivers > 0} description="Esperando revisión" link="/admin/drivers" />
+                            <KPICard title="Aprobados Activos" value={metrics.approvedDrivers} icon="user-check" color="blue" description={`Bloqueados: ${metrics.blockedDrivers}`} />
+                            <KPICard title="Con MercadoPago" value={metrics.mpLinkedDrivers} icon="credit-card" color="green" description={`Sin MP: ${metrics.mpUnlinkedDrivers}`} />
+                        </div>
                     </div>
 
+                    {/* DEMANDA - PASAJEROS */}
+                    <div>
+                        <h2 className="text-lg font-black mb-4 flex items-center gap-2"><VamoIcon name="users" className="h-5 w-5 text-blue-500" /> Demanda & Pasajeros</h2>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <KPICard title="Total Pasajeros" value={metrics.totalPassengers} icon="users" color="blue" description={`Nuevos 30d: ${metrics.newPassengers}`} />
+                            <KPICard title="Pasajeros Online" value={metrics.onlinePassengers} icon="zap" color="emerald" description="Activos últimos 2 min" />
+                            <KPICard title="Bloqueados" value={metrics.blockedPassengers} icon="ban" color="red" description="Cuentas suspendidas" />
+                        </div>
+                    </div>
+
+                    {/* OPERACIONES - VIAJES */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* LEFT: MAIN STATS */}
-                        <div className="lg:col-span-2 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <KPICard 
-                                    title="Registrados Totales" 
-                                    value={metrics.totalDrivers} 
-                                    icon="users" 
-                                    color="blue" 
-                                    description={`Nuevos 30d: ${metrics.newDrivers}`}
-                                    link="/admin/drivers"
-                                />
-                                <KPICard 
-                                    title="Aprobados Activos" 
-                                    value={metrics.approvedDrivers} 
-                                    icon="user-check" 
-                                    color="green" 
-                                    description={`Bloqueados: ${metrics.blockedDrivers}`}
-                                />
-                                <KPICard 
-                                    title="Altas Pendientes" 
-                                    value={metrics.pendingDrivers} 
-                                    icon="clock" 
-                                    color="amber" 
-                                    description="Esperando revisión"
-                                    alert={metrics.pendingDrivers > 0}
-                                    link="/admin/drivers"
-                                />
-                                <KPICard 
-                                    title="Conductores Online" 
-                                    value={metrics.onlineDrivers} 
-                                    icon="zap" 
-                                    color="green" 
-                                    description="Conectados ahora"
-                                />
-                                <KPICard 
-                                    title="Retiros Pendientes" 
-                                    value={metrics.pendingWithdrawals} 
-                                    icon="landmark" 
-                                    color="amber" 
-                                    description="Solicitando cobro"
-                                    alert={metrics.pendingWithdrawals > 0}
-                                    link="/admin/withdrawals"
-                                />
-                                <KPICard 
-                                    title="Viajes Hoy" 
-                                    value={metrics.recentCompletedRides} 
-                                    icon="check-circle" 
-                                    color="emerald" 
-                                    description="Completados con éxito"
-                                />
+                        <div className="lg:col-span-2 space-y-4">
+                            <h2 className="text-lg font-black flex items-center gap-2"><VamoIcon name="map-pin" className="h-5 w-5 text-emerald-500" /> Operaciones & Viajes</h2>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <KPICard title="Viajes Activos" value={metrics.activeRides} icon="activity" color="emerald" description="En curso ahora" alert={metrics.activeRides > 0} link="/admin/live-rides" />
+                                <KPICard title="Viajes Hoy" value={metrics.todayRides} icon="calendar" color="blue" description="Creados hoy" />
+                                <KPICard title="Viajes Completados" value={metrics.completedRides} icon="check-circle" color="zinc" description={`Cancelados: ${metrics.cancelledRides}`} />
                             </div>
-                            <div className="flex justify-end">
-                                <Button asChild variant="outline" className="border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10">
-                                    <Link href="/admin/drivers?city=global&status=all">
-                                        Ver todos los conductores de Argentina
-                                    </Link>
-                                </Button>
+
+                            <h2 className="text-lg font-black flex items-center gap-2 mt-8"><VamoIcon name="banknote" className="h-5 w-5 text-amber-500" /> Finanzas & GMV</h2>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <KPICard title="GMV Hoy" value={`$${metrics.todayGmv.toLocaleString()}`} icon="banknote" color="emerald" description={`Ticket prom: $${Math.round(metrics.avgTicket)}`} link="/admin/ledger" />
+                                <KPICard title="Retiros Pendientes" value={metrics.pendingWithdrawals} icon="landmark" color="amber" alert={metrics.pendingWithdrawals > 0} description="Solicitando cobro" link="/admin/withdrawals" />
+                                <KPICard title="FAP Nuevos" value={metrics.newFapClaims} icon="shield-check" color={metrics.newFapClaims > 0 ? "red" : "blue"} description={`${metrics.pendingFapClaims} casos totales`} alert={metrics.newFapClaims > 0} link="/admin/claims" />
+                            </div>
+                            
+                            <h2 className="text-lg font-black flex items-center gap-2 mt-8"><VamoIcon name="globe" className="h-5 w-5 text-indigo-400" /> Red & Expansión</h2>
+                            <div className="grid grid-cols-2 gap-4">
+                                <KPICard title="Ciudades Detectadas" value={metrics.citiesWithRecords} icon="map" color="indigo" description="Con algún usuario registrado" />
+                                <KPICard title="Ciudades Sin Panel" value={metrics.citiesWithoutPanel} icon="alert-circle" color="zinc" description="Pendiente de configuración" />
                             </div>
                         </div>
 
                         {/* RIGHT: HEALTH & ALERTS */}
                         <div className="space-y-6">
-                            <Card className="border-zinc-800 bg-black/40 backdrop-blur-xl">
+                            <Card className="border-zinc-800 bg-black/40 backdrop-blur-xl mt-11">
                                 <CardHeader>
                                     <CardTitle className="text-lg">Salud de Red</CardTitle>
                                     <CardDescription>Drivers vs Demanda</CardDescription>
@@ -442,7 +411,7 @@ export default function AdminDashboardPage() {
                                     <div className="text-4xl font-black mb-2 flex items-center gap-2">
                                         {metrics.onlineDrivers} <span className="text-zinc-600">/</span> {metrics.activeRides}
                                     </div>
-                                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Conductores / Viajes Activos</p>
+                                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold text-center">Conductores Online<br/>vs<br/>Viajes Activos</p>
                                     
                                     <div className="mt-8 w-full bg-zinc-900 h-2 rounded-full overflow-hidden">
                                         <div 
@@ -457,39 +426,14 @@ export default function AdminDashboardPage() {
                             </Card>
 
                             <SystemAlerts cityKey={activeCityKey || undefined} />
-
-                            <Card className="border-red-500/20 bg-red-500/[0.02] backdrop-blur-xl">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-sm flex items-center gap-2 text-zinc-500">
-                                        <VamoIcon name="list" className="h-4 w-4" /> Tareas Operativas
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    {metrics.pendingDrivers > 0 && (
-                                        <Link href="/admin/drivers" className="flex items-center justify-between p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 transition-all text-blue-400">
-                                            <span className="text-[10px] font-black uppercase">Revisar {metrics.pendingDrivers} Conductores</span>
-                                            <VamoIcon name="chevron-right" className="h-3 w-3" />
-                                        </Link>
-                                    )}
-                                    {metrics.pendingWithdrawals > 0 && (
-                                        <Link href="/admin/withdrawals" className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all text-amber-500">
-                                            <span className="text-[10px] font-black uppercase">Procesar {metrics.pendingWithdrawals} Pagos</span>
-                                            <VamoIcon name="chevron-right" className="h-3 w-3" />
-                                        </Link>
-                                    )}
-                                    {metrics.pendingDrivers === 0 && metrics.pendingWithdrawals === 0 && (
-                                        <p className="text-xs text-zinc-600 italic text-center py-4">No hay tareas pendientes.</p>
-                                    )}
-                                </CardContent>
-                            </Card>
                         </div>
                     </div>
-                </>
+                </div>
             )}
 
             {/* ── ADMIN TOOLS ────────────────────── */}
             {(profile?.role === 'admin' || profile?.role === 'superadmin') && (
-                <div className="mt-4 rounded-2xl border border-dashed border-rose-500/20 bg-rose-500/[0.03] p-4">
+                <div className="mt-8 rounded-2xl border border-dashed border-rose-500/20 bg-rose-500/[0.03] p-4">
                     <p className="text-[10px] font-black uppercase tracking-widest text-rose-500/60 mb-3">🛠 Admin Tools — Retention Testing</p>
                     <div className="flex flex-col gap-2">
                         <RetentionTestButton />
