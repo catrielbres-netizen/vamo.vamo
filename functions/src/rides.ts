@@ -434,7 +434,16 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
             // Optimization: use walletBalance from drivers_locations if available
             const cashBalance = (candidate as any).walletBalance;
 
-            const eligibility = canDriverReceiveOffers(p, rideData.serviceType, undefined, undefined, cashBalance);
+            const eligibility = canDriverReceiveOffers(
+                p, 
+                rideData.serviceType, 
+                undefined, 
+                { 
+                    hasPet: (rideData as any).hasPet, 
+                    paymentMethod: rideData.paymentMethod 
+                }, 
+                cashBalance
+            );
             
             if (!eligibility.isEligible) {
                 logger.warn(`[MATCH_DEBUG] Candidate ${driverId} discarded (eligibility): ${eligibility.reason} (cash: ${cashBalance ?? 'MISSING_LOC'})`);

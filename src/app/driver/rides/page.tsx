@@ -76,6 +76,27 @@ export default function DriverRidesPage() {
             </Alert>
         )}
 
+        {(profile?.approved && !profile?.mpLinked) && (
+            <Alert className="border-[#009EE3]/50 bg-[#009EE3]/10 rounded-2xl shadow-sm mb-4">
+                <VamoIcon name="credit-card" className="h-5 w-5 text-[#009EE3]" />
+                <AlertTitle className="text-[#009EE3] font-bold text-base flex items-center gap-2">
+                    Activá los pagos digitales
+                </AlertTitle>
+                <AlertDescription className="text-[#009EE3]/90 text-xs mt-2 space-y-3">
+                    <p>Vinculá tu cuenta de Mercado Pago para recibir viajes con pago digital. Los conductores vinculados pueden recibir tanto viajes en efectivo como con Mercado Pago.</p>
+                    <ul className="list-disc pl-4 space-y-1 font-medium">
+                        <li>Más viajes disponibles.</li>
+                        <li>Cobro inmediato al finalizar el viaje.</li>
+                        <li>El dinero llega directamente a tu cuenta Mercado Pago.</li>
+                        <li>También seguís recibiendo viajes en efectivo.</li>
+                    </ul>
+                    <Button variant="default" size="sm" className="w-full bg-[#009EE3] hover:bg-[#007EBC] text-white font-bold mt-2 rounded-xl" asChild>
+                        <Link href="/driver/profile">VINCULAR MERCADO PAGO</Link>
+                    </Button>
+                </AlertDescription>
+            </Alert>
+        )}
+
         {driverIsAvailable ? (
           <>
             {error && (

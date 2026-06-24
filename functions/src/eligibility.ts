@@ -184,7 +184,7 @@ export const canDriverReceiveOffers = (
     profile: UserProfile | null | undefined, 
     rideService?: ServiceType, 
     isEmailVerified?: boolean,
-    rideMeta?: { isDiscountApplied?: boolean; hasPet?: boolean },
+    rideMeta?: { isDiscountApplied?: boolean; hasPet?: boolean; paymentMethod?: string },
     cashBalance?: number
 ): EligibilityResult => {
   if (!profile) return { isEligible: false, reason: "Perfil no encontrado", code: "NOT_FOUND" };
@@ -225,6 +225,12 @@ export const canDriverReceiveOffers = (
       return { isEligible: false, reason: "Ya estás en un viaje", code: "ACTIVE_RIDE" };
   }
 
+  // Mercado Pago Guard
+  if (rideMeta?.paymentMethod === 'mercadopago' && !profile.mpLinked) {
+      logger.info(`[MP_GUARD] Driver ${profile.uid} discarded: ride is MP but driver is not linked`);
+      return { isEligible: false, reason: "El pasajero paga con Mercado Pago y no tienes cuenta vinculada", code: "MP_NOT_LINKED" };
+  }
+
   // [VamO PRO] All drivers are equal and can receive any ride type
   // No service-type mismatch check here anymore
   
@@ -234,8 +240,6 @@ export const canDriverReceiveOffers = (
   if (rideService === 'express' && !prefs.acceptsExpress) {
       return { isEligible: false, reason: "Preferís no recibir viajes Express", code: "PREFERENCE_MISMATCH" };
   }
-  
-
   
   if (rideMeta?.hasPet && !prefs.acceptsPets) {
       return { isEligible: false, reason: "Preferís no recibir mascotas", code: "PREFERENCE_MISMATCH" };

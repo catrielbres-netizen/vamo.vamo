@@ -515,6 +515,13 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
            }
         };
 
+         if (!profile.mpLinked) {
+            toast({
+               title: "Modo Efectivo",
+               description: "Actualmente solo recibirás viajes en efectivo. Vinculá tu Mercado Pago para más viajes.",
+            });
+         }
+
        if (isMockingLocation && RAWSON_MOCK_LOCATION) {
           proceedOnline(RAWSON_MOCK_LOCATION.lat, RAWSON_MOCK_LOCATION.lng);
           return;

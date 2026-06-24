@@ -39,9 +39,9 @@ export const createRidePaymentPreferenceV1 = onCall(
             throw new HttpsError('failed-precondition', 'Este viaje fue configurado para pago en efectivo.');
         }
 
-        const validStatuses = ['in_progress', 'ongoing', 'completed', 'finished'];
+        const validStatuses = ['completed', 'finished'];
         if (!validStatuses.includes(rideData.status)) {
-            throw new HttpsError('failed-precondition', 'El pago digital estará disponible cuando el viaje inicie.');
+            throw new HttpsError('failed-precondition', 'El pago digital estará disponible únicamente al finalizar el viaje. Por favor espere que el conductor complete el recorrido.');
         }
 
         if (!rideData.driverId) {
@@ -99,11 +99,12 @@ export const createRidePaymentPreferenceV1 = onCall(
             rideData.driverId === paymentConfigData.ownerDriverUid || 
             String(mpAccountData?.mpUserId) === String(paymentConfigData.marketplaceOwnerMpUserId);
 
-        const paymentMode = isOwnerDriver ? "single_driver_no_split" : "marketplace_split";
-        const splitApplied = !isOwnerDriver;
-        const commissionCollectionStatus = isOwnerDriver ? "internal_only" : "automatic_marketplace_fee";
-        const marketplaceFeeApplied = isOwnerDriver ? 0 : vamoCommissionAmount;
-        const driverGrossAmount = isOwnerDriver ? totalAmount : totalAmount - vamoCommissionAmount;
+        // Prepaid Wallet Model: All MP payments go 100% to the driver. No MP split.
+        const paymentMode = "single_driver_no_split";
+        const splitApplied = false;
+        const commissionCollectionStatus = "internal_only";
+        const marketplaceFeeApplied = 0;
+        const driverGrossAmount = totalAmount;
 
         const notificationUrl = process.env.MERCADOPAGO_WEBHOOK_URL;
         if (!notificationUrl) {
@@ -142,9 +143,11 @@ export const createRidePaymentPreferenceV1 = onCall(
             }
         };
 
-        if (!isOwnerDriver && vamoCommissionAmount > 0) {
-            (preferenceRequest as any).marketplace_fee = vamoCommissionAmount;
-        }
+        // Prepaid Wallet Model: No marketplace_fee applied during the transaction.
+        // The driver receives 100% in their MP account, and the commission is deducted from their Vamo Wallet.
+        // if (!isOwnerDriver && vamoCommissionAmount > 0) {
+        //     (preferenceRequest as any).marketplace_fee = vamoCommissionAmount;
+        // }
 
         try {
             logger.log(`Creating MP Preference for ride ${rideId} using Driver Token.`);
