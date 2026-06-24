@@ -21,42 +21,42 @@ const nextConfig = {
       {
         source: '/drivers',
         destination: '/driver/register',
-        permanent: true,
+        permanent: false,
       },
       {
         source: '/registro/conductor',
         destination: '/driver/register',
-        permanent: true,
+        permanent: false,
       },
       {
         source: '/registro/pasajero',
         destination: '/pasajero/register',
-        permanent: true,
+        permanent: false,
       },
       {
         source: '/register',
         destination: '/pasajero/register',
-        permanent: true,
+        permanent: false,
       },
       {
         source: '/registro',
         destination: '/pasajero/register',
-        permanent: true,
+        permanent: false,
       },
       {
         source: '/pasajero',
         destination: '/pasajero/register',
-        permanent: true,
+        permanent: false,
       },
       {
         source: '/loginconductor',
-        destination: '/login',
-        permanent: true,
+        destination: '/login?role=driver',
+        permanent: false,
       },
       {
         source: '/driver/login',
-        destination: '/login',
-        permanent: true,
+        destination: '/login?role=driver',
+        permanent: false,
       }
     ]
   }
