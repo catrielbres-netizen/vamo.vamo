@@ -48,9 +48,9 @@ import { DriverBottomNav } from '@/components/driver/DriverBottomNav';
 const MIN_DISTANCE_UPDATE_METERS = 25;
 
 const RAWSON_MOCK_LOCATION = { 
-  lat: -51.6226, 
-  lng: -69.2181, 
-  address: "Centro, Río Gallegos, Santa Cruz" 
+  lat: -43.289918, 
+  lng: -65.114437, 
+  address: "Av. 9 de Julio 1000, U9103 Rawson, Chubut, Argentina" 
 };
 
 /**
@@ -610,10 +610,10 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
               Hola, {profile?.name?.split(' ')[0]} 👋
             </h1>
             <div className="flex items-center gap-2 flex-wrap">
-               <div className="flex items-center gap-1.5 bg-zinc-900/50 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/5 shadow-sm">
-                 <VamoIcon name="star" className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-                 <span className="font-bold text-xs text-zinc-200">{formatRating(profile?.averageRating)}</span>
-               </div>
+                 <div className="flex items-center gap-1.5 bg-zinc-900/50 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/5 shadow-sm">
+                   <VamoIcon name="shield-check" className={cn("w-3.5 h-3.5", profile?.reputationLevel === 'Excelente' ? "text-emerald-500" : profile?.reputationLevel === 'Bueno' ? "text-blue-400" : "text-amber-500")} />
+                   <span className="font-bold text-xs text-zinc-200 uppercase">{profile?.reputationLevel || 'Excelente'}</span>
+                 </div>
                <div className="flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md px-2.5 py-1 rounded-full border border-indigo-500/20 shadow-sm">
                  <VamoIcon name="map-pin" className="w-3.5 h-3.5 text-indigo-400" />
                  <span className="font-bold text-xs text-indigo-200">{profile?.city || 'VamO'}</span>

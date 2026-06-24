@@ -656,6 +656,11 @@ export interface UserProfile {
     phone?: string | null;
     phoneNormalized?: string | null;
     role: Role;
+    reputationScore?: number;
+    reputationLevel?: string;
+    vamoScore?: number;
+    vamoLevel?: string;
+    suspensionReason?: string;
     profileCompleted: boolean;
     photoURL?: string | null;
     city?: string;

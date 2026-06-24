@@ -81,7 +81,7 @@ export function DriverProgressPanel({ profile, className }: DriverProgressPanelP
   const isFemale = profile?.gender === 'female';
   
   // High Scoring Logic (Matching backend logic from onRideSettlementV6)
-  const hasHighScoring = (profile.averageRating || 5) >= 4.8 && (profile.stats?.acceptanceRate || 100) >= 90;
+  const hasHighScoring = (profile.vamoScore ?? 100) >= 90;
 
   return (
     <div className={cn(

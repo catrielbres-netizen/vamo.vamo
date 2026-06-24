@@ -19,6 +19,9 @@ import { checkPromotionEligibility } from "./promotions";
 import { calculateAndLockCredits, releaseLockedCredits, INCENTIVE_CONFIG } from "./lib/incentives";
 import { handleRideCancellationFinancials } from "./lib/refund";
 import { ensureServiceInvariants, sendNotification } from "./handlers";
+import { analyzeRidePath } from "./lib/guardianTracks";
+import { normalizePhone } from "./lib/phone";
+import { calculateNewScore, getReputationLevel, DRIVER_SCORE_RULES } from "./lib/scoring";
 import { logLedgerEvent } from "./lib/audit";
 import { getPassengerRiskSummary } from "./lib/antifraud";
 import { calculateUserTrustScore } from "./lib/trustScoring";
@@ -475,8 +478,18 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
             const bHasPriority = (b.profile as any).priorityUntil?.toMillis
                 ? (b.profile as any).priorityUntil.toMillis() > nowMs
                 : false;
+
+            const aScore = a.profile.vamoScore ?? 100;
+            const bScore = b.profile.vamoScore ?? 100;
+            const aIsExcelente = aScore >= 90;
+            const bIsExcelente = bScore >= 90;
+
             if (aHasPriority && !bHasPriority) return -1;
             if (!aHasPriority && bHasPriority) return 1;
+
+            if (aIsExcelente && !bIsExcelente) return -1;
+            if (!aIsExcelente && bIsExcelente) return 1;
+
             // Mismo nivel de prioridad → menor distancia primero
             return a.distanceKm - b.distanceKm;
         });
@@ -484,7 +497,8 @@ export async function findNextDriverAndCreateOffer(rideId: string) {
             const hasPriority = (c.profile as any).priorityUntil?.toMillis
                 ? (c.profile as any).priorityUntil.toMillis() > nowMs
                 : false;
-            logger.info(`[PRIORITY_MATCH] driverId=${c.id} | hasPriority=${hasPriority} | distance=${(c.distanceKm * 1000).toFixed(0)}m`);
+            const score = c.profile.vamoScore ?? 100;
+            logger.info(`[PRIORITY_MATCH] driverId=${c.id} | hasPriority=${hasPriority} | vamoScore=${score} | distance=${(c.distanceKm * 1000).toFixed(0)}m`);
         });
 
         const expiresAt = Timestamp.fromMillis(Date.now() + OFFER_DURATION_SECONDS * 1000);
@@ -1923,6 +1937,29 @@ export const onRideUpdatedV1 = onDocumentUpdated({ document: "rides/{rideId}", r
         const ledgerRef = db.collection('municipal_ledger').doc(rideId);
         await ledgerRef.set(ledgerEntry);
         logger.info(`[LEDGER] Created municipal_ledger entry for ride ${rideId} (City: ${cityKey}, Amount: ${municipalShareAmount})`);
+
+        // [VamO Score] Award points for completed ride
+        if (afterData.driverId) {
+            const driverRef = db.collection('users').doc(afterData.driverId);
+            try {
+                await db.runTransaction(async (tx) => {
+                    const snap = await tx.get(driverRef);
+                    if (snap.exists) {
+                        const data = snap.data() || {};
+                        const currentScore = data.reputationScore ?? 100;
+                        const newScore = calculateNewScore(currentScore, DRIVER_SCORE_RULES.RIDE_COMPLETED);
+                        const newLevel = getReputationLevel(newScore);
+                        tx.update(driverRef, {
+                            reputationScore: newScore,
+                            reputationLevel: newLevel
+                        });
+                        logger.info(`[VAMO_SCORE] Driver ${afterData.driverId} awarded +1 for ride ${rideId}`);
+                    }
+                });
+            } catch (error) {
+                logger.error(`[VAMO_SCORE] Failed to award points to driver ${afterData.driverId}`, error);
+            }
+        }
     }
 });
 

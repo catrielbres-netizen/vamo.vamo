@@ -28,6 +28,7 @@ import { analyzeRidePath } from "./lib/guardianTracks";
 import { computeDriverRiskProfile } from "./lib/driverRisk";
 import { normalizePhone } from "./lib/phone";
 import { settleSharedRideFinancialsV1 } from "./sharedRides";
+import { calculateNewScore, getReputationLevel, DRIVER_SCORE_RULES, PASSENGER_SCORE_RULES } from "./lib/scoring";
 // --- NOTIFICATION HELPER ---
 export const sendNotification = async (userId: string, title: string, body: string, link: string = '/', additionalData: { [key: string]: any } = {}) => {
     const db = getDb();
@@ -1097,11 +1098,17 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
             const todayCash = isSharedChild ? 0 : (settlementData.cashToCollect || 0);
             const todayDigital = isSharedChild ? 0 : (settlementData.walletCoveredAmount || 0);
 
+            const currentVamoScore = (driverData as any).vamoScore ?? 100;
+            const newVamoScore = calculateNewScore(currentVamoScore, DRIVER_SCORE_RULES.RIDE_COMPLETED);
+            const newVamoLevel = getReputationLevel(newVamoScore);
+
             const driverUpdate: any = {
                 'stats.ridesCompleted': FieldValue.increment(1),
                 updatedAt: now,
                 rewardPoints: FieldValue.increment(pointsAwarded),
                 driverLevel: getDriverLevel((driverData.rewardPoints || 0) + pointsAwarded),
+                vamoScore: newVamoScore,
+                vamoLevel: newVamoLevel,
                 activeRideId: null,
                 driverStatus: 'online'
             };
@@ -1344,6 +1351,20 @@ export const onRideSettlementV6 = onDocumentUpdated("rides/{rideId}", async (eve
 
 
             tx.update(driverRef, driverUpdate);
+
+            // LOG VAMO SCORE EVENT
+            if (!isSharedChild) {
+                const scoreEventRef = db.collection(`users/${driverId}/score_events`).doc();
+                tx.set(scoreEventRef, {
+                    rideId,
+                    eventType: 'trip_completed',
+                    pointsChanged: DRIVER_SCORE_RULES.RIDE_COMPLETED,
+                    previousScore: currentVamoScore,
+                    newScore: newVamoScore,
+                    newLevel: newVamoLevel,
+                    createdAt: FieldValue.serverTimestamp()
+                });
+            }
 
             // --- PASSENGER BALANCE DEDUCTION (UNTOUCHED) ---
             if (!isSharedChild && walletCredit > 0) {
@@ -2229,10 +2250,23 @@ export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (even
                 }
 
                 const newWeeklyCount = weeklyCount + 1;
+                
+                let currentScore = passengerData.reputationScore ?? 100;
+                if (driverId) {
+                    if (before.status === 'driver_arrived') {
+                        currentScore = calculateNewScore(currentScore, PASSENGER_SCORE_RULES.NO_SHOW);
+                    } else if (before.status === 'driver_assigned') {
+                        currentScore = calculateNewScore(currentScore, PASSENGER_SCORE_RULES.LATE_CANCELLATION);
+                    }
+                }
+                const newLevel = getReputationLevel(currentScore);
+
                 const updates: { [key: string]: any } = {
                     activeRideId: null,
                     weeklyCancellations: newWeeklyCount,
                     lastCancellationAt: now,
+                    reputationScore: currentScore,
+                    reputationLevel: newLevel
                 };
 
                 if (newWeeklyCount > 2) {
@@ -2313,6 +2347,16 @@ export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (even
                 ignoredOffers: driverData?.ignoredOffersCount || 0
             };
             const riskProfile = computeDriverRiskProfile(driverData, undefined, updatedMetrics);
+            
+            let currentScore = driverData.reputationScore ?? 100;
+            if (after.passengerId) {
+                if (before.status === 'driver_arrived') {
+                    currentScore = calculateNewScore(currentScore, DRIVER_SCORE_RULES.NO_SHOW);
+                } else if (before.status === 'driver_assigned') {
+                    currentScore = calculateNewScore(currentScore, DRIVER_SCORE_RULES.LATE_CANCELLATION);
+                }
+            }
+            const newLevel = getReputationLevel(currentScore);
 
             const batch = db.batch();
             batch.update(driverRef, { 
@@ -2320,6 +2364,8 @@ export const onRideCancelledV3 = onDocumentUpdated("rides/{rideId}", async (even
                 cancellationCount: FieldValue.increment(1),
                 activeRideId: null, 
                 driverStatus: 'offline',
+                reputationScore: currentScore,
+                reputationLevel: newLevel,
                 updatedAt: FieldValue.serverTimestamp()
             });
             
@@ -2498,6 +2544,63 @@ export const cancelRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
             activeRideId: FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp()
         };
+
+        // [VAMO SCORE] Penalties for cancellation
+        let scorePenalty = 0;
+        let scorePenaltyReason = '';
+
+        if (isDriver) {
+            if (reason === 'no_show' || reason === 'passenger_no_show') {
+                scorePenalty = DRIVER_SCORE_RULES.NO_SHOW;
+                scorePenaltyReason = 'No presentarse';
+            } else {
+                scorePenalty = DRIVER_SCORE_RULES.LATE_CANCELLATION;
+                scorePenaltyReason = 'Cancelación tardía';
+            }
+        } else if (isPassenger) {
+            if (reason === 'no_show' || reason === 'driver_no_show') {
+                scorePenalty = PASSENGER_SCORE_RULES.NO_SHOW;
+                scorePenaltyReason = 'No presentarse';
+            } else if (cancelFeeAmount > 0 || rideData.status === 'driver_arrived') { // Late cancel
+                scorePenalty = PASSENGER_SCORE_RULES.LATE_CANCELLATION;
+                scorePenaltyReason = 'Cancelación tardía';
+            }
+        }
+
+        if (scorePenalty < 0) {
+            const cancelingUserRef = db.doc(`users/${uid}`);
+            const cancelingUserSnap = await transaction.get(cancelingUserRef);
+            const currentVamoScore = cancelingUserSnap.exists ? (cancelingUserSnap.data()?.vamoScore ?? 100) : 100;
+
+            const newVamoScore = calculateNewScore(currentVamoScore, scorePenalty);
+            const newVamoLevel = getReputationLevel(newVamoScore);
+
+            Object.assign(userUpdate, {
+                vamoScore: newVamoScore,
+                vamoLevel: newVamoLevel
+            });
+
+            const scoreEventRef = db.collection(`users/${uid}/score_events`).doc();
+            transaction.set(scoreEventRef, {
+                rideId,
+                eventType: 'cancellation_penalty',
+                reason: scorePenaltyReason,
+                pointsChanged: scorePenalty,
+                previousScore: currentVamoScore,
+                newScore: newVamoScore,
+                newLevel: newVamoLevel,
+                createdAt: FieldValue.serverTimestamp()
+            });
+
+            if (newVamoLevel === 'Suspendido' && currentVamoScore >= 40) {
+                Object.assign(userUpdate, {
+                    accountStatus: 'suspended',
+                    isSuspended: true,
+                    suspensionReason: `Suspendido por VamO Score (${scorePenaltyReason})`,
+                    suspendedAt: FieldValue.serverTimestamp()
+                });
+            }
+        }
 
         // [VamO PRO] Unified Financial & Policy Handler (All reads before writes)
         await handleRideCancellationFinancials({
@@ -2777,6 +2880,134 @@ export const submitRideRatingV1 = onCall({ cors: true, region: 'us-central1' }, 
 
         transaction.update(rideRef, updates);
         logger.info(`[RATING_GUARD] rating saved para ride ${rideId}`);
+        return { success: true };
+    });
+});
+
+export const submitTripFeedbackV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    const db = getDb();
+    const uid = request.auth?.uid;
+    if (!uid) {
+        throw new HttpsError("unauthenticated", "Usuario no autenticado.");
+    }
+
+    const { rideId, feedbackType, reason, comment } = request.data;
+    if (!rideId || (feedbackType !== 'thumbs_up' && feedbackType !== 'thumbs_down')) {
+        throw new HttpsError("invalid-argument", "Datos de feedback inválidos.");
+    }
+
+    const rideRef = db.doc(`rides/${rideId}`);
+
+    return db.runTransaction(async (transaction: admin.firestore.Transaction) => {
+        const rideSnap = await transaction.get(rideRef);
+        if (!rideSnap.exists) {
+            throw new HttpsError("not-found", "El viaje no existe.");
+        }
+        const rideData = rideSnap.data() as Ride;
+
+        if (rideData.status !== 'completed') {
+            logger.warn(`[FEEDBACK_GUARD] invalid ride status: ${rideData.status}`);
+            throw new HttpsError("failed-precondition", "Solo se pueden calificar viajes completados.");
+        }
+
+        const isPassenger = rideData.passengerId === uid;
+        const isDriver = rideData.driverId === uid;
+
+        if (!isPassenger && !isDriver) {
+            logger.warn(`[FEEDBACK_GUARD] unauthorized rater: ${uid}`);
+            throw new HttpsError("permission-denied", "No sos parte de este viaje.");
+        }
+
+        const updates: { [key: string]: any } = {};
+        
+        let targetUserId = "";
+        let isRatingDriver = false;
+
+        if (isPassenger) {
+            if (rideData.driverRatingByPassenger) {
+                logger.warn(`[FEEDBACK_GUARD] duplicate prevented for passenger ${uid}`);
+                throw new HttpsError("already-exists", "Ya enviaste feedback a este conductor.");
+            }
+            updates.driverRatingByPassenger = feedbackType === 'thumbs_up' ? 5 : 1; // Legacy compatibility
+            updates.driverFeedbackType = feedbackType;
+            if (reason) updates.driverFeedbackReason = reason;
+            if (comment) updates.driverComments = comment;
+            targetUserId = rideData.driverId || '';
+            isRatingDriver = true;
+        } else { // isDriver
+            if (rideData.passengerRatingByDriver) {
+                logger.warn(`[FEEDBACK_GUARD] duplicate prevented for driver ${uid}`);
+                throw new HttpsError("already-exists", "Ya enviaste feedback a este pasajero.");
+            }
+            updates.passengerRatingByDriver = feedbackType === 'thumbs_up' ? 5 : 1; // Legacy compatibility
+            updates.passengerFeedbackType = feedbackType;
+            if (reason) updates.passengerFeedbackReason = reason;
+            if (comment) updates.passengerComments = comment;
+            targetUserId = rideData.passengerId || '';
+            isRatingDriver = false;
+        }
+
+        transaction.update(rideRef, updates);
+
+        // Fetch target user and update score
+        const targetUserRef = db.doc(`users/${targetUserId}`);
+        const targetUserSnap = await transaction.get(targetUserRef);
+
+        if (targetUserSnap.exists) {
+            const targetData = targetUserSnap.data() || {};
+            const currentScore = targetData.vamoScore ?? 100;
+            let pointChange = 0;
+
+            if (feedbackType === 'thumbs_up') {
+                pointChange = isRatingDriver ? DRIVER_SCORE_RULES.THUMBS_UP : PASSENGER_SCORE_RULES.THUMBS_UP;
+            } else if (feedbackType === 'thumbs_down') {
+                if (isRatingDriver) {
+                    if (reason === 'mild') pointChange = DRIVER_SCORE_RULES.COMPLAINT_MILD;
+                    else if (reason === 'moderate') pointChange = DRIVER_SCORE_RULES.COMPLAINT_MODERATE;
+                    else if (reason === 'severe') pointChange = DRIVER_SCORE_RULES.COMPLAINT_SEVERE;
+                    else pointChange = DRIVER_SCORE_RULES.COMPLAINT_MILD; // Default if not specified
+                } else {
+                    if (reason === 'severe' || reason === 'fraud') pointChange = PASSENGER_SCORE_RULES.FRAUD_SEVERE;
+                    else pointChange = PASSENGER_SCORE_RULES.VALIDATED_COMPLAINT;
+                }
+            }
+
+            const newScore = calculateNewScore(currentScore, pointChange);
+            const newLevel = getReputationLevel(newScore);
+
+            transaction.update(targetUserRef, {
+                vamoScore: newScore,
+                vamoLevel: newLevel
+            });
+
+            // LOG EVENT
+            const scoreEventRef = db.collection(`users/${targetUserId}/score_events`).doc();
+            transaction.set(scoreEventRef, {
+                rideId,
+                eventType: isRatingDriver ? 'driver_rated' : 'passenger_rated',
+                feedbackType,
+                reason: reason || null,
+                pointsChanged: pointChange,
+                previousScore: currentScore,
+                newScore: newScore,
+                newLevel: newLevel,
+                createdAt: FieldValue.serverTimestamp()
+            });
+
+            // SUSPENSION CHECK
+            if (newLevel === 'Suspendido' && currentScore >= 40) {
+                transaction.update(targetUserRef, {
+                    accountStatus: 'suspended',
+                    isSuspended: true,
+                    suspensionReason: `Suspendido por VamO Score (Grave/Fraude)`,
+                    suspendedAt: FieldValue.serverTimestamp()
+                });
+            }
+
+            logger.info(`[VAMO_SCORE] Updated user ${targetUserId} score: ${currentScore} -> ${newScore} (${newLevel}) due to ${feedbackType}`);
+        }
+
+        logger.info(`[FEEDBACK_GUARD] feedback saved for ride ${rideId}`);
         return { success: true };
     });
 });

@@ -133,8 +133,8 @@ export default function FinishedRideSummary({
     console.log(`[RECEIPT_DIAGNOSTIC] ${id} status=${ride.status} hasCompletedRide=${!!ride.completedRide}`);
   }, [ride.status, !!ride.completedRide, id]);
 
-  const handleRatingSubmit = async (rating: number, comments: string) => {
-    if (rating === 0 || !firebaseApp || isRatingSubmitted) {
+  const handleRatingSubmit = async (feedbackType: 'thumbs_up' | 'thumbs_down', reason?: string, comments?: string) => {
+    if (!feedbackType || !firebaseApp || isRatingSubmitted) {
         console.warn('[RATING_UI] disabled duplicate');
         return;
     }
@@ -143,11 +143,11 @@ export default function FinishedRideSummary({
     try {
       setIsRatingSubmitted(true);
       const functions = getFunctions(undefined, 'us-central1');
-      const submitRating = httpsCallable(functions, 'submitRideRatingV1');
-      await submitRating({ rideId: ride.id, score: rating, comment: comments });
+      const submitFeedback = httpsCallable(functions, 'submitTripFeedbackV1');
+      await submitFeedback({ rideId: ride.id, feedbackType, reason, comment: comments });
 
       console.log('[RATING_UI] submit success');
-      toast({ title: '¡Calificación enviada!', description: 'Gracias por tu opinión.' });
+      toast({ title: '¡Opinión enviada!', description: 'Gracias por ayudarnos a mejorar VamO.' });
 
       setTimeout(() => {
         handleClose();
@@ -342,7 +342,7 @@ export default function FinishedRideSummary({
   const pointsToNext = nextThreshold ? nextThreshold - currentPoints : 0;
 
   // [VamO PRO] Feedback Logic: Determine what the user gave and what the user received.
-  const userRatingValue = isDriver ? ride.passengerRatingByDriver : ride.driverRatingByPassenger;
+  const userFeedbackValue = isDriver ? ride.passengerFeedbackType : ride.driverFeedbackType;
   const userCommentText = isDriver ? ride.passengerComments : ride.driverComments;
 
   const receivedRatingValue = isDriver ? ride.driverRatingByPassenger : ride.passengerRatingByDriver;
@@ -729,8 +729,8 @@ export default function FinishedRideSummary({
         participantRole={isDriver ? 'pasajero' : 'conductor'}
         photoURL={isDriver ? ride.passengerPhotoUrl : ride.driverPhotoUrl}
         onSubmit={handleRatingSubmit}
-        isSubmitted={!!userRatingValue || isRatingSubmitted}
-        initialRating={userRatingValue || undefined}
+        isSubmitted={!!userFeedbackValue || isRatingSubmitted}
+        initialFeedbackType={userFeedbackValue as 'thumbs_up' | 'thumbs_down' | undefined}
         initialComment={userCommentText || undefined}
         submitButtonText={isDriver ? 'Calificar y ver viajes' : 'Calificar y pedir otro viaje'}
       />

@@ -19,6 +19,8 @@ export const canPassengerRequestRide = (
   
   if (!profile.profileCompleted) return { isEligible: false, reason: "Debés completar tu perfil", code: "PROFILE_INCOMPLETE" };
   
+  if (profile.isSuspended) return { isEligible: false, reason: profile.suspensionReason || "Tu cuenta ha sido suspendida.", code: "SUSPENDED" };
+  
   // MANDATORY LEGAL CHECK (v1.3)
   const CURRENT_TERMS_V = 'v1.3';
   const hasAccepted = profile.termsAccepted || profile.acceptedDriverTerms;

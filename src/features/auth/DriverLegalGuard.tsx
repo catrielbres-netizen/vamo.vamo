@@ -12,6 +12,7 @@ import { Scale, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { PrivacyPolicyText, PaymentWalletPolicyText, LiabilityPolicyText, CancellationPolicyText, VerificationPolicyText, ScoringPolicyText, SuspensionPolicyText, MercadoPagoPolicyText, DriverSpecificTerms } from '@/components/legal/LegalTexts';
 
 export function DriverLegalGuard({ children, forced, onClose }: { children?: React.ReactNode, forced?: boolean, onClose?: () => void }) {
     const { user, profile, loading } = useUser();
@@ -22,6 +23,14 @@ export function DriverLegalGuard({ children, forced, onClose }: { children?: Rea
     const [fullName, setFullName] = useState('');
     const [dni, setDni] = useState('');
     const [checked, setChecked] = useState(false);
+    const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        if (scrollHeight - scrollTop <= clientHeight + 50) {
+            setHasScrolledToBottom(true);
+        }
+    };
 
     const needsAcceptance = !loading && !!profile && profile.role === 'driver' && (
         !profile.legal?.driverTermsAccepted || 
@@ -108,28 +117,26 @@ export function DriverLegalGuard({ children, forced, onClose }: { children?: Rea
                         </div>
                     </DialogHeader>
 
-                    <div className="flex-1 overflow-y-auto p-6 sm:p-8 text-sm text-zinc-400 space-y-8 leading-relaxed custom-scrollbar">
+                    <div 
+                        className="flex-1 overflow-y-auto p-6 sm:p-8 text-sm text-zinc-400 space-y-8 leading-relaxed custom-scrollbar relative"
+                        onScroll={handleScroll}
+                    >
                         <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-start gap-3">
                             <ShieldCheck className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
                             <p className="text-[11px] text-zinc-300 font-medium">
-                                VamO actúa como plataforma tecnológica de intermediación entre usuarios pasajeros y conductores independientes.
+                                Por favor leé atentamente los siguientes términos. Debés deslizar hasta el final del documento para habilitar la firma digital y continuar.
                             </p>
                         </div>
 
-                        <section className="space-y-3">
-                            <h3 className="font-black text-white text-[11px] uppercase tracking-widest flex items-center gap-2"><CheckCircle2 className="h-3 w-3 text-indigo-500" />1. Rol de la Plataforma</h3>
-                            <p className="text-xs">VamO no es empleador, transportista, titular del vehículo ni aseguradora. Su función es proveer la tecnología para la intermediación y registro.</p>
-                        </section>
-                        
-                        <section className="space-y-3">
-                            <h3 className="font-black text-white text-[11px] uppercase tracking-widest flex items-center gap-2"><CheckCircle2 className="h-3 w-3 text-indigo-500" />2. Independencia y Responsabilidad</h3>
-                            <p className="text-xs">El conductor es un proveedor independiente. Es el responsable directo de la prestación material del servicio, del estado del vehículo, la conducción segura, y del cumplimiento estricto de habilitaciones, seguros obligatorios, licencia de conducir, documentación y normativa de tránsito local.</p>
-                        </section>
-
-                        <section className="space-y-3">
-                            <h3 className="font-black text-white text-[11px] uppercase tracking-widest flex items-center gap-2"><CheckCircle2 className="h-3 w-3 text-indigo-500" />3. Suspensión</h3>
-                            <p className="text-xs">VamO podrá suspender o inhabilitar la cuenta por motivos de seguridad, presentación de documentación falsa o vencida, y reiterados incumplimientos o reportes de la comunidad.</p>
-                        </section>
+                        <DriverSpecificTerms />
+                        <LiabilityPolicyText />
+                        <PaymentWalletPolicyText />
+                        <MercadoPagoPolicyText />
+                        <CancellationPolicyText />
+                        <VerificationPolicyText />
+                        <ScoringPolicyText />
+                        <SuspensionPolicyText />
+                        <PrivacyPolicyText />
                         
                         {profile?.cityKey === 'rio_gallegos' && (
                             <section className="space-y-3 p-4 bg-amber-500/10 rounded-xl border border-amber-500/20">
@@ -137,10 +144,18 @@ export function DriverLegalGuard({ children, forced, onClose }: { children?: Rea
                                 <p className="text-xs text-amber-200/70">Río Gallegos se encuentra en etapa de reclutamiento previo al lanzamiento. La aceptación y eventual aprobación documental no implican inicio inmediato de viajes. VamO informará cuando la ciudad quede activa para operar.</p>
                             </section>
                         )}
+                        
+                        {!hasScrolledToBottom && (
+                            <div className="sticky bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none flex items-end justify-center pb-4">
+                                <div className="bg-indigo-500/20 text-indigo-400 text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border border-indigo-500/30 animate-pulse">
+                                    Deslizá hacia abajo para continuar
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <form onSubmit={handleAccept} className="p-6 sm:p-8 bg-zinc-900 border-t border-white/5 shrink-0 flex flex-col gap-4">
-                        <div className="space-y-4 mb-2">
+                        <div className={`space-y-4 mb-2 transition-opacity duration-300 ${!hasScrolledToBottom ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                             <div className="space-y-2">
                                 <Label className="text-[10px] uppercase font-black tracking-widest text-zinc-500">Aclaración (Nombre Completo)</Label>
                                 <Input 
@@ -171,13 +186,13 @@ export function DriverLegalGuard({ children, forced, onClose }: { children?: Rea
                                     className="mt-1 h-4 w-4 rounded border-white/10 bg-zinc-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900" 
                                 />
                                 <span className="text-xs text-zinc-400 group-hover:text-zinc-300">
-                                    Leí y acepto los términos del conductor. Reconozco que mi IP y datos quedarán registrados como firma electrónica bajo la Ley vigente.
+                                    Leí íntegramente y acepto los términos del contrato. Reconozco que mi IP y datos quedarán registrados como firma electrónica bajo la Ley vigente.
                                 </span>
                             </label>
                         </div>
                         <Button 
                             type="submit"
-                            disabled={isAccepting || !checked || !fullName || !dni}
+                            disabled={isAccepting || !checked || !fullName || !dni || !hasScrolledToBottom}
                             className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.1em] rounded-2xl shadow-xl shadow-indigo-500/10 transition-all active:scale-[0.98]"
                         >
                             {isAccepting ? (

@@ -327,6 +327,7 @@ export default function RideStatus({ ride, onNewRide, onCancel }: { ride: WithId
                     <PassengerDriverCard 
                         name={ride.driverName || 'Conductor'}
                         rating={ride.driverRating || '5.0'}
+                        vamoScore={(ride as any).driverVamoScore ?? undefined}
                         vehicle={ride.driverVehicle || 'Cargando...'}
                         vehicleBrand={ride.driverVehicleBrand || undefined}
                         vehicleModel={ride.driverVehicleModel || undefined}

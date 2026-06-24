@@ -776,6 +776,7 @@ export interface UserProfile {
     ratingCount?: number;
 
     driverRiskScore?: number;
+    vamoScore?: number;
     riskReasons?: string[];
 
     activeRideId?: string | null;

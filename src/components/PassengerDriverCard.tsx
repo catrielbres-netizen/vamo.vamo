@@ -5,10 +5,12 @@ import { VamoIcon } from './VamoIcon';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { formatRating } from '@/lib/formatters';
+import { getReputationLevel } from '@/lib/scoring';
 
 interface PassengerDriverCardProps {
   name: string;
   rating: number | string;
+  vamoScore?: number;
   vehicle?: string; // Legacy / Fallback
   vehicleBrand?: string;
   vehicleModel?: string;
@@ -28,6 +30,7 @@ interface PassengerDriverCardProps {
 export const PassengerDriverCard: React.FC<PassengerDriverCardProps> = ({
   name,
   rating,
+  vamoScore,
   vehicle,
   vehicleBrand,
   vehicleModel,
@@ -121,15 +124,15 @@ export const PassengerDriverCard: React.FC<PassengerDriverCardProps> = ({
                   <p className="font-bold text-lg text-white leading-tight truncate">{name}</p>
                   {isMunicipal && <span className="text-[8px] font-black bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-1 py-0.5 rounded">MUNI</span>}
               </div>
-              {isNaN(Number(rating)) || rating === 'NUEVO' ? (
+              {(!vamoScore && isNaN(Number(rating))) || rating === 'NUEVO' ? (
                 <div className="flex items-center gap-1 mt-1 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20 inline-flex">
                   <VamoIcon name="sparkles" className="w-3 h-3 text-yellow-500" />
                   <span className="text-[10px] font-black tracking-widest uppercase text-yellow-500">Nuevo</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 mt-1">
-                  <VamoIcon name="star" className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-                  <span className="text-sm font-semibold text-zinc-400">{formatRating(rating)}</span>
+                  <VamoIcon name="shield-check" className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="text-[11px] font-black uppercase tracking-widest text-zinc-400">{getReputationLevel(vamoScore ?? 100)}</span>
                 </div>
               )}
             </div>
@@ -175,16 +178,16 @@ export const PassengerDriverCard: React.FC<PassengerDriverCardProps> = ({
                 </div>
                 <div>
                     <h3 className="text-2xl font-black text-white uppercase tracking-tighter">{name}</h3>
-                    {isNaN(Number(rating)) || rating === 'NUEVO' ? (
+                    {(!vamoScore && isNaN(Number(rating))) || rating === 'NUEVO' ? (
                         <div className="flex items-center justify-center gap-2 mt-1 bg-yellow-500/10 px-3 py-1 rounded-lg border border-yellow-500/20">
                             <VamoIcon name="sparkles" className="w-4 h-4 text-yellow-500" />
                             <span className="text-xs font-black uppercase tracking-widest text-yellow-500">Conductor Nuevo</span>
                         </div>
                     ) : (
                         <div className="flex items-center justify-center gap-2 mt-1">
-                            <VamoIcon name="star" className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                            <span className="text-lg font-black text-white">{formatRating(rating)}</span>
-                            <span className="text-xs text-zinc-500 font-bold uppercase tracking-widest ml-1">Score Promedio</span>
+                            <VamoIcon name="shield-check" className="w-4 h-4 text-indigo-400" />
+                            <span className="text-lg font-black uppercase text-white">{getReputationLevel(vamoScore ?? 100)}</span>
+                            <span className="text-xs text-zinc-500 font-bold uppercase tracking-widest ml-1">Nivel VamO Score</span>
                         </div>
                     )}
                 </div>

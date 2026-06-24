@@ -304,7 +304,7 @@ export default function DriverProfilePage() {
   const levelKey = profile.driverLevel || 'default';
   const levelBadgeStyle = levelBadgeStyles[levelKey] || levelBadgeStyles.default;
 
-  const averageRating = formatRating(profile.averageRating, 'N/A');
+  const reputationLevel = profile.reputationLevel || 'Excelente';
   const balance = profile.currentBalance ?? 0;
   
   const matchingScore = profile.matchingScore ?? 100;
@@ -435,9 +435,9 @@ export default function DriverProfilePage() {
                             <p className="text-[8px] font-bold text-zinc-600 uppercase tracking-wider mt-1">Acumulados</p>
                         </div>
                         <div className="bg-[#1A1D27] p-5 rounded-2xl border border-white/5 text-center flex flex-col items-center justify-center transition-all hover:bg-[#1f222e]">
-                            <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">Calificación</p>
-                            <p className="text-2xl font-black text-indigo-400">{averageRating}</p>
-                            <p className="text-[8px] font-bold text-zinc-600 uppercase tracking-wider mt-1">Promedio</p>
+                            <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">Reputación</p>
+                            <p className={cn("text-lg font-black uppercase tracking-widest", reputationLevel === 'Excelente' ? "text-emerald-400" : reputationLevel === 'Bueno' ? "text-blue-400" : "text-amber-400")}>{reputationLevel}</p>
+                            <p className="text-[8px] font-bold text-zinc-600 uppercase tracking-wider mt-1">Nivel Actual</p>
                         </div>
                     </div>
 

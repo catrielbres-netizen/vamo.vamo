@@ -72,26 +72,24 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
   }, [ride?.id, isDriver]);
 
   // [VamO PRO] What I gave to the other person
-  const userRatingValue = isDriver ? (ride as any).passengerRatingByDriver : (ride as any).driverRatingByPassenger;
-  const userCommentText = isDriver ? (ride as any).passengerComments : (ride as any).driverComments;
+  const userFeedbackValue = isDriver ? ride.passengerFeedbackType : ride.driverFeedbackType;
+  const userCommentText = isDriver ? ride.passengerComments : ride.driverComments;
 
   // [VamO PRO] What the other person gave to me (Audit/Fraud Defense)
   const receivedRatingValue = isDriver ? (ride as any).driverRatingByPassenger : (ride as any).passengerRatingByDriver;
+  const receivedFeedbackType = isDriver ? (ride as any).passengerFeedbackType : (ride as any).driverFeedbackType;
   const receivedCommentText = isDriver ? (ride as any).driverComments : (ride as any).passengerComments;
 
-  const handleRatingSubmit = async (rating: number, comments: string) => {
-    if (isRatingSubmitted || !firebaseApp) {
-        console.warn('[RATING_UI] disabled duplicate');
-        return;
-    }
-    console.log('[RATING_UI] submit click');
+  const handleRatingSubmit = async (feedbackType: 'thumbs_up' | 'thumbs_down', reason?: string, comments?: string) => {
+    if (!feedbackType || !firebaseApp || isRatingSubmitted) return;
+
     try {
       setIsRatingSubmitted(true);
-      const functions = getFunctions(firebaseApp, 'us-central1');
-      const submitRating = httpsCallable(functions, 'submitRideRatingV1');
-      await submitRating({ rideId: ride.id, score: rating, comment: comments });
-      console.log('[RATING_UI] submit success');
-      toast({ title: 'Calificación enviada', description: 'Gracias por evaluar a tu conductor.' });
+      const functions = getFunctions(undefined, 'us-central1');
+      const submitFeedback = httpsCallable(functions, 'submitTripFeedbackV1');
+      await submitFeedback({ rideId: ride.id, feedbackType, reason, comment: comments });
+
+      toast({ title: '¡Opinión enviada!', description: 'Gracias por ayudarnos a mejorar VamO.' });
     } catch (error: any) {
       setIsRatingSubmitted(false);
       console.error('[RATING_UI] submit error:', error);
@@ -517,21 +515,25 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
           </div>
 
           {/* [VamO PRO] Rating Received Section (Audit Support) */}
-          {receivedRatingValue ? (
+          {(receivedRatingValue || receivedFeedbackType) ? (
               <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 animate-in fade-in duration-700">
                   <p className="text-[9px] font-black uppercase tracking-[0.2em] text-primary text-center mb-2 italic">Calificación del {isDriver ? 'Pasajero' : 'Conductor'} hacia vos</p>
                   <div className="flex flex-col items-center gap-2">
-                      <div className="flex gap-1">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                              <VamoIcon
-                                  key={star}
-                                  name="star"
-                                  className={cn(
-                                      "w-4 h-4",
-                                      star <= receivedRatingValue ? "text-yellow-400 fill-yellow-400" : "text-zinc-800"
-                                  )}
-                              />
-                          ))}
+                      <div className="flex justify-center items-center gap-2">
+                          {(() => {
+                              const isPositive = receivedFeedbackType === 'thumbs_up' || (receivedRatingValue && receivedRatingValue >= 4);
+                              return (
+                                  <div className={cn("px-4 py-2 rounded-full border flex items-center gap-2", isPositive ? "bg-emerald-500/10 border-emerald-500/20" : "bg-rose-500/10 border-rose-500/20")}>
+                                      <VamoIcon
+                                          name={isPositive ? "thumbs-up" : "thumbs-down"}
+                                          className={cn("w-5 h-5", isPositive ? "text-emerald-400" : "text-rose-500")}
+                                      />
+                                      <span className={cn("text-xs font-black uppercase tracking-widest", isPositive ? "text-emerald-400" : "text-rose-500")}>
+                                          {isPositive ? 'Positivo' : 'Negativo'}
+                                      </span>
+                                  </div>
+                              );
+                          })()}
                       </div>
                       {receivedCommentText && (
                           <p className="text-xs text-zinc-400 italic text-center px-4 leading-relaxed">"{receivedCommentText}"</p>
@@ -542,13 +544,12 @@ export function RideReceipt({ ride, onClose, className, closeLabel }: RideReceip
          </CardContent>
 
         <RatingForm
-          participantName={isDriver ? (ride as any).passengerName || 'Pasajero' : (driverName || 'Conductor')}
+          participantName={isDriver ? ride.passengerName || 'Pasajero' : ride.driverName || 'Conductor'}
           participantRole={isDriver ? 'pasajero' : 'conductor'}
-          photoURL={isDriver ? (ride as any).passengerPhotoUrl : (ride as any).driverPhotoUrl}
+          photoURL={isDriver ? ride.passengerPhotoUrl : ride.driverPhotoUrl}
           onSubmit={handleRatingSubmit}
-          isSubmitted={!!userRatingValue || isRatingSubmitted}
-          submitButtonText={'Enviar calificación'}
-          initialRating={userRatingValue || undefined}
+          isSubmitted={!!userFeedbackValue || isRatingSubmitted}
+          initialFeedbackType={userFeedbackValue as 'thumbs_up' | 'thumbs_down' | undefined}
           initialComment={userCommentText || undefined}
         />
 

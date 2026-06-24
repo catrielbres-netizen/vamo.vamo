@@ -43,7 +43,7 @@ export function DriverRatingsPanel() {
       (snap) => {
         const rated = snap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((r: any) => !!r.driverRatingByPassenger && !!r.driverComments)
+          .filter((r: any) => (!!r.driverFeedbackType || !!r.driverRatingByPassenger) && !!r.driverComments)
           .slice(0, 3);
         setRecentRatings(rated);
         setLoading(false);
@@ -72,18 +72,18 @@ export function DriverRatingsPanel() {
         <div key={ride.id} className="p-4 bg-zinc-950/40 rounded-2xl border border-white/5 hover:bg-zinc-950/60 transition-colors">
           <div className="flex items-center justify-between mb-2">
             <div className="flex gap-0.5">
-              {[1, 2, 3, 4, 5].map((s) => (
-                <VamoIcon
-                  key={s}
-                  name="star"
-                  className={cn(
-                    'w-3 h-3',
-                    s <= (ride.driverRatingByPassenger || 0)
-                      ? 'text-yellow-400 fill-yellow-400'
-                      : 'text-zinc-800'
-                  )}
-                />
-              ))}
+              {(() => {
+                const isPositive = ride.driverFeedbackType === 'thumbs_up' || (ride.driverRatingByPassenger && ride.driverRatingByPassenger >= 4);
+                return (
+                  <VamoIcon
+                    name={isPositive ? "thumbs-up" : "thumbs-down"}
+                    className={cn(
+                      'w-4 h-4',
+                      isPositive ? 'text-emerald-400' : 'text-rose-500'
+                    )}
+                  />
+                );
+              })()}
             </div>
             <span className="text-[9px] font-bold text-zinc-600 uppercase">
               {ride.completedAt?.toDate?.().toLocaleDateString() || 'Reciente'}

@@ -816,6 +816,7 @@ export default function AdminDriverDetailPage() {
       </div>
 
       <DriverHistorySection driverId={driverId} />
+      <VamoScoreHistorySection driverId={driverId} />
     </div>
   );
 }
@@ -948,6 +949,108 @@ function DriverHistorySection({ driverId }: { driverId: string }) {
                                                     )}
                                                 </DialogContent>
                                             </Dialog>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+function VamoScoreHistorySection({ driverId }: { driverId: string }) {
+    const firestore = useFirestore();
+    const [events, setEvents] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!firestore || !driverId) return;
+
+        const q = query(
+            collection(firestore, `users/${driverId}/score_events`),
+            orderBy('createdAt', 'desc'),
+            limit(50)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetchedEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setEvents(fetchedEvents);
+            setLoading(false);
+        }, (err) => {
+            console.error('[SCORE_HISTORY_FETCH_ERROR]', err);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [firestore, driverId]);
+
+    if (loading) return <Skeleton className="h-64 w-full rounded-2xl" />;
+
+    return (
+        <Card className="border-zinc-800 bg-black/20 mt-8">
+            <CardHeader>
+                <CardTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5 text-indigo-400" /> Historial de VamO Score
+                </CardTitle>
+                <CardDescription>Últimos 50 eventos de puntaje de este conductor.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm border-collapse">
+                        <thead>
+                            <tr className="border-b border-zinc-800 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                                <th className="p-3">Fecha/Hora</th>
+                                <th className="p-3">Evento</th>
+                                <th className="p-3">Motivo</th>
+                                <th className="p-3 text-right">Variación</th>
+                                <th className="p-3 text-right">Score Final</th>
+                                <th className="p-3 text-right">Nivel Final</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/50">
+                            {events.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="p-8 text-center text-zinc-500 italic">No hay eventos registrados.</td>
+                                </tr>
+                            ) : (
+                                events.map((event) => (
+                                    <tr key={event.id} className="hover:bg-white/5 transition-colors group">
+                                        <td className="p-3 align-top">
+                                            <p className="font-bold text-zinc-200">
+                                                {event.createdAt?.toDate?.()?.toLocaleDateString('es-AR') || '---'}
+                                            </p>
+                                            <p className="text-[10px] text-zinc-500">
+                                                {event.createdAt?.toDate?.()?.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) || '---'}
+                                            </p>
+                                        </td>
+                                        <td className="p-3 align-top">
+                                            <p className="font-bold text-zinc-200 uppercase text-xs">{event.eventType === 'trip_completed' ? 'Viaje Completado' : event.eventType === 'cancellation_penalty' ? 'Penalidad Cancelación' : event.eventType === 'passenger_rated' ? 'Calificación de Pasajero' : event.eventType}</p>
+                                            {event.rideId && <p className="text-[9px] text-zinc-500 font-mono">RIDE: {event.rideId.substring(0,8)}...</p>}
+                                        </td>
+                                        <td className="p-3 align-top text-xs text-zinc-400">
+                                            {event.feedbackType === 'thumbs_up' ? 'Pulgar Arriba' : event.feedbackType === 'thumbs_down' ? 'Pulgar Abajo' : event.feedbackType || ''}
+                                            {event.reason ? ` - ${event.reason}` : ''}
+                                        </td>
+                                        <td className="p-3 align-top text-right font-black">
+                                            <span className={event.pointsChanged > 0 ? 'text-green-500' : event.pointsChanged < 0 ? 'text-red-500' : 'text-zinc-500'}>
+                                                {event.pointsChanged > 0 ? `+${event.pointsChanged}` : event.pointsChanged} pts
+                                            </span>
+                                        </td>
+                                        <td className="p-3 align-top text-right font-black text-white">
+                                            {event.newScore}
+                                        </td>
+                                        <td className="p-3 align-top text-right">
+                                            <Badge variant="outline" className={cn("text-[9px] font-black uppercase tracking-widest",
+                                                event.newLevel === 'Excelente' ? "border-indigo-500/50 text-indigo-400 bg-indigo-500/10" :
+                                                event.newLevel === 'Bueno' ? "border-green-500/50 text-green-500 bg-green-500/10" :
+                                                event.newLevel === 'En observación' ? "border-orange-500/50 text-orange-500 bg-orange-500/10" :
+                                                "border-red-500/50 text-red-500 bg-red-500/10"
+                                            )}>
+                                                {event.newLevel}
+                                            </Badge>
                                         </td>
                                     </tr>
                                 ))

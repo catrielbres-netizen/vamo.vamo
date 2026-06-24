@@ -13,6 +13,7 @@ import { CURRENT_TERMS_VERSION } from '@/lib/legal-config';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Scale, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { PassengerSpecificTerms, LiabilityPolicyText, PrivacyPolicyText, CancellationPolicyText, VerificationPolicyText, SuspensionPolicyText, ScoringPolicyText } from '@/components/legal/LegalTexts';
 
 /**
  * TermsGuard: Intercepta usuarios que no han aceptado la versión vigente de T&C.
@@ -23,6 +24,15 @@ export function TermsGuard({ children, forced, onClose }: { children?: React.Rea
     const { toast } = useToast();
     const [isAccepting, setIsAccepting] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
+    const [checked, setChecked] = useState(false);
+    const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        if (scrollHeight - scrollTop <= clientHeight + 50) {
+            setHasScrolledToBottom(true);
+        }
+    };
 
     // Determinar si falta aceptación (validación reactiva unificada)
     const needsAcceptance = !loading && !!profile && profile.role !== 'superadmin' && (
@@ -45,7 +55,7 @@ export function TermsGuard({ children, forced, onClose }: { children?: React.Rea
     }, [forced, needsAcceptance]);
 
     const handleAccept = async () => {
-        if (!user) return;
+        if (!user || !checked) return;
         
         setIsAccepting(true);
         try {
@@ -121,45 +131,24 @@ export function TermsGuard({ children, forced, onClose }: { children?: React.Rea
                     </DialogHeader>
 
                     {/* Contenido Legal Scrollable */}
-                    <div className="flex-1 overflow-y-auto p-8 text-sm text-zinc-400 space-y-8 leading-relaxed custom-scrollbar">
+                    <div 
+                        className="flex-1 overflow-y-auto p-8 text-sm text-zinc-400 space-y-8 leading-relaxed custom-scrollbar relative"
+                        onScroll={handleScroll}
+                    >
                         <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-start gap-3">
                             <ShieldCheck className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
                             <p className="text-[11px] text-zinc-300 font-medium">
-                                Hemos actualizado nuestro marco legal para darte mayor respaldo. Al continuar usando VamO PRO, aceptas estas condiciones que rigen para todos tus viajes futuros.
+                                Hemos actualizado nuestro marco legal para darte mayor respaldo. Debés deslizar hasta el final del documento para habilitar la firma digital y continuar.
                             </p>
                         </div>
 
-                        <section className="space-y-3">
-                            <div className="flex items-center gap-2">
-                                <CheckCircle2 className="h-3 w-3 text-indigo-500" />
-                                <h3 className="font-black text-white text-[11px] uppercase tracking-widest">1. Rol de la Plataforma e Intermediación</h3>
-                            </div>
-                            <p className="text-xs">VamO actúa exclusivamente como un <span className="text-white font-bold">intermediario tecnológico</span> que conecta conductores independientes con pasajeros. No existiendo relación laboral ni societaria, VamO no presta servicios de transporte ni garantiza la idoneidad o seguridad absoluta de los terceros prestadores.</p>
-                        </section>
-
-                        <section className="space-y-3">
-                            <div className="flex items-center gap-2">
-                                <CheckCircle2 className="h-3 w-3 text-indigo-500" />
-                                <h3 className="font-black text-white text-[11px] uppercase tracking-widest">2. Fondo de Asistencia (F.A.P.)</h3>
-                            </div>
-                            <p className="text-xs">Para la modalidad Express, el usuario acepta el funcionamiento del <span className="text-white font-bold">Fondo de Asistencia VamO</span>. Este constituye un beneficio <span className="text-white font-bold">discrecional, limitado y sujeto a evaluación</span> interna. No implica un contrato de seguro, póliza técnica ni obligación automática de pago ante incidentes.</p>
-                        </section>
-
-                        <section className="space-y-3">
-                            <div className="flex items-center gap-2">
-                                <CheckCircle2 className="h-3 w-3 text-indigo-500" />
-                                <h3 className="font-black text-white text-[11px] uppercase tracking-widest">3. Taxis y Remises</h3>
-                            </div>
-                            <p className="text-xs">Los viajes realizados en unidades de Taxi o Remis habilitados operan bajo sus propios seguros obligatorios de pasajeros. VamO actúa como gestor de despacho y pago para estas unidades, pero la responsabilidad del transporte recae en el permisionario.</p>
-                        </section>
-
-                        <section className="space-y-3">
-                            <div className="flex items-center gap-2">
-                                <CheckCircle2 className="h-3 w-3 text-indigo-500" />
-                                <h3 className="font-black text-white text-[11px] uppercase tracking-widest">4. Privacidad y Datos</h3>
-                            </div>
-                            <p className="text-xs">Consientes el tratamiento de tus datos de geolocalización, contacto e historial operativo para garantizar la seguridad del servicio y la transparencia en la liquidación de viajes.</p>
-                        </section>
+                        <PassengerSpecificTerms />
+                        <LiabilityPolicyText />
+                        <CancellationPolicyText />
+                        <VerificationPolicyText />
+                        <ScoringPolicyText />
+                        <SuspensionPolicyText />
+                        <PrivacyPolicyText />
 
                         <div className="pt-4 border-t border-white/5">
                             <div className="flex items-center gap-2 text-zinc-600">
@@ -167,27 +156,41 @@ export function TermsGuard({ children, forced, onClose }: { children?: React.Rea
                                 <p className="text-[10px] italic">Este acuerdo es vinculante y rige en la jurisdicción de la Provincia de Chubut, Argentina.</p>
                             </div>
                         </div>
+                        
+                        {!hasScrolledToBottom && (
+                            <div className="sticky bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none flex items-end justify-center pb-4">
+                                <div className="bg-indigo-500/20 text-indigo-400 text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border border-indigo-500/30 animate-pulse">
+                                    Deslizá hacia abajo para continuar
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Footer con Acción Fijo */}
                     <div className="p-6 sm:p-8 pb-10 bg-zinc-900 border-t border-white/5 shrink-0 flex flex-col gap-4">
-                        <div className="flex items-start gap-3 px-2">
-                            <div className="h-4 w-4 rounded border border-indigo-500/50 bg-indigo-500/10 flex items-center justify-center mt-0.5 shrink-0">
-                                <VamoIcon name="check" className="h-2 w-2 text-indigo-400" />
-                            </div>
-                            <p className="text-[10px] text-zinc-500 leading-tight">
-                                Al hacer clic en "Acepto", confirmás que has leído y comprendido los términos detallados arriba y su validez para el uso continuo de la plataforma.
-                            </p>
+                        <div className={`transition-opacity duration-300 ${!hasScrolledToBottom ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                            <label className="flex items-start gap-3 px-2 cursor-pointer group">
+                                <input 
+                                    type="checkbox" 
+                                    required
+                                    checked={checked} 
+                                    onChange={e => setChecked(e.target.checked)} 
+                                    className="mt-0.5 h-4 w-4 rounded border-white/10 bg-zinc-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900" 
+                                />
+                                <p className="text-[10px] text-zinc-400 leading-tight group-hover:text-zinc-300">
+                                    He leído íntegramente y acepto los términos del contrato de usuario. Confirmo que mi IP y dispositivo quedarán registrados como firma electrónica en conformidad con la normativa vigente.
+                                </p>
+                            </label>
                         </div>
                         <Button 
                             onClick={handleAccept}
-                            disabled={isAccepting}
+                            disabled={isAccepting || !checked || !hasScrolledToBottom}
                             className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.1em] rounded-2xl shadow-xl shadow-indigo-500/10 transition-all active:scale-[0.98] mb-2 sm:mb-0"
                         >
                             {isAccepting ? (
                                 <VamoIcon name="loader" className="h-6 w-6 animate-spin" />
                             ) : (
-                                "Acepto y Continuar"
+                                "Firma Digital y Continuar"
                             )}
                         </Button>
                     </div>
