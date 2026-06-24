@@ -2,15 +2,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { 
     collection, 
     query, 
     where, 
     orderBy, 
-    limit, 
-    getDocs, 
-    startAfter,
-    DocumentSnapshot 
+    getDocs
 } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -32,7 +28,6 @@ import { isDriverReadyForReview } from '@/lib/eligibility';
 import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 import { BroadcastDialog } from '@/components/admin/BroadcastDialog';
 
-const PAGE_SIZE = 15;
 
 type DriverRow = {
   id: string;
@@ -57,13 +52,10 @@ export default function AdminDriversPage() {
 
   // Data State
   const [drivers, setDrivers] = useState<DriverRow[]>([]);
-  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
   
   // UI State
   const { cityKey: activeCityKey, loading: loadingContext } = useMunicipalContext();
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,26 +63,23 @@ export default function AdminDriversPage() {
   useEffect(() => {
     if (!firestore || profile?.role !== 'admin' || loadingContext) return;
     initialLoad();
-  }, [firestore, profile, filterStatus, activeCityKey, loadingContext]);
+  }, [firestore, profile, activeCityKey, loadingContext]); // Removed filterStatus from dependency array to not re-fetch
 
   const initialLoad = async () => {
     setLoading(true);
     setError(null);
     setDrivers([]);
-    setLastDoc(null);
-    setHasMore(true);
-    await fetchDrivers(null);
+    await fetchDrivers();
     setLoading(false);
   };
 
-  const fetchDrivers = async (afterDoc: DocumentSnapshot | null) => {
+  const fetchDrivers = async () => {
     if (!firestore) return;
     try {
       let q = query(
         collection(firestore, 'users'),
         where('role', '==', 'driver'),
-        orderBy('createdAt', 'desc'),
-        limit(PAGE_SIZE)
+        orderBy('createdAt', 'desc')
       );
 
       const isGlobalMode = activeCityKey === 'all' || activeCityKey === '*' || activeCityKey === 'global' || !activeCityKey;
@@ -99,22 +88,9 @@ export default function AdminDriversPage() {
         q = query(q, where('cityKey', '==', activeCityKey));
       }
 
-      if (filterStatus === 'pending') {
-        q = query(q, where('approved', '==', false));
-      } else if (filterStatus === 'approved') {
-        q = query(q, where('approved', '==', true));
-      } else if (filterStatus === 'suspended') {
-        q = query(q, where('isSuspended', '==', true));
-      }
-
-      if (afterDoc) {
-        q = query(q, startAfter(afterDoc));
-      }
-
       const snap = await getDocs(q);
       if (snap.empty) {
-        setHasMore(false);
-        if (!afterDoc) setDrivers([]);
+        setDrivers([]);
         return;
       }
 
@@ -127,14 +103,8 @@ export default function AdminDriversPage() {
       let newList = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as DriverRow))
         .filter(d => !isTestUser(d));
-      setLastDoc(snap.docs[snap.docs.length - 1]);
-      setHasMore(snap.docs.length === PAGE_SIZE);
 
-      if (afterDoc) {
-        setDrivers(prev => [...prev, ...newList]);
-      } else {
-        setDrivers(newList);
-      }
+      setDrivers(newList);
     } catch (err: any) {
       console.error("Error fetching drivers:", err);
       if (err?.message?.includes('index')) {
@@ -145,20 +115,17 @@ export default function AdminDriversPage() {
     }
   };
 
-  const handleLoadMore = async () => {
-    if (loadingMore || !hasMore) return;
-    setLoadingMore(true);
-    await fetchDrivers(lastDoc);
-    setLoadingMore(false);
-  };
-
-  // Client-side search & unified pending filtering
+  // Client-side search & unified filtering
   const displayedDrivers = useMemo(() => {
     let list = drivers;
 
-    // Apply strict "Ready for Review" filter if pending is selected
+    // Apply strict filters based on filterStatus
     if (filterStatus === 'pending') {
-      list = list.filter(d => isDriverReadyForReview(d));
+      list = list.filter(d => d.approved === false && isDriverReadyForReview(d));
+    } else if (filterStatus === 'approved') {
+      list = list.filter(d => d.approved === true);
+    } else if (filterStatus === 'suspended') {
+      list = list.filter(d => d.isSuspended === true);
     }
 
     if (!searchQuery) return list;
@@ -215,7 +182,7 @@ export default function AdminDriversPage() {
             <div className="flex flex-col items-end gap-2">
                 <BroadcastDialog targetRole="driver" cityKey={activeCityKey || 'global'} />
                 <div className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
-                    {drivers.length} cargados {hasMore ? '(más disponibles)' : '(total)'}
+                    {displayedDrivers.length} listados de {drivers.length} total
                 </div>
             </div>
         </div>
@@ -346,26 +313,6 @@ export default function AdminDriversPage() {
                     </tbody>
                 </table>
             </div>
-
-            {hasMore && (
-                <div className="p-6 border-t border-zinc-800 bg-zinc-900/20 flex justify-center">
-                    <Button 
-                        variant="outline" 
-                        onClick={handleLoadMore} 
-                        disabled={loadingMore}
-                        className="bg-zinc-900 border-zinc-800 hover:bg-zinc-800 min-w-[200px]"
-                    >
-                        {loadingMore ? (
-                            <>
-                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                CARGANDO...
-                            </>
-                        ) : (
-                            'CARGAR MÁS'
-                        )}
-                    </Button>
-                </div>
-            )}
         </Card>
     </div>
   );

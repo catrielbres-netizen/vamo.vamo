@@ -1065,6 +1065,24 @@
                                            "order":  "ASCENDING"
                                        },
                                        {
+                                           "fieldPath":  "isOnline",
+                                           "order":  "ASCENDING"
+                                       },
+                                       {
+                                           "fieldPath":  "lastActiveAt",
+                                           "order":  "ASCENDING"
+                                       }
+                                   ]
+                    },
+                    {
+                        "collectionGroup":  "users",
+                        "queryScope":  "COLLECTION",
+                        "fields":  [
+                                       {
+                                           "fieldPath":  "role",
+                                           "order":  "ASCENDING"
+                                       },
+                                       {
                                            "fieldPath":  "cityKey",
                                            "order":  "ASCENDING"
                                        },
@@ -1171,6 +1189,20 @@
                                        {
                                            "fieldPath":  "createdAt",
                                            "order":  "DESCENDING"
+                                       }
+                                   ]
+                    },
+                    {
+                        "collectionGroup":  "city_metrics_hourly",
+                        "queryScope":  "COLLECTION",
+                        "fields":  [
+                                       {
+                                           "fieldPath":  "cityKey",
+                                           "order":  "ASCENDING"
+                                       },
+                                       {
+                                           "fieldPath":  "hourId",
+                                           "order":  "ASCENDING"
                                        }
                                    ]
                     }
