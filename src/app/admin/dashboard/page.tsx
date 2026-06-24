@@ -43,6 +43,9 @@ export default function AdminDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [hasIndexError, setHasIndexError] = useState(false);
     const [metrics, setMetrics] = useState({
+        totalDrivers: 0,
+        newDrivers: 0,
+        blockedDrivers: 0,
         pendingDrivers: 0,
         approvedDrivers: 0,
         onlineDrivers: 0,
@@ -131,11 +134,25 @@ export default function AdminDashboardPage() {
                 }
             };
 
-            // Execute all queries in parallel but handle failures individually
+            const isTestUser = (data: any) => {
+                const email = data.email?.toLowerCase() || '';
+                return email.includes('test') || email.includes('demo') || data.isTestUser === true;
+            };
+
+            const allDriversSnap = await getDocs(query(usersColl, ...baseUserQuery));
+            const driversList = allDriversSnap.docs.map(d => d.data()).filter(d => !isTestUser(d));
+
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            
+            const totalDriversCount = driversList.length;
+            const newDriversCount = driversList.filter(d => d.createdAt && (d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt)) >= thirtyDaysAgo).length;
+            const blockedDriversCount = driversList.filter(d => d.isSuspended === true).length;
+            const approvedCount = driversList.filter(d => d.approved === true).length;
+            const onlineCount = driversList.filter(d => d.driverStatus === 'online').length;
+            const realPendingCount = driversList.filter(d => isDriverReadyForReview(d)).length;
+
+            // Execute all other queries in parallel
             const [
-                pendingSnap,
-                approvedCount,
-                onlineCount,
                 withdrawalsCount,
                 activeRidesCount,
                 completedTodayCount,
@@ -204,14 +221,13 @@ export default function AdminDashboardPage() {
 
             console.log("📊 [ADMIN_STATS_QUERY_ALL_DONE]");
 
-            const realPendingCount = pendingSnap && (pendingSnap as any).docs 
-                ? (pendingSnap as any).docs.filter((d: any) => d && d.data && isDriverReadyForReview(d.data())).length 
-                : 0;
-
             setMetrics({
+                totalDrivers: totalDriversCount,
+                newDrivers: newDriversCount,
+                blockedDrivers: blockedDriversCount,
                 pendingDrivers: realPendingCount,
-                approvedDrivers: approvedCount as number,
-                onlineDrivers: onlineCount as number,
+                approvedDrivers: approvedCount,
+                onlineDrivers: onlineCount,
                 totalPassengers: totalPass as number,
                 onlinePassengers: onlinePass as number,
                 pendingWithdrawals: withdrawalsCount as number,
@@ -244,6 +260,9 @@ export default function AdminDashboardPage() {
         
         // Reset metrics on city change
         setMetrics({
+            totalDrivers: 0,
+            newDrivers: 0,
+            blockedDrivers: 0,
             pendingDrivers: 0,
             approvedDrivers: 0,
             onlineDrivers: 0,
@@ -353,39 +372,63 @@ export default function AdminDashboardPage() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* LEFT: MAIN STATS */}
-                        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <KPICard 
-                                title="Conductores Online" 
-                                value={metrics.onlineDrivers} 
-                                icon="zap" 
-                                color="green" 
-                                description={`${metrics.approvedDrivers} conductores aprobados`}
-                            />
-                            <KPICard 
-                                title="Altas Pendientes" 
-                                value={metrics.pendingDrivers} 
-                                icon="users" 
-                                color="blue" 
-                                description="Esperando revisión de documentos"
-                                alert={metrics.pendingDrivers > 0}
-                                link="/admin/drivers"
-                            />
-                            <KPICard 
-                                title="Retiros Pendientes" 
-                                value={metrics.pendingWithdrawals} 
-                                icon="landmark" 
-                                color="amber" 
-                                description="Conductores solicitando cobro"
-                                alert={metrics.pendingWithdrawals > 0}
-                                link="/admin/withdrawals"
-                            />
-                            <KPICard 
-                                title="Viajes Hoy" 
-                                value={metrics.recentCompletedRides} 
-                                icon="check-circle" 
-                                color="emerald" 
-                                description="Completados con éxito"
-                            />
+                        <div className="lg:col-span-2 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <KPICard 
+                                    title="Registrados Totales" 
+                                    value={metrics.totalDrivers} 
+                                    icon="users" 
+                                    color="blue" 
+                                    description={`Nuevos 30d: ${metrics.newDrivers}`}
+                                    link="/admin/drivers"
+                                />
+                                <KPICard 
+                                    title="Aprobados Activos" 
+                                    value={metrics.approvedDrivers} 
+                                    icon="user-check" 
+                                    color="green" 
+                                    description={`Bloqueados: ${metrics.blockedDrivers}`}
+                                />
+                                <KPICard 
+                                    title="Altas Pendientes" 
+                                    value={metrics.pendingDrivers} 
+                                    icon="clock" 
+                                    color="amber" 
+                                    description="Esperando revisión"
+                                    alert={metrics.pendingDrivers > 0}
+                                    link="/admin/drivers"
+                                />
+                                <KPICard 
+                                    title="Conductores Online" 
+                                    value={metrics.onlineDrivers} 
+                                    icon="zap" 
+                                    color="green" 
+                                    description="Conectados ahora"
+                                />
+                                <KPICard 
+                                    title="Retiros Pendientes" 
+                                    value={metrics.pendingWithdrawals} 
+                                    icon="landmark" 
+                                    color="amber" 
+                                    description="Solicitando cobro"
+                                    alert={metrics.pendingWithdrawals > 0}
+                                    link="/admin/withdrawals"
+                                />
+                                <KPICard 
+                                    title="Viajes Hoy" 
+                                    value={metrics.recentCompletedRides} 
+                                    icon="check-circle" 
+                                    color="emerald" 
+                                    description="Completados con éxito"
+                                />
+                            </div>
+                            <div className="flex justify-end">
+                                <Button asChild variant="outline" className="border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10">
+                                    <Link href="/admin/drivers?city=global&status=all">
+                                        Ver todos los conductores de Argentina
+                                    </Link>
+                                </Button>
+                            </div>
                         </div>
 
                         {/* RIGHT: HEALTH & ALERTS */}

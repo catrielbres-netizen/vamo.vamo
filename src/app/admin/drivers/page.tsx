@@ -93,7 +93,9 @@ export default function AdminDriversPage() {
         limit(PAGE_SIZE)
       );
 
-      if (activeCityKey) {
+      const isGlobalMode = activeCityKey === 'all' || activeCityKey === '*' || activeCityKey === 'global' || !activeCityKey;
+
+      if (!isGlobalMode && activeCityKey) {
         q = query(q, where('cityKey', '==', activeCityKey));
       }
 
@@ -116,7 +118,15 @@ export default function AdminDriversPage() {
         return;
       }
 
-      const newList = snap.docs.map(d => ({ id: d.id, ...d.data() } as DriverRow));
+      // Filtrar usuarios de prueba en el cliente
+      const isTestUser = (data: any) => {
+        const email = data.email?.toLowerCase() || '';
+        return email.includes('test') || email.includes('demo') || data.isTestUser === true;
+      };
+
+      let newList = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as DriverRow))
+        .filter(d => !isTestUser(d));
       setLastDoc(snap.docs[snap.docs.length - 1]);
       setHasMore(snap.docs.length === PAGE_SIZE);
 
