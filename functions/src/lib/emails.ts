@@ -263,7 +263,65 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
 
             ${referralsHtml()}
         `);
-    }
+    },
+
+    // --- LAUNCH EMAILS (PASSENGERS) ---
+    passenger_launch_minus_2d: (data) => baseTemplate(`
+        <h2 style="color: #0F172A; font-size: 22px; font-weight: 800; margin-top: 0;">¡Ya falta muy poco!</h2>
+        <p>Hola <strong>${data.name}</strong>,</p>
+        <p>En tan solo <strong>2 días</strong> vas a poder pedir viajes con VamO en tu ciudad.</p>
+        <p>Estamos ultimando detalles para asegurarnos de que tengas la mejor experiencia, con viajes seguros y a precios justos.</p>
+        
+        ${buttonHtml('Abrir VamO', 'https://www.vamoapp.com.ar/dashboard/ride')}
+    `),
+
+    passenger_launch_minus_1d: (data) => baseTemplate(`
+        <h2 style="color: #0F172A; font-size: 22px; font-weight: 800; margin-top: 0;">¡Mañana es el gran día!</h2>
+        <p>Hola <strong>${data.name}</strong>,</p>
+        <p>A partir de mañana, VamO empieza a funcionar en tu ciudad.</p>
+        <p>Preparate para moverte de forma inteligente. Asegurate de tener la app lista o guardada en la pantalla de inicio de tu celular.</p>
+        
+        ${buttonHtml('Abrir VamO', 'https://www.vamoapp.com.ar/dashboard/ride')}
+    `),
+
+    passenger_launch_0d: (data) => baseTemplate(`
+        <h2 style="color: #15803D; font-size: 22px; font-weight: 800; margin-top: 0;">¡VamO ya está activo!</h2>
+        <p>Hola <strong>${data.name}</strong>,</p>
+        <p>¡El día llegó! VamO ya está activo en tu ciudad.</p>
+        <p>Ya podés pedir tu primer viaje con nosotros. Conductores locales están listos para llevarte a donde necesites, de forma segura y económica.</p>
+        
+        ${buttonHtml('Pedir mi primer viaje', 'https://www.vamoapp.com.ar/dashboard/ride')}
+        
+        ${referralsHtml()}
+    `),
+
+    // --- LAUNCH EMAILS (DRIVERS) ---
+    driver_launch_minus_2d: (data) => baseTemplate(`
+        <h2 style="color: #0F172A; font-size: 22px; font-weight: 800; margin-top: 0;">¡Prepará tu cuenta!</h2>
+        <p>Hola <strong>${data.name}</strong>,</p>
+        <p>En <strong>2 días</strong> VamO abre oficialmente para pasajeros en tu ciudad.</p>
+        <p>Esto significa que empezarán a llegar solicitudes de viaje. Asegurate de que tu vehículo esté en condiciones y tu perfil completo.</p>
+        
+        ${buttonHtml('Ir a mi panel', 'https://www.vamoapp.com.ar/driver/dashboard')}
+    `),
+
+    driver_launch_minus_1d: (data) => baseTemplate(`
+        <h2 style="color: #0F172A; font-size: 22px; font-weight: 800; margin-top: 0;">¡Mañana empiezan los viajes!</h2>
+        <p>Hola <strong>${data.name}</strong>,</p>
+        <p>A partir de mañana, VamO estará habilitado para pasajeros en tu ciudad.</p>
+        <p>Conectate temprano para captar los primeros pedidos y empezar a ganar. Recordá mantener un buen nivel de aceptación para destacarte en la plataforma.</p>
+        
+        ${buttonHtml('Ir a mi panel', 'https://www.vamoapp.com.ar/driver/dashboard')}
+    `),
+
+    driver_launch_0d: (data) => baseTemplate(`
+        <h2 style="color: #15803D; font-size: 22px; font-weight: 800; margin-top: 0;">¡VamO ya está activo para pasajeros!</h2>
+        <p>Hola <strong>${data.name}</strong>,</p>
+        <p>¡Llegó el día! Ya habilitamos la aplicación para que los pasajeros de tu ciudad puedan pedir viajes.</p>
+        <p><strong>Ya podés conectarte.</strong> Asegurate de tener saldo en VamO Pay o métodos de pago configurados si aplica. ¡Te deseamos muchos éxitos en tus primeros viajes!</p>
+        
+        ${buttonHtml('Conectarme ahora', 'https://www.vamoapp.com.ar/driver/dashboard')}
+    `)
 };
 
 export async function sendEmailWithResend(options: { to: string, subject: string, html: string }) {
@@ -271,10 +329,12 @@ export async function sendEmailWithResend(options: { to: string, subject: string
     let finalSubject = options.subject;
 
     if (!EMAILS_ENABLED) {
-        // Test Mode
-        finalTo = EMAILS_TEST_TO;
-        finalSubject = `[TEST VamO] ${options.subject} - original: ${options.to}`;
-        console.log(`[TEST_MODE] Interceptando email. OriginalTo: ${options.to}. Destino: ${finalTo}`);
+        // Test Mode: DO NOT rewrite user emails to admin anymore.
+        // Instead, we just log and skip the actual Resend API call to prevent accidental spam
+        // unless it's explicitly aimed at a test domain/internal domain (optional, but safe to just mock entirely).
+        console.log(`[TEST_MODE] Email Skipped. OriginalTo: ${options.to}. Subject: ${finalSubject}`);
+        // Devuelve un mock ID para que la base de datos marque el status como 'sent' pero nunca salió
+        return `mock_id_${new Date().getTime()}`;
     }
 
     const { data, error } = await resend.emails.send({
