@@ -676,6 +676,22 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
                   const riskLevel = profile.driverRiskLevel || 'low';
                   const isBlocked = riskLevel === 'blocked' || balance <= negativeLimit;
                   
+                  // Priority 0: Documentos Obligatorios Pendientes
+                  if (profile.hasMandatoryPendingDocs) {
+                      return (
+                          <div className="p-4 rounded-2xl mb-4 border border-red-500/20 bg-red-500/10 text-red-500 flex items-center gap-4 shadow-sm animate-in fade-in slide-in-from-top-2">
+                              <div className="h-10 w-10 rounded-xl bg-red-500/20 flex items-center justify-center shrink-0">
+                                  <VamoIcon name="alert-circle" className="h-5 w-5" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                  <p className="font-bold text-sm leading-tight">Acción requerida</p>
+                                  <p className="text-[10px] opacity-80 mt-0.5">La administración solicitó documentación obligatoria. Tu cuenta está restringida hasta que la subas.</p>
+                              </div>
+                              <Button size="sm" variant="ghost" className="h-8 rounded-lg bg-white/5 hover:bg-white/10 font-bold text-xs" onClick={() => router.push('/driver/profile')}>Subir</Button>
+                          </div>
+                      );
+                  }
+
                   // Priority 1: Blocked (either by risk engine or hard wallet limit)
                   if (isBlocked) {
                       return (

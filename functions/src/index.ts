@@ -69,3 +69,4 @@ export * from "./legal";
 
 // Note: Ensure all sub-modules use getDb() from ./lib/firebaseAdmin 
 // to avoid "default Firebase app does not exist" errors.
+export * from "./documentRequests";

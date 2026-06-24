@@ -97,13 +97,19 @@ export default function AdminDriverDetailPage() {
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [isUpdatingReview, setIsUpdatingReview] = useState(false);
 
+  const [isMandatoryDoc, setIsMandatoryDoc] = useState(true);
+
   const DOC_OPTIONS = [
-    { id: 'dni', label: 'DNI (Frente y Dorso)' },
-    { id: 'licencia', label: 'Licencia de Conducir' },
+    { id: 'dni_front', label: 'DNI (Frente)' },
+    { id: 'dni_back', label: 'DNI (Dorso)' },
+    { id: 'license', label: 'Licencia de Conducir' },
+    { id: 'insurance', label: 'Póliza de Seguro' },
+    { id: 'vehicle_front', label: 'Foto Frente Vehículo' },
+    { id: 'vehicle_back', label: 'Foto Trasera Vehículo' },
+    { id: 'vehicle_interior', label: 'Foto Interior Vehículo' },
     { id: 'cedula', label: 'Cédula del Vehículo' },
-    { id: 'habilitacion', label: 'Habilitación Taxi/Remis' },
-    { id: 'seguro', label: 'Póliza de Seguro' },
-    { id: 'antecedentes', label: 'Certificado Antecedentes' },
+    { id: 'technical_inspection', label: 'Verificación Técnica / RTO' },
+    { id: 'other', label: 'Otro Documento' },
   ];
 
   const driverId = useMemo(() => searchParams.get('id'), [searchParams]);
@@ -117,6 +123,21 @@ export default function AdminDriverDetailPage() {
 
   const [legalDoc, setLegalDoc] = useState<any>(null);
   const [loadingLegal, setLoadingLegal] = useState(false);
+
+  const [docRequests, setDocRequests] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!firestore || !driverId) return;
+    const q = query(
+        collection(firestore, `users/${driverId}/document_requests`),
+        orderBy('requestedAt', 'desc')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setDocRequests(requests);
+    });
+    return () => unsubscribe();
+  }, [firestore, driverId]);
 
   useEffect(() => {
     if (!firestore || !driverId || !driver?.legal?.driverTermsAccepted || !driver?.legal?.driverTermsVersion) return;
@@ -237,18 +258,20 @@ export default function AdminDriverDetailPage() {
   }
 
   const handleRequestDocs = async () => {
-    if (!firestore || !driverId) return;
+    if (!firestore || !driverId || selectedDocs.length === 0) return;
     setIsUpdatingReview(true);
     try {
-        const userRef = doc(firestore, 'users', driverId);
-        await updateDoc(userRef, {
-            requiresManualReview: true,
-            manualReviewStatus: 'pending_docs',
-            documentsRequested: selectedDocs,
-            adminReviewNote: reviewNote,
-        });
-        syncPublicDriverProfile(firestore, driverId).catch(console.error);
-        toast({ title: 'Solicitud enviada', description: 'El conductor verá el pedido en su perfil.' });
+        for (const docType of selectedDocs) {
+            await callCloudFunction('adminCreateDocumentRequestV1', { 
+                driverId, 
+                docType, 
+                isMandatory: isMandatoryDoc, 
+                adminNote: reviewNote 
+            }, `Solicitud de ${docType} creada.`);
+        }
+        setSelectedDocs([]);
+        setReviewNote('');
+        toast({ title: 'Solicitudes enviadas', description: 'El conductor verá el pedido en su perfil.' });
     } catch (e: any) {
         toast({ variant: 'destructive', title: 'Error', description: e.message });
     } finally {
@@ -677,6 +700,13 @@ export default function AdminDriverDetailPage() {
                             ))}
                         </div>
                         
+                        <div className="flex items-center space-x-2 p-3 mt-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                            <Switch id="mandatory_toggle" checked={isMandatoryDoc} onCheckedChange={setIsMandatoryDoc} />
+                            <label htmlFor="mandatory_toggle" className="text-xs font-bold text-red-400 cursor-pointer">
+                                {isMandatoryDoc ? 'Obligatoria (Bloquea al conductor)' : 'Informativa (No bloquea)'}
+                            </label>
+                        </div>
+                        
                         <div className="space-y-2">
                              <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nota para el Conductor</Label>
                              <Input 
@@ -697,23 +727,73 @@ export default function AdminDriverDetailPage() {
                         </Button>
                     </div>
 
-                    {/* VISUALIZADOR DE DOCUMENTOS SUBIDOS */}
-                    {(driver.documentsSubmitted && Object.keys(driver.documentsSubmitted).length > 0) && (
-                        <div className="space-y-3 pt-2 border-t border-indigo-500/10">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Documentación Presentada</Label>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                {Object.entries(driver.documentsSubmitted).map(([key, data]) => (
-                                    <div key={key} className="group relative rounded-lg overflow-hidden aspect-square border border-zinc-800 bg-black">
-                                        <img src={data.url} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
-                                        <div className="absolute inset-x-0 bottom-0 p-2 bg-black/80">
-                                            <p className="text-[8px] font-black uppercase truncate text-indigo-400">{DOC_OPTIONS.find(o => o.id === key)?.label || key}</p>
+                    {/* VISUALIZADOR DE REQUERIMIENTOS DOCUMENTALES */}
+                    {docRequests.length > 0 && (
+                        <div className="space-y-3 pt-4 border-t border-indigo-500/10">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Historial de Requerimientos</Label>
+                            <div className="space-y-3">
+                                {docRequests.map((req) => (
+                                    <div key={req.id} className="p-3 bg-white/[0.02] border border-white/5 rounded-xl space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="text-xs font-bold text-white uppercase">{DOC_OPTIONS.find(o => o.id === req.docType)?.label || req.docType}</p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <Badge variant="outline" className={cn(
+                                                        "text-[9px] uppercase font-black",
+                                                        req.status === 'approved' ? 'border-green-500/30 text-green-400' :
+                                                        req.status === 'rejected' ? 'border-red-500/30 text-red-400' :
+                                                        req.status === 'uploaded' ? 'border-indigo-500/30 text-indigo-400' :
+                                                        'border-zinc-500/30 text-zinc-400'
+                                                    )}>
+                                                        {req.status === 'approved' ? 'Aprobado' :
+                                                         req.status === 'rejected' ? 'Rechazado' :
+                                                         req.status === 'uploaded' ? 'Subido' : 'Pendiente'}
+                                                    </Badge>
+                                                    {req.isMandatory && (
+                                                        <Badge variant="outline" className="border-red-500/50 bg-red-500/10 text-red-400 text-[9px] uppercase font-black">Obligatorio</Badge>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <button 
-                                            onClick={() => window.open(data.url, '_blank')}
-                                            className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                            <VamoIcon name="external-link" className="h-5 w-5" />
-                                        </button>
+
+                                        {req.uploadedUrl && (
+                                            <div className="relative rounded-lg overflow-hidden border border-zinc-800 bg-black aspect-video max-w-sm">
+                                                {req.uploadedUrl.includes('.pdf') ? (
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900">
+                                                        <FileText className="h-8 w-8 text-zinc-500 mb-2" />
+                                                        <span className="text-xs text-zinc-400 font-bold">Documento PDF</span>
+                                                    </div>
+                                                ) : (
+                                                    <img src={req.uploadedUrl} className="w-full h-full object-cover" />
+                                                )}
+                                                <button 
+                                                    onClick={() => window.open(req.uploadedUrl, '_blank')}
+                                                    className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity"
+                                                >
+                                                    <VamoIcon name="external-link" className="h-8 w-8 text-white" />
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {req.status === 'uploaded' && (
+                                            <div className="flex items-center gap-2 pt-2">
+                                                <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 h-8 text-[10px] font-black uppercase tracking-widest" onClick={async () => {
+                                                    await callCloudFunction('adminReviewDocumentRequestV1', { driverId, requestId: req.id, status: 'approved' }, 'Documento aprobado.');
+                                                }}>
+                                                    <CheckCircle2 className="h-4 w-4 mr-1" /> Aprobar
+                                                </Button>
+                                                <Button size="sm" variant="destructive" className="flex-1 h-8 text-[10px] font-black uppercase tracking-widest" onClick={async () => {
+                                                    const reason = window.prompt("Motivo del rechazo:");
+                                                    if (reason === null) return;
+                                                    await callCloudFunction('adminReviewDocumentRequestV1', { driverId, requestId: req.id, status: 'rejected', adminNote: reason }, 'Documento rechazado.');
+                                                }}>
+                                                    Rechazar
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {req.adminNote && (
+                                            <p className="text-[10px] text-zinc-400 italic">Nota Admin: {req.adminNote}</p>
+                                        )}
                                     </div>
                                 ))}
                             </div>

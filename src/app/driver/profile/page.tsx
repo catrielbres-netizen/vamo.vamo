@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useDriverStats } from '@/hooks/useDriverStats';
 import { Separator } from '@/components/ui/separator';
@@ -70,12 +70,16 @@ const levelBadgeStyles: Record<DriverLevel | 'default', string> = {
 };
 
 const DOC_LABELS: Record<string, string> = {
-    dni: 'DNI (Frente y Dorso)',
-    licencia: 'Licencia de Conducir',
+    dni_front: 'DNI (Frente)',
+    dni_back: 'DNI (Dorso)',
+    license: 'Licencia de Conducir',
+    insurance: 'Póliza de Seguro',
+    vehicle_front: 'Foto Frente Vehículo',
+    vehicle_back: 'Foto Trasera Vehículo',
+    vehicle_interior: 'Foto Interior Vehículo',
     cedula: 'Cédula del Vehículo',
-    habilitacion: 'Habilitación Taxi/Remis',
-    seguro: 'Póliza de Seguro',
-    antecedentes: 'Certificado Antecedentes',
+    technical_inspection: 'Verificación Técnica / RTO',
+    other: 'Otro Documento',
 };
 
 
@@ -118,6 +122,21 @@ export default function DriverProfilePage() {
   const [isSavingPreferences, setIsSavingPreferences] = useState(false);
   const [isLinkingMp, setIsLinkingMp] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [docRequests, setDocRequests] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!firestore || !user?.uid) return;
+    const q = query(
+        collection(firestore, `users/${user.uid}/document_requests`),
+        orderBy('requestedAt', 'desc')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setDocRequests(requests);
+    });
+    return () => unsubscribe();
+  }, [firestore, user?.uid]);
 
   // --- STRICT ONBOARDING REDIRECT ---
   useEffect(() => {
@@ -177,29 +196,22 @@ export default function DriverProfilePage() {
 
   const [isUploadingDoc, setIsUploadingDoc] = useState<string | null>(null);
 
-  const handleDocUpload = async (docId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDocUpload = async (requestId: string, docType: string, event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0 || !user || !firebaseApp || !firestore) return;
     const file = event.target.files[0];
     const storage = getStorage(firebaseApp);
-    const storageRef = ref(storage, `driver_documents/${user.uid}/${docId}_${Date.now()}.jpg`);
+    const storageRef = ref(storage, `driver_documents/${user.uid}/${docType}_${Date.now()}.jpg`);
 
-    setIsUploadingDoc(docId);
+    setIsUploadingDoc(requestId);
     try {
         const uploadResult = await uploadBytes(storageRef, file, { contentType: file.type });
         const downloadURL = await getDownloadURL(uploadResult.ref);
 
-        const userDocRef = doc(firestore, 'users', user.uid);
-        const currentSubmitted = profile?.documentsSubmitted || {};
-        
-        await updateDoc(userDocRef, {
-            [`documentsSubmitted.${docId}`]: {
-                url: downloadURL,
-                uploadedAt: new Date(),
-            },
-            manualReviewStatus: 'docs_submitted'
-        });
+        const functions = getFunctions(firebaseApp, 'us-central1');
+        const submitFn = httpsCallable(functions, 'submitDocumentRequestV1');
+        await submitFn({ driverId: user.uid, requestId, uploadedUrl: downloadURL });
 
-        toast({ title: "Documento subido", description: `${DOC_LABELS[docId] || docId} se guardó correctamente.` });
+        toast({ title: "Documento subido", description: `${DOC_LABELS[docType] || docType} se envió para revisión.` });
     } catch (error: any) {
         console.error("Error uploading doc:", error);
         toast({ variant: 'destructive', title: "Error al subir documento", description: error.message });
@@ -511,70 +523,90 @@ export default function DriverProfilePage() {
                       </div>
                   )}
 
-                  {profile.requiresManualReview && profile.manualReviewStatus !== 'approved' && (
-                      <div className="space-y-3">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Documentos Solicitados</p>
-                          <div className="grid gap-2">
-                              {(profile.documentsRequested || []).map((docId: string) => {
-                                  const isUploaded = !!profile.documentsSubmitted?.[docId];
-                                  return (
-                                      <div key={docId} className="flex items-center justify-between p-3 bg-background/40 rounded-xl border border-border/50">
-                                          <div className="flex items-center gap-3">
-                                              <div className={cn(
-                                                  "h-8 w-8 rounded-full flex items-center justify-center",
-                                                  isUploaded ? "bg-green-500/20 text-green-500" : "bg-indigo-500/20 text-indigo-400"
-                                              )}>
-                                                  {isUploaded ? <VamoIcon name="check" className="h-4 w-4" /> : <VamoIcon name="upload" className="h-4 w-4" />}
-                                              </div>
-                                              <div>
-                                                  <p className="text-xs font-bold">{DOC_LABELS[docId] || docId}</p>
-                                                  <p className="text-[9px] text-muted-foreground">{isUploaded ? 'Recibido' : 'Pendiente'}</p>
-                                              </div>
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                              {isUploaded && profile.documentsSubmitted?.[docId]?.url && (
-                                                   <Button size="icon" variant="ghost" className="h-8 w-8 text-indigo-400" onClick={() => window.open(profile.documentsSubmitted?.[docId]?.url, '_blank')}>
-                                                        <VamoIcon name="eye" className="h-4 w-4" />
-                                                   </Button>
-                                              )}
-                                              <input
-                                                  type="file"
-                                                  id={`doc-input-${docId}`}
-                                                  className="hidden"
-                                                  accept="image/*"
-                                                  onChange={(e) => handleDocUpload(docId, e)}
-                                              />
-                                              <Button 
-                                                  size="sm" 
-                                                  variant={isUploaded ? "outline" : "default"} 
-                                                  className="h-8 text-[10px] font-bold uppercase"
-                                                  disabled={isUploadingDoc === docId}
-                                                  onClick={() => document.getElementById(`doc-input-${docId}`)?.click()}
-                                              >
-                                                  {isUploadingDoc === docId ? "..." : isUploaded ? "Cambiar" : "Subir"}
-                                              </Button>
-                                          </div>
-                                      </div>
-                                  );
-                              })}
-                              {(!profile.documentsRequested || profile.documentsRequested.length === 0) && (
-                                  <p className="text-xs text-muted-foreground italic p-4 text-center bg-muted/20 rounded-xl">
-                                      Aún no se han solicitado documentos.
-                                  </p>
-                              )}
-                          </div>
-                          
-                          <div className="pt-4 mt-2 border-t border-white/5">
-                              <p className="text-center text-xs text-muted-foreground mb-2">¿Problemas al subir las fotos?</p>
-                              <Button 
-                                  variant="outline" 
-                                  className="w-full h-12 rounded-xl text-xs font-bold border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/10"
-                                  onClick={() => window.location.href = `mailto:documentos@vamoapp.com.ar?subject=Documentos%20Conductor%20-%20${profile.name}%20(${user.uid})&body=Hola%20equipo%20de%20VamO,%0A%0AAdjunto%20los%20documentos%20solicitados%20porque%20tuve%20problemas%20para%20subirlos%20desde%20la%20app.%0A%0AGracias.`}
-                              >
-                                  <VamoIcon name="mail" className="w-4 h-4 mr-2" /> Enviar por Email
-                              </Button>
-                          </div>
-                      </div>
+                  {docRequests.length > 0 && (
+                        <div className="space-y-3 pt-4 border-t border-white/5">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Requerimientos Documentales</p>
+                            <div className="grid gap-2">
+                                {docRequests.map((req: any) => {
+                                    const isUploaded = req.status === 'uploaded' || req.status === 'approved';
+                                    const isApproved = req.status === 'approved';
+                                    const isRejected = req.status === 'rejected';
+
+                                    return (
+                                        <div key={req.id} className="flex flex-col p-3 bg-background/40 rounded-xl border border-border/50 gap-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={cn(
+                                                        "h-8 w-8 rounded-full flex items-center justify-center",
+                                                        isApproved ? "bg-green-500/20 text-green-500" : 
+                                                        isRejected ? "bg-red-500/20 text-red-500" :
+                                                        isUploaded ? "bg-indigo-500/20 text-indigo-400" : "bg-amber-500/20 text-amber-500"
+                                                    )}>
+                                                        {isApproved ? <VamoIcon name="check" className="h-4 w-4" /> : 
+                                                         isRejected ? <VamoIcon name="alert-circle" className="h-4 w-4" /> :
+                                                         isUploaded ? <VamoIcon name="check" className="h-4 w-4" /> : 
+                                                         <VamoIcon name="upload" className="h-4 w-4" />}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-bold">{DOC_LABELS[req.docType] || req.docType}</p>
+                                                        <div className="flex items-center gap-1 mt-0.5">
+                                                            <p className="text-[9px] text-muted-foreground">
+                                                                {isApproved ? 'Aprobado' : isRejected ? 'Rechazado' : isUploaded ? 'En Revisión' : 'Pendiente'}
+                                                            </p>
+                                                            {req.isMandatory && <Badge variant="outline" className="border-red-500/50 bg-red-500/10 text-red-400 text-[8px] uppercase px-1 py-0 h-4">Obligatorio</Badge>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {req.uploadedUrl && (
+                                                         <Button size="icon" variant="ghost" className="h-8 w-8 text-indigo-400" onClick={() => window.open(req.uploadedUrl, '_blank')}>
+                                                              <VamoIcon name="eye" className="h-4 w-4" />
+                                                         </Button>
+                                                    )}
+                                                    {!isApproved && (
+                                                        <>
+                                                            <input
+                                                                type="file"
+                                                                id={`doc-input-${req.id}`}
+                                                                className="hidden"
+                                                                accept="image/*,application/pdf"
+                                                                onChange={(e) => handleDocUpload(req.id, req.docType, e)}
+                                                            />
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant={isUploaded ? "outline" : "default"} 
+                                                                className="h-8 text-[10px] font-bold uppercase"
+                                                                disabled={isUploadingDoc === req.id}
+                                                                onClick={() => document.getElementById(`doc-input-${req.id}`)?.click()}
+                                                            >
+                                                                {isUploadingDoc === req.id ? "..." : isUploaded || isRejected ? "Re-Subir" : "Subir"}
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {req.adminNote && (
+                                                <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                                    <p className="text-[9px] font-black uppercase text-red-400 mb-0.5">Nota de revisión:</p>
+                                                    <p className="text-xs text-red-100">{req.adminNote}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="pt-4 mt-2 border-t border-white/5">
+                                <p className="text-center text-xs text-muted-foreground mb-2">¿Problemas al subir las fotos?</p>
+                                <Button 
+                                    variant="outline" 
+                                    className="w-full h-12 rounded-xl text-xs font-bold border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/10"
+                                    onClick={() => window.location.href = `mailto:documentos@vamoapp.com.ar?subject=Documentos%20Conductor%20-%20${profile.name}%20(${user?.uid})&body=Hola%20equipo%20de%20VamO,%0A%0AAdjunto%20los%20documentos%20solicitados%20porque%20tuve%20problemas%20para%20subirlos%20desde%20la%20app.%0A%0AGracias.`}
+                                >
+                                    <VamoIcon name="mail" className="w-4 h-4 mr-2" /> Enviar por Email
+                                </Button>
+                            </div>
+                        </div>
                   )}
               </CardContent>
           </Card>

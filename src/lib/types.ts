@@ -705,6 +705,36 @@ export interface DriverStats {
     cancellationRate: number;
 }
 
+export type DocumentRequestDocType = 
+    | 'dni_front'
+    | 'dni_back'
+    | 'license'
+    | 'insurance'
+    | 'vehicle_front'
+    | 'vehicle_back'
+    | 'vehicle_interior'
+    | 'cedula'
+    | 'technical_inspection'
+    | 'other';
+
+export type DocumentRequestStatus = 'pending' | 'uploaded' | 'approved' | 'rejected';
+
+export interface DocumentRequest {
+    id: string;
+    userId: string;
+    docType: DocumentRequestDocType;
+    status: DocumentRequestStatus;
+    isMandatory: boolean;
+    requestedAt: any;
+    requestedBy: string;
+    uploadedAt?: any;
+    approvedAt?: any;
+    approvedBy?: string;
+    adminNote?: string;
+    driverNote?: string;
+    uploadedUrl?: string;
+}
+
 export interface UserProfile {
     id?: any;
     uid: string; // Atomic UID
@@ -859,6 +889,7 @@ export interface UserProfile {
     // --- Driver Specific (Legacy/Professional) ---
     manualReviewStatus?: 'pending' | 'docs_submitted' | 'approved' | 'rejected';
     requiresManualReview?: boolean;
+    hasMandatoryPendingDocs?: boolean;
     onboardingCompleted?: boolean;
     adminReviewNote?: string;
     documentsRequested?: string[];

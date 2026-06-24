@@ -104,7 +104,7 @@ export function calculateRidePrice(
   let finalPassengerFare = municipalTotal;
   let dynamicSnapshot: DynamicPricingSnapshot | undefined = undefined;
 
-  if (dynamicConfig?.enabled && input.serviceType !== 'shared') {
+  if (dynamicConfig?.enabled && input.serviceType !== 'shared' && municipalTotal > 10000) {
     // CLAMP rules (0-30%)
     const maxAllowed = Math.min(30, dynamicConfig.maxDiscountPercent || 30);
     const rawDiscountPercent = dynamicConfig.currentDiscountPercent || 0;

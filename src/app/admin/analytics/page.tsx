@@ -24,28 +24,15 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
-// --- Mock Data for UI Demonstration while real telemetry populates ---
-const MOCK_DAILY_TRENDS = [
-    { name: 'Lun', rides: 45, users: 120, revenue: 125000 },
-    { name: 'Mar', rides: 52, users: 145, revenue: 148000 },
-    { name: 'Mie', rides: 48, users: 130, revenue: 132000 },
-    { name: 'Jue', rides: 61, users: 180, revenue: 175000 },
-    { name: 'Vie', rides: 85, users: 240, revenue: 260000 },
-    { name: 'Sab', rides: 98, users: 310, revenue: 310000 },
-    { name: 'Dom', rides: 72, users: 210, revenue: 215000 },
-];
 
-const MOCK_CITY_DISTRIBUTION = [
-    { name: 'Rawson', value: 450, color: '#6366f1' },
-    { name: 'Playa Unión', value: 300, color: '#10b981' },
-    { name: 'Trelew', value: 120, color: '#f59e0b' },
-];
 
 export default function AdminAnalyticsPage() {
     const firestore = useFirestore();
     const { cityKey: activeCityKey, cityName } = useMunicipalContext();
     const [loading, setLoading] = useState(true);
     const [timeRange, setTimeRange] = useState('7d');
+    const [chartData, setChartData] = useState<any[]>([]);
+    const [geoData, setGeoData] = useState<any[]>([]);
     
     const [stats, setStats] = useState({
         dau: 0,
@@ -70,30 +57,79 @@ export default function AdminAnalyticsPage() {
                 else if (timeRange === '30d') startOfPeriod.setDate(now.getDate() - 30);
                 else startOfPeriod.setFullYear(now.getFullYear() - 1);
 
-                // 1. DAU (Unique active users in period)
-                // Note: High-accuracy DAU requires aggregation. Here we estimate by presence events.
-                const qDau = query(
-                    collection(firestore, 'telemetry_events'),
-                    where('eventName', 'in', ['went_online', 'went_offline']),
-                    where('createdAt', '>=', startOfPeriod)
-                );
-                const dauSnap = await getCountFromServer(qDau);
+                const dayStringLimit = startOfPeriod.toISOString().split('T')[0];
+
+                let targetCollection = activeCityKey ? 'city_metrics_daily' : 'platform_metrics_daily';
+                let qMetrics = activeCityKey 
+                    ? query(collection(firestore, targetCollection), where('cityKey', '==', activeCityKey), where('dayId', '>=', dayStringLimit), orderBy('dayId', 'asc'))
+                    : query(collection(firestore, targetCollection), where('dayId', '>=', dayStringLimit), orderBy('dayId', 'asc'));
+
+                const metricsSnap = await getDocs(qMetrics);
                 
-                // 2. Rides in period
-                const qRides = query(
-                    collection(firestore, 'rides'),
-                    where('createdAt', '>=', startOfPeriod)
-                );
-                if (activeCityKey) {
-                    // We'd need an index for cityKey + createdAt
-                }
-                const ridesSnap = await getCountFromServer(qRides);
+                let accumulatedRides = 0;
+                let accumulatedGMV = 0;
+                let peakDau = 0;
+                const newChartData: any[] = [];
+                
+                metricsSnap.forEach(doc => {
+                    const data = doc.data();
+                    const s = data.stats || {};
+                    accumulatedRides += (s.ridesCount || 0);
+                    accumulatedGMV += (s.totalGMV || 0);
+                    peakDau = Math.max(peakDau, s.peakDrivers || 0);
+                    
+                    const dateObj = new Date(data.dayId + 'T12:00:00Z');
+                    const daysStr = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+                    
+                    newChartData.push({
+                        name: daysStr[dateObj.getDay()],
+                        rides: s.ridesCount || 0,
+                        users: s.peakDrivers || 0,
+                        revenue: s.totalGMV || 0,
+                    });
+                });
+
+                setChartData(newChartData);
+
+                // Fetch current Active Users from telemetry or drivers_locations
+                const qDau = activeCityKey
+                    ? query(collection(firestore, 'drivers_locations'), where('cityKey', '==', activeCityKey), where('driverStatus', 'in', ['online', 'in_ride']))
+                    : query(collection(firestore, 'drivers_locations'), where('driverStatus', 'in', ['online', 'in_ride']));
+                
+                const dauSnap = await getCountFromServer(qDau);
+                const currentOnline = dauSnap.data().count;
 
                 setStats(prev => ({
                     ...prev,
-                    dau: dauSnap.data().count,
-                    totalRides: ridesSnap.data().count, // Added to local state below
+                    dau: Math.max(currentOnline, peakDau), // Historical peak vs current realtime
+                    totalRides: accumulatedRides,
+                    totalGmv: accumulatedGMV,
                 }));
+
+                // Geo Distribution (Only when Global)
+                if (!activeCityKey) {
+                    const geoQuery = query(collection(firestore, 'cities'));
+                    const geoSnap = await getDocs(geoQuery);
+                    const geoArr: any[] = [];
+                    const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+                    let colorIdx = 0;
+                    
+                    for (const doc of geoSnap.docs) {
+                         const cityId = doc.id;
+                         const cName = doc.data().name || cityId;
+                         const qCR = query(collection(firestore, 'city_metrics_daily'), where('cityKey', '==', cityId), orderBy('dayId', 'desc'), limit(1));
+                         const qcrSnap = await getDocs(qCR);
+                         let val = 0;
+                         if (!qcrSnap.empty) {
+                             val = qcrSnap.docs[0].data().stats?.ridesCount || 0;
+                         }
+                         if (val > 0) {
+                             geoArr.push({ name: cName, value: val, cityKey: cityId, color: colors[colorIdx++ % colors.length] });
+                         }
+                    }
+                    setGeoData(geoArr);
+                }
+
             } catch (err) {
                 console.error("[ANALYTICS_FETCH_ERROR]", err);
             } finally {
@@ -168,8 +204,8 @@ export default function AdminAnalyticsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard 
                     label="Active Users (DAU)" 
-                    value={stats.dau || 482} 
-                    trend="+18%" 
+                    value={stats.dau || 0} 
+                    trend="Live" 
                     icon="users" 
                     color="indigo" 
                 />
@@ -214,7 +250,7 @@ export default function AdminAnalyticsPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <ChartContainer title="Crecimiento de Usuarios & Viajes" description="Evolución diaria de registros vs demanda real.">
                             <ResponsiveContainer width="100%" height={300}>
-                                <AreaChart data={MOCK_DAILY_TRENDS}>
+                                <AreaChart data={chartData}>
                                     <defs>
                                         <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
@@ -240,7 +276,7 @@ export default function AdminAnalyticsPage() {
 
                         <ChartContainer title="Volumen de Ingresos (GMV)" description="Facturación total bruta generada por el sistema.">
                             <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={MOCK_DAILY_TRENDS}>
+                                <BarChart data={chartData}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
                                     <XAxis dataKey="name" stroke="#52525b" fontSize={10} axisLine={false} tickLine={false} />
                                     <YAxis stroke="#52525b" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v/1000}k`} />
@@ -291,7 +327,7 @@ export default function AdminAnalyticsPage() {
                             <ResponsiveContainer width="100%" height={300}>
                                 <PieChart>
                                     <Pie
-                                        data={MOCK_CITY_DISTRIBUTION}
+                                        data={geoData}
                                         cx="50%"
                                         cy="50%"
                                         innerRadius={60}
@@ -299,7 +335,7 @@ export default function AdminAnalyticsPage() {
                                         paddingAngle={5}
                                         dataKey="value"
                                     >
-                                        {MOCK_CITY_DISTRIBUTION.map((entry, index) => (
+                                        {geoData.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                                         ))}
                                     </Pie>
@@ -308,8 +344,9 @@ export default function AdminAnalyticsPage() {
                                     />
                                 </PieChart>
                             </ResponsiveContainer>
-                            <div className="flex justify-center gap-6 mt-4">
-                                {MOCK_CITY_DISTRIBUTION.map(city => (
+                            <div className="flex justify-center flex-wrap gap-4 mt-4">
+                                {geoData.length === 0 && <span className="text-xs text-zinc-600">No hay datos geográficos</span>}
+                                {geoData.map(city => (
                                     <div key={city.name} className="flex items-center gap-2">
                                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: city.color }} />
                                         <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{city.name}</span>

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useFirebase } from '@/firebase';
-import { EmailAuthProvider, linkWithCredential } from 'firebase/auth';
+import { updatePassword } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,21 +45,18 @@ export function ForcePasswordLink({ onComplete }: ForcePasswordLinkProps) {
 
         setIsSubmitting(true);
         try {
-            // Create a credential with the existing email and the new password
-            const credential = EmailAuthProvider.credential(user.email, password);
-            
-            // Link the password credential to the existing Google account
-            await linkWithCredential(user, credential);
+            // In Firebase, to add a password to an existing federated account, we use updatePassword
+            await updatePassword(user, password);
             
             toast({ title: '¡Seguridad configurada!', description: 'Contraseña creada exitosamente.' });
             
             // Proceed to the next step
             onComplete();
         } catch (error: any) {
-            console.error('Password Link Error:', error);
+            console.error('Password Update Error:', error);
             let desc = error.message;
-            if (error.code === 'auth/credential-already-in-use') desc = 'Esta contraseña o cuenta ya está vinculada.';
-            toast({ variant: 'destructive', title: 'Error al vincular', description: desc });
+            if (error.code === 'auth/requires-recent-login') desc = 'Por seguridad, necesitás volver a iniciar sesión para cambiar la contraseña.';
+            toast({ variant: 'destructive', title: 'Error al configurar', description: desc });
         } finally {
             setIsSubmitting(false);
         }

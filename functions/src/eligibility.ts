@@ -73,6 +73,10 @@ export const canDriverGoOnline = (
       return { isEligible: false, reason: message, code: "SUSPENDED" };
   }
   
+  if (profile.hasMandatoryPendingDocs) {
+      return { isEligible: false, reason: "Tenés documentación obligatoria pendiente o rechazada. Revisá tu perfil.", code: "PENDING_DOCS" };
+  }
+
   if (profile.blockedUntil && (profile.blockedUntil as any).toMillis() > Date.now()) {
       const dateStr = new Date((profile.blockedUntil as any).toMillis()).toLocaleString('es-AR');
       return { isEligible: false, reason: `Tu cuenta está bloqueada temporalmente hasta ${dateStr}`, code: "BLOCKED_TEMPORAL" };
@@ -200,6 +204,10 @@ export const canDriverReceiveOffers = (
           reason: "Saldo insuficiente (límite negativo alcanzado)", 
           code: "NEGATIVE_BALANCE_LIMIT" 
       };
+  }
+
+  if (profile.hasMandatoryPendingDocs) {
+      return { isEligible: false, reason: "Tenés documentación obligatoria pendiente o rechazada.", code: "PENDING_DOCS" };
   }
 
   // [VamO PRO] Driver Risk Guard

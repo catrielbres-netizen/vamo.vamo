@@ -1090,11 +1090,11 @@ function RidePageContent() {
                      )}
 
                     {/* BLOQUE D: ACCIÓN SOBRIA */}
-                    <div className="pt-1 flex gap-2">
+                    <div className="sticky bottom-0 bg-[#1a1a1a] pt-3 pb-1 flex gap-2 z-20 border-t border-white/5 mt-auto">
                         <Button 
                             onClick={() => setIsSchedulingOpen(true)}
                             variant="outline"
-                            className="w-14 h-14 rounded-2xl border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                            className="w-14 h-14 rounded-2xl border-white/10 bg-white/5 hover:bg-white/10 text-white shrink-0"
                         >
                             <VamoIcon name="calendar" className="w-6 h-6" />
                         </Button>

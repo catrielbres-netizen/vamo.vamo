@@ -324,7 +324,10 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                         <div className="space-y-4 pt-2">
                             <Button 
                                 variant="outline"
-                                onClick={() => router.push(fixedRole === 'driver' ? '/driver/register' : '/pasajero/register')}
+                                onClick={async () => {
+                                    if (auth?.currentUser) await signOut(auth);
+                                    router.push(fixedRole === 'driver' ? '/driver/register' : '/pasajero/register');
+                                }}
                                 className="w-full h-12 border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10 text-indigo-400 font-bold rounded-xl transition-all"
                             >
                                 CREAR CUENTA NUEVA
