@@ -798,60 +798,62 @@ function RidePageContent() {
                 <div className="pointer-events-auto mt-2 cursor-pointer" onClick={() => router.push('/dashboard/profile')}>
                     <ExpressProgressWidget profile={profile} compact />
                 </div>
-                
-                {/* BLOQUE A: INPUTS PULIDOS AL INICIO DE TODO */}
-                <div className="flex flex-col gap-2 mt-2 pointer-events-auto bg-[#1a1a1a] p-4 rounded-3xl border border-white/10 shadow-2xl">
-                    <div className="relative bg-white/5 border border-white/10 rounded-2xl transition-all focus-within:border-indigo-500/50">
-                        <PlaceAutocompleteInput 
-                            onPlaceSelect={setOrigin} 
-                            defaultValue={origin?.address || ''} 
-                            placeholder="Punto de partida" 
-                            iconName="map-pin" 
-                            iconClassName="text-indigo-400"
-                            cityKey={profile?.cityKey}
-                        />
-                        <button 
-                            onClick={() => handleOpenMapSelector('origin')}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-white/30 hover:text-white/80 transition-colors"
-                        >
-                            <VamoIcon name="map" className="h-4 w-4" />
-                        </button>
-                    </div>
-
-                    <div className="relative bg-white/5 border border-white/10 rounded-2xl transition-all focus-within:border-indigo-500/50">
-                        <PlaceAutocompleteInput 
-                            onPlaceSelect={setDestination} 
-                            defaultValue={destination?.address || ''} 
-                            placeholder="¿A dónde vas?" 
-                            iconName="flag" 
-                            iconClassName="text-emerald-400"
-                            cityKey={profile?.cityKey}
-                        />
-                        <button 
-                            onClick={() => handleOpenMapSelector('destination')}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-white/30 hover:text-white/80 transition-colors"
-                        >
-                            <VamoIcon name="map" className="h-4 w-4" />
-                        </button>
-                    </div>
-                </div>
             </div>
 
             <button
                 onClick={handleUseCurrentLocation}
                 disabled={isGeocoding}
                 className="absolute right-4 z-20 w-12 h-12 rounded-full bg-[#1a1a1a] border border-white/10 shadow-xl flex items-center justify-center pointer-events-auto text-white/80 hover:text-white transition-colors"
-                style={{ top: 'calc(env(safe-area-inset-top, 16px) + 210px)' }}
+                style={{ top: 'calc(env(safe-area-inset-top, 16px) + 120px)' }}
             >
                 {isGeocoding ? <VamoIcon name="loader" className="animate-spin h-5 w-5" /> : <VamoIcon name="crosshair" className="h-5 w-5" />}
             </button>
 
-            {sheetState === 'expanded' && (
-              <div className="mt-auto pointer-events-auto bg-[#1a1a1a] border border-white/10 rounded-t-3xl p-5 flex flex-col gap-4 text-white animate-in slide-in-from-bottom-5 duration-300 shadow-[0_-20px_50px_-12px_rgba(0,0,0,0.5)] max-h-[65dvh] overflow-y-auto overscroll-contain"
-                   style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 8px) + 20px)' }}>
-                 <h1 className="text-base font-bold text-white/90 px-1 italic uppercase tracking-wider">Detalles del Viaje</h1>
+            <div className="mt-auto pointer-events-auto bg-[#1a1a1a] border border-white/10 rounded-t-3xl p-5 flex flex-col gap-4 text-white shadow-[0_-20px_50px_-12px_rgba(0,0,0,0.5)] max-h-[85dvh] overflow-y-auto overscroll-contain transition-all duration-300 z-30"
+                 style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 8px) + 20px)' }}>
                  
-                 {/* NUEVO SELECTOR PRINCIPAL: INDIVIDUAL VS COMPARTIDO */}
+                 {/* BLOQUE A: INPUTS PULIDOS AL INICIO DE TODO */}
+                 <div className="flex flex-col gap-2">
+                     <div className="relative bg-white/5 border border-white/10 rounded-2xl transition-all focus-within:border-indigo-500/50">
+                         <PlaceAutocompleteInput 
+                             onPlaceSelect={setOrigin} 
+                             defaultValue={origin?.address || ''} 
+                             placeholder="Punto de partida" 
+                             iconName="map-pin" 
+                             iconClassName="text-indigo-400"
+                             cityKey={profile?.cityKey}
+                         />
+                         <button 
+                             onClick={() => handleOpenMapSelector('origin')}
+                             className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-white/30 hover:text-white/80 transition-colors"
+                         >
+                             <VamoIcon name="map" className="h-4 w-4" />
+                         </button>
+                     </div>
+
+                     <div className="relative bg-white/5 border border-white/10 rounded-2xl transition-all focus-within:border-indigo-500/50">
+                         <PlaceAutocompleteInput 
+                             onPlaceSelect={setDestination} 
+                             defaultValue={destination?.address || ''} 
+                             placeholder="¿A dónde vas?" 
+                             iconName="flag" 
+                             iconClassName="text-emerald-400"
+                             cityKey={profile?.cityKey}
+                         />
+                         <button 
+                             onClick={() => handleOpenMapSelector('destination')}
+                             className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-white/30 hover:text-white/80 transition-colors"
+                         >
+                             <VamoIcon name="map" className="h-4 w-4" />
+                         </button>
+                     </div>
+                 </div>
+
+                 {sheetState === 'expanded' && (
+                   <div className="flex flex-col gap-4 animate-in slide-in-from-bottom-5 duration-300 mt-2">
+                     <h1 className="text-base font-bold text-white/90 px-1 italic uppercase tracking-wider">Detalles del Viaje</h1>
+                     
+                     {/* NUEVO SELECTOR PRINCIPAL: INDIVIDUAL VS COMPARTIDO */}
                  <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 border border-white/5 rounded-2xl">
                     <button
                         onClick={() => {
@@ -1114,8 +1116,9 @@ function RidePageContent() {
                              serviceType === 'shared' ? 'CONFIRMAR COMPARTIDO' : 'SOLICITAR VamO'}
                         </Button>
                     </div>
+                  </div>
+                 )}
               </div>
-            )}
         </div>
       )}
 

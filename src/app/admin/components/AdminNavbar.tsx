@@ -19,6 +19,7 @@ import { useActiveCities } from '@/hooks/useActiveCities';
 const navLinks = [
     { href: '/admin/dashboard', label: 'Dashboard', icon: 'layout' },
     { href: '/admin/live-rides', label: 'Operativo En Vivo', icon: 'activity' },
+    { href: '/admin/heatmap', label: 'Heatmap', icon: 'map' },
     { href: '/admin/fraud', label: 'Control de Fraude', icon: 'shield-alert' },
     { href: '/admin/withdrawals', label: 'Finanzas & Retiros', icon: 'banknote' },
     { href: '/admin/municipal-settlements', label: 'Liquidaciones', icon: 'landmark' },

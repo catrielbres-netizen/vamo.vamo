@@ -35,7 +35,7 @@ export default function DriverSuspensionBanner({ profile }: DriverSuspensionBann
 
   // Define texts and icons
   let title = 'Cuenta Suspendida';
-  let message = 'Tu cuenta se encuentra suspendida. Contactá soporte.';
+  let message = 'Tu cuenta se encuentra suspendida. Contactá soporte (soporte.vamo@gmail.com).';
   let reason = profile.suspensionReason || '';
 
   if (source === 'traffic') {

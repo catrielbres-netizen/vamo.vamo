@@ -27,7 +27,7 @@ export const featureFlags = {
 
   // Soporte
   supportEmailEnabled: true,
-  supportEmailAddress: 'soporte@vamoapp.com',
+  supportEmailAddress: 'soporte.vamo@gmail.com',
 };
 
 export type FeatureFlags = typeof featureFlags;

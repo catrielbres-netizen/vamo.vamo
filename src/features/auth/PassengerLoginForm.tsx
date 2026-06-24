@@ -61,7 +61,7 @@ export function PassengerLoginForm() {
       if (!userDoc.exists()) {
         console.warn(`[PASSENGER_AUTH_AUDIT][INVALID_SESSION] No profile found for ${user.uid}. Cleaning up...`);
         await signOut(auth);
-        setError("No encontramos un perfil asociado a esta cuenta. Contactá a soporte.");
+        setError("No encontramos un perfil asociado a esta cuenta. Contactá a soporte (soporte.vamo@gmail.com).");
         setVisualState('error');
         return;
       }

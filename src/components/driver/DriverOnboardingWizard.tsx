@@ -985,7 +985,7 @@ export function DriverOnboardingWizard() {
 
         {/* Support Link */}
         <p className="text-center text-xs text-zinc-500">
-            ¿Necesitás ayuda? <a href="#" className="text-indigo-400 hover:underline">Contactar a soporte</a>
+            ¿Necesitás ayuda? <a href="mailto:soporte.vamo@gmail.com" className="text-indigo-400 hover:underline">Contactar a soporte</a>
         </p>
       </div>
     </div>

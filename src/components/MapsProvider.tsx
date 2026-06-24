@@ -31,7 +31,7 @@ export function MapsProvider({ children }: React.PropsWithChildren) {
         </div>
       )}
       {mapsAreAvailable ? (
-        <APIProvider apiKey={apiKey} libraries={['places', 'routes', 'geocoding']}>
+        <APIProvider apiKey={apiKey} libraries={['places', 'routes', 'geocoding', 'visualization']}>
           {children}
         </APIProvider>
       ) : (

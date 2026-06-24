@@ -128,7 +128,7 @@ export default function AdminDriversPage() {
     } catch (err: any) {
       console.error("Error fetching drivers:", err);
       if (err?.message?.includes('index')) {
-          setError("Falta un índice en la base de datos para este filtro. Por favor, contacte a soporte.");
+          setError("Falta un índice en la base de datos para este filtro. Por favor, contacte a soporte (soporte.vamo@gmail.com).");
       } else {
           setError("Error al cargar conductores. Por favor, intente de nuevo.");
       }

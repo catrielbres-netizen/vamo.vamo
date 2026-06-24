@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
     collection, 
@@ -359,9 +361,11 @@ export default function AdminAnalyticsPage() {
                             <VamoIcon name="map" className="w-12 h-12 text-zinc-700 mb-4" />
                             <h3 className="text-lg font-black text-white italic tracking-tighter mb-2">Mapa de Calor Operativo</h3>
                             <p className="text-sm text-zinc-500 max-w-xs">Visualiza la densidad de pedidos en tiempo real para optimizar el posicionamiento de conductores.</p>
-                            <Badge className="mt-4 bg-indigo-600 hover:bg-indigo-600 cursor-pointer uppercase font-black tracking-widest text-[10px]">
-                                Abrir Live Heatmap
-                            </Badge>
+                            <Link href="/admin/heatmap">
+                                <Badge className="mt-4 bg-indigo-600 hover:bg-indigo-600 cursor-pointer uppercase font-black tracking-widest text-[10px]">
+                                    Abrir Live Heatmap
+                                </Badge>
+                            </Link>
                         </div>
                     </div>
                 </TabsContent>
