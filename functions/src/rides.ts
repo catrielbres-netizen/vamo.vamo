@@ -736,7 +736,7 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
     if (!userSnap.exists) throw new HttpsError('not-found', 'Perfil de usuario no encontrado.');
     const passengerProfile = userSnap.data() as UserProfile;
 
-    const CURRENT_TERMS_V = 'v1.3';
+    const CURRENT_TERMS_V = 'v1.4';
     if (!dryRun && (!passengerProfile.termsAccepted || passengerProfile.termsVersion !== CURRENT_TERMS_V)) {
         throw new HttpsError('failed-precondition', 'Debes aceptar los Términos y Condiciones actualizados.');
     }

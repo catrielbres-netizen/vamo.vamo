@@ -22,7 +22,7 @@ export const canPassengerRequestRide = (
   if (profile.isSuspended) return { isEligible: false, reason: profile.suspensionReason || "Tu cuenta ha sido suspendida.", code: "SUSPENDED" };
   
   // MANDATORY LEGAL CHECK (v1.3)
-  const CURRENT_TERMS_V = 'v1.3';
+  const CURRENT_TERMS_V = 'v1.4';
   const hasAccepted = profile.termsAccepted || profile.acceptedDriverTerms;
   const isCorrectVersion = profile.termsVersion === CURRENT_TERMS_V;
 
@@ -150,7 +150,7 @@ export const canDriverGoOnline = (
   }
 
   // MANDATORY LEGAL CHECK (v1.3)
-  const CURRENT_TERMS_V = 'v1.3';
+  const CURRENT_TERMS_V = 'v1.4';
   const hasAccepted = profile.termsAccepted || profile.acceptedDriverTerms;
   const isCorrectVersion = profile.termsVersion === CURRENT_TERMS_V;
 

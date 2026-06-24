@@ -272,7 +272,7 @@ export const completeDriverOnboardingV1 = onCall({ cors: true, region: "us-centr
         termsAccepted: true,
         driverTermsAccepted: true,
         acceptedDriverTerms: true,
-        termsVersion: data.termsVersion || 'v1.3',
+        termsVersion: data.termsVersion || 'v1.4',
         termsAcceptedAt: FieldValue.serverTimestamp(),
         legalAccepted: true,
         updatedAt: FieldValue.serverTimestamp(),
