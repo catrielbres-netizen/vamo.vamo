@@ -69,6 +69,7 @@ export const processMailQueueV1 = functions
             await snap.ref.update({
                 status: 'sent',
                 providerMessageId,
+                htmlContent: html, // Save HTML for auditing
                 sentAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });

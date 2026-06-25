@@ -10,6 +10,9 @@ export const RESEND_API_KEY = process.env.RESEND_API_KEY || ''; // Cloud Functio
 // Instantiate with a dummy key if empty, to prevent top-level exceptions during Firebase deploy analysis
 const resend = new Resend(RESEND_API_KEY || 're_dummy_key_for_build');
 
+export const PUBLIC_BASE_URL = '${PUBLIC_BASE_URL}';
+export const OFFICIAL_DRIVER_REGISTER_URL = `${PUBLIC_BASE_URL}/login/?role=driver`;
+
 export const DEFAULT_FROM = process.env.EMAIL_FROM || 'VamO <notificaciones@vamoapp.com.ar>';
 
 // Estructura de MailQueue
@@ -51,7 +54,7 @@ const referralsHtml = () => `
     <div style="background-color: #F0FDF4; border: 1px dashed #86EFAC; border-radius: 12px; padding: 20px; margin-top: 30px; text-align: center;">
         <h3 style="margin-top: 0; color: #166534; font-size: 18px;">Invitá a otra persona a usar VamO</h3>
         <p style="font-size: 14px; color: #15803D; margin-bottom: 20px; line-height: 1.6;">Compartí la app con familiares, vecinos o compañeros. Cuantos más usuarios tenga VamO en tu ciudad, más rápido crece el servicio local.</p>
-        <a href="https://www.vamoapp.com.ar" style="background-color: #166534; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
+        <a href="${PUBLIC_BASE_URL}" style="background-color: #166534; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
             Compartir VamO
         </a>
     </div>
@@ -83,7 +86,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
             <strong>Próximos pasos:</strong> Para poder conectarte y recibir viajes, tenés que subir la documentación requerida para tu habilitación.
         </p>
 
-        ${buttonHtml('Completar habilitación', 'https://www.vamoapp.com.ar/driver/muni-status')}
+        ${buttonHtml('Completar habilitación', '${PUBLIC_BASE_URL}/driver/muni-status')}
         
         <p style="font-size: 14px; color: #64748B; text-align: center; margin-top: 24px;">Una vez habilitado, acá podrás ver tus ganancias estimadas y estadísticas de viaje.</p>
     `),
@@ -94,7 +97,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <p>Tu solicitud y documentación han sido recibidas exitosamente.</p>
         <p>Tu perfil se encuentra ahora en revisión por nuestro equipo operativo.</p>
         
-        ${buttonHtml('Ver estado de revisión', 'https://www.vamoapp.com.ar/driver')}
+        ${buttonHtml('Ver estado de revisión', '${PUBLIC_BASE_URL}/driver')}
     `),
     
     driver_pending_documents: (data) => baseTemplate(`
@@ -103,7 +106,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <p>Aún tenemos documentos pendientes de subir a tu perfil.</p>
         <p>Recordá que para empezar a recibir viajes, debés completar tu legajo ingresando a la app.</p>
         
-        ${buttonHtml('Subir documentos', 'https://www.vamoapp.com.ar/driver/muni-status')}
+        ${buttonHtml('Subir documentos', '${PUBLIC_BASE_URL}/driver/muni-status')}
     `),
     
     document_received: (data) => baseTemplate(`
@@ -112,7 +115,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <p>Recibimos tu documento: <strong>${data.documentName}</strong>.</p>
         <p>Será revisado por el área correspondiente. Te avisaremos cuando tenga novedades.</p>
         
-        ${buttonHtml('Abrir VamO', 'https://www.vamoapp.com.ar/driver')}
+        ${buttonHtml('Abrir VamO', '${PUBLIC_BASE_URL}/driver')}
     `),
     
     document_approved: (data) => baseTemplate(`
@@ -120,7 +123,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <p>Hola <strong>${data.name}</strong>,</p>
         <p>Tu documento <strong>${data.documentName}</strong> fue aprobado exitosamente.</p>
         
-        ${buttonHtml('Revisar estado', 'https://www.vamoapp.com.ar/driver/muni-status')}
+        ${buttonHtml('Revisar estado', '${PUBLIC_BASE_URL}/driver/muni-status')}
     `),
     
     document_observed: (data) => baseTemplate(`
@@ -131,7 +134,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
             <strong>Motivo:</strong> ${data.reason}
         </p>
         
-        ${buttonHtml('Corregir documento', 'https://www.vamoapp.com.ar/driver/muni-status')}
+        ${buttonHtml('Corregir documento', '${PUBLIC_BASE_URL}/driver/muni-status')}
     `),
     
     driver_enabled: (data) => baseTemplate(`
@@ -141,10 +144,10 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <div style="background-color: #F0FDF4; border: 1px dashed #86EFAC; border-radius: 12px; padding: 20px; margin-top: 24px; text-align: center;">
             <h3 style="margin-top: 0; color: #166534; font-size: 18px;">Ayudanos a activar VamO en tu zona</h3>
             <p style="font-size: 14px; color: #15803D; margin-bottom: 20px; line-height: 1.6;">Cuantos más conductores se sumen y completen su registro, más rápido podremos activar la zona para operar.</p>
-            ${buttonHtml('Invitar Conductor', 'https://www.vamoapp.com.ar/login/?role=driver')}
+            ${buttonHtml('Invitar Conductor', '${OFFICIAL_DRIVER_REGISTER_URL}')}
         </div>
 
-        ${buttonHtml('Conectarme en VamO', 'https://www.vamoapp.com.ar/driver')}
+        ${buttonHtml('Conectarme en VamO', '${PUBLIC_BASE_URL}/driver')}
     `),
 
     driver_how_to_operate_vamo: (data) => baseTemplate(`
@@ -158,7 +161,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
             <li style="margin-bottom: 8px;">Al llegar al destino, deslizá para finalizar el viaje y cobrar.</li>
         </ol>
         
-        ${buttonHtml('Abrir VamO', 'https://www.vamoapp.com.ar/driver')}
+        ${buttonHtml('Abrir VamO', '${PUBLIC_BASE_URL}/driver')}
     `),
 
     driver_wallet_intro: (data) => {
@@ -177,7 +180,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
             
             ${activityCardHtml('Tu actividad reciente', statsHtml)}
 
-            ${buttonHtml('Ver mi billetera', 'https://www.vamoapp.com.ar/driver')}
+            ${buttonHtml('Ver mi billetera', '${PUBLIC_BASE_URL}/driver')}
         `);
     },
 
@@ -193,7 +196,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
             
             ${activityCardHtml('Tu actividad', statsHtml)}
 
-            ${buttonHtml('Volver a conectarme', 'https://www.vamoapp.com.ar/driver')}
+            ${buttonHtml('Volver a conectarme', '${PUBLIC_BASE_URL}/driver')}
             
             ${referralsHtml()}
         `);
@@ -211,7 +214,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         </ul>
         <p>Recordá que podés compartir tu recorrido en tiempo real con contactos para mayor seguridad.</p>
 
-        ${buttonHtml('Abrir VamO', 'https://www.vamoapp.com.ar/dashboard/ride')}
+        ${buttonHtml('Abrir VamO', '${PUBLIC_BASE_URL}/dashboard/ride')}
 
         ${referralsHtml()}
     `),
@@ -230,7 +233,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
             </ul>
         `)}
 
-        ${buttonHtml('Probar viaje compartido', 'https://www.vamoapp.com.ar/dashboard/ride')}
+        ${buttonHtml('Probar viaje compartido', '${PUBLIC_BASE_URL}/dashboard/ride')}
     `),
 
     passenger_vamo_pay_intro: (data) => {
@@ -249,7 +252,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
                 <strong>Regla clara:</strong> El saldo VamO Pay no es retirable en efectivo ni transferible a Mercado Pago. Sirve exclusivamente como crédito interno para pagar futuros viajes en la app.
             </p>
 
-            ${buttonHtml('Abrir VamO', 'https://www.vamoapp.com.ar/dashboard/ride')}
+            ${buttonHtml('Abrir VamO', '${PUBLIC_BASE_URL}/dashboard/ride')}
         `);
     },
 
@@ -265,7 +268,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
             
             ${activityCardHtml('Tu actividad en VamO', statsHtml)}
 
-            ${buttonHtml('Pedir viaje', 'https://www.vamoapp.com.ar/dashboard/ride')}
+            ${buttonHtml('Pedir viaje', '${PUBLIC_BASE_URL}/dashboard/ride')}
 
             ${referralsHtml()}
         `);
@@ -278,7 +281,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <p>En tan solo <strong>2 días</strong> vas a poder pedir viajes con VamO en tu ciudad.</p>
         <p>Estamos ultimando detalles para asegurarnos de que tengas la mejor experiencia, con viajes seguros y a precios justos.</p>
         
-        ${buttonHtml('Abrir VamO', 'https://www.vamoapp.com.ar/dashboard/ride')}
+        ${buttonHtml('Abrir VamO', '${PUBLIC_BASE_URL}/dashboard/ride')}
     `),
 
     passenger_launch_minus_1d: (data) => baseTemplate(`
@@ -287,7 +290,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <p>A partir de mañana, VamO empieza a funcionar en tu ciudad.</p>
         <p>Preparate para moverte de forma inteligente. Asegurate de tener la app lista o guardada en la pantalla de inicio de tu celular.</p>
         
-        ${buttonHtml('Abrir VamO', 'https://www.vamoapp.com.ar/dashboard/ride')}
+        ${buttonHtml('Abrir VamO', '${PUBLIC_BASE_URL}/dashboard/ride')}
     `),
 
     passenger_launch_0d: (data) => baseTemplate(`
@@ -296,7 +299,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <p>¡El día llegó! VamO ya está activo en tu ciudad.</p>
         <p>Ya podés pedir tu primer viaje con nosotros. Conductores locales están listos para llevarte a donde necesites, de forma segura y económica.</p>
         
-        ${buttonHtml('Pedir mi primer viaje', 'https://www.vamoapp.com.ar/dashboard/ride')}
+        ${buttonHtml('Pedir mi primer viaje', '${PUBLIC_BASE_URL}/dashboard/ride')}
         
         ${referralsHtml()}
     `),
@@ -308,7 +311,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <p>En <strong>2 días</strong> VamO abre oficialmente para pasajeros en tu ciudad.</p>
         <p>Esto significa que empezarán a llegar solicitudes de viaje. Asegurate de que tu vehículo esté en condiciones y tu perfil completo.</p>
         
-        ${buttonHtml('Ir a mi panel', 'https://www.vamoapp.com.ar/driver/dashboard')}
+        ${buttonHtml('Ir a mi panel', '${PUBLIC_BASE_URL}/driver/dashboard')}
     `),
 
     driver_launch_minus_1d: (data) => baseTemplate(`
@@ -317,7 +320,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <p>A partir de mañana, VamO estará habilitado para pasajeros en tu ciudad.</p>
         <p>Conectate temprano para captar los primeros pedidos y empezar a ganar. Recordá mantener un buen nivel de aceptación para destacarte en la plataforma.</p>
         
-        ${buttonHtml('Ir a mi panel', 'https://www.vamoapp.com.ar/driver/dashboard')}
+        ${buttonHtml('Ir a mi panel', '${PUBLIC_BASE_URL}/driver/dashboard')}
     `),
 
     driver_launch_0d: (data) => baseTemplate(`
@@ -326,7 +329,7 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <p>¡Llegó el día! Ya habilitamos la aplicación para que los pasajeros de tu ciudad puedan pedir viajes.</p>
         <p><strong>Ya podés conectarte.</strong> Asegurate de tener saldo en VamO Pay o métodos de pago configurados si aplica. ¡Te deseamos muchos éxitos en tus primeros viajes!</p>
         
-        ${buttonHtml('Conectarme ahora', 'https://www.vamoapp.com.ar/driver/dashboard')}
+        ${buttonHtml('Conectarme ahora', '${PUBLIC_BASE_URL}/driver/dashboard')}
     `)
 };
 
