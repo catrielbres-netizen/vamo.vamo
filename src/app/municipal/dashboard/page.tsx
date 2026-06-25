@@ -143,9 +143,10 @@ export default function MunicipalDashboardPage() {
     const [copiedLink, setCopiedLink] = useState('');
 
     const handleCopy = (type: 'passenger' | 'driver') => {
-        const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.com.ar';
-        const path = type === 'passenger' ? '/pasajero/onboarding' : '/driver/register';
-        const url = `${baseUrl}${path}?city=${cityKey}`;
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://www.vamoapp.com.ar';
+        const path = type === 'passenger' ? '/pasajero/onboarding' : '/login/';
+        const params = type === 'passenger' ? `?city=${cityKey}` : `?role=driver&city=${cityKey}`;
+        const url = `${baseUrl}${path}${params}`;
         navigator.clipboard.writeText(url);
         setCopiedLink(type);
         setTimeout(() => setCopiedLink(''), 2000);

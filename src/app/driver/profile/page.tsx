@@ -345,7 +345,7 @@ export default function DriverProfilePage() {
               
               <div className="relative z-10 p-4 bg-white rounded-3xl shadow-xl">
                   <LazyQRCode
-                      value={`${typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.com.ar'}/verify/driver/${user?.uid}`}
+                      value={`${typeof window !== 'undefined' ? window.location.origin : 'https://www.vamoapp.com.ar'}/verify/driver/${user?.uid}`}
                       size={160}
                       level="H"
                       marginSize={1}

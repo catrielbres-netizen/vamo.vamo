@@ -585,7 +585,7 @@ export default function DriverMuniStatusPage() {
                             <div className="flex flex-col items-center gap-6 py-6">
                                 <div className="relative p-4 bg-white rounded-3xl shadow-2xl overflow-hidden">
                                     <LazyQRCode 
-                                        value={`${typeof window !== 'undefined' ? window.location.origin : 'https://vamoapp.com.ar'}/verify/driver/${user?.uid}`}
+                                        value={`${typeof window !== 'undefined' ? window.location.origin : 'https://www.vamoapp.com.ar'}/verify/driver/${user?.uid}`}
                                         size={180}
                                         level="H"
                                         marginSize={2}
