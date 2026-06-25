@@ -54,14 +54,14 @@ export default function AuthContinuePage() {
 
                 if (profile.registrationStatus !== 'active') {
                     console.warn(`[AUTH_CONTINUE] Incomplete registration (${profile.registrationStatus}). Routing to onboarding...`);
-                    if (profile.role === 'driver') {
+                    if (profile.role === 'driver' || profile.role === 'incomplete_driver') {
                         router.replace('/driver/register');
                     } else {
                         router.replace('/dashboard/complete-profile');
                     }
                 } else {
                     console.log("[AUTH_CONTINUE] Status active. Routing to dashboard...");
-                    if (profile.role === 'driver') {
+                    if (profile.role === 'driver' || profile.role === 'incomplete_driver') {
                         router.replace('/driver');
                     } else {
                         router.replace('/dashboard');
