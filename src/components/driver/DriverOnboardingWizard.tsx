@@ -369,7 +369,9 @@ export function DriverOnboardingWizard() {
             licenseExpiry: toDateStr(data.licenseExpiry),
             insuranceExpiry: toDateStr(data.insuranceExpiry),
             criminalRecordExpiry: toDateStr(data.criminalRecordExpiry),
-            termsAccepted: true,
+            termsAccepted: !!data.driverTermsAccepted,
+            legalName: data.legalName || '',
+            legalDni: data.legalDni || '',
           });
           
           if (data.documents) {
@@ -1025,8 +1027,14 @@ export function DriverOnboardingWizard() {
             </DialogContent>
         </Dialog>
 
-        <Dialog open={isLegalModalOpen} onOpenChange={setIsLegalModalOpen}>
+        <Dialog open={isLegalModalOpen} onOpenChange={(open) => {
+            if (!open && (!formData.termsAccepted || formData.legalName.length < 5 || formData.legalDni.length < 7)) {
+                setFormData(p => ({ ...p, termsAccepted: false, legalName: '', legalDni: '' }));
+            }
+            setIsLegalModalOpen(open);
+        }}>
             <DialogContent 
+                hideCloseButton
                 className="max-w-md w-[95vw] h-[85dvh] flex flex-col gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/5 shadow-2xl p-0"
                 onPointerDownOutside={(e) => e.preventDefault()}
                 onEscapeKeyDown={(e) => e.preventDefault()}
