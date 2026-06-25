@@ -1018,7 +1018,7 @@ export function DriverOnboardingWizard() {
 
         <Dialog open={isLegalModalOpen} onOpenChange={setIsLegalModalOpen}>
             <DialogContent 
-                className="max-w-md w-[95vw] h-[85vh] flex flex-col gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/5 shadow-2xl p-0"
+                className="max-w-md w-[95vw] h-[85dvh] flex flex-col gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/5 shadow-2xl p-0"
                 onPointerDownOutside={(e) => e.preventDefault()}
                 onEscapeKeyDown={(e) => e.preventDefault()}
             >
@@ -1069,48 +1069,48 @@ export function DriverOnboardingWizard() {
                     
                     {/* Centinela de scroll */}
                     <div ref={sentinelRef} className="h-10 w-full" />
-                </div>
 
-                {hasScrolledToBottom && (
-                    <div className="p-6 sm:p-8 pb-10 bg-zinc-900 border-t border-white/5 shrink-0 flex flex-col gap-4 animate-in slide-in-from-bottom-8 fade-in duration-500">
-                        <div className="space-y-3 mb-2">
-                            <Input 
-                                placeholder="Nombre completo" 
-                                value={formData.legalName}
-                                onChange={(e) => setFormData(p => ({ ...p, legalName: e.target.value }))}
-                                className="h-12 bg-zinc-950 border-white/10"
-                            />
-                            <Input 
-                                placeholder="DNI" 
-                                type="number"
-                                value={formData.legalDni}
-                                onChange={(e) => setFormData(p => ({ ...p, legalDni: e.target.value }))}
-                                className="h-12 bg-zinc-950 border-white/10"
-                            />
-                        </div>
-                        <div className="transition-opacity duration-300 opacity-100">
-                            <label className="flex items-start gap-3 px-2 cursor-pointer group">
-                                <input 
-                                    type="checkbox" 
-                                    required
-                                    checked={formData.termsAccepted} 
-                                    onChange={e => setFormData(p => ({ ...p, termsAccepted: e.target.checked }))} 
-                                    className="mt-0.5 h-4 w-4 rounded border-white/10 bg-zinc-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900" 
+                    {hasScrolledToBottom && (
+                        <div className="sticky bottom-0 left-0 right-0 p-6 sm:p-8 bg-zinc-900 border-t border-white/5 flex flex-col gap-4 animate-in slide-in-from-bottom-8 fade-in duration-500 shadow-[0_-20px_50px_-15px_rgba(0,0,0,0.8)] z-50 -mx-8 -mb-8 rounded-b-[2.5rem]">
+                            <div className="space-y-3 mb-2">
+                                <Input 
+                                    placeholder="Nombre completo" 
+                                    value={formData.legalName}
+                                    onChange={(e) => setFormData(p => ({ ...p, legalName: e.target.value }))}
+                                    className="h-12 bg-zinc-950 border-white/10"
                                 />
-                                <p className="text-[10px] text-zinc-400 leading-tight group-hover:text-zinc-300">
-                                    En carácter de declaración jurada, firmo digitalmente y acepto íntegramente este contrato operativo.
-                                </p>
-                            </label>
+                                <Input 
+                                    placeholder="DNI" 
+                                    type="number"
+                                    value={formData.legalDni}
+                                    onChange={(e) => setFormData(p => ({ ...p, legalDni: e.target.value }))}
+                                    className="h-12 bg-zinc-950 border-white/10"
+                                />
+                            </div>
+                            <div className="transition-opacity duration-300 opacity-100">
+                                <label className="flex items-start gap-3 px-2 cursor-pointer group">
+                                    <input 
+                                        type="checkbox" 
+                                        required
+                                        checked={formData.termsAccepted} 
+                                        onChange={e => setFormData(p => ({ ...p, termsAccepted: e.target.checked }))} 
+                                        className="mt-0.5 h-4 w-4 rounded border-white/10 bg-zinc-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900" 
+                                    />
+                                    <p className="text-[10px] text-zinc-400 leading-tight group-hover:text-zinc-300">
+                                        En carácter de declaración jurada, firmo digitalmente y acepto íntegramente este contrato operativo.
+                                    </p>
+                                </label>
+                            </div>
+                            <Button 
+                                onClick={() => setIsLegalModalOpen(false)}
+                                disabled={!formData.termsAccepted || formData.legalName.length < 5 || formData.legalDni.length < 7}
+                                className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.1em] rounded-2xl shadow-xl shadow-indigo-500/10 transition-all active:scale-[0.98] mb-2 sm:mb-0"
+                            >
+                                Aceptar y Continuar
+                            </Button>
                         </div>
-                        <Button 
-                            onClick={() => setIsLegalModalOpen(false)}
-                            disabled={!formData.termsAccepted || formData.legalName.length < 5 || formData.legalDni.length < 7}
-                            className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.1em] rounded-2xl shadow-xl shadow-indigo-500/10 transition-all active:scale-[0.98] mb-2 sm:mb-0"
-                        >
-                            Aceptar y Continuar
-                        </Button>
-                    </div>
-                )}
+                    )}
+                </div>
             </DialogContent>
         </Dialog>
 
