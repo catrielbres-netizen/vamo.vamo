@@ -16,6 +16,7 @@ import { DriverMissionPanel } from '@/components/DriverMissionPanel';
 import { NotificationToggle } from '@/components/NotificationToggle';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { CURRENT_DRIVER_TERMS_VERSION } from '@/lib/legal-config';
 const statusMessages: Record<string, {title: string, description: string, icon: string}> = {
     unverified: {
         title: 'Perfil Incompleto',
@@ -53,8 +54,38 @@ export default function DriverRidesPage() {
   
   console.log(`[DRIVER_PAGE] Render. Online: ${isOnline}, Balance: ${balance}, Offers: ${availableOffers.length}`);
 
+  const isMissingDocs = !profile?.profileCompleted || profile?.municipalStatus === 'pending_documents' || profile?.municipalStatus === 'observed_documents';
+  const isMissingContract = !profile?.legal?.driverTermsAccepted || profile?.legal?.driverTermsVersion !== CURRENT_DRIVER_TERMS_VERSION;
+  
+  let alertTitle = null;
+  let alertDesc = null;
+  let alertActionText = "Subir documentación";
+
+  if (isMissingDocs || (!profile?.approved && !isPendingReview && !isMissingContract)) {
+      alertTitle = "Tenés documentación pendiente";
+      alertDesc = "Para completar tu registro y poder ser revisado, ingresá a la pestaña Habilitación y subí la documentación solicitada.";
+      alertActionText = "Subir documentación";
+  } else if (isMissingContract) {
+      alertTitle = "Falta firmar contrato";
+      alertDesc = "Para poder operar, debés aceptar el contrato de Términos y Condiciones vigente en la pestaña Habilitación.";
+      alertActionText = "Firmar contrato";
+  }
+
   return (
       <div className="space-y-4">
+        {alertTitle && (
+            <Alert variant="destructive" className="border-red-500/50 bg-red-950/20 rounded-2xl mb-4 shadow-lg shadow-red-500/10">
+                <VamoIcon name="alert-triangle" className="h-5 w-5 text-red-400" />
+                <AlertTitle className="text-red-400 font-black text-lg">{alertTitle}</AlertTitle>
+                <AlertDescription className="text-red-200 mt-2 font-medium">
+                    {alertDesc}
+                </AlertDescription>
+                <Button asChild className="w-full mt-4 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest shadow-xl">
+                    <Link href="/driver/muni-status">{alertActionText}</Link>
+                </Button>
+            </Alert>
+        )}
+
         {!profile?.approved && (
             <Alert variant="default" className="border-emerald-500/50 bg-emerald-500/10 rounded-2xl">
                 <VamoIcon name="map-pin" className="h-5 w-5 text-emerald-400" />
@@ -79,17 +110,6 @@ export default function DriverRidesPage() {
                 <AlertDescription className="text-indigo-500/80 text-xs">
                     Estamos validando tus datos y documentación. Podrás recibir viajes cuando tu cuenta esté aprobada y tu zona habilitada.
                 </AlertDescription>
-            </Alert>
-        )}
-
-        {(!profile?.approved && !isPendingReview) && (
-            <Alert variant="destructive" className="rounded-2xl">
-                <VamoIcon name={message.icon} className="h-4 w-4" />
-                <AlertTitle>{message.title}</AlertTitle>
-                <AlertDescription className="mb-4">{message.description}</AlertDescription>
-                <Button variant="outline" size="sm" className="w-full bg-red-950 hover:bg-red-900 border-red-500/50 text-white font-bold" asChild>
-                    <Link href="/driver/profile">Ir a Mi Perfil</Link>
-                </Button>
             </Alert>
         )}
 
