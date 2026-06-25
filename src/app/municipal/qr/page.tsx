@@ -6,6 +6,8 @@ import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
+import { useToast } from '@/hooks/use-toast';
+import { PUBLIC_BASE_URL } from '@/config/urls';
 import { useUser } from '@/firebase/auth/use-user';
 
 export default function MayorQRPage() {
@@ -32,7 +34,7 @@ export default function MayorQRPage() {
     };
 
     // URL to go to login. Using window.origin or a default
-    const loginUrl = typeof window !== 'undefined' ? `${window.location.origin}/login` : 'https://vamo.app/login';
+    const loginUrl = `${PUBLIC_BASE_URL}/login`;
 
     return (
         <div className="min-h-screen bg-[#050508] flex flex-col items-center justify-center p-6 font-sans">

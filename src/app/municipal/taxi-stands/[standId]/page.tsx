@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useMunicipalContext } from '@/hooks/useMunicipalContext';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { PUBLIC_BASE_URL } from '@/config/urls';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { MapsProvider } from '@/components/MapsProvider';
@@ -659,7 +660,7 @@ function TaxiStandDetailContent() {
     };
 
     const handleCopyCredentials = (email: string, pass: string, url: string) => {
-        const text = `Usuario: ${email}\nClave Temporal: ${pass}\nIngreso: ${window.location.origin}${url}`;
+        const text = `Usuario: ${email}\nClave Temporal: ${pass}\nIngreso: ${PUBLIC_BASE_URL}${url}`;
         navigator.clipboard.writeText(text);
         toast({
             title: 'Copiado al portapapeles',

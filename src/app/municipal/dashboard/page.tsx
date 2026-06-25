@@ -5,6 +5,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, query, where, getCountFromServer, doc, setDoc, onSnapshot, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { MunicipalProfile, MunicipalExpressStatus, normalizeCityKey } from '@/lib/types';
+import { PUBLIC_BASE_URL, OFFICIAL_DRIVER_REGISTER_URL } from '@/config/urls';
 import Link from 'next/link';
 import { VamoIcon } from '@/components/VamoIcon';
 import { cn } from '@/lib/utils';
@@ -143,13 +144,14 @@ export default function MunicipalDashboardPage() {
     const [copiedLink, setCopiedLink] = useState('');
 
     const handleCopy = (type: 'passenger' | 'driver') => {
-        const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://www.vamoapp.com.ar';
-        const path = type === 'passenger' ? '/pasajero/onboarding' : '/login/';
-        const params = type === 'passenger' ? `?city=${cityKey}` : `?role=driver&city=${cityKey}`;
-        const url = `${baseUrl}${path}${params}`;
-        navigator.clipboard.writeText(url);
-        setCopiedLink(type);
-        setTimeout(() => setCopiedLink(''), 2000);
+        const url = type === 'passenger' 
+            ? `${PUBLIC_BASE_URL}/pasajero/onboarding?city=${cityKey}` 
+            : `${OFFICIAL_DRIVER_REGISTER_URL}&city=${cityKey}`;
+        
+        navigator.clipboard.writeText(url).then(() => {      
+            setCopiedLink(type);
+            setTimeout(() => setCopiedLink(''), 2000);
+        });
     };
 
     // Paradas Digitales live states

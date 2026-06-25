@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ThemeCustomizer } from '@/components/settings/ThemeCustomizer';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { VamoLogo } from '@/components/branding/VamoLogo';
+import { PUBLIC_BASE_URL } from '@/config/urls';
 import { VamoIcon } from '@/components/VamoIcon';
 import { UserProfile, VerificationStatus, DriverLevel } from '@/lib/types';
 import { signOut } from 'firebase/auth';
@@ -345,7 +347,7 @@ export default function DriverProfilePage() {
               
               <div className="relative z-10 p-4 bg-white rounded-3xl shadow-xl">
                   <LazyQRCode
-                      value={`${typeof window !== 'undefined' ? window.location.origin : 'https://www.vamoapp.com.ar'}/verify/driver/${user?.uid}`}
+                      value={`${PUBLIC_BASE_URL}/verify/driver/${user?.uid}`}
                       size={160}
                       level="H"
                       marginSize={1}

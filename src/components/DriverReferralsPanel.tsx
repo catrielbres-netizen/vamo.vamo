@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { OFFICIAL_DRIVER_REGISTER_URL } from '@/config/urls';
 
 export function DriverReferralsPanel() {
   const { user, profile } = useUser();
@@ -74,7 +75,7 @@ export function DriverReferralsPanel() {
   const handleShare = async () => {
     const code = profile?.referralCode;
     if (!code) { handleGenerateCode(); return; }
-    const link = `https://www.vamoapp.com.ar/login/?role=driver&ref=${code}`;
+    const link = `${OFFICIAL_DRIVER_REGISTER_URL}&ref=${code}`;
     const text = `Sumate a manejar con VamO y ganá más 🚀\nRegistrate desde mi link:\n${link}`;
     if (navigator.share) {
       try { await navigator.share({ title: 'VamO Conductor 🚀', text }); return; } catch (_) {}

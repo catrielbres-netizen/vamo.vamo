@@ -20,6 +20,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
+import { PUBLIC_BASE_URL } from '@/config/urls';
 import { VamoIcon } from '@/components/VamoIcon';
 import { useFirestore, useFirebaseApp, useDoc, useMemoFirebase } from '@/firebase';
 import { useUser } from '@/firebase/auth/use-user';
@@ -483,7 +484,7 @@ export default function RideStatus({ ride, onNewRide, onCancel }: { ride: WithId
                         <Button 
                             variant="outline"
                             onClick={() => {
-                                const shareUrl = `${window.location.origin}/share/${ride.id}`;
+                                const shareUrl = `${PUBLIC_BASE_URL}/share/${ride.id}`;
                                 if (navigator.share) {
                                   navigator.share({
                                     title: 'Seguí mi viaje en VamO',

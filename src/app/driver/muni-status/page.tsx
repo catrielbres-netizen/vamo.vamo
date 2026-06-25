@@ -7,6 +7,7 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'fire
 import { cn } from '@/lib/utils';
 import { VamoIcon } from '@/components/VamoIcon';
 import { Button } from '@/components/ui/button';
+import { PUBLIC_BASE_URL } from '@/config/urls';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -585,7 +586,7 @@ export default function DriverMuniStatusPage() {
                             <div className="flex flex-col items-center gap-6 py-6">
                                 <div className="relative p-4 bg-white rounded-3xl shadow-2xl overflow-hidden">
                                     <LazyQRCode 
-                                        value={`${typeof window !== 'undefined' ? window.location.origin : 'https://www.vamoapp.com.ar'}/verify/driver/${user?.uid}`}
+                                        value={`${PUBLIC_BASE_URL}/verify/driver/${user?.uid}`}
                                         size={180}
                                         level="H"
                                         marginSize={2}
