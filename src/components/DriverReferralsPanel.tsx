@@ -116,14 +116,21 @@ export function DriverReferralsPanel() {
             Generar mi Código
           </Button>
         ) : (
-          <Button
-            variant="default"
-            className="w-full h-12 font-bold rounded-xl"
-            onClick={handleShare}
-            disabled={isGeneratingCode || !profile?.referralCode}
-          >
-            {isGeneratingCode ? 'Generando...' : 'Compartir Código'}
-          </Button>
+          <div className="w-full flex flex-col gap-2">
+            <Button
+              variant="default"
+              className="w-full h-12 font-bold rounded-xl"
+              onClick={handleShare}
+              disabled={isGeneratingCode || !profile?.referralCode}
+            >
+              {isGeneratingCode ? 'Generando...' : 'Compartir Código'}
+            </Button>
+            {profile?.referralCode && (
+              <p className="text-[10px] text-muted-foreground break-all bg-black/20 p-2 rounded-lg border border-white/5">
+                Link generado: {`${OFFICIAL_DRIVER_REGISTER_URL}&ref=${profile.referralCode}`}
+              </p>
+            )}
+          </div>
         )}
       </div>
 
