@@ -17,7 +17,7 @@ export function computeDriverRiskProfile(
 
     // A) Financiero
     const balance = wallet?.cashBalance ?? driver.currentBalance ?? 0;
-    const negativeLimit = driver.driverSubtype === 'professional' ? -15000 : -8000;
+    const negativeLimit = -2000;
     
     if (balance < 0) {
         score += 10;

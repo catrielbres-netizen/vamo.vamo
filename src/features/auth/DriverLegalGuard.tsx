@@ -32,18 +32,9 @@ export function DriverLegalGuard({ children, forced, onClose }: { children?: Rea
         }
     };
 
-    const needsAcceptance = !loading && !!profile && profile.role === 'driver' && (
-        !profile.legal?.driverTermsAccepted || 
-        profile.legal?.driverTermsVersion !== CURRENT_DRIVER_TERMS_VERSION
-    );
-
     useEffect(() => {
-        if (forced || needsAcceptance) {
-            setIsOpen(true);
-        } else {
-            setIsOpen(false);
-        }
-    }, [forced, needsAcceptance]);
+        setIsOpen(!!forced);
+    }, [forced]);
 
     const handleAccept = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -90,11 +81,7 @@ export function DriverLegalGuard({ children, forced, onClose }: { children?: Rea
             <Dialog open={isOpen} onOpenChange={(open) => {
                 if (!open && onClose) onClose();
             }}>
-                <DialogContent 
-                    className="max-w-md w-[95vw] max-h-[90vh] flex flex-col gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/5 shadow-2xl p-0"
-                    onPointerDownOutside={(e) => e.preventDefault()}
-                    onEscapeKeyDown={(e) => e.preventDefault()}
-                >
+                <DialogContent className="max-w-md w-[95vw] max-h-[90vh] flex flex-col gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/5 shadow-2xl p-0">
                     <DialogHeader className="p-6 sm:p-8 border-b border-white/5 bg-zinc-900/50 shrink-0 text-left relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-8 opacity-10">
                             <Scale className="h-32 w-32 text-indigo-500 -mr-12 -mt-12 rotate-12" />
@@ -121,11 +108,14 @@ export function DriverLegalGuard({ children, forced, onClose }: { children?: Rea
                         className="flex-1 overflow-y-auto p-6 sm:p-8 text-sm text-zinc-400 space-y-8 leading-relaxed custom-scrollbar relative"
                         onScroll={handleScroll}
                     >
-                        <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-start gap-3">
-                            <ShieldCheck className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
-                            <p className="text-[11px] text-zinc-300 font-medium">
-                                Por favor leé atentamente los siguientes términos. Debés deslizar hasta el final del documento para habilitar la firma digital y continuar.
-                            </p>
+                        <div className="p-4 bg-indigo-500/10 border-2 border-indigo-500/30 rounded-2xl flex items-start gap-3 mb-4 shadow-lg shadow-indigo-500/10">
+                            <ShieldCheck className="h-6 w-6 text-indigo-400 shrink-0 mt-0.5" />
+                            <div>
+                                <h4 className="text-sm font-black text-indigo-400 uppercase tracking-widest mb-1">¡Importante!</h4>
+                                <p className="text-xs text-zinc-300 font-medium leading-relaxed">
+                                    Por favor leé atentamente los siguientes términos. <strong className="text-white">DEBÉS DESLIZAR HASTA EL FINAL DEL DOCUMENTO</strong> para que se habilite el formulario de firma en la parte inferior.
+                                </p>
+                            </div>
                         </div>
 
                         <DriverSpecificTerms />

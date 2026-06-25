@@ -224,7 +224,7 @@ export const completeDriverRegistrationV1 = onCall({ cors: true, region: "us-cen
                     transaction.set(phoneIndexRef, {
                         uid,
                         emailLower: email.toLowerCase().trim(),
-                        role: "driver",
+                        role: "incomplete_driver",
                         createdAt: admin.firestore.FieldValue.serverTimestamp()
                     });
                 }
@@ -233,14 +233,11 @@ export const completeDriverRegistrationV1 = onCall({ cors: true, region: "us-cen
                     uid,
                     email,
                     emailLower: email.toLowerCase().trim(),
-                    role: "driver",
+                    role: "incomplete_driver",
                     phone: phone || "",
                     phoneNormalized: normalizedPhone || null,
                     cityKey: safeCityKey || userSnap.data()?.cityKey || "",
                     city: city || userSnap.data()?.city || "",
-                    approved: false,
-                    municipalStatus: "pending_municipal_review",
-                    driverStatus: "offline",
                     profileCompleted: false,
                     registrationStatus: "pending_profile",
                     onboardingIncomplete: true,

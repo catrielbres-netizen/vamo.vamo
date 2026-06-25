@@ -791,7 +791,7 @@ export interface UserProfile {
     weeklyTripsCount?: number;
     driverLevel?: DriverLevel;
     vamoPoints?: number;
-    promoCreditGranted?: boolean;
+    welcomeBonusGranted?: boolean;
     fcmToken?: string | null; 
     fcmTokens?: string[]; 
     fcmUpdatedAt?: any;

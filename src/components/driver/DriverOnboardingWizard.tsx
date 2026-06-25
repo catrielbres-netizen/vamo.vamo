@@ -66,42 +66,15 @@ export function DriverOnboardingWizard() {
     cityKey: '',
     customCity: '',
     cityResolutionStatus: 'unresolved',
-    cityResolutionSource: 'legacy_query_param',
+    cityResolutionSource: 'manual' as 'manual' | 'google' | 'ip' | 'auto' | 'gps',
     registrationLocation: null as any,
     identityStatus: 'unverified' as 'unverified' | 'pending' | 'verified',
     driverSubtype: PLAN_B_DRIVER_SUBTYPE as DriverSubtype,
     licenseExpiry: '',
     insuranceExpiry: '',
     criminalRecordExpiry: '',
-    termsAccepted: false,
     fleetOwnerId: '',
-    legalName: '',
-    legalDni: '',
   });
-
-  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
-  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
-  const sentinelRef = React.useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-      if (!isLegalModalOpen || hasScrolledToBottom) return;
-
-      const observer = new IntersectionObserver(
-          (entries) => {
-              if (entries[0].isIntersecting) {
-                  setHasScrolledToBottom(true);
-              }
-          },
-          { root: null, threshold: 1.0 }
-      );
-
-      if (sentinelRef.current) {
-          observer.observe(sentinelRef.current);
-      }
-
-      return () => observer.disconnect();
-  }, [isLegalModalOpen, hasScrolledToBottom]);
-
   // --- Documents State ---
   const [docs, setDocs] = useState<{
     dniPhoto: File | null;
@@ -369,9 +342,6 @@ export function DriverOnboardingWizard() {
             licenseExpiry: toDateStr(data.licenseExpiry),
             insuranceExpiry: toDateStr(data.insuranceExpiry),
             criminalRecordExpiry: toDateStr(data.criminalRecordExpiry),
-            termsAccepted: !!data.driverTermsAccepted,
-            legalName: data.legalName || '',
-            legalDni: data.legalDni || '',
           });
           
           if (data.documents) {
@@ -511,12 +481,6 @@ export function DriverOnboardingWizard() {
       }
     }
 
-    if (currentStep === 4) {
-      if (!formData.termsAccepted) {
-        return toast({ variant: 'destructive', title: 'Acuerdo legal', description: 'Debés aceptar los términos y condiciones para continuar.' });
-      }
-    }
-    
     if (currentStep < STEPS.length) setCurrentStep(prev => prev + 1);
   };
 
@@ -620,13 +584,6 @@ export function DriverOnboardingWizard() {
         registrationLocation: formData.registrationLocation,
         driverSubtype: formData.driverSubtype,
         commissionRate: 0.18, // Forzado Plan B
-        termsAccepted: true,
-        driverTermsAccepted: true,
-        acceptedDriverTerms: true,
-        termsVersion: CURRENT_TERMS_VERSION, // Consistent with legal-config
-        legalType: 'driver_contract',
-        legalName: formData.legalName,
-        legalDni: formData.legalDni,
       };
 
       await completeDriverOnboarding(payload);
@@ -711,8 +668,8 @@ export function DriverOnboardingWizard() {
                 {currentStep === 1 && (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label className="text-xs uppercase tracking-widest text-zinc-400">Nombre Completo</Label>
-                      <Input name="name" value={formData.name} onChange={handleInputChange} placeholder="Ej: Juan Pérez" className="h-12 bg-white/5 border-white/5 rounded-xl" />
+                      <Label className="text-xs uppercase tracking-widest text-zinc-400">Nombre y Apellido</Label>
+                      <Input name="name" value={formData.name} onChange={handleInputChange} placeholder="Ej: Juan Pérez (Nombre y Apellido)" className="h-12 bg-white/5 border-white/5 rounded-xl" />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs uppercase tracking-widest text-zinc-400">DNI / Documento</Label>
@@ -924,8 +881,7 @@ export function DriverOnboardingWizard() {
                 )}
                     
                 {/* --- STEP 4: FINISH --- */}
-                {currentStep === 4 && (
-                  <div className="text-center space-y-6 py-8">
+                    <div className="text-center space-y-6 py-8">
                     <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto border border-emerald-500/30">
                       <VamoIcon name="check-circle" className="w-10 h-10 text-emerald-500" />
                     </div>
@@ -949,26 +905,7 @@ export function DriverOnboardingWizard() {
                             <p className="text-zinc-400 font-mono tracking-widest text-xs mt-1">PATENTE: {formData.plate}</p>
                         </div>
                     </div>
-
-                    <div className="pt-4 flex flex-col items-center gap-4 text-left border-t border-white/5 mt-4">
-                        <Button
-                            onClick={() => setIsLegalModalOpen(true)}
-                            variant="outline"
-                            className={cn(
-                                "w-full h-14 rounded-2xl font-black uppercase tracking-widest transition-all",
-                                formData.termsAccepted 
-                                  ? "bg-emerald-600/10 border-emerald-500/30 text-emerald-400" 
-                                  : "border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10"
-                            )}
-                        >
-                            {formData.termsAccepted ? "Contrato Firmado" : "Leer y Firmar Contrato"}
-                        </Button>
-                        <p className="text-[11px] text-zinc-500 leading-tight text-center max-w-xs">
-                            Debés leer íntegramente y firmar el contrato digital para poder operar en VamO.
-                        </p>
-                    </div>
                   </div>
-                )}
               </CardContent>
 
               {/* Navigation */}
@@ -985,7 +922,7 @@ export function DriverOnboardingWizard() {
                 )}
                 <Button
                   onClick={currentStep === STEPS.length ? finishOnboarding : nextStep}
-                  disabled={loading || (currentStep === STEPS.length && !formData.termsAccepted)}
+                  disabled={loading}
                   className={cn(
                     "flex-1 h-14 rounded-2xl font-black uppercase tracking-widest shadow-xl transition-all active:scale-95",
                     currentStep === STEPS.length ? "bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50" : "bg-indigo-600 hover:bg-indigo-700"
@@ -1012,7 +949,7 @@ export function DriverOnboardingWizard() {
                 <div className="space-y-2">
                     <h2 className="text-2xl font-black text-white tracking-tighter uppercase italic">¡Cuenta Creada!</h2>
                     <p className="text-zinc-400 text-sm leading-relaxed">
-                        Cuenta creada correctamente. Ahora completá tu habilitación desde la pestaña Habilitación.
+                        Tu cuenta ha sido creada correctamente. Recordá que en cualquier momento se activará el servicio en tu zona para recibir viajes, y te lo informaremos mediante correo electrónico. Mientras tanto, podés completar tu habilitación.
                     </p>
                 </div>
 
@@ -1027,109 +964,7 @@ export function DriverOnboardingWizard() {
             </DialogContent>
         </Dialog>
 
-        <Dialog open={isLegalModalOpen} onOpenChange={(open) => {
-            if (!open && (!formData.termsAccepted || formData.legalName.length < 5 || formData.legalDni.length < 7)) {
-                setFormData(p => ({ ...p, termsAccepted: false, legalName: '', legalDni: '' }));
-            }
-            setIsLegalModalOpen(open);
-        }}>
-            <DialogContent 
-                hideCloseButton
-                className="max-w-md w-[95vw] h-[85dvh] flex flex-col gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/5 shadow-2xl p-0"
-                onPointerDownOutside={(e) => e.preventDefault()}
-                onEscapeKeyDown={(e) => e.preventDefault()}
-            >
-                <DialogHeader className="p-8 border-b border-white/5 bg-zinc-900/50 shrink-0 text-left relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-8 opacity-10">
-                        <Scale className="h-32 w-32 text-indigo-500 -mr-12 -mt-12 rotate-12" />
-                    </div>
-                    <div className="relative z-10 space-y-4">
-                        <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 bg-indigo-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
-                                <Scale className="h-5 w-5 text-indigo-400" />
-                            </div>
-                            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Contrato Conductor VamO</span>
-                        </div>
-                        <div>
-                            <DialogTitle className="text-3xl font-black text-white uppercase tracking-tighter leading-none mb-2">
-                                Acuerdo Operativo
-                            </DialogTitle>
-                            <DialogDescription className="text-xs text-zinc-500 font-medium">
-                                Versión {CURRENT_TERMS_VERSION} | Actualización {new Date().getFullYear()}
-                            </DialogDescription>
-                        </div>
-                    </div>
-                </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto p-8 text-sm text-zinc-400 space-y-8 leading-relaxed custom-scrollbar relative">
-                    <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-start gap-3">
-                        <ShieldCheck className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
-                        <p className="text-[11px] text-zinc-300 font-medium">
-                            Este contrato rige tu relación como conductor independiente con VamO. Debés deslizar hasta el final para habilitar la firma digital.
-                        </p>
-                    </div>
-
-                    <DriverSpecificTerms />
-                    <LiabilityPolicyText />
-                    <CancellationPolicyText />
-                    <VerificationPolicyText />
-                    <ScoringPolicyText />
-                    <SuspensionPolicyText />
-                    <PrivacyPolicyText />
-
-                    <div className="pt-4 border-t border-white/5">
-                        <div className="flex items-center gap-2 text-zinc-600">
-                            <AlertCircle className="h-3 w-3" />
-                            <p className="text-[10px] italic">Este contrato es vinculante y rige en la jurisdicción de la Provincia de Chubut, Argentina.</p>
-                        </div>
-                    </div>
-                    
-                    {/* Centinela de scroll */}
-                    <div ref={sentinelRef} className="h-10 w-full" />
-
-                    {hasScrolledToBottom && (
-                        <div className="sticky bottom-0 left-0 right-0 p-6 sm:p-8 bg-zinc-900 border-t border-white/5 flex flex-col gap-4 animate-in slide-in-from-bottom-8 fade-in duration-500 shadow-[0_-20px_50px_-15px_rgba(0,0,0,0.8)] z-50 -mx-8 -mb-8 rounded-b-[2.5rem]">
-                            <div className="space-y-3 mb-2">
-                                <Input 
-                                    placeholder="Nombre completo" 
-                                    value={formData.legalName}
-                                    onChange={(e) => setFormData(p => ({ ...p, legalName: e.target.value }))}
-                                    className="h-12 bg-zinc-950 border-white/10"
-                                />
-                                <Input 
-                                    placeholder="DNI" 
-                                    type="number"
-                                    value={formData.legalDni}
-                                    onChange={(e) => setFormData(p => ({ ...p, legalDni: e.target.value }))}
-                                    className="h-12 bg-zinc-950 border-white/10"
-                                />
-                            </div>
-                            <div className="transition-opacity duration-300 opacity-100">
-                                <label className="flex items-start gap-3 px-2 cursor-pointer group">
-                                    <input 
-                                        type="checkbox" 
-                                        required
-                                        checked={formData.termsAccepted} 
-                                        onChange={e => setFormData(p => ({ ...p, termsAccepted: e.target.checked }))} 
-                                        className="mt-0.5 h-4 w-4 rounded border-white/10 bg-zinc-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900" 
-                                    />
-                                    <p className="text-[10px] text-zinc-400 leading-tight group-hover:text-zinc-300">
-                                        En carácter de declaración jurada, firmo digitalmente y acepto íntegramente este contrato operativo.
-                                    </p>
-                                </label>
-                            </div>
-                            <Button 
-                                onClick={() => setIsLegalModalOpen(false)}
-                                disabled={!formData.termsAccepted || formData.legalName.length < 5 || formData.legalDni.length < 7}
-                                className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.1em] rounded-2xl shadow-xl shadow-indigo-500/10 transition-all active:scale-[0.98] mb-2 sm:mb-0"
-                            >
-                                Aceptar y Continuar
-                            </Button>
-                        </div>
-                    )}
-                </div>
-            </DialogContent>
-        </Dialog>
 
         <style jsx global>{`
             .custom-scrollbar::-webkit-scrollbar { width: 4px; }

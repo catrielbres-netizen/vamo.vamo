@@ -64,7 +64,7 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                 // [VamO PRO] Registration Status Guard
                 if (profile.registrationStatus !== 'active' && !profile.profileCompleted) {
                     console.warn(`[AUTH_REDIRECT] User ${user.uid} has status ${profile.registrationStatus}. Redirecting to onboarding...`);
-                    if (profile.role === 'driver') {
+                    if (profile.role === 'driver' || profile.role === 'incomplete_driver') {
                         router.push('/driver/register');
                     } else {
                         router.push('/dashboard/complete-profile');
@@ -120,10 +120,10 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                 const userDoc = await getDoc(doc(firestore, 'users', signedUser.uid));
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
-                    if (userData.role && userData.role !== fixedRole) {
+                    if (userData.role && userData.role !== fixedRole && !(fixedRole === 'driver' && userData.role === 'incomplete_driver')) {
                         console.warn(`[AUTH_INVALID_SESSION] Role mismatch: expected ${fixedRole}, got ${userData.role}. Cleaning up...`);
                         await signOut(auth);
-                        const otherRole = userData.role === 'driver' ? 'conductor' : 'pasajero';
+                        const otherRole = userData.role === 'driver' || userData.role === 'incomplete_driver' ? 'conductor' : 'pasajero';
                         toast({ 
                             variant: 'destructive', 
                             title: 'Acceso incorrecto', 

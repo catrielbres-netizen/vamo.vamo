@@ -138,7 +138,7 @@ export const approveDriverV1 = onCall({ cors: true, region: 'us-central1' }, asy
                 updatedAt: timestamp
             });
 
-            tx.update(userRef, {
+            const userUpdates: any = {
                 approved: true,
                 municipalStatus: 'active',
                 ...updates,
@@ -146,7 +146,26 @@ export const approveDriverV1 = onCall({ cors: true, region: 'us-central1' }, asy
                 suspensionSource: finalSuspensionSource,
                 suspensionReason: isAdmin ? user.adminSuspensionReason : (isMuni ? null : (isTraffic ? user.trafficSuspensionReason : null)),
                 updatedAt: timestamp
-            });
+            };
+            
+            if (!user.welcomeBonusGranted) {
+                userUpdates.welcomeBonusGranted = true;
+                userUpdates.currentBalance = admin.firestore.FieldValue.increment(5000);
+                userUpdates.nonWithdrawableBalance = admin.firestore.FieldValue.increment(5000);
+                
+                const walletRef = db.doc(`wallets/${driverId}`);
+                tx.set(walletRef, { cashBalance: admin.firestore.FieldValue.increment(5000) }, { merge: true });
+
+                tx.set(db.collection('wallet_transactions').doc(), {
+                    userId: driverId,
+                    amount: 5000,
+                    type: 'adjustment',
+                    note: 'driver_approval_bonus',
+                    createdAt: timestamp
+                });
+            }
+
+            tx.update(userRef, userUpdates);
 
             tx.set(db.collection('municipal_audit_log').doc(), {
                 driverId,
@@ -482,6 +501,23 @@ export const updateMunicipalStatusV1 = onCall({ cors: true, region: 'us-central1
                 userUpdates.approved = true;
                 muniUpdates.observationGraceUntil = null;
                 userUpdates.observationGraceUntil = null;
+                
+                if (!target.welcomeBonusGranted) {
+                    userUpdates.welcomeBonusGranted = true;
+                    userUpdates.currentBalance = admin.firestore.FieldValue.increment(5000);
+                    userUpdates.nonWithdrawableBalance = admin.firestore.FieldValue.increment(5000);
+                    
+                    const walletRef = db.doc(`wallets/${driverId}`);
+                    tx.set(walletRef, { cashBalance: admin.firestore.FieldValue.increment(5000) }, { merge: true });
+
+                    tx.set(db.collection('wallet_transactions').doc(), {
+                        userId: driverId,
+                        amount: 5000,
+                        type: 'adjustment',
+                        note: 'driver_approval_bonus',
+                        createdAt: timestamp
+                    });
+                }
             } else if (status.startsWith('suspended_') || status === 'rejected_by_municipality') {
                 userUpdates.approved = false;
                 muniUpdates.observationGraceUntil = null;

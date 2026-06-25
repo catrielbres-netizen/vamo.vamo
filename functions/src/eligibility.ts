@@ -149,10 +149,10 @@ export const canDriverGoOnline = (
       return { isEligible: false, reason: "Completá el color de tu vehículo para poder recibir viajes.", code: "VEHICLE_INCOMPLETE" };
   }
 
-  // MANDATORY LEGAL CHECK (v1.3)
+  // MANDATORY LEGAL CHECK (v1.3 / v1.4)
   const CURRENT_TERMS_V = 'v1.4';
-  const hasAccepted = profile.termsAccepted || profile.acceptedDriverTerms;
-  const isCorrectVersion = profile.termsVersion === CURRENT_TERMS_V;
+  const hasAccepted = profile.termsAccepted || profile.acceptedDriverTerms || profile.legal?.driverTermsAccepted;
+  const isCorrectVersion = profile.termsVersion === CURRENT_TERMS_V || profile.legal?.driverTermsVersion === CURRENT_TERMS_V;
 
   if (!hasAccepted || !isCorrectVersion) {
       return { isEligible: false, reason: "Debés aceptar los nuevos Términos y Condiciones", code: "TERMS_NOT_ACCEPTED" };
@@ -167,9 +167,9 @@ export const canDriverGoOnline = (
     return { isEligible: false, reason: "Debés verificar tu cuenta de email para operar", code: "UNVERIFIED_EMAIL" };
   }
 
-  // [VamO PRO] Negative Balance Control
+  // Negative Balance Control
   const balance = cashBalance ?? profile.currentBalance ?? 0;
-  const negativeLimit = profile.driverSubtype === 'professional' ? -15000 : -8000;
+  const negativeLimit = -2000;
 
   if (balance <= negativeLimit) {
     return { 
@@ -197,13 +197,13 @@ export const canDriverReceiveOffers = (
 
   // Negative Balance Guard (Strict)
   const balance = cashBalance ?? profile.currentBalance ?? 0;
-  const negativeLimit = profile.driverSubtype === 'professional' ? -15000 : -8000;
+  const negativeLimit = -2000;
 
   if (balance <= negativeLimit) {
       logger.info(`[WALLET_GUARD] driverId=${profile.uid} balance=${balance} limit=${negativeLimit} reason=BLOCKED_NEGATIVE`);
       return { 
           isEligible: false, 
-          reason: "Saldo insuficiente (límite negativo alcanzado)", 
+          reason: "Saldo insuficiente (límite negativo alcanzado). Necesitás recargar saldo para continuar.", 
           code: "NEGATIVE_BALANCE_LIMIT" 
       };
   }

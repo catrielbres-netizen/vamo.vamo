@@ -185,7 +185,7 @@ export const completeDriverOnboardingV1 = onCall({ cors: true, region: "us-centr
             logger.error(`[ONBOARDING_ERROR] UID ${uidPart} exists with sensitive role ${userData.role}`);
             throw new HttpsError('permission-denied', 'No pudimos completar el registro de conductor para esta cuenta. Contactá a soporte.');
         }
-        if (userData.role && userData.role !== 'driver') {
+        if (userData.role && (userData.role as string) !== 'driver' && (userData.role as string) !== 'incomplete_driver') {
             throw new HttpsError('permission-denied', 'No pudimos completar el registro de conductor para esta cuenta. Contactá a soporte.');
         }
     }

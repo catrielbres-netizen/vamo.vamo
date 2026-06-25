@@ -13,6 +13,8 @@ import { useRouter } from 'next/navigation';
 import { featureFlags } from '@/config/features';
 import { LazyQRCode } from '@/components/LazyQRCode';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DriverLegalGuard } from '@/features/auth/DriverLegalGuard';
+import { CURRENT_DRIVER_TERMS_VERSION } from '@/lib/legal-config';
 import {
     Dialog,
     DialogContent,
@@ -208,7 +210,8 @@ export default function DriverMuniStatusPage() {
     const { toast } = useToast();
     const [munProfile, setMunProfile] = useState<MunicipalProfile | null>(null);
     const [observations, setObservations] = useState<TrafficObservation[]>([]);
-    const [loading, setLoading]       = useState(true);
+    const [loading, setLoading] = useState(true);
+    const [showLegalGuard, setShowLegalGuard] = useState(false);
 
     const [uploadingDoc, setUploadingDoc] = useState<MunicipalChecklistKey | null>(null);
     const [fileSelected, setFileSelected] = useState<File | null>(null);
@@ -413,6 +416,8 @@ export default function DriverMuniStatusPage() {
                 <VamoIcon name="landmark" className="h-5 w-5 text-amber-400" />
                 <h2 className="text-lg font-black text-white tracking-tight">Habilitación Municipal</h2>
             </div>
+            
+            <DriverLegalGuard forced={showLegalGuard} onClose={() => setShowLegalGuard(false)} />
 
             <Tabs defaultValue="status" className="w-full">
                 <TabsList className="w-full grid grid-cols-3 h-12 bg-[#0B0F19] border border-white/5 rounded-2xl p-1 gap-1 mb-6">
@@ -798,6 +803,40 @@ export default function DriverMuniStatusPage() {
                     className={cn(
                         'h-6 w-6',
                         munProfile?.canonStatus === 'paid' && !isExpired(munProfile?.canonExpiry) ? 'text-emerald-500' : 'text-zinc-600'
+                    )}
+                />
+            </div>
+
+            {/* ── CONTRATO LEGAL ─────────────────────────────────────────── */}
+            <div className="rounded-2xl bg-white/[0.03] border border-white/5 p-4 flex items-center justify-between">
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-0.5">Contrato de Conductor</p>
+                    <p className={cn(
+                        'text-sm font-bold',
+                        (profile?.legal?.driverTermsAccepted && profile?.legal?.driverTermsVersion === CURRENT_DRIVER_TERMS_VERSION) ? 'text-emerald-400' : 'text-red-400'
+                    )}>
+                        {(profile?.legal?.driverTermsAccepted && profile?.legal?.driverTermsVersion === CURRENT_DRIVER_TERMS_VERSION) ? '✓ Firmado y Vigente' : '✗ Pendiente de Firma'}
+                    </p>
+                    {(!profile?.legal?.driverTermsAccepted || profile?.legal?.driverTermsVersion !== CURRENT_DRIVER_TERMS_VERSION) && (
+                        <div className="mt-2">
+                            <Button size="sm" onClick={() => setShowLegalGuard(true)} className="h-8 text-[10px] bg-red-500 hover:bg-red-600 text-white font-bold uppercase tracking-widest rounded-lg">
+                                Ver y firmar contrato
+                            </Button>
+                        </div>
+                    )}
+                    {(profile?.legal?.driverTermsAccepted && profile?.legal?.driverTermsVersion === CURRENT_DRIVER_TERMS_VERSION) && (
+                        <div className="mt-2">
+                            <Button size="sm" onClick={() => setShowLegalGuard(true)} variant="outline" className="h-8 text-[10px] border-white/10 text-zinc-400 hover:text-white font-bold uppercase tracking-widest rounded-lg">
+                                Ver contrato firmado
+                            </Button>
+                        </div>
+                    )}
+                </div>
+                <VamoIcon
+                    name={(profile?.legal?.driverTermsAccepted && profile?.legal?.driverTermsVersion === CURRENT_DRIVER_TERMS_VERSION) ? 'file-check' : 'file-warning'}
+                    className={cn(
+                        'h-6 w-6',
+                        (profile?.legal?.driverTermsAccepted && profile?.legal?.driverTermsVersion === CURRENT_DRIVER_TERMS_VERSION) ? 'text-emerald-500' : 'text-zinc-600'
                     )}
                 />
             </div>

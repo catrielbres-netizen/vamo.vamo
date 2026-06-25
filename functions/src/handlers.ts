@@ -3057,21 +3057,23 @@ export const approveDriverByAdminV1 = onCall({ cors: true, region: "us-central1"
         updatedAt: FieldValue.serverTimestamp()
     };
 
-    if (driverData && !driverData.promoCreditGranted) {
-        const promoAmount = 2000;
-        updates.promoCreditGranted = true;
+    if (driverData && !driverData.welcomeBonusGranted) {
+        const promoAmount = 5000;
+        updates.welcomeBonusGranted = true;
         updates.currentBalance = FieldValue.increment(promoAmount);
         updates.nonWithdrawableBalance = FieldValue.increment(promoAmount);
 
-        const transactionRef = db.collection('platform_transactions').doc();
+        const transactionRef = db.collection('wallet_transactions').doc();
         batch.set(transactionRef, {
-            driverId: driverId,
+            userId: driverId,
             amount: promoAmount,
-            type: 'credit_promo',
-            source: 'system',
-            note: 'Bono de bienvenida por aprobación de cuenta.',
+            type: 'adjustment',
+            note: 'driver_approval_bonus',
             createdAt: FieldValue.serverTimestamp(),
         });
+        
+        const walletRef = db.doc(`wallets/${driverId}`);
+        batch.set(walletRef, { cashBalance: FieldValue.increment(promoAmount) }, { merge: true });
     }
 
     // [VamO PRO] Risk Update on Admin Approval

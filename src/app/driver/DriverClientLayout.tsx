@@ -36,7 +36,6 @@ import { DriverProgressPanel } from '@/components/DriverProgressPanel';
 import { DriverMissionPanel } from '@/components/DriverMissionPanel';
 import { AuthGuard } from '@/features/auth/AuthGuard';
 import { TermsGuard } from '@/features/auth/TermsGuard';
-import { DriverLegalGuard } from '@/features/auth/DriverLegalGuard';
 import { useBackNavigationLock } from '@/hooks/useBackNavigationLock';
 import { NotificationToggle } from '@/components/NotificationToggle';
 import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
@@ -420,7 +419,7 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
     };
 
     sendHeartbeat();
-    const intervalId = setInterval(sendHeartbeat, 60000); // 60s (Cost Optimized)
+    const intervalId = setInterval(sendHeartbeat, 10000); // 10s as requested by admin
     return () => clearInterval(intervalId);
   }, [firestore, authUser?.uid, profile, telemetry]);
 
@@ -592,7 +591,6 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
           forced={showTerms} 
           onClose={() => setShowTerms(false)} 
       />
-      <DriverLegalGuard />
       <CancellationModal />
       <div className="container mx-auto max-w-md p-4 relative min-h-screen">
           {/* Watermark Logo */}
@@ -646,14 +644,6 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
                           </span>
                       </div>
                        <div className="flex items-center gap-4">
-                           <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className={`h-8 text-[10px] uppercase font-bold tracking-widest ${isMockingLocation ? 'bg-amber-500/10 text-amber-500 border-amber-500/50' : 'text-muted-foreground'}`}
-                              onClick={() => setIsMockingLocation(!isMockingLocation)}
-                           >
-                               {isMockingLocation ? 'MOCK GPS: ON' : 'MOCK GPS: OFF'}
-                           </Button>
                            <Switch 
                               id="online-toggle" 
                               checked={profile.driverStatus === 'online'} 

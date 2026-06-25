@@ -95,7 +95,7 @@ export default function AdminDriversPage() {
         return;
       }
 
-      // Filtrar usuarios de prueba en el cliente
+      // Filtrar usuarios de prueba y registros incompletos en el cliente
       const isTestUser = (data: any) => {
         const email = data.email?.toLowerCase() || '';
         return email.includes('test') || email.includes('demo') || data.isTestUser === true;
@@ -103,7 +103,14 @@ export default function AdminDriversPage() {
 
       let newList = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as DriverRow))
-        .filter(d => !isTestUser(d));
+        .filter(d => !isTestUser(d))
+        .filter(d => {
+            // [VamO REGLA] No mostrar en admin a quienes no completaron el registro inicial
+            const data = d as any;
+            if (data.onboardingIncomplete === true || data.profileCompleted === false) return false;
+            if (!data.name || data.name.trim() === '') return false; // "Sin nombre" prevent
+            return true;
+        });
 
       setDrivers(newList);
     } catch (err: any) {
