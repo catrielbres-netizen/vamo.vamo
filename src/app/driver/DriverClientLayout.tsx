@@ -116,7 +116,7 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
 
   return (
     <DriverErrorBoundary>
-      <AuthGuard allowedRoles={['driver', 'admin']} fallbackPath="/login">
+      <AuthGuard allowedRoles={['driver', 'incomplete_driver', 'admin']} fallbackPath="/login">
         <DriverRealtimeProvider>
           <WeeklyPoolProvider>
             <GlobalOfferOverlay />
@@ -136,7 +136,7 @@ function DriverLayoutWithAuth({ children }: { children: ReactNode }) {
   if (!profile) return <VamoFullScreenLoader label="Cargando perfil..." />;
   
   // [VamO PRO] Role Isolation Guard
-  if (profile.role !== 'driver' && profile.role !== 'admin') {
+  if (profile.role !== 'driver' && profile.role !== 'incomplete_driver' && profile.role !== 'admin') {
       return <VamoFullScreenLoader label="Sincronizando..." />;
   }
 

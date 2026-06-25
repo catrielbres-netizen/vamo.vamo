@@ -175,14 +175,14 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                     return;
                 }
                 if (profile.registrationStatus !== 'active' && !profile.profileCompleted) {
-                    if (profile.role === 'driver') {
+                    if (profile.role === 'driver' || profile.role === 'incomplete_driver') {
                         router.push('/driver/register');
                     } else {
                         router.push('/dashboard/complete-profile');
                     }
                     return;
                 }
-                if (profile.role === 'driver') {
+                if (profile.role === 'driver' || profile.role === 'incomplete_driver') {
                     router.push('/driver');
                 } else if (profile.role === 'passenger') {
                     router.push('/dashboard');

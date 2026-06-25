@@ -76,7 +76,15 @@ export function AuthGuard({
   const registrationStatus = (profile as any)?.registrationStatus;
   const isPassenger = role === 'passenger' || profile?.role === 'passenger';
   const isIncompletePassenger = isPassenger && registrationStatus !== 'active';
-  const shouldRedirectToOnboarding = profile && isIncompletePassenger && !isProfileCompletion;
+  
+  const isDriver = role === 'driver' || profile?.role === 'driver' || role === 'incomplete_driver' || profile?.role === 'incomplete_driver';
+  const isIncompleteDriver = isDriver && registrationStatus !== 'active' && !profile?.profileCompleted;
+  
+  const isPassengerOnboarding = pathname?.startsWith('/dashboard/complete-profile');
+  const isDriverOnboarding = pathname?.startsWith('/driver/register');
+  
+  const shouldRedirectToPassengerOnboarding = profile && isIncompletePassenger && !isPassengerOnboarding;
+  const shouldRedirectToDriverOnboarding = profile && isIncompleteDriver && !isDriverOnboarding;
 
   useEffect(() => {
     if (isResolving) return;
@@ -110,9 +118,15 @@ export function AuthGuard({
     }
 
     // 3. Onboarding Enforcer [VamO PRO]
-    if (shouldRedirectToOnboarding) {
-      console.warn(`${logPrefix} REDIRECT: Incomplete onboarding. Target: /dashboard/complete-profile`, debugData);
+    if (shouldRedirectToPassengerOnboarding) {
+      console.warn(`${logPrefix} REDIRECT: Incomplete passenger onboarding. Target: /dashboard/complete-profile`, debugData);
       router.replace('/dashboard/complete-profile');
+      return;
+    }
+    
+    if (shouldRedirectToDriverOnboarding) {
+      console.warn(`${logPrefix} REDIRECT: Incomplete driver onboarding. Target: /driver/register`, debugData);
+      router.replace('/driver/register');
       return;
     }
 
@@ -125,13 +139,13 @@ export function AuthGuard({
 
     // If we reach here, access is valid.
     console.log(`${logPrefix} ACCESS_GRANTED`, debugData);
-  }, [user, profile, role, isResolving, allowedRoles, fallbackPath, router, pathname, isProfileCompletion, registrationStatus, shouldRedirectToOnboarding, onboardingFlag]);
+  }, [user, profile, role, isResolving, allowedRoles, fallbackPath, router, pathname, isPassengerOnboarding, isDriverOnboarding, registrationStatus, shouldRedirectToPassengerOnboarding, shouldRedirectToDriverOnboarding, onboardingFlag]);
 
   // Block rendering while resolving or if invalid
-  if (isResolving || shouldRedirectToOnboarding) {
+  if (isResolving || shouldRedirectToPassengerOnboarding || shouldRedirectToDriverOnboarding) {
     return <VamoFullScreenLoader label={
       onboardingFlag ? "Preparando tu panel..." :
-      shouldRedirectToOnboarding ? "Cargando onboarding..." : 
+      (shouldRedirectToPassengerOnboarding || shouldRedirectToDriverOnboarding) ? "Cargando onboarding..." : 
       "Validando sesión..."
     } />;
   }
