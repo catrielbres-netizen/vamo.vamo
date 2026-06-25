@@ -55,12 +55,29 @@ export default function DriverRidesPage() {
 
   return (
       <div className="space-y-4">
+        {!profile?.approved && (
+            <Alert variant="default" className="border-emerald-500/50 bg-emerald-500/10 rounded-2xl">
+                <VamoIcon name="map-pin" className="h-5 w-5 text-emerald-400" />
+                <AlertTitle className="text-emerald-400 font-black text-sm uppercase tracking-wider">
+                    ¡VamO llega a tu ciudad!
+                </AlertTitle>
+                <AlertDescription className="text-emerald-500/90 text-xs mt-2 space-y-2 font-medium">
+                    <p>
+                        Estamos expandiendo nuestra red a nuevas localidades. En cualquier momento se activará el servicio en tu zona para que puedas empezar a recibir viajes.
+                    </p>
+                    <p className="text-emerald-400 font-bold bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
+                        Te informaremos mediante correo electrónico tan pronto como tu área esté habilitada para operar.
+                    </p>
+                </AlertDescription>
+            </Alert>
+        )}
+
         {isPendingReview && (
             <Alert variant="default" className="border-indigo-500/50 bg-indigo-500/10 rounded-2xl">
                 <VamoIcon name="clock" className="h-4 w-4 text-indigo-400" />
                 <AlertTitle className="text-indigo-400 font-bold">Documentación en revisión</AlertTitle>
                 <AlertDescription className="text-indigo-500/80 text-xs">
-                    Estamos validando tus datos y documentación. Podrás recibir viajes cuando tu cuenta esté aprobada.
+                    Estamos validando tus datos y documentación. Podrás recibir viajes cuando tu cuenta esté aprobada y tu zona habilitada.
                 </AlertDescription>
             </Alert>
         )}
