@@ -76,7 +76,10 @@ export function DriverReferralsPanel() {
     const code = profile?.referralCode;
     if (!code) { handleGenerateCode(); return; }
     const link = `${OFFICIAL_DRIVER_REGISTER_URL}&ref=${code}`;
-    const text = `Sumate a manejar con VamO y ganá más 🚀\nRegistrate desde mi link:\n${link}`;
+    const text = `Sumate a manejar con VamO\nRegistrate desde mi link:\n${link}`;
+    console.log('REFERRAL_LINK_VERSION_2026_06_25_WWW_LOGIN');
+    console.log('GENERATED_LINK:', link);
+    
     if (navigator.share) {
       try { await navigator.share({ title: 'VamO Conductor 🚀', text }); return; } catch (_) {}
     }
