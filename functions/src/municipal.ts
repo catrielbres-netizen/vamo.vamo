@@ -434,7 +434,7 @@ export const updateMunicipalStatusV1 = onCall({ cors: true, region: 'us-central1
         const operatorSnap = await db.doc(`users/${operatorUid}`).get();
         const operator = operatorSnap.data() as UserProfile;
 
-        await db.runTransaction(async (tx) => {
+        const result = await db.runTransaction(async (tx) => {
             const muniRef = db.doc(`municipal_profiles/${driverId}`);
             const userRef = db.doc(`users/${driverId}`);
             const [muniSnap, userSnap] = await Promise.all([tx.get(muniRef), tx.get(userRef)]);
