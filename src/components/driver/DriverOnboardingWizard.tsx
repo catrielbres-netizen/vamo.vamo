@@ -25,6 +25,9 @@ import { useActiveCities } from '@/hooks/useActiveCities';
 import { CityHubAutocomplete } from '@/components/shared/CityHubAutocomplete';
 import { canonicalCityKey } from '@/lib/cityUtils';
 import { DriverSubtype } from '@/lib/types';
+import { Scale } from 'lucide-react';
+import { DriverSpecificTerms, LiabilityPolicyText, PrivacyPolicyText, CancellationPolicyText, VerificationPolicyText, SuspensionPolicyText, ScoringPolicyText } from '@/components/legal/LegalTexts';
+import { DialogHeader, DialogDescription } from '@/components/ui/dialog';
 
 // --- Steps Configuration ---
 const STEPS = [
@@ -72,7 +75,32 @@ export function DriverOnboardingWizard() {
     criminalRecordExpiry: '',
     termsAccepted: false,
     fleetOwnerId: '',
+    legalName: '',
+    legalDni: '',
   });
+
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+      if (!isLegalModalOpen || hasScrolledToBottom) return;
+
+      const observer = new IntersectionObserver(
+          (entries) => {
+              if (entries[0].isIntersecting) {
+                  setHasScrolledToBottom(true);
+              }
+          },
+          { root: null, threshold: 1.0 }
+      );
+
+      if (sentinelRef.current) {
+          observer.observe(sentinelRef.current);
+      }
+
+      return () => observer.disconnect();
+  }, [isLegalModalOpen, hasScrolledToBottom]);
 
   // --- Documents State ---
   const [docs, setDocs] = useState<{
@@ -543,7 +571,6 @@ export function DriverOnboardingWizard() {
           } else {
               finalCityKey = '';
               finalCityLabel = formData.customCity;
-              cityResolutionStatus = 'outside_service_area';
               cityResolutionSource = 'manual';
           }
       } else if (finalCityKey !== 'other' && finalCityKey !== '') {
@@ -586,6 +613,9 @@ export function DriverOnboardingWizard() {
         driverTermsAccepted: true,
         acceptedDriverTerms: true,
         termsVersion: CURRENT_TERMS_VERSION, // Consistent with legal-config
+        legalType: 'driver_contract',
+        legalName: formData.legalName,
+        legalDni: formData.legalDni,
       };
 
       await completeDriverOnboarding(payload);
@@ -909,18 +939,21 @@ export function DriverOnboardingWizard() {
                         </div>
                     </div>
 
-                    <div className="pt-4 flex items-start gap-3 px-2 text-left">
-                        <div 
-                          className={cn(
-                            "h-5 w-5 rounded border flex items-center justify-center mt-0.5 cursor-pointer transition-colors",
-                            formData.termsAccepted ? "bg-indigo-600 border-indigo-600" : "border-zinc-700 hover:border-zinc-500"
-                          )}
-                          onClick={() => setFormData(p => ({ ...p, termsAccepted: !p.termsAccepted }))}
+                    <div className="pt-4 flex flex-col items-center gap-4 text-left border-t border-white/5 mt-4">
+                        <Button
+                            onClick={() => setIsLegalModalOpen(true)}
+                            variant="outline"
+                            className={cn(
+                                "w-full h-14 rounded-2xl font-black uppercase tracking-widest transition-all",
+                                formData.termsAccepted 
+                                  ? "bg-emerald-600/10 border-emerald-500/30 text-emerald-400" 
+                                  : "border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10"
+                            )}
                         >
-                          {formData.termsAccepted && <VamoIcon name="check" className="h-3 w-3 text-white" />}
-                        </div>
-                        <p className="text-[11px] text-zinc-400 leading-tight">
-                            Acepto los <span className="text-indigo-400 font-bold">Términos y Condiciones</span> y el tratamiento de mis datos personales para operar en VamO.
+                            {formData.termsAccepted ? "Contrato Firmado" : "Leer y Firmar Contrato"}
+                        </Button>
+                        <p className="text-[11px] text-zinc-500 leading-tight text-center max-w-xs">
+                            Debés leer íntegramente y firmar el contrato digital para poder operar en VamO.
                         </p>
                     </div>
                   </div>
@@ -941,10 +974,10 @@ export function DriverOnboardingWizard() {
                 )}
                 <Button
                   onClick={currentStep === STEPS.length ? finishOnboarding : nextStep}
-                  disabled={loading}
+                  disabled={loading || (currentStep === STEPS.length && !formData.termsAccepted)}
                   className={cn(
                     "flex-1 h-14 rounded-2xl font-black uppercase tracking-widest shadow-xl transition-all active:scale-95",
-                    currentStep === STEPS.length ? "bg-emerald-600 hover:bg-emerald-700" : "bg-indigo-600 hover:bg-indigo-700"
+                    currentStep === STEPS.length ? "bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50" : "bg-indigo-600 hover:bg-indigo-700"
                   )}
                 >
                   {loading ? <VamoIcon name="loader" className="w-5 h-5 animate-spin" /> : currentStep === STEPS.length ? 'Finalizar' : 'Siguiente'}
@@ -982,6 +1015,111 @@ export function DriverOnboardingWizard() {
                 </Button>
             </DialogContent>
         </Dialog>
+
+        <Dialog open={isLegalModalOpen} onOpenChange={setIsLegalModalOpen}>
+            <DialogContent 
+                className="max-w-md w-[95vw] h-[85vh] flex flex-col gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/5 shadow-2xl p-0"
+                onPointerDownOutside={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => e.preventDefault()}
+            >
+                <DialogHeader className="p-8 border-b border-white/5 bg-zinc-900/50 shrink-0 text-left relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-8 opacity-10">
+                        <Scale className="h-32 w-32 text-indigo-500 -mr-12 -mt-12 rotate-12" />
+                    </div>
+                    <div className="relative z-10 space-y-4">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 bg-indigo-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                                <Scale className="h-5 w-5 text-indigo-400" />
+                            </div>
+                            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Contrato Conductor VamO</span>
+                        </div>
+                        <div>
+                            <DialogTitle className="text-3xl font-black text-white uppercase tracking-tighter leading-none mb-2">
+                                Acuerdo Operativo
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-zinc-500 font-medium">
+                                Versión {CURRENT_TERMS_VERSION} | Actualización {new Date().getFullYear()}
+                            </DialogDescription>
+                        </div>
+                    </div>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-y-auto p-8 text-sm text-zinc-400 space-y-8 leading-relaxed custom-scrollbar relative">
+                    <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-start gap-3">
+                        <ShieldCheck className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-zinc-300 font-medium">
+                            Este contrato rige tu relación como conductor independiente con VamO. Debés deslizar hasta el final para habilitar la firma digital.
+                        </p>
+                    </div>
+
+                    <DriverSpecificTerms />
+                    <LiabilityPolicyText />
+                    <CancellationPolicyText />
+                    <VerificationPolicyText />
+                    <ScoringPolicyText />
+                    <SuspensionPolicyText />
+                    <PrivacyPolicyText />
+
+                    <div className="pt-4 border-t border-white/5">
+                        <div className="flex items-center gap-2 text-zinc-600">
+                            <AlertCircle className="h-3 w-3" />
+                            <p className="text-[10px] italic">Este contrato es vinculante y rige en la jurisdicción de la Provincia de Chubut, Argentina.</p>
+                        </div>
+                    </div>
+                    
+                    {/* Centinela de scroll */}
+                    <div ref={sentinelRef} className="h-10 w-full" />
+                </div>
+
+                {hasScrolledToBottom && (
+                    <div className="p-6 sm:p-8 pb-10 bg-zinc-900 border-t border-white/5 shrink-0 flex flex-col gap-4 animate-in slide-in-from-bottom-8 fade-in duration-500">
+                        <div className="space-y-3 mb-2">
+                            <Input 
+                                placeholder="Nombre completo" 
+                                value={formData.legalName}
+                                onChange={(e) => setFormData(p => ({ ...p, legalName: e.target.value }))}
+                                className="h-12 bg-zinc-950 border-white/10"
+                            />
+                            <Input 
+                                placeholder="DNI" 
+                                type="number"
+                                value={formData.legalDni}
+                                onChange={(e) => setFormData(p => ({ ...p, legalDni: e.target.value }))}
+                                className="h-12 bg-zinc-950 border-white/10"
+                            />
+                        </div>
+                        <div className="transition-opacity duration-300 opacity-100">
+                            <label className="flex items-start gap-3 px-2 cursor-pointer group">
+                                <input 
+                                    type="checkbox" 
+                                    required
+                                    checked={formData.termsAccepted} 
+                                    onChange={e => setFormData(p => ({ ...p, termsAccepted: e.target.checked }))} 
+                                    className="mt-0.5 h-4 w-4 rounded border-white/10 bg-zinc-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900" 
+                                />
+                                <p className="text-[10px] text-zinc-400 leading-tight group-hover:text-zinc-300">
+                                    En carácter de declaración jurada, firmo digitalmente y acepto íntegramente este contrato operativo.
+                                </p>
+                            </label>
+                        </div>
+                        <Button 
+                            onClick={() => setIsLegalModalOpen(false)}
+                            disabled={!formData.termsAccepted || formData.legalName.length < 5 || formData.legalDni.length < 7}
+                            className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.1em] rounded-2xl shadow-xl shadow-indigo-500/10 transition-all active:scale-[0.98] mb-2 sm:mb-0"
+                        >
+                            Aceptar y Continuar
+                        </Button>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
+
+        <style jsx global>{`
+            .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+            .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+            .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.05); border-radius: 10px; }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.1); }
+        `}</style>
 
         {/* Support Link */}
         <p className="text-center text-xs text-zinc-500">

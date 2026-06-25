@@ -27,12 +27,26 @@ export function TermsGuard({ children, forced, onClose }: { children?: React.Rea
     const [checked, setChecked] = useState(false);
     const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
 
-    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-        if (scrollHeight - scrollTop <= clientHeight + 50) {
-            setHasScrolledToBottom(true);
+    const sentinelRef = React.useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!isOpen || hasScrolledToBottom) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting) {
+                    setHasScrolledToBottom(true);
+                }
+            },
+            { root: null, threshold: 1.0 }
+        );
+
+        if (sentinelRef.current) {
+            observer.observe(sentinelRef.current);
         }
-    };
+
+        return () => observer.disconnect();
+    }, [isOpen, hasScrolledToBottom]);
 
     // Determinar si falta aceptación (validación reactiva unificada)
     const needsAcceptance = !loading && !!profile && profile.role !== 'superadmin' && (
@@ -68,7 +82,8 @@ export function TermsGuard({ children, forced, onClose }: { children?: React.Rea
                 acceptedDriverTerms: true, // Legacy compatibility
                 termsAcceptedAt: new Date(),
                 termsVersion: CURRENT_TERMS_VERSION,
-                legalAccepted: true
+                legalAccepted: true,
+                legalType: 'passenger_terms'
             });
 
             console.log("[PASSENGER_TERMS_ACCEPTED] Terms version", CURRENT_TERMS_VERSION, "accepted by", user.uid);
@@ -103,7 +118,7 @@ export function TermsGuard({ children, forced, onClose }: { children?: React.Rea
                 if (!open && onClose) onClose();
             }}>
                 <DialogContent 
-                    className="max-w-md w-[95vw] max-h-[85vh] flex flex-col gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/5 shadow-2xl p-0"
+                    className="max-w-md w-[95vw] h-[85vh] flex flex-col gap-0 sm:rounded-[2.5rem] overflow-hidden bg-zinc-950 border-white/5 shadow-2xl p-0"
                     onPointerDownOutside={(e) => e.preventDefault()}
                     onEscapeKeyDown={(e) => e.preventDefault()}
                 >
@@ -131,10 +146,7 @@ export function TermsGuard({ children, forced, onClose }: { children?: React.Rea
                     </DialogHeader>
 
                     {/* Contenido Legal Scrollable */}
-                    <div 
-                        className="flex-1 overflow-y-auto p-8 text-sm text-zinc-400 space-y-8 leading-relaxed custom-scrollbar relative"
-                        onScroll={handleScroll}
-                    >
+                    <div className="flex-1 overflow-y-auto p-8 text-sm text-zinc-400 space-y-8 leading-relaxed custom-scrollbar relative">
                         <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-start gap-3">
                             <ShieldCheck className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
                             <p className="text-[11px] text-zinc-300 font-medium">
@@ -157,43 +169,40 @@ export function TermsGuard({ children, forced, onClose }: { children?: React.Rea
                             </div>
                         </div>
                         
-                        {!hasScrolledToBottom && (
-                            <div className="sticky bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none flex items-end justify-center pb-4">
-                                <div className="bg-indigo-500/20 text-indigo-400 text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border border-indigo-500/30 animate-pulse">
-                                    Deslizá hacia abajo para continuar
-                                </div>
-                            </div>
-                        )}
+                        {/* Centinela de scroll invisible */}
+                        <div ref={sentinelRef} className="h-10 w-full" />
                     </div>
 
-                    {/* Footer con Acción Fijo */}
-                    <div className="p-6 sm:p-8 pb-10 bg-zinc-900 border-t border-white/5 shrink-0 flex flex-col gap-4">
-                        <div className={`transition-opacity duration-300 ${!hasScrolledToBottom ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                            <label className="flex items-start gap-3 px-2 cursor-pointer group">
-                                <input 
-                                    type="checkbox" 
-                                    required
-                                    checked={checked} 
-                                    onChange={e => setChecked(e.target.checked)} 
-                                    className="mt-0.5 h-4 w-4 rounded border-white/10 bg-zinc-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900" 
-                                />
-                                <p className="text-[10px] text-zinc-400 leading-tight group-hover:text-zinc-300">
-                                    He leído íntegramente y acepto los términos del contrato de usuario. Confirmo que mi IP y dispositivo quedarán registrados como firma electrónica en conformidad con la normativa vigente.
-                                </p>
-                            </label>
+                    {/* Footer con Acción Fijo - Oculto hasta scrollear al final */}
+                    {hasScrolledToBottom && (
+                        <div className="p-6 sm:p-8 pb-10 bg-zinc-900 border-t border-white/5 shrink-0 flex flex-col gap-4 animate-in slide-in-from-bottom-8 fade-in duration-500">
+                            <div className="transition-opacity duration-300 opacity-100">
+                                <label className="flex items-start gap-3 px-2 cursor-pointer group">
+                                    <input 
+                                        type="checkbox" 
+                                        required
+                                        checked={checked} 
+                                        onChange={e => setChecked(e.target.checked)} 
+                                        className="mt-0.5 h-4 w-4 rounded border-white/10 bg-zinc-950 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900" 
+                                    />
+                                    <p className="text-[10px] text-zinc-400 leading-tight group-hover:text-zinc-300">
+                                        He leído íntegramente y acepto los términos del contrato de usuario. Confirmo que mi IP y dispositivo quedarán registrados como firma electrónica en conformidad con la normativa vigente.
+                                    </p>
+                                </label>
+                            </div>
+                            <Button 
+                                onClick={handleAccept}
+                                disabled={isAccepting || !checked}
+                                className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.1em] rounded-2xl shadow-xl shadow-indigo-500/10 transition-all active:scale-[0.98] mb-2 sm:mb-0"
+                            >
+                                {isAccepting ? (
+                                    <VamoIcon name="loader" className="h-6 w-6 animate-spin" />
+                                ) : (
+                                    "Firma Digital y Continuar"
+                                )}
+                            </Button>
                         </div>
-                        <Button 
-                            onClick={handleAccept}
-                            disabled={isAccepting || !checked || !hasScrolledToBottom}
-                            className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-[0.1em] rounded-2xl shadow-xl shadow-indigo-500/10 transition-all active:scale-[0.98] mb-2 sm:mb-0"
-                        >
-                            {isAccepting ? (
-                                <VamoIcon name="loader" className="h-6 w-6 animate-spin" />
-                            ) : (
-                                "Firma Digital y Continuar"
-                            )}
-                        </Button>
-                    </div>
+                    )}
                 </DialogContent>
             </Dialog>
 

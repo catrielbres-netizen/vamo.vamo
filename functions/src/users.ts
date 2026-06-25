@@ -279,6 +279,18 @@ export const completeDriverOnboardingV1 = onCall({ cors: true, region: "us-centr
         claimsVersion: (userData.claimsVersion || 1) + 1
     };
 
+    const logEntry: any = {
+        termsVersion: data.termsVersion || 'v1.4',
+        acceptedAt: admin.firestore.Timestamp.now(),
+        userAgent: request.rawRequest?.headers['user-agent'] || 'unknown',
+        ip: request.rawRequest?.headers['x-forwarded-for'] || request.rawRequest?.socket?.remoteAddress || 'unknown',
+        type: data.legalType || 'driver_contract'
+    };
+    if (data.legalName) logEntry.signatureName = data.legalName;
+    if (data.legalDni) logEntry.signatureDni = data.legalDni;
+
+    updatePayload.legalAcceptanceLog = admin.firestore.FieldValue.arrayUnion(logEntry);
+
     const normalizedDni = String(data.dni).replace(/\D/g, '');
 
     // [VamO BUGFIX] Remove undefined and NaN values from payload deeply to prevent Firestore crash
@@ -490,7 +502,7 @@ export const updateDriverStatusV1 = onCall({ cors: true, region: "us-central1" }
     // Security check: cannot go online if not approved or if municipal status is not active.
     // MOD: Allow pending_municipal_review to support simplified onboarding express flow.
     if (status === 'online') {
-        const currentDriverTermsVersion = "2026-06-rio-gallegos-v1";
+        const currentDriverTermsVersion = "2026-06-global-v2";
         const userLegal = userData.legal || {};
         if (!userLegal.driverTermsAccepted || userLegal.driverTermsVersion !== currentDriverTermsVersion) {
             throw new HttpsError('permission-denied', 'Debés aceptar el contrato de conductor antes de poder operar en VamO.');

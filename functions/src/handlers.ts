@@ -3627,6 +3627,7 @@ export const updateProfileV1 = onCall({ cors: true, region: "us-central1" }, asy
     const {
         name, surname, displayName, phone, gender, photoURL, dni,
         profileCompleted, onboardingCompleted, termsAccepted, termsVersion,
+        legalType, legalName, legalDni, driverTermsAccepted, acceptedDriverTerms, legalAccepted,
         city, cityKey, cityLabel, carModelYear, vehicleType, vehicleFrontPhotoURL,
         servicesOffered, vehicleVerificationStatus, vehicle, passengerPreferences
     } = request.data;
@@ -3702,7 +3703,10 @@ export const updateProfileV1 = onCall({ cors: true, region: "us-central1" }, asy
             }
             if (onboardingCompleted !== undefined) updates.onboardingCompleted = onboardingCompleted;
             if (termsAccepted !== undefined) updates.termsAccepted = termsAccepted;
-            
+            if (driverTermsAccepted !== undefined) updates.driverTermsAccepted = driverTermsAccepted;
+            if (acceptedDriverTerms !== undefined) updates.acceptedDriverTerms = acceptedDriverTerms;
+            if (legalAccepted !== undefined) updates.legalAccepted = legalAccepted;
+
             if (cityKey) {
                 const normalizedKey = normalizeCityKey(cityKey);
                 updates.cityKey = normalizedKey;
@@ -3723,16 +3727,19 @@ export const updateProfileV1 = onCall({ cors: true, region: "us-central1" }, asy
             if (cityLabel) updates.cityLabel = cityLabel;
             if (passengerPreferences !== undefined) updates.passengerPreferences = passengerPreferences;
 
-            if (termsAccepted && termsVersion) {
-                updates.termsAccepted = true;
+            if (termsVersion && (termsAccepted || driverTermsAccepted)) {
                 updates.termsVersion = termsVersion;
                 updates.termsAcceptedAt = now;
-                const logEntry = {
+                const logEntry: any = {
                     termsVersion,
                     acceptedAt: Timestamp.now(),
-                    userAgent: request.rawRequest.headers['user-agent'] || 'unknown',
-                    ip: request.rawRequest.headers['x-forwarded-for'] || request.rawRequest.socket.remoteAddress || 'unknown'
+                    userAgent: request.rawRequest?.headers['user-agent'] || 'unknown',
+                    ip: request.rawRequest?.headers['x-forwarded-for'] || request.rawRequest?.socket?.remoteAddress || 'unknown',
+                    type: legalType || 'passenger_terms'
                 };
+                if (legalName) logEntry.signatureName = legalName;
+                if (legalDni) logEntry.signatureDni = legalDni;
+                
                 updates.legalAcceptanceLog = FieldValue.arrayUnion(logEntry);
             }
 
