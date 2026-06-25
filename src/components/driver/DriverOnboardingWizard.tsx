@@ -478,8 +478,17 @@ export function DriverOnboardingWizard() {
   const nextStep = () => {
     // Validation
     if (currentStep === 1) {
-      if (!formData.name || !formData.dni || !formData.phone || !formData.cityKey) {
+      const nameParts = formData.name.trim().split(/\s+/);
+      const hasLastName = nameParts.length >= 2;
+
+      if (!formData.name || !hasLastName) {
+        return toast({ variant: 'destructive', title: 'Nombre Incompleto', description: 'Por favor ingresá tu nombre y apellido.' });
+      }
+      if (!formData.dni || !formData.phone || !formData.cityKey) {
         return toast({ variant: 'destructive', title: 'Campos incompletos', description: 'Por favor completá todos los datos personales y seleccioná tu ciudad.' });
+      }
+      if (!docs.profilePhoto && !previews.profilePhoto) {
+        return toast({ variant: 'destructive', title: 'Foto de Perfil', description: 'La foto de perfil es obligatoria para verificar tu identidad.' });
       }
     }
     if (currentStep === 2) {
@@ -717,7 +726,7 @@ export function DriverOnboardingWizard() {
                     </div>
 
                     <div className="space-y-2 pt-2">
-                        <Label className="text-xs uppercase tracking-widest text-zinc-400 mb-2 block">Foto de Perfil (Opcional pero recomendada)</Label>
+                        <Label className="text-xs uppercase tracking-widest text-zinc-400 mb-2 block">Foto de Perfil (Obligatorio)</Label>
                         <div className="flex items-center gap-4">
                             {previews.profilePhoto ? (
                                 <img src={previews.profilePhoto} alt="Profile" className="w-16 h-16 rounded-full object-cover border-2 border-indigo-500" />
