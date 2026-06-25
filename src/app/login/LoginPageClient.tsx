@@ -34,12 +34,19 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<{email?: string, password?: string}>({});
 
-    // [VamO PRO RESILIENCE] Pre-fill email if provided via URL (Resume Flow)
+    // [VamO PRO RESILIENCE] Pre-fill email and role if provided via URL
+    const [clientRole, setClientRole] = useState<'driver' | 'passenger' | undefined>(fixedRole);
     React.useEffect(() => {
-        const urlEmail = new URLSearchParams(window.location.search).get('email');
+        const params = new URLSearchParams(window.location.search);
+        const urlEmail = params.get('email');
         if (urlEmail) {
             console.log(`[AUTH_RESUME_FLOW] Pre-filling email: ${urlEmail}`);
             setEmail(decodeURIComponent(urlEmail));
+        }
+        
+        const urlRole = params.get('role');
+        if (urlRole === 'driver' || urlRole === 'passenger') {
+            setClientRole(urlRole);
         }
     }, []);
 
@@ -116,21 +123,33 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
             console.log(`[AUTH_STATE_CHANGED] User logged in: ${signedUser.uid}`);
 
             // Role Guard (Strict Separation)
-            if (fixedRole) {
+            if (clientRole) {
                 const userDoc = await getDoc(doc(firestore, 'users', signedUser.uid));
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
-                    if (userData.role && userData.role !== fixedRole && !(fixedRole === 'driver' && userData.role === 'incomplete_driver')) {
-                        console.warn(`[AUTH_INVALID_SESSION] Role mismatch: expected ${fixedRole}, got ${userData.role}. Cleaning up...`);
-                        await signOut(auth);
-                        const otherRole = userData.role === 'driver' || userData.role === 'incomplete_driver' ? 'conductor' : 'pasajero';
-                        toast({ 
-                            variant: 'destructive', 
-                            title: 'Acceso incorrecto', 
-                            description: `Tu cuenta es de ${otherRole}. Por favor, ingresá por el portal de ${otherRole}s.` 
-                        });
-                        setIsSubmitting(false);
+                    const uRole = userData.role;
+                    
+                    if (uRole === 'incomplete_driver') {
+                        router.push('/driver/register');
                         return;
+                    }
+
+                    if (uRole && clientRole) {
+                        const isMismatch = (clientRole === 'driver' && uRole !== 'driver' && uRole !== 'incomplete_driver') ||
+                                           (clientRole === 'passenger' && uRole !== 'passenger');
+
+                        if (isMismatch) {
+                            console.warn(`[AUTH_INVALID_SESSION] Role mismatch: expected ${clientRole}, got ${uRole}. Cleaning up...`);
+                            await signOut(auth);
+                            const otherRole = uRole === 'driver' || uRole === 'incomplete_driver' ? 'conductor' : 'pasajero';
+                            toast({ 
+                                variant: 'destructive', 
+                                title: 'Acceso incorrecto', 
+                                description: `Tu cuenta es de ${otherRole}. Por favor, ingresá por el portal de ${otherRole}s.` 
+                            });
+                            setIsSubmitting(false);
+                            return;
+                        }
                     }
                 } else {
                     console.warn(`[AUTH_INVALID_SESSION] No profile found for ${signedUser.uid}. Cleaning up...`);
@@ -191,7 +210,7 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                 }
             } else {
                 // Nuevo usuario de Google, redirigir a completar perfil
-                if (fixedRole === 'driver') {
+                if (clientRole === 'driver') {
                     router.push('/driver/register?method=google');
                 } else {
                     router.push('/pasajero/onboarding?method=google');
@@ -238,7 +257,7 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                 <Card className="w-full bg-zinc-900 border-white/5 shadow-2xl rounded-[2.5rem]">
                     <CardHeader className="text-center pb-6">
                         <CardTitle className="text-2xl font-black text-white uppercase tracking-tight">
-                            {fixedRole === 'driver' ? 'ACCESO CONDUCTOR' : 'ACCESO PASAJERO'}
+                            {clientRole === 'driver' ? 'ACCESO CONDUCTOR' : 'ACCESO PASAJERO'}
                         </CardTitle>
                         <CardDescription className="text-zinc-500 font-medium">Ingresá tus datos para continuar</CardDescription>
                     </CardHeader>
@@ -301,7 +320,7 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                                 {isSubmitting ? <VamoIcon name="loader" className="animate-spin" /> : 'INICIAR SESIÓN'}
                             </Button>
 
-                            {fixedRole !== 'driver' && (
+                            {clientRole !== 'driver' && (
                                 <div className="pt-2">
                                     <GoogleAuthButton 
                                         onSuccess={handleGoogleAuthSuccess}
@@ -326,14 +345,14 @@ export default function LoginPageClient({ fixedRole }: LoginPageClientProps) {
                                 variant="outline"
                                 onClick={async () => {
                                     if (auth?.currentUser) await signOut(auth);
-                                    router.push(fixedRole === 'driver' ? '/driver/register' : '/pasajero/register');
+                                    router.push(clientRole === 'driver' ? '/driver/register' : '/pasajero/register');
                                 }}
                                 className="w-full h-12 border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10 text-indigo-400 font-bold rounded-xl transition-all"
                             >
                                 CREAR CUENTA NUEVA
                             </Button>
                             
-                            {fixedRole !== 'driver' && (
+                            {clientRole !== 'driver' && (
                                 <div className="text-center">
                                     <button 
                                         type="button"
