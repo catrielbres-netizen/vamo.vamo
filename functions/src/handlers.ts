@@ -3092,6 +3092,21 @@ export const approveDriverByAdminV1 = onCall({ cors: true, region: "us-central1"
 
     await batch.commit();
 
+    if (driverData.email) {
+        try {
+            const { enqueueTransactionalEmailV1 } = require('./lib/emails');
+            await enqueueTransactionalEmailV1({
+                to: driverData.email,
+                template: 'driver_enabled',
+                subject: '¡Tu cuenta de conductor fue habilitada!',
+                data: { name: driverData.name || 'Conductor' },
+                dedupeKey: `driver_enabled_${driverId}`
+            });
+        } catch (err) {
+            console.error(`[ADMIN_APPROVAL_EMAIL_ERROR] Failed to enqueue email for ${driverId}:`, err);
+        }
+    }
+
     return { success: true };
 });
 

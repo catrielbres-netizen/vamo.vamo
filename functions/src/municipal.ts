@@ -557,7 +557,22 @@ export const updateMunicipalStatusV1 = onCall({ cors: true, region: 'us-central1
                 note: observation || null,
                 createdAt: timestamp
             });
+
+            return {
+                userEmail: target.email,
+                userName: target.name
+            };
         });
+
+        if (result && result.userEmail && status === 'active') {
+            await enqueueTransactionalEmailV1({
+                to: result.userEmail,
+                template: 'driver_enabled',
+                subject: '¡Tu cuenta de conductor fue habilitada!',
+                data: { name: result.userName },
+                dedupeKey: `driver_enabled_${driverId}`
+            });
+        }
 
         return { success: true };
     } catch (error: any) {

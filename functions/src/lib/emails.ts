@@ -88,6 +88,15 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
         <p style="font-size: 14px; color: #64748B; text-align: center; margin-top: 24px;">Una vez habilitado, acá podrás ver tus ganancias estimadas y estadísticas de viaje.</p>
     `),
     
+    driver_onboarding_completed: (data) => baseTemplate(`
+        <h2 style="color: #0F172A; font-size: 22px; font-weight: 800; margin-top: 0;">Solicitud Recibida</h2>
+        <p>Hola <strong>${data.name}</strong>,</p>
+        <p>Tu solicitud y documentación han sido recibidas exitosamente.</p>
+        <p>Tu perfil se encuentra ahora en revisión por nuestro equipo operativo.</p>
+        
+        ${buttonHtml('Ver estado de revisión', 'https://www.vamoapp.com.ar/driver')}
+    `),
+    
     driver_pending_documents: (data) => baseTemplate(`
         <h2 style="color: #B45309; font-size: 22px; font-weight: 800; margin-top: 0;">Acción Requerida</h2>
         <p>Hola <strong>${data.name}</strong>,</p>
@@ -128,15 +137,12 @@ export const EmailTemplates: Record<string, (data: any) => string> = {
     driver_enabled: (data) => baseTemplate(`
         <h2 style="color: #15803D; font-size: 22px; font-weight: 800; margin-top: 0;">¡Cuenta Habilitada!</h2>
         <p>Hola <strong>${data.name}</strong>, ¡excelentes noticias! Tu cuenta de conductor ya está completamente habilitada.</p>
-        <p>Estás listo para salir a las calles, recibir viajes y generar ingresos.</p>
-
-        ${activityCardHtml('Tus próximos objetivos', `
-            <ul style="margin: 0; padding-left: 20px;">
-                <li style="margin-bottom: 8px;">Recibir tu primer viaje.</li>
-                <li style="margin-bottom: 8px;">Mantener una buena calificación.</li>
-                <li>Revisar tu billetera para gestionar tus cobros.</li>
-            </ul>
-        `)}
+        
+        <div style="background-color: #F0FDF4; border: 1px dashed #86EFAC; border-radius: 12px; padding: 20px; margin-top: 24px; text-align: center;">
+            <h3 style="margin-top: 0; color: #166534; font-size: 18px;">Ayudanos a activar VamO en tu zona</h3>
+            <p style="font-size: 14px; color: #15803D; margin-bottom: 20px; line-height: 1.6;">Cuantos más conductores se sumen y completen su registro, más rápido podremos activar la zona para operar.</p>
+            ${buttonHtml('Invitar Conductor', 'https://www.vamoapp.com.ar/login/?role=driver')}
+        </div>
 
         ${buttonHtml('Conectarme en VamO', 'https://www.vamoapp.com.ar/driver')}
     `),

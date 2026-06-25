@@ -383,21 +383,12 @@ export const completeDriverOnboardingV1 = onCall({ cors: true, region: "us-centr
         if (currentEmail) {
             await enqueueTransactionalEmailV1({
                 to: currentEmail,
-                template: 'driver_registration_created',
-                subject: 'Tu registro en VamO fue creado',
+                template: 'driver_onboarding_completed',
+                subject: 'Tu solicitud fue recibida',
                 data: {
                     name: currentName,
-                    cityName: finalCityName || ""
                 },
-                dedupeKey: `driver_registration_created_${uid}`
-            });
-
-            await enqueueTransactionalEmailV1({
-                to: currentEmail,
-                template: 'driver_pending_documents',
-                subject: 'Acción requerida: completá tu habilitación',
-                data: { name: currentName },
-                dedupeKey: `driver_pending_documents_${uid}`
+                dedupeKey: `driver_onboarding_completed_${uid}`
             });
         }
 
