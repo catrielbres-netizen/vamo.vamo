@@ -35,7 +35,7 @@ import { canDriverGoOnline } from '@/lib/eligibility';
 import { DriverProgressPanel } from '@/components/DriverProgressPanel';
 import { DriverMissionPanel } from '@/components/DriverMissionPanel';
 import { AuthGuard } from '@/features/auth/AuthGuard';
-import { TermsGuard } from '@/features/auth/TermsGuard';
+import { DriverLegalGuard } from '@/features/auth/DriverLegalGuard';
 import { useBackNavigationLock } from '@/hooks/useBackNavigationLock';
 import { NotificationToggle } from '@/components/NotificationToggle';
 import { useTelemetry } from '@/lib/telemetry/TelemetryProvider';
@@ -587,7 +587,7 @@ function DriverLayoutInner({ children, authUser, profile }: { children: ReactNod
 
   return (
     <>
-      <TermsGuard 
+      <DriverLegalGuard 
           forced={showTerms} 
           onClose={() => setShowTerms(false)} 
       />

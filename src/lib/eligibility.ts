@@ -1,5 +1,5 @@
 import { UserProfile, ServiceType } from "./types";
-import { CURRENT_TERMS_VERSION } from "./legal-config";
+import { CURRENT_TERMS_VERSION, CURRENT_DRIVER_TERMS_VERSION } from "./legal-config";
 import { featureFlags } from "@/config/features";
 
 export type EligibilityResult = {
@@ -102,13 +102,13 @@ export const canDriverGoOnline = (profile: UserProfile | null | undefined, isEma
   }
 
   // MANDATORY LEGAL CHECK (Unified Flags + Centralized Version)
-  const hasAccepted = profile.termsAccepted || profile.acceptedDriverTerms;
-  const isCorrectVersion = profile.termsVersion === CURRENT_TERMS_VERSION;
+  const hasAccepted = profile.legal?.driverTermsAccepted;
+  const isCorrectVersion = profile.legal?.driverTermsVersion === CURRENT_DRIVER_TERMS_VERSION;
 
   if (!hasAccepted || !isCorrectVersion) {
       return { 
           isEligible: false, 
-          reason: `Debés aceptar los términos y condiciones actualizados (${CURRENT_TERMS_VERSION})`, 
+          reason: `Debés aceptar el contrato de conductor vigente`, 
           code: "TERMS_NOT_ACCEPTED" 
       };
   }
