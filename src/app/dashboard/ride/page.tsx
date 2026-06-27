@@ -5,7 +5,7 @@ import { useUser, useFirestore, useDoc, useMemoFirebase, useFirebaseApp } from '
 import { TutorialOverlay } from '@/components/TutorialOverlay';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useQuery } from '@tanstack/react-query';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { VamoIcon } from '@/components/VamoIcon';
 import { PassengerSearchingSheet } from "@/components/PassengerSearchingSheet";
 import { PassengerCityLaunchGate } from '@/components/PassengerCityLaunchGate';
@@ -32,6 +32,7 @@ import { Ride, Place, ServiceType, Promotion } from '@/lib/types';
 import { OnlineDriversLayer } from '@/components/OnlineDriversLayer';
 import { ShieldCheck, Scale, Map as MapIcon, Flag, Crosshair, Gift, Loader2, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { usePromotions } from '@/hooks/usePromotions';
 import { PassengerSmallBalance } from '@/components/PassengerSmallBalance';
@@ -349,6 +350,16 @@ function RidePageContent() {
   };
 
   const handlePreRequestRide = async () => {
+    if (!isOperative) {
+        setShowCityInactiveModal(true);
+        return;
+    }
+
+    if (!isOperative) {
+        setShowCityInactiveModal(true);
+        return;
+    }
+
     // Si la sugerencia fue rechazada antes, pasamos directo al flujo correspondiente
     if (!isSharedEnabled || hasDeclinedSuggestion || !origin || !destination || !firebaseApp) {
         if (serviceType === 'shared') return setIsLegalGateOpen(true);
@@ -741,7 +752,7 @@ function RidePageContent() {
   };
 
   return (
-    <PassengerCityLaunchGate cityKey={profile?.cityKey}>
+    
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#0a0a0a] animate-in fade-in duration-1000 fill-mode-both">
       {mapsAvailable && (
         <div 
@@ -1462,7 +1473,7 @@ function RidePageContent() {
       </AlertDialog>
 
     </div>
-    </PassengerCityLaunchGate>
+    
 
   );
 }
