@@ -817,8 +817,8 @@ export const createRideV1 = onCall({ cors: true, region: 'us-central1' }, async 
     }
     
     // NEW RULE: Check passenger access via operationalStatus or passengerAccess config
-    const passengerAccessEnabled = cityConfig.passengerAccess?.enabled;
-    const isOperative = cityConfig.operationalStatus === 'active' || passengerAccessEnabled;
+    const passengerAccessEnabled = cityConfig.passengerAccess?.enabled === true;
+    const isOperative = passengerAccessEnabled;
 
     if (!isOperative) {
         logger.error(`[createRideV1] City ${cityKey} is not ready for passengers. Status: ${cityConfig.operationalStatus}`);

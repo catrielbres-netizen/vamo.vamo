@@ -75,7 +75,7 @@ function RidePageContent() {
     return () => unsubscribe();
   }, [firestore, profile?.cityKey]);
 
-  const isOperative = cityConfig?.operationalStatus === 'active' || cityConfig?.passengerAccess?.enabled === true;
+  const isOperative = cityConfig?.passengerAccess?.enabled === true;
 
 
   useEffect(() => {

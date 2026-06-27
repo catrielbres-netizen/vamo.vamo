@@ -527,3 +527,89 @@ export const adminBroadcastMessageV1 = onCall(async (request) => {
     }
 });
 
+
+export const broadcastToCityPassengersV1 = onCall({ cors: true, region: 'us-central1' }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debe iniciar sesión.');
+    if (!request.auth.token.admin && request.auth.token.role !== 'admin' && request.auth.token.role !== 'superadmin') {
+        throw new HttpsError('permission-denied', 'No tiene permisos de administrador.');
+    }
+
+    const { cityKey, subject, text, html } = request.data;
+    if (!cityKey || !subject || !text) throw new HttpsError('invalid-argument', 'Faltan parámetros obligatorios.');
+
+    const db = getDb();
+    const batchSize = 500;
+    
+    try {
+        const snapshot = await db.collection('users')
+            .where('role', '==', 'passenger')
+            .where('cityKey', '==', cityKey)
+            .get();
+
+        if (snapshot.empty) {
+            return { success: true, count: 0, message: 'No hay pasajeros en esta ciudad.' };
+        }
+
+        let currentBatch = db.batch();
+        let opsCount = 0;
+        let totalCount = 0;
+
+        for (const doc of snapshot.docs) {
+            const userData = doc.data();
+            const passengerEmail = userData.email;
+            const passengerUid = doc.id;
+
+            if (passengerEmail) {
+                const mailRef = db.collection('mail_queue').doc();
+                currentBatch.set(mailRef, {
+                    to: passengerEmail,
+                    message: {
+                        subject,
+                        text,
+                        html: html || text
+                    },
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    source: 'admin_broadcast_city'
+                });
+                opsCount++;
+            }
+
+            const notifRef = db.collection(`users/${passengerUid}/notifications`).doc();
+            currentBatch.set(notifRef, {
+                title: subject,
+                body: text,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                read: false,
+                type: 'system_broadcast'
+            });
+            opsCount++;
+            totalCount++;
+
+            if (opsCount >= batchSize - 10) {
+                await currentBatch.commit();
+                currentBatch = db.batch();
+                opsCount = 0;
+            }
+        }
+
+        if (opsCount > 0) {
+            await currentBatch.commit();
+        }
+
+        await db.collection('admin_broadcasts').add({
+            cityKey,
+            subject,
+            text,
+            passengerCount: totalCount,
+            sentBy: request.auth.uid,
+            sentAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        logger.info(`Broadcast enviado a ${totalCount} pasajeros en la ciudad ${cityKey}.`);
+        return { success: true, count: totalCount };
+
+    } catch (error: any) {
+        logger.error('Error en broadcastToCityPassengersV1', error);
+        throw new HttpsError('internal', 'Error enviando el broadcast.');
+    }
+});

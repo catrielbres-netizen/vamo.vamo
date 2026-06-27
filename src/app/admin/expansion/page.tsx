@@ -38,6 +38,7 @@ export default function ExpansionDashboardPage() {
 
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
     const [updatingCity, setUpdatingCity] = useState(false);
+    const [sendingBroadcast, setSendingBroadcast] = useState(false);
     const [updateCityData, setUpdateCityData] = useState<{
         cityKey: string;
         name: string;
@@ -144,6 +145,37 @@ export default function ExpansionDashboardPage() {
             });
         } finally {
             setCreatingCity(false);
+        }
+    };
+
+    const handleBroadcast = async () => {
+        if (!functions || !updateCityData) return;
+        
+        const confirmMsg = `¿Estás seguro de enviar un aviso masivo a TODOS los pasajeros de ${updateCityData.name} indicando que ya pueden pedir viajes?`;
+        if (!window.confirm(confirmMsg)) return;
+
+        setSendingBroadcast(true);
+        try {
+            const broadcastCall = httpsCallable(functions, 'broadcastToCityPassengersV1');
+            const result: any = await broadcastCall({
+                cityKey: updateCityData.cityKey,
+                subject: 'VamO ya está activo en tu ciudad',
+                text: 'Hola, VamO ya está habilitado en tu ciudad. Desde ahora podés ingresar a la app y pedir viajes cuando lo necesites. Gracias por sumarte a VamO.'
+            });
+
+            toast({
+                title: "✅ Aviso enviado",
+                description: `Se enviaron notificaciones a ${result.data.count} pasajeros.`,
+            });
+        } catch (error: any) {
+            console.error("Error sending broadcast:", error);
+            toast({
+                title: "Error al enviar aviso",
+                description: error.message || "No se pudo enviar el aviso masivo.",
+                variant: "destructive"
+            });
+        } finally {
+            setSendingBroadcast(false);
         }
     };
 
@@ -667,7 +699,7 @@ export default function ExpansionDashboardPage() {
                                     />
                                     <div className="flex flex-col">
                                         <span className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">Habilitar App para Pasajeros</span>
-                                        <span className="text-[10px] text-zinc-500 leading-tight">Si está inactivo, los pasajeros verán la pantalla de "Próximamente".</span>
+                                        <span className="text-[10px] text-zinc-500 leading-tight">Si está apagado, podrán entrar a la app pero no podrán solicitar viajes.</span>
                                     </div>
                                 </label>
 
