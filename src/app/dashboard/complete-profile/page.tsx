@@ -18,6 +18,9 @@ import { CITIES } from '@/lib/cityData';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { VamoFullScreenLoader } from '@/components/branding/VamoFullScreenLoader';
 import { Suspense } from 'react';
+import { useMapsAvailability } from '@/components/MapsProvider';
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
+import { resolveCity } from '@/lib/city-resolution';
 import { Checkbox } from "@/components/ui/checkbox";
 import { CURRENT_TERMS_VERSION } from "@/lib/legal-config";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -47,7 +50,76 @@ function CompletePassengerProfileContent() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
-    const [termsAccepted, setTermsAccepted] = useState(false);
+        const [termsAccepted, setTermsAccepted] = useState(false);
+
+    const { mapsAvailable } = useMapsAvailability();
+    const geocodingLib = useMapsLibrary('geocoding');
+    const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
+    const [registrationLat, setRegistrationLat] = useState<number | null>(null);
+    const [registrationLng, setRegistrationLng] = useState<number | null>(null);
+    const [registrationCityKey, setRegistrationCityKey] = useState<string | null>(null);
+    const [registrationCityName, setRegistrationCityName] = useState<string | null>(null);
+    const [registrationSource, setRegistrationSource] = useState<'gps' | 'manual' | 'gps_unmatched'>('manual');
+    const [isLocating, setIsLocating] = useState(false);
+    const [gpsError, setGpsError] = useState(false);
+
+    useEffect(() => {
+        if (geocodingLib) setGeocoder(new geocodingLib.Geocoder());
+    }, [geocodingLib]);
+
+    const handleLocateMe = () => {
+        if (!mapsAvailable || !geocoder) {
+            toast({ variant: 'destructive', title: 'Servicio no disponible', description: 'El servicio de ubicación todavía está cargando, intentá nuevamente.' });
+            return;
+        }
+        if (!navigator.geolocation) {
+            setGpsError(true);
+            return;
+        }
+        setIsLocating(true);
+        setGpsError(false);
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords;
+                setRegistrationLat(latitude);
+                setRegistrationLng(longitude);
+                geocoder.geocode({ location: { lat: latitude, lng: longitude } }, async (results, status) => {
+                    if (status === 'OK' && results?.[0]) {
+                        const result = results[0];
+                        const resolution = await resolveCity(latitude, longitude, result.address_components, geocoder);
+                        if (resolution.city && CITIES[resolution.city]) {
+                            setCityKey(resolution.city);
+                            setRegistrationCityKey(resolution.city);
+                            setRegistrationCityName(CITIES[resolution.city].name);
+                            setRegistrationSource('gps');
+                            toast({ title: 'Ubicación encontrada', description: `Localidad: ${CITIES[resolution.city].name}` });
+                        } else {
+                            setCityKey('other');
+                            setRegistrationCityKey('pending_city');
+                            setRegistrationCityName(resolution.city || 'Ciudad pendiente de verificación');
+                            setRegistrationSource('gps_unmatched');
+                            toast({ title: 'Ubicación detectada', description: 'Tu ciudad aún no está activa o verificada, pero guardamos tu ubicación.' });
+                        }
+                    } else {
+                        // Geocoder failed completely but we HAVE lat/lng
+                        setCityKey('other');
+                        setRegistrationCityKey('pending_city');
+                        setRegistrationCityName('Ciudad pendiente de verificación');
+                        setRegistrationSource('gps_unmatched');
+                        toast({ title: 'Ubicación detectada', description: 'No pudimos verificar el nombre de la ciudad, pero guardamos tu ubicación.' });
+                    }
+                    setIsLocating(false);
+                });
+            },
+            (error) => {
+                console.warn('GPS Denied or failed', error);
+                setGpsError(true);
+                setIsLocating(false);
+                toast({ variant: 'destructive', title: 'Acceso Denegado', description: 'Tocá el candado del navegador, permití ubicación y volvé a tocar Localizar mi ubicación.' });
+            },
+            { timeout: 10000, enableHighAccuracy: true }
+        );
+    };
     const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
 
     useEffect(() => {
