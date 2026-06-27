@@ -58,20 +58,66 @@ function RidePageContent() {
   const { toast } = useToast();
   const router = useRouter();
 
+  const [cityConfig, setCityConfig] = useState<any | null>(null);
+  const [showCityInactiveModal, setShowCityInactiveModal] = useState(false);
+  const [showWelcomeBanner, setShowWelcomeBanner] = useState(false);
+  const welcomeBannerChecked = useRef(false);
+
+  useEffect(() => {
+    if (!firestore || !profile?.cityKey) return;
+    const unsubscribe = onSnapshot(doc(firestore, `cities/${profile.cityKey}`), (docSnap) => {
+        if (docSnap.exists()) {
+            setCityConfig(docSnap.data());
+        } else {
+            setCityConfig(null);
+        }
+    });
+    return () => unsubscribe();
+  }, [firestore, profile?.cityKey]);
+
+  const isOperative = cityConfig?.operationalStatus === 'active' || cityConfig?.passengerAccess?.enabled === true;
+
+
   useEffect(() => {
     if (!userIsLoading && profile) {
       if (profile.registrationStatus !== 'active') {
         console.warn("[RIDE_PAGE_GUARD] Unauthorized access to dashboard. Redirecting to onboarding...");
-        router.replace('/dashboard/complete-profile');
+        router.replace('/pasajero/register/');
         return;
       }
       console.log("[RIDE_PAGE_ALLOW_DASHBOARD] Profile active. Rendering ride map.");
       setIsLoaded(true);
+      
+      // FIX LOOP: Check ref
+      if (!welcomeBannerChecked.current) {
+          welcomeBannerChecked.current = true;
+          const seenLocally = typeof window !== 'undefined' ? localStorage.getItem(`vamo_welcome_${profile.uid}`) : null;
+          if (profile.role === 'passenger' && !profile.passengerWelcomeSeen && !seenLocally) {
+              setShowWelcomeBanner(true);
+          }
+      }
     } else if (!userIsLoading && !profile) {
         console.warn("[RIDE_PAGE_BLOCK_DASHBOARD] No profile found. Redirecting...");
         router.replace('/login');
     }
   }, [userIsLoading, profile, router]);
+
+  const dismissWelcomeBanner = async () => {
+      setShowWelcomeBanner(false);
+      if (typeof window !== 'undefined' && profile?.uid) {
+          localStorage.setItem(`vamo_welcome_${profile.uid}`, 'true');
+      }
+      if (firestore && user) {
+          try {
+              await updateDoc(doc(firestore, 'users', user.uid), {
+                  passengerWelcomeSeen: true,
+                  passengerWelcomeSeenAt: serverTimestamp()
+              });
+          } catch (e) {
+              console.error("Error dismissing welcome banner", e);
+          }
+      }
+  };
   
   const { mapsAvailable } = useMapsAvailability();
   const geocodingLib = useMapsLibrary('geocoding');
@@ -350,16 +396,6 @@ function RidePageContent() {
   };
 
   const handlePreRequestRide = async () => {
-    if (!isOperative) {
-        setShowCityInactiveModal(true);
-        return;
-    }
-
-    if (!isOperative) {
-        setShowCityInactiveModal(true);
-        return;
-    }
-
     // Si la sugerencia fue rechazada antes, pasamos directo al flujo correspondiente
     if (!isSharedEnabled || hasDeclinedSuggestion || !origin || !destination || !firebaseApp) {
         if (serviceType === 'shared') return setIsLegalGateOpen(true);
